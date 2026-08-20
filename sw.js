@@ -2,10 +2,10 @@
    Shell is cached so the desk opens instantly and keeps working offline.
    index.html is network-first, so a new deploy shows up on the next visit and
    the page is told to offer a reload. */
-const BUILD = '2026.08.20.1138-bdb5f2e';
+const BUILD = '2026.08.20.1151-bdb5f2e';
 const CACHE = 'solvix-tender-' + BUILD;
 const SHELL = ['./', './index.html', './manifest.webmanifest',
-               './icons/icon-192.png', './icons/icon-512.png'];
+               './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
