@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Freight Class &amp; Density Calculator — Solvix Toolkit</title>
+<meta name="description" content="Work out LTL density and the NMFC density-based freight class for a multi-pallet shipment: cubic feet per handling unit, pounds per cubic foot, class per line and for the whole shipment, linear feet, and a printable BOL-ready density worksheet.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cpath d='M16 4 27 10v12L16 28 5 22V10z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M5 10l11 6 11-6M16 16v12' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#5A9BE8;--accent-ink:#93C1F3;--accent-wash:#152A40;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#5A9BE8;--accent-ink:#93C1F3;--accent-wash:#152A40;--on-accent:#0B1017}
+
+[hidden]{display:none!important}
+.app>*+*{margin-top:14px}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.col-in,.col-res,.card,.card>.bd,.card>.hd,.card>.ft{min-width:0}
+.tw{max-width:100%}
+.split{margin-top:14px}
+body>.appbar{margin:0;padding-left:0;padding-right:0}
+.appbar-in{width:100%;max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+@media(min-width:901px){
+  .col-res{grid-column:2;grid-row:1}
+  .col-in{grid-column:1;grid-row:1}
+}
+.col-in>*+*{margin-top:14px}
+.col-res .stat.hero .v{font-size:40px;line-height:1.05}
+.col-res .stat.hero{padding:14px}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:340px){.statgrid{grid-template-columns:1fr}}
+.statgrid .stat{padding:9px 11px}
+.statgrid .stat .v{font-size:17px}
+.ftbig{font:700 19px/1.1 var(--mono);margin-left:auto;font-variant-numeric:tabular-nums}
+.cellerr{display:block;font:11px/1.3 var(--sans);color:var(--bad);margin-top:3px;max-width:160px;white-space:normal}
+.pv{display:none}
+#unitTable{min-width:1010px}
+#unitTable td{padding:5px 6px}
+#unitTable th{padding:9px 6px}
+#unitTable input[type=number]{min-width:62px}
+#unitTable .cdesc input{min-width:150px;text-align:left;font-family:var(--sans)}
+#unitTable select{min-width:132px;font-size:12.5px}
+#unitTable td.idx{color:var(--muted);font:600 12px/1 var(--mono);width:22px;text-align:center;padding-left:8px}
+#unitTable .stk{text-align:center}
+#unitTable .stk input{width:16px;height:16px;accent-color:var(--accent);margin:0}
+#unitTable td.calc{background:var(--sunk);font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:hover td.calc{background:transparent}
+#unitTable td.cls{font-weight:700;text-align:right;background:var(--sunk)}
+.mini{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv b{font-family:var(--mono);font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kv span{color:var(--ink-2)}
+#refTable{font-size:12.5px}
+#refTable td,#refTable th{padding:4px 8px}
+#refTable tr.on td{background:var(--accent-wash);font-weight:700;color:var(--accent-ink)}
+#refTable tbody tr:hover td{background:var(--sunk)}
+#refTable tr.on:hover td{background:var(--accent-wash)}
+.refcols{columns:2 200px;column-gap:18px}
+.savelist{display:flex;flex-direction:column;gap:6px}
+.saveitem{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:4px;padding:7px 9px;background:var(--raise)}
+.saveitem .nm{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.saveitem .mt{font:11px/1 var(--mono);color:var(--muted);margin-left:auto;white-space:nowrap}
+.segs{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.segs button{font:600 12px/1 var(--sans);padding:7px 10px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.segs button+button{border-left:1px solid var(--line-hard)}
+.segs button.on{background:var(--accent);color:var(--on-accent)}
+.flags{display:flex;flex-direction:column;gap:6px}
+.flag{font-size:12.5px;line-height:1.4;padding:7px 9px;border-radius:4px;background:var(--warn-wash);color:var(--warn);border-left:3px solid var(--warn)}
+.flag.b{background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+.flag.g{background:var(--ok-wash);color:var(--ok);border-color:var(--ok)}
+
+/* printed document head */
+.doc-head{border-bottom:2.5px solid #000;padding-bottom:5mm;margin-bottom:5mm}
+.dh-title{font:700 19pt/1.1 var(--sans);letter-spacing:-.02em}
+.dh-sub{font:11pt/1.3 var(--sans);margin-top:2mm;color:#333}
+.dh-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm 6mm;margin-top:5mm}
+.dh-grid div span{display:block;font:600 7.5pt/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#555}
+.dh-grid div b{font:600 10.5pt/1.3 var(--sans)}
+.dh-grid div.w2{grid-column:span 2}
+.sign{margin-top:5mm;border-top:1px solid #bbb;padding-top:4mm;font-size:9pt;color:#333}
+.sign .lines{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:9mm}
+.sign .lines div{border-top:1px solid #000;padding-top:1.5mm;font:8.5pt/1.2 var(--sans);color:#333}
+
+@media print{
+  .app{display:flex;flex-direction:column;gap:0}
+  .app>*+*{margin-top:0}
+  .doc-head{order:1}
+  .split{order:2;margin-top:0;display:block}
+  #unitsCard{order:3}
+  #refCard{order:4}
+  .sign{order:5}
+  #footNote{order:6}
+  #detailsCard,#savedCard,.banner,#addRow{display:none!important}
+  .col-res .card{margin-bottom:6mm}
+  .col-res .stat.hero .v{font-size:26pt}
+  .statgrid{display:grid!important;grid-template-columns:repeat(4,1fr)}
+  .statgrid .stat .v{font-size:11pt}
+  .tw{overflow:visible}
+  #unitTable{min-width:0;font-size:8.4pt;table-layout:auto}
+  #unitTable th,#unitTable td{padding:2.5px 3px;white-space:nowrap}
+  #unitTable th{white-space:normal}
+  #unitTable input,#unitTable select{display:none!important}
+  #unitTable .pv{display:block!important;font-family:var(--mono);font-size:8.4pt;text-align:right}
+  #unitTable .cdesc .pv{text-align:left;font-family:var(--sans);white-space:normal;min-width:34mm}
+  #unitTable .ctype .pv{text-align:left;font-family:var(--sans);white-space:normal}
+  #unitTable td.calc,#unitTable td.cls{background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cellerr{display:none}
+  .colrm,.rmhd{display:none!important}
+  #refTable{font-size:8pt}
+  #refTable tr.on td{background:#e2e2e2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .refcols{columns:3}
+  .flag{border:1px solid #999;background:#fff!important;color:#000!important}
+  .note{border:1px solid #444;border-left:3px solid #000;background:#fff!important;color:#000!important}
+  .ftbig{font-size:13pt}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">FC</div>
+    <div style="min-width:0">
+      <h1>Freight Class &amp; Density Calculator</h1>
+      <div class="sub" id="barSub">NMFC density scale · LTL</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export JSON</button>
+    <button type="button" class="btn" id="btnImport">Import JSON</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <!-- printed document header -->
+  <div class="printonly doc-head">
+    <div class="dh-title">Shipment Density &amp; Freight Class Worksheet</div>
+    <div class="dh-sub">Attach to the Bill of Lading — density-based NMFC classification</div>
+    <div class="dh-grid">
+      <div class="w2"><span>Shipper</span><b id="pShipper">—</b></div>
+      <div class="w2"><span>Consignee</span><b id="pConsignee">—</b></div>
+      <div><span>BOL / Reference no.</span><b id="pBol">—</b></div>
+      <div><span>PRO no.</span><b id="pPro">—</b></div>
+      <div><span>Carrier / SCAC</span><b id="pCarrier">—</b></div>
+      <div><span>Ship date</span><b id="pDate">—</b></div>
+      <div class="w2"><span>Commodity description</span><b id="pCommodity">—</b></div>
+      <div><span>NMFC item / sub</span><b id="pNmfc">—</b></div>
+      <div><span>Prepared by</span><b id="pPrep">—</b></div>
+    </div>
+  </div>
+
+  <div class="note banner noprint" id="banner">
+    <strong>Sample shipment loaded</strong> — two 48×40 pallets of coating powder plus one crated machine
+    part. Change any figure and every result updates as you type.
+    <div class="row" style="margin-top:9px">
+      <button type="button" class="btn sm" id="btnBlank">Start a blank shipment</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- ══ results ══ -->
+    <section class="col-res">
+      <div class="card sticky">
+        <div class="hd"><h2>Shipment result</h2><span class="chip" id="chipUnits">—</span></div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k">Freight class (whole shipment)</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">density —</div>
+          </div>
+
+          <div class="note warn" id="disclaimer">
+            <strong>Density only — this is not an NMFC classification.</strong>
+            This worksheet applies the published density scale used by density-based NMFC items. Many
+            commodities carry a <strong>fixed class regardless of density</strong>, and classification also
+            depends on stowability, handling and liability. The NMFC is a copyrighted publication of the
+            NMFTA — check the current NMFC item and sub number for your commodity, and confirm the class with
+            your carrier or broker before tendering. Misdeclared class leads to re-weigh, re-class and
+            balance-due charges.
+          </div>
+
+          <div class="statgrid">
+            <div class="stat"><div class="k">Total weight</div><div class="v" id="sWt">—</div><div class="u" id="sWtU">&nbsp;</div></div>
+            <div class="stat"><div class="k">Total cube</div><div class="v" id="sCu">—</div><div class="u" id="sCuU">&nbsp;</div></div>
+            <div class="stat"><div class="k">Density</div><div class="v" id="sDen">—</div><div class="u" id="sDenU">&nbsp;</div></div>
+            <div class="stat"><div class="k">Linear feet</div><div class="v" id="sLf">—</div><div class="u">est. 96 in trailer</div></div>
+          </div>
+
+          <div>
+            <div class="mini">Class breaks at this cube</div>
+            <div class="kv"><span id="kbUpName">Next lower class</span><b id="kbUp">—</b></div>
+            <div class="kv"><span id="kbDnName">Holds class until</span><b id="kbDn">—</b></div>
+            <div class="hint" style="margin-top:6px" id="kbHint">Weight change needed at the cube shown above.</div>
+          </div>
+
+          <div class="flags" id="flags"></div>
+
+          <div id="rateBox" hidden>
+            <div class="mini">Estimated linehaul (your rates)</div>
+            <div class="kv"><span>Gross at rate per 100 lb</span><b id="rGross">—</b></div>
+            <div class="kv"><span id="rDiscName">Less discount</span><b id="rDisc">—</b></div>
+            <div class="kv"><span>Linehaul after minimum</span><b id="rLine">—</b></div>
+            <div class="kv"><span id="rFscName">Fuel surcharge</span><b id="rFsc">—</b></div>
+            <div class="kv"><span><strong>Estimated total charge</strong></span><b id="rTot">—</b></div>
+            <div class="hint" style="margin-top:6px">Estimate from the rates you entered. Accessorials, discounts and minimums vary by carrier and lane.</div>
+          </div>
+
+        </div>
+        <div class="ft"><span class="lbl">Class</span><span class="ftbig" id="ftClass">—</span></div>
+      </div>
+    </section>
+
+    <!-- ══ inputs ══ -->
+    <section class="col-in">
+
+      <div class="card" id="detailsCard">
+        <div class="hd"><h2>Shipment details</h2>
+          <div class="segs noprint" role="group" aria-label="Measurement units">
+            <button type="button" id="segImp" class="on">Inches / lb</button>
+            <button type="button" id="segMet">cm / kg</button>
+          </div>
+        </div>
+        <div class="bd grid cols-3">
+          <div class="f"><label for="fShipper">Shipper</label><input id="fShipper" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fConsignee">Consignee</label><input id="fConsignee" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fCarrier">Carrier / SCAC</label><input id="fCarrier" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fBol">BOL / reference no.</label><input id="fBol" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fPro">PRO no.</label><input id="fPro" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fDate">Ship date</label><input id="fDate" type="date"></div>
+          <div class="f" style="grid-column:1/-1"><label for="fCommodity">Commodity description</label><input id="fCommodity" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fNmfc">NMFC item / sub (if known)</label><input id="fNmfc" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fPrep">Prepared by</label><input id="fPrep" type="text" autocomplete="off"></div>
+          <div class="f"><label for="fOrigin">Origin → destination</label><input id="fOrigin" type="text" autocomplete="off"></div>
+        </div>
+      </div>
+
+      <div class="card" id="unitsCard">
+        <div class="hd"><h2>Handling units</h2>
+          <span class="hint" id="dimHint">Dimensions in inches, weight in lb</span>
+        </div>
+        <div class="tw">
+          <table id="unitTable">
+            <caption class="printonly" style="caption-side:top;text-align:left;font:600 9pt/1.3 var(--sans);padding:0 0 2mm">
+              Handling units — cube and density per line</caption>
+            <thead><tr>
+              <th scope="col" class="rmhd"><span class="lbl" style="letter-spacing:0">#</span></th>
+              <th scope="col">Description</th>
+              <th scope="col">Type / preset</th>
+              <th scope="col" class="n" id="hL">L (in)</th>
+              <th scope="col" class="n" id="hW">W (in)</th>
+              <th scope="col" class="n" id="hH">H (in)</th>
+              <th scope="col" class="n">Pcs</th>
+              <th scope="col" class="n" id="hWt">Wt each (lb)</th>
+              <th scope="col" class="n" title="Can a second unit be stacked on top?">Stk</th>
+              <th scope="col" class="n">Cube ft³</th>
+              <th scope="col" class="n">Weight lb</th>
+              <th scope="col" class="n">Density pcf</th>
+              <th scope="col" class="n">Class</th>
+              <th scope="col" class="colrm"><span class="lbl" style="letter-spacing:0">Del</span></th>
+            </tr></thead>
+            <tbody id="unitBody"></tbody>
+            <tfoot><tr>
+              <td class="rmhd"></td>
+              <td colspan="5"><strong>Shipment total</strong></td>
+              <td class="n" id="tQty">—</td>
+              <td class="n"></td>
+              <td class="n"></td>
+              <td class="n" id="tCu">—</td>
+              <td class="n" id="tWt">—</td>
+              <td class="n" id="tDen">—</td>
+              <td class="n" id="tCls">—</td>
+              <td class="colrm"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft noprint" id="addRow">
+          <button type="button" class="btn" id="btnAdd">+ Add handling unit</button>
+          <button type="button" class="btn sm" id="btnAddPallet">+ 48×40 pallet</button>
+          <span class="hint" style="margin-left:auto">Cube = L × W × H ÷ 1728 per unit. Density = weight ÷ cube.</span>
+        </div>
+      </div>
+
+      <div class="card" id="rateCard">
+        <div class="hd"><h2>Rate check <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></h2></div>
+        <div class="bd grid cols-3">
+          <div class="f"><label for="fCur">Currency</label>
+            <select id="fCur">
+              <option value="$">$ — dollar</option>
+              <option value="£">£ — pound</option>
+              <option value="€">€ — euro</option>
+              <option value="custom">Custom symbol…</option>
+            </select></div>
+          <div class="f" id="curCustomWrap" hidden><label for="fCurCustom">Custom symbol</label><input id="fCurCustom" type="text" maxlength="4" autocomplete="off"></div>
+          <div class="f"><label for="fRate">Rate per 100 lb (cwt)</label><input id="fRate" type="number" min="0" step="0.01" inputmode="decimal"><span class="err" id="eRate" hidden></span></div>
+          <div class="f"><label for="fDisc">Discount %</label><input id="fDisc" type="number" min="0" max="99" step="0.1" inputmode="decimal"><span class="err" id="eDisc" hidden></span></div>
+          <div class="f"><label for="fMin">Absolute minimum charge</label><input id="fMin" type="number" min="0" step="0.01" inputmode="decimal"><span class="err" id="eMin" hidden></span></div>
+          <div class="f"><label for="fFsc">Fuel surcharge %</label><input id="fFsc" type="number" min="0" max="200" step="0.1" inputmode="decimal"><span class="err" id="eFsc" hidden></span></div>
+        </div>
+        <div class="ft"><span class="hint">Leave the rate blank to hide the estimate. Rates are yours — nothing is built in.</span></div>
+      </div>
+
+      <div class="card noprint" id="savedCard">
+        <div class="hd"><h2>Saved shipments</h2><span class="chip" id="chipSaved">0 saved</span></div>
+        <div class="bd stack">
+          <div class="row">
+            <div class="f" style="flex:1 1 190px"><label for="fSaveName">Save this shipment as</label><input id="fSaveName" type="text" placeholder="BOL 88214 — Acme" autocomplete="off"></div>
+            <button type="button" class="btn pri" id="btnSave" style="align-self:flex-end">Save</button>
+          </div>
+          <div class="savelist" id="saveList"></div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <div class="card" id="refCard">
+    <div class="hd"><h2>NMFC density scale</h2><span class="hint">The band your shipment falls in is highlighted</span></div>
+    <div class="bd">
+      <div class="refcols">
+        <table id="refTable">
+          <thead><tr><th scope="col">Density (lb per ft³)</th><th scope="col" class="n">Class</th></tr></thead>
+          <tbody id="refBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="sign printonly">
+    <div><strong>Declaration.</strong> The dimensions and weights above were taken by the shipper and are the
+      basis of the density shown. Class is derived from density only; the governing NMFC item may specify a
+      different class. Carrier may re-weigh and re-measure.</div>
+    <div class="lines">
+      <div>Shipper signature / date</div>
+      <div>Driver signature / date</div>
+      <div>Carrier PRO no.</div>
+    </div>
+  </div>
+
+  <footer class="hint" id="footNote" style="margin-top:16px;line-height:1.55">
+    Cubic feet = (L × W × H in inches) ÷ 1728 per handling unit; density = total weight ÷ total cube in pounds
+    per cubic foot. Classes follow the density scale used by density-based NMFC items: 50 pcf and over class 50;
+    35–50 class 55; 30–35 class 60; 22.5–30 class 65; 15–22.5 class 70; 13.5–15 class 77.5; 12–13.5 class 85;
+    10.5–12 class 92.5; 9–10.5 class 100; 8–9 class 110; 7–8 class 125; 6–7 class 150; 5–6 class 175;
+    4–5 class 200; 3–4 class 250; 2–3 class 300; 1–2 class 400; under 1 class 500 (each band includes its lower
+    figure and excludes the upper). Cube is gross shipping cube including the pallet. Linear feet is an estimate
+    for a 96 in wide trailer with no mixing of lines. This tool does not reproduce the NMFC and is not a
+    substitute for it. Metric entries are converted at 1 in = 2.54 cm and 1 lb = 0.45359237 kg.
+    Everything is stored in this browser only — nothing is sent anywhere.
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.freight-class-calculator.v1';
+var IN_PER_CM=1/2.54, LB_PER_KG=2.20462262185;
+
+/* ── NMFC density scale ─────────────────────────────────────────── */
+var BANDS=[
+ {lo:50,  hi:Infinity, c:'50',   t:'50 and over'},
+ {lo:35,  hi:50,   c:'55',   t:'35 but less than 50'},
+ {lo:30,  hi:35,   c:'60',   t:'30 but less than 35'},
+ {lo:22.5,hi:30,   c:'65',   t:'22.5 but less than 30'},
+ {lo:15,  hi:22.5, c:'70',   t:'15 but less than 22.5'},
+ {lo:13.5,hi:15,   c:'77.5', t:'13.5 but less than 15'},
+ {lo:12,  hi:13.5, c:'85',   t:'12 but less than 13.5'},
+ {lo:10.5,hi:12,   c:'92.5', t:'10.5 but less than 12'},
+ {lo:9,   hi:10.5, c:'100',  t:'9 but less than 10.5'},
+ {lo:8,   hi:9,    c:'110',  t:'8 but less than 9'},
+ {lo:7,   hi:8,    c:'125',  t:'7 but less than 8'},
+ {lo:6,   hi:7,    c:'150',  t:'6 but less than 7'},
+ {lo:5,   hi:6,    c:'175',  t:'5 but less than 6'},
+ {lo:4,   hi:5,    c:'200',  t:'4 but less than 5'},
+ {lo:3,   hi:4,    c:'250',  t:'3 but less than 4'},
+ {lo:2,   hi:3,    c:'300',  t:'2 but less than 3'},
+ {lo:1,   hi:2,    c:'400',  t:'1 but less than 2'},
+ {lo:0,   hi:1,    c:'500',  t:'less than 1'}
+];
+function bandFor(d){
+  if(!isFinite(d)||d<=0) return null;
+  for(var i=0;i<BANDS.length;i++){ if(d>=BANDS[i].lo && d<BANDS[i].hi) return BANDS[i]; }
+  return null;
+}
+
+/* ── handling unit types / pallet presets (dims in inches) ──────── */
+var TYPES=[
+ {k:'p4840', n:'Pallet 48×40 (GMA)', L:48, W:40},
+ {k:'p4848', n:'Pallet 48×48',       L:48, W:48},
+ {k:'p4245', n:'Pallet 42×42',       L:42, W:42},
+ {k:'p4845', n:'Pallet 48×45',       L:48, W:45},
+ {k:'p4820', n:'Half pallet 48×20',  L:48, W:20},
+ {k:'p3632', n:'Pallet 36×32',       L:36, W:32},
+ {k:'drum',  n:'Drum (23×23)',       L:23, W:23},
+ {k:'crate', n:'Crate',              L:0,  W:0},
+ {k:'box',   n:'Carton / box',       L:0,  W:0},
+ {k:'skid',  n:'Skid',               L:0,  W:0},
+ {k:'bundle',n:'Bundle',             L:0,  W:0},
+ {k:'roll',  n:'Reel / roll',        L:0,  W:0},
+ {k:'loose', n:'Loose piece',        L:0,  W:0}
+];
+function typeName(k){ for(var i=0;i<TYPES.length;i++) if(TYPES[i].k===k) return TYPES[i].n; return 'Handling unit'; }
+function typeShort(k){ return typeName(k).replace(/\s*\([^)]*\)/,''); }
+
+/* ── helpers ────────────────────────────────────────────────────── */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function numOf(v){ if(v===''||v==null) return NaN; var n=parseFloat(v); return isFinite(n)?n:NaN; }
+function fx(n,dp){ if(!isFinite(n)) return '—'; var v=n.toFixed(dp); if(/^-0(\.0*)?$/.test(v)) v=v.replace('-',''); return v; }
+function grp(s){ var p=String(s).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
+function fmt(n,dp){ return isFinite(n)? grp(fx(n,dp)) : '—'; }
+function money(n){ return isFinite(n)? S.opts.cur+grp(fx(n,2)) : '—'; }
+function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dateLong(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  var p=iso.split('-'), M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return Number(p[2])+' '+M[Number(p[1])-1]+' '+p[0];
+}
+
+/* ── state ──────────────────────────────────────────────────────── */
+function sampleState(){
+  return {
+    sys:'imp',
+    sample:true,
+    banner:true,
+    details:{shipper:'Northgate Coatings Ltd', consignee:'Barrow Industrial Supply',
+      carrier:'Estes Express (EXLA)', bol:'BOL-88214', pro:'', date:todayISO(),
+      commodity:'Powder coating in fibre drums on pallets; one crated pump housing',
+      nmfc:'Item 51770 sub 3 (density)', prep:'M. Kerrigan', origin:'Toledo, OH → Fort Wayne, IN'},
+    units:[
+      {d:'Coating powder, shrink-wrapped', t:'p4840', L:48, W:40, H:50, q:2, w:700, s:false},
+      {d:'Pump housing, crated', t:'crate', L:60, W:44, H:42, q:1, w:980, s:false}
+    ],
+    opts:{cur:'$', curSel:'$'},
+    rate:{rate:24.6, disc:65, min:118, fsc:28.5}
+  };
+}
+function blankState(){
+  return {
+    sys:S?S.sys:'imp', sample:false, banner:false,
+    details:{shipper:'',consignee:'',carrier:'',bol:'',pro:'',date:todayISO(),commodity:'',nmfc:'',prep:'',origin:''},
+    units:[{d:'', t:'p4840', L:48, W:40, H:48, q:1, w:'', s:false}],
+    opts:{cur:(S&&S.opts?S.opts.cur:'$'), curSel:(S&&S.opts?S.opts.curSel:'$')},
+    rate:{rate:'',disc:'',min:'',fsc:''}
+  };
+}
+var S=sampleState(), SAVED=[];
+
+/* ── persistence ────────────────────────────────────────────────── */
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify({v:1,state:S,saved:SAVED})); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw);
+    if(o && o.state && o.state.units){ S=normalise(o.state); SAVED=Array.isArray(o.saved)?o.saved:[]; return true; }
+  }catch(e){}
+  return false;
+}
+function normalise(st){
+  var d=sampleState();
+  st=st||{};
+  st.sys=(st.sys==='met')?'met':'imp';
+  st.sample=!!st.sample; st.banner=!!st.banner;
+  st.details=Object.assign({},d.details,st.details||{});
+  st.opts=Object.assign({},d.opts,st.opts||{});
+  st.rate=Object.assign({rate:'',disc:'',min:'',fsc:''},st.rate||{});
+  st.units=(Array.isArray(st.units)?st.units:[]).map(function(u){
+    return {d:String(u&&u.d!=null?u.d:''), t:(u&&u.t)||'crate',
+      L:(u&&u.L!=null?u.L:''), W:(u&&u.W!=null?u.W:''), H:(u&&u.H!=null?u.H:''),
+      q:(u&&u.q!=null?u.q:1), w:(u&&u.w!=null?u.w:''), s:!!(u&&u.s)};
+  });
+  return st;
+}
+
+/* ── computation ────────────────────────────────────────────────── */
+function linearFeet(L,W,q,stack){
+  if(!(L>0&&W>0&&q>0)) return NaN;
+  var tier=stack?2:1, best=Infinity, o=[[L,W],[W,L]];
+  for(var i=0;i<2;i++){
+    var depth=o[i][0], across=Math.floor(96/o[i][1]);
+    if(across<1) continue;
+    var rows=Math.ceil(q/(across*tier));
+    best=Math.min(best, rows*depth/12);
+  }
+  return isFinite(best)?best:NaN;
+}
+function compute(){
+  var met=S.sys==='met';
+  var lines=[], tw=0, tc=0, tq=0, tlf=0, anyLine=false, lfOK=true, flags=[];
+  for(var i=0;i<S.units.length;i++){
+    var u=S.units[i];
+    var L=numOf(u.L)*(met?IN_PER_CM:1), W=numOf(u.W)*(met?IN_PER_CM:1), H=numOf(u.H)*(met?IN_PER_CM:1);
+    var q=Math.floor(numOf(u.q)), w=numOf(u.w)*(met?LB_PER_KG:1);
+    var ok = L>0&&W>0&&H>0&&q>0&&w>0;
+    var cuEach = ok ? (L*W*H)/1728 : NaN;
+    var cuLine = ok ? cuEach*q : NaN;
+    var wtLine = ok ? w*q : NaN;
+    var den = (ok && cuLine>0) ? wtLine/cuLine : NaN;
+    var band = bandFor(den);
+    var lf = ok ? linearFeet(L,W,q,u.s) : NaN;
+    if(ok){ anyLine=true; tw+=wtLine; tc+=cuLine; tq+=q;
+      if(isFinite(lf)) tlf+=lf; else lfOK=false;
+      if(H>96) flags.push({t:'Line '+(i+1)+': '+fmt(H,0)+' in tall exceeds most 96 in LTL trailer doors — check equipment.',k:''});
+      if(Math.max(L,W)>96) flags.push({t:'Line '+(i+1)+': longest dimension over 96 in (8 ft) normally triggers extreme-length / linear-foot charges.',k:''});
+      if(w>4400) flags.push({t:'Line '+(i+1)+': '+fmt(w,0)+' lb per unit may need a forklift with extra capacity or a heavy-item charge.',k:''});
+    }
+    lines.push({u:u,i:i,ok:ok,cuEach:cuEach,cu:cuLine,wt:wtLine,den:den,band:band,lf:lf,L:L,W:W,H:H,q:q,w:w});
+  }
+  var tden = (anyLine && tc>0) ? tw/tc : NaN;
+  var tband = bandFor(tden);
+  if(anyLine && tw>=10000) flags.push({t:'Over 10,000 lb — ask for volume or truckload pricing; density class may not be the cheapest route.',k:'g'});
+  if(anyLine && lfOK && tlf>=12) flags.push({t:'About '+fmt(tlf,1)+' linear feet — most carriers apply linear-foot rules from 12 ft.',k:''});
+  if(!anyLine) flags.push({t:'Enter length, width, height, pieces and weight for at least one handling unit.',k:'b'});
+
+  /* class breaks at the current cube */
+  var up=null,dn=null;
+  if(tband && tc>0 && isFinite(tw)){
+    if(isFinite(tband.hi)){
+      var idx=BANDS.indexOf(tband);
+      up={cls:BANDS[idx-1].c, addWt:tband.hi*tc-tw, cutCu:tc-(tw/tband.hi)};
+    }
+    if(tband.lo>0){
+      var idx2=BANDS.indexOf(tband);
+      dn={cls:BANDS[idx2+1].c, margWt:tw-tband.lo*tc, addCu:(tw/tband.lo)-tc};
+    }
+  }
+
+  /* rate estimate */
+  var r=S.rate, rr=numOf(r.rate), rd=numOf(r.disc), rm=numOf(r.min), rf=numOf(r.fsc), rate=null;
+  if(isFinite(rr) && rr>0 && anyLine && tw>0){
+    var gross=tw/100*rr;
+    var disc=isFinite(rd)&&rd>0 ? gross*(rd/100) : 0;
+    var net=gross-disc;
+    var line=(isFinite(rm)&&rm>0)? Math.max(net,rm) : net;
+    var fsc=(isFinite(rf)&&rf>0)? line*(rf/100) : 0;
+    rate={gross:gross,disc:disc,discPct:isFinite(rd)?rd:0,line:line,minApplied:(isFinite(rm)&&rm>net),
+      fsc:fsc,fscPct:isFinite(rf)?rf:0,tot:line+fsc};
+  }
+  return {lines:lines,tw:tw,tc:tc,tq:tq,tlf:tlf,lfOK:lfOK,tden:tden,tband:tband,any:anyLine,flags:flags,up:up,dn:dn,rate:rate};
+}
+
+/* ── rendering ──────────────────────────────────────────────────── */
+var typeOptsHTML='';
+(function(){ for(var i=0;i<TYPES.length;i++) typeOptsHTML+='<option value="'+TYPES[i].k+'">'+esc(TYPES[i].n)+'</option>'; })();
+
+function rowHTML(u,i){
+  var n=i+1;
+  function cell(k,val,lab,step,min){
+    return '<td class="n"><input type="number" inputmode="decimal" step="'+step+'" min="'+min+'" data-k="'+k+'" data-i="'+i+'" '+
+      'aria-label="'+lab+', line '+n+'" value="'+esc(val)+'"><span class="pv"></span><span class="cellerr" hidden></span></td>';
+  }
+  return '<tr data-i="'+i+'">'+
+    '<td class="idx rmhd">'+n+'</td>'+
+    '<td class="cdesc"><input type="text" data-k="d" data-i="'+i+'" aria-label="Description, line '+n+'" value="'+esc(u.d)+'" placeholder="What is on the pallet?"><span class="pv"></span></td>'+
+    '<td class="ctype"><select data-k="t" data-i="'+i+'" aria-label="Type or pallet preset, line '+n+'">'+typeOptsHTML+'</select><span class="pv"></span></td>'+
+    cell('L',u.L,'Length','0.1','0')+
+    cell('W',u.W,'Width','0.1','0')+
+    cell('H',u.H,'Height','0.1','0')+
+    cell('q',u.q,'Pieces','1','1')+
+    cell('w',u.w,'Weight each','0.1','0')+
+    '<td class="stk"><input type="checkbox" data-k="s" data-i="'+i+'" aria-label="Stackable, line '+n+'"'+(u.s?' checked':'')+'><span class="pv"></span></td>'+
+    '<td class="calc c-cu">—</td>'+
+    '<td class="calc c-wt">—</td>'+
+    '<td class="calc c-den">—</td>'+
+    '<td class="cls c-cls">—</td>'+
+    '<td class="colrm"><button type="button" class="btn ico sm rm" data-i="'+i+'" aria-label="Remove line '+n+'">✕</button></td>'+
+  '</tr>';
+}
+function renderRows(){
+  var b=$('unitBody');
+  if(!S.units.length){
+    b.innerHTML='<tr><td colspan="14"><div class="empty">No handling units yet — add one below.</div></td></tr>';
+    return;
+  }
+  var h=''; for(var i=0;i<S.units.length;i++) h+=rowHTML(S.units[i],i);
+  b.innerHTML=h;
+  var sel=b.querySelectorAll('select[data-k="t"]');
+  for(var j=0;j<sel.length;j++) sel[j].value=S.units[j].t;
+}
+function renderRef(){
+  var h='';
+  for(var i=0;i<BANDS.length;i++) h+='<tr data-c="'+BANDS[i].c+'"><td>'+esc(BANDS[i].t)+'</td><td class="n">'+BANDS[i].c+'</td></tr>';
+  $('refBody').innerHTML=h;
+}
+function renderSaved(){
+  var l=$('saveList');
+  $('chipSaved').textContent=SAVED.length+' saved';
+  if(!SAVED.length){ l.innerHTML='<div class="hint">Nothing saved yet. Save a shipment to reopen it later on this computer.</div>'; return; }
+  var h='';
+  for(var i=0;i<SAVED.length;i++){
+    h+='<div class="saveitem"><span class="nm">'+esc(SAVED[i].name)+'</span>'+
+       '<span class="mt">'+esc(SAVED[i].meta||'')+'</span>'+
+       '<button type="button" class="btn sm ld" data-i="'+i+'">Open</button>'+
+       '<button type="button" class="btn sm dgr dl" data-i="'+i+'" aria-label="Delete '+esc(SAVED[i].name)+'">Delete</button></div>';
+  }
+  l.innerHTML=h;
+}
+
+function unitLabels(){
+  var met=S.sys==='met';
+  $('hL').textContent='L ('+(met?'cm':'in')+')';
+  $('hW').textContent='W ('+(met?'cm':'in')+')';
+  $('hH').textContent='H ('+(met?'cm':'in')+')';
+  $('hWt').textContent='Wt each ('+(met?'kg':'lb')+')';
+  $('dimHint').textContent=met?'Dimensions in centimetres, weight in kilograms':'Dimensions in inches, weight in pounds';
+  $('segImp').classList.toggle('on',!met);
+  $('segMet').classList.toggle('on',met);
+}
+
+function paint(){
+  var C=compute(), met=S.sys==='met';
+  var rows=$('unitBody').querySelectorAll('tr[data-i]');
+  for(var i=0;i<rows.length;i++){
+    var tr=rows[i], L=C.lines[i]; if(!L) continue;
+    tr.querySelector('.c-cu').textContent = L.ok? fmt(L.cu,2) : '—';
+    tr.querySelector('.c-wt').textContent = L.ok? fmt(L.wt,1) : '—';
+    tr.querySelector('.c-den').textContent = L.ok? fmt(L.den,2) : '—';
+    tr.querySelector('.c-cls').textContent = L.band? L.band.c : '—';
+    var pvs=tr.querySelectorAll('.pv');
+    var u=S.units[i];
+    pvs[0].textContent=u.d||'—';
+    pvs[1].textContent=typeShort(u.t);
+    pvs[2].textContent=(u.L===''||u.L==null)?'—':String(u.L);
+    pvs[3].textContent=(u.W===''||u.W==null)?'—':String(u.W);
+    pvs[4].textContent=(u.H===''||u.H==null)?'—':String(u.H);
+    pvs[5].textContent=(u.q===''||u.q==null)?'—':String(u.q);
+    pvs[6].textContent=(u.w===''||u.w==null)?'—':String(u.w);
+    pvs[7].textContent=u.s?'Yes':'No';
+  }
+  $('tQty').textContent = C.any? fmt(C.tq,0) : '—';
+  $('tCu').textContent  = C.any? fmt(C.tc,2) : '—';
+  $('tWt').textContent  = C.any? fmt(C.tw,1) : '—';
+  $('tDen').textContent = C.any? fmt(C.tden,2) : '—';
+  $('tCls').textContent = C.tband? C.tband.c : '—';
+
+  $('heroV').textContent = C.tband? ('Class '+C.tband.c) : '—';
+  $('heroU').textContent = C.tband
+      ? (fmt(C.tden,2)+' lb/ft³' + (met? ' ('+fmt(C.tden*16.0184634,1)+' kg/m³)' : '') + ' · band '+C.tband.t)
+      : 'density —';
+  $('ftClass').textContent = C.tband? C.tband.c : '—';
+  $('chipUnits').textContent = C.any? (fmt(C.tq,0)+' unit'+(C.tq===1?'':'s')+' · '+S.units.length+' line'+(S.units.length===1?'':'s')) : 'no data';
+
+  $('sWt').textContent = C.any? fmt(met? C.tw/LB_PER_KG : C.tw, met?1:0) : '—';
+  $('sWtU').textContent = met? 'kg ('+fmt(C.tw,0)+' lb)' : 'lb';
+  $('sCu').textContent = C.any? fmt(C.tc,2) : '—';
+  $('sCuU').textContent = met? 'ft³ ('+fmt(C.tc*0.0283168466,2)+' m³)' : 'ft³ gross, incl. pallet';
+  $('sDen').textContent = C.any? fmt(C.tden,2) : '—';
+  $('sDenU').textContent = met? 'lb/ft³ ('+fmt(C.tden*16.0184634,1)+' kg/m³)' : 'lb per ft³ (pcf)';
+  $('sLf').textContent = (C.any&&C.lfOK)? fmt(Math.ceil(C.tlf-1e-9),0) : '—';
+
+  /* class breaks */
+  if(C.up){
+    $('kbUpName').textContent='To reach class '+C.up.cls;
+    $('kbUp').textContent='+'+fmt(met? C.up.addWt/LB_PER_KG : C.up.addWt, met?1:0)+(met?' kg':' lb')+
+      '  or −'+fmt(C.up.cutCu,2)+' ft³';
+  } else if(C.tband){
+    $('kbUpName').textContent='Next lower class';
+    $('kbUp').textContent='class 50 is the floor';
+  } else { $('kbUpName').textContent='Next lower class'; $('kbUp').textContent='—'; }
+  if(C.dn){
+    $('kbDnName').textContent='Falls to class '+C.dn.cls+' if it loses';
+    $('kbDn').textContent=fmt(met? C.dn.margWt/LB_PER_KG : C.dn.margWt, met?1:0)+(met?' kg':' lb')+
+      '  or gains '+fmt(C.dn.addCu,2)+' ft³';
+  } else { $('kbDnName').textContent='Holds class until'; $('kbDn').textContent='—'; }
+  $('kbHint').textContent = C.tband
+    ? 'Based on the current total cube of '+fmt(C.tc,2)+' ft³. Weights rounded to the nearest '+(met?'0.1 kg':'pound')+'.'
+    : 'Enter a complete line to see how close you are to the next class.';
+
+  /* flags */
+  var fh='';
+  for(var k=0;k<C.flags.length;k++) fh+='<div class="flag '+(C.flags[k].k||'')+'">'+esc(C.flags[k].t)+'</div>';
+  $('flags').innerHTML=fh;
+
+  /* rate */
+  if(C.rate){
+    $('rateBox').hidden=false;
+    $('rGross').textContent=money(C.rate.gross);
+    $('rDiscName').textContent='Less discount '+fmt(C.rate.discPct,1)+'%';
+    $('rDisc').textContent='−'+money(C.rate.disc);
+    $('rLine').textContent=money(C.rate.line)+(C.rate.minApplied?' (min)':'');
+    $('rFscName').textContent='Fuel surcharge '+fmt(C.rate.fscPct,1)+'%';
+    $('rFsc').textContent=money(C.rate.fsc);
+    $('rTot').textContent=money(C.rate.tot);
+  } else { $('rateBox').hidden=true; }
+
+  /* reference highlight */
+  var rrows=$('refBody').querySelectorAll('tr');
+  for(var m=0;m<rrows.length;m++)
+    rrows[m].classList.toggle('on', !!(C.tband && rrows[m].getAttribute('data-c')===C.tband.c));
+
+  /* print header */
+  var d=S.details;
+  $('pShipper').textContent=d.shipper||'—';
+  $('pConsignee').textContent=d.consignee||'—';
+  $('pBol').textContent=d.bol||'—';
+  $('pPro').textContent=d.pro||'—';
+  $('pCarrier').textContent=d.carrier||'—';
+  $('pDate').textContent=dateLong(d.date)||'—';
+  $('pCommodity').textContent=(d.commodity||'—')+(d.origin?('  ·  '+d.origin):'');
+  $('pNmfc').textContent=d.nmfc||'—';
+  $('pPrep').textContent=d.prep||'—';
+  $('barSub').textContent=(C.tband? 'class '+C.tband.c+' · '+fmt(C.tden,2)+' pcf' : 'NMFC density scale · LTL');
+  document.title=(C.tband? 'Class '+C.tband.c+' — ':'')+'Freight Class & Density Calculator — Solvix Toolkit';
+  return C;
+}
+
+/* ── validation ─────────────────────────────────────────────────── */
+var RULES={
+  L:{min:0.1,max:636,lab:'Length'}, W:{min:0.1,max:636,lab:'Width'},
+  H:{min:0.1,max:636,lab:'Height'}, q:{min:1,max:9999,lab:'Pieces'},
+  w:{min:0.1,max:100000,lab:'Weight'}
+};
+function validateCell(inp){
+  var k=inp.getAttribute('data-k'), r=RULES[k];
+  var wrap=inp.parentNode, e=wrap.querySelector('.cellerr');
+  if(!r||!e) return;
+  var raw=inp.value.trim(), msg='';
+  if(raw===''){ msg=''; }
+  else{
+    var n=parseFloat(raw);
+    var met=S.sys==='met';
+    var maxDisp = (k==='q') ? r.max : (k==='w' ? (met? r.max/LB_PER_KG : r.max) : (met? r.max*2.54 : r.max));
+    var minDisp = (k==='q') ? r.min : 0.01;
+    if(!isFinite(n)) msg='Enter a number';
+    else if(n<=0) msg=r.lab+' must be more than zero';
+    else if(n<minDisp) msg='Too small';
+    else if(n>maxDisp) msg=r.lab+' over '+fmt(maxDisp,0)+' — check the entry';
+    else if(k==='q' && Math.abs(n-Math.round(n))>1e-9) msg='Whole pieces only';
+  }
+  inp.classList.toggle('inv', !!msg);
+  e.textContent=msg; e.hidden=!msg;
+}
+function validateRate(id,eid,lab,max){
+  var inp=$(id), e=$(eid), raw=inp.value.trim(), msg='';
+  if(raw!==''){
+    var n=parseFloat(raw);
+    if(!isFinite(n)) msg='Enter a number';
+    else if(n<0) msg=lab+' cannot be negative';
+    else if(n>max) msg=lab+' over '+max+' — check the entry';
+  }
+  inp.classList.toggle('inv',!!msg); e.textContent=msg; e.hidden=!msg;
+}
+
+/* ── field wiring ───────────────────────────────────────────────── */
+var DETAIL_MAP={fShipper:'shipper',fConsignee:'consignee',fCarrier:'carrier',fBol:'bol',fPro:'pro',
+  fDate:'date',fCommodity:'commodity',fNmfc:'nmfc',fPrep:'prep',fOrigin:'origin'};
+function fillForm(){
+  for(var id in DETAIL_MAP) if(DETAIL_MAP.hasOwnProperty(id)) $(id).value=S.details[DETAIL_MAP[id]]||'';
+  $('fRate').value=S.rate.rate===''||S.rate.rate==null?'':S.rate.rate;
+  $('fDisc').value=S.rate.disc===''||S.rate.disc==null?'':S.rate.disc;
+  $('fMin').value=S.rate.min===''||S.rate.min==null?'':S.rate.min;
+  $('fFsc').value=S.rate.fsc===''||S.rate.fsc==null?'':S.rate.fsc;
+  $('fCur').value=S.opts.curSel;
+  $('curCustomWrap').hidden = S.opts.curSel!=='custom';
+  $('fCurCustom').value = S.opts.curSel==='custom'? S.opts.cur : '';
+  $('banner').hidden=!S.banner;
+  unitLabels();
+}
+function redrawAll(){ fillForm(); renderRows(); renderSaved(); paint(); }
+
+/* ── unit conversion on toggle ──────────────────────────────────── */
+function switchSystem(sys){
+  if(sys===S.sys) return;
+  var toMet = sys==='met';
+  for(var i=0;i<S.units.length;i++){
+    var u=S.units[i];
+    ['L','W','H'].forEach(function(k){
+      var n=numOf(u[k]); if(!isFinite(n)) return;
+      u[k]= toMet ? Math.round(n*2.54*10)/10 : Math.round(n/2.54*100)/100;
+    });
+    var w=numOf(u.w);
+    if(isFinite(w)) u.w = toMet ? Math.round(w/LB_PER_KG*10)/10 : Math.round(w*LB_PER_KG*10)/10;
+  }
+  S.sys=sys; S.sample=false;
+  redrawAll(); save();
+}
+
+/* ── CSV ────────────────────────────────────────────────────────── */
+function cq(v){ v=(v==null?'':String(v)); return /[",\n\r]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function crow(a){ return a.map(cq).join(','); }
+function buildCSV(){
+  var C=compute(), met=S.sys==='met', d=S.details, L=[];
+  var dU=met?'cm':'in', wU=met?'kg':'lb';
+  L.push(crow(['Shipment Density & Freight Class Worksheet']));
+  L.push(crow(['Generated',new Date().toISOString().slice(0,10)]));
+  L.push(crow(['Shipper',d.shipper]));
+  L.push(crow(['Consignee',d.consignee]));
+  L.push(crow(['Carrier / SCAC',d.carrier]));
+  L.push(crow(['BOL / reference',d.bol]));
+  L.push(crow(['PRO no.',d.pro]));
+  L.push(crow(['Ship date',d.date]));
+  L.push(crow(['Origin / destination',d.origin]));
+  L.push(crow(['Commodity',d.commodity]));
+  L.push(crow(['NMFC item / sub',d.nmfc]));
+  L.push(crow(['Prepared by',d.prep]));
+  L.push('');
+  L.push(crow(['#','Description','Type','Length ('+dU+')','Width ('+dU+')','Height ('+dU+')','Pieces',
+    'Weight each ('+wU+')','Stackable','Cube each (ft3)','Cube total (ft3)','Weight total (lb)',
+    'Density (lb/ft3)','Class','Linear ft (est)']));
+  for(var i=0;i<C.lines.length;i++){
+    var ln=C.lines[i], u=ln.u;
+    L.push(crow([i+1,u.d,typeShort(u.t),u.L,u.W,u.H,u.q,u.w,u.s?'Yes':'No',
+      ln.ok?fx(ln.cuEach,3):'', ln.ok?fx(ln.cu,2):'', ln.ok?fx(ln.wt,1):'',
+      ln.ok?fx(ln.den,2):'', ln.band?ln.band.c:'', isFinite(ln.lf)?fx(ln.lf,2):'']));
+  }
+  L.push(crow(['','SHIPMENT TOTAL','','','','',C.any?C.tq:'','','','',
+    C.any?fx(C.tc,2):'', C.any?fx(C.tw,1):'', C.any?fx(C.tden,2):'', C.tband?C.tband.c:'',
+    (C.any&&C.lfOK)?fx(C.tlf,2):'']));
+  L.push('');
+  L.push(crow(['Summary']));
+  L.push(crow(['Handling units',C.any?C.tq:'']));
+  L.push(crow(['Total weight (lb)',C.any?fx(C.tw,1):'']));
+  L.push(crow(['Total cube (ft3)',C.any?fx(C.tc,2):'']));
+  L.push(crow(['Overall density (lb/ft3)',C.any?fx(C.tden,2):'']));
+  L.push(crow(['Freight class (density basis)',C.tband?C.tband.c:'']));
+  L.push(crow(['Density band',C.tband?C.tband.t:'']));
+  L.push(crow(['Linear feet (est, 96 in trailer)',(C.any&&C.lfOK)?fx(Math.ceil(C.tlf-1e-9),0):'']));
+  if(C.up) L.push(crow(['To reach class '+C.up.cls,'add '+fx(C.up.addWt,1)+' lb or remove '+fx(C.up.cutCu,2)+' ft3']));
+  if(C.dn) L.push(crow(['Falls to class '+C.dn.cls+' if it loses','more than '+fx(C.dn.margWt,1)+' lb or gains '+fx(C.dn.addCu,2)+' ft3']));
+  if(C.rate){
+    L.push('');
+    L.push(crow(['Rate check ('+S.opts.cur+')']));
+    L.push(crow(['Rate per 100 lb',fx(numOf(S.rate.rate),2)]));
+    L.push(crow(['Gross charge',fx(C.rate.gross,2)]));
+    L.push(crow(['Discount '+fx(C.rate.discPct,1)+'%','-'+fx(C.rate.disc,2)]));
+    L.push(crow(['Linehaul'+(C.rate.minApplied?' (minimum applied)':''),fx(C.rate.line,2)]));
+    L.push(crow(['Fuel surcharge '+fx(C.rate.fscPct,1)+'%',fx(C.rate.fsc,2)]));
+    L.push(crow(['Estimated total',fx(C.rate.tot,2)]));
+  }
+  L.push('');
+  L.push(crow(['Notice','Density-based class only. Many NMFC items carry a fixed class regardless of density; '+
+    'classification also depends on stowability, handling and liability. Confirm the governing NMFC item with your carrier or broker.']));
+  return L.join('\r\n');
+}
+function dl(name,text,mime){
+  try{
+    var b=new Blob([text],{type:mime}), u=URL.createObjectURL(b), a=document.createElement('a');
+    a.href=u; a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(u); },400);
+  }catch(e){}
+}
+function stem(){
+  var b=(S.details.bol||S.details.consignee||'shipment').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'');
+  return 'freight-class-'+(b||'shipment');
+}
+
+/* ── events ─────────────────────────────────────────────────────── */
+function bind(){
+  for(var id in DETAIL_MAP){ if(!DETAIL_MAP.hasOwnProperty(id)) continue;
+    (function(id){
+      $(id).addEventListener('input',function(){ S.details[DETAIL_MAP[id]]=this.value; S.sample=false; paint(); save(); });
+    })(id);
+  }
+  var body=$('unitBody');
+  body.addEventListener('input',function(ev){
+    var t=ev.target, i=parseInt(t.getAttribute('data-i'),10), k=t.getAttribute('data-k');
+    if(isNaN(i)||!k||!S.units[i]) return;
+    if(k==='s') S.units[i].s=t.checked;
+    else if(k==='d') S.units[i].d=t.value;
+    else S.units[i][k]=t.value;
+    S.sample=false;
+    if(RULES[k]) validateCell(t);
+    paint(); save();
+  });
+  body.addEventListener('change',function(ev){
+    var t=ev.target;
+    if(t.getAttribute('data-k')!=='t') return;
+    var i=parseInt(t.getAttribute('data-i'),10); if(isNaN(i)||!S.units[i]) return;
+    S.units[i].t=t.value;
+    var def=null; for(var j=0;j<TYPES.length;j++) if(TYPES[j].k===t.value) def=TYPES[j];
+    if(def && def.L>0){
+      var met=S.sys==='met';
+      S.units[i].L = met? Math.round(def.L*2.54*10)/10 : def.L;
+      S.units[i].W = met? Math.round(def.W*2.54*10)/10 : def.W;
+      var tr=t.closest('tr');
+      tr.querySelector('input[data-k="L"]').value=S.units[i].L;
+      tr.querySelector('input[data-k="W"]').value=S.units[i].W;
+    }
+    S.sample=false; paint(); save();
+  });
+  body.addEventListener('blur',function(ev){
+    var t=ev.target;
+    if(t && t.getAttribute && RULES[t.getAttribute('data-k')]) validateCell(t);
+  },true);
+  body.addEventListener('click',function(ev){
+    var b=ev.target.closest('.rm'); if(!b) return;
+    var i=parseInt(b.getAttribute('data-i'),10); if(isNaN(i)) return;
+    S.units.splice(i,1); S.sample=false; renderRows(); paint(); save();
+  });
+
+  function addUnit(pre){
+    var met=S.sys==='met';
+    var u={d:'', t:pre?'p4840':'crate', L:'', W:'', H:'', q:1, w:'', s:false};
+    if(pre){ u.L=met?121.9:48; u.W=met?101.6:40; u.H=met?121.9:48; }
+    S.units.push(u); S.sample=false; renderRows(); paint(); save();
+    var last=$('unitBody').querySelector('tr:last-child input[data-k="d"]'); if(last) last.focus();
+  }
+  $('btnAdd').addEventListener('click',function(){ addUnit(false); });
+  $('btnAddPallet').addEventListener('click',function(){ addUnit(true); });
+
+  $('segImp').addEventListener('click',function(){ switchSystem('imp'); });
+  $('segMet').addEventListener('click',function(){ switchSystem('met'); });
+
+  var rmap=[['fRate','rate','eRate','Rate',100000],['fDisc','disc','eDisc','Discount',99],
+            ['fMin','min','eMin','Minimum charge',100000],['fFsc','fsc','eFsc','Fuel surcharge',200]];
+  rmap.forEach(function(r){
+    $(r[0]).addEventListener('input',function(){ S.rate[r[1]]=this.value; S.sample=false; paint(); save(); });
+    $(r[0]).addEventListener('blur',function(){ validateRate(r[0],r[2],r[3],r[4]); });
+  });
+  $('fCur').addEventListener('change',function(){
+    S.opts.curSel=this.value;
+    $('curCustomWrap').hidden = this.value!=='custom';
+    S.opts.cur = this.value==='custom' ? ($('fCurCustom').value||'¤') : this.value;
+    if(this.value==='custom') $('fCurCustom').focus();
+    paint(); save();
+  });
+  $('fCurCustom').addEventListener('input',function(){
+    S.opts.cur=this.value||'¤'; paint(); save();
+  });
+
+  $('btnPrint').addEventListener('click',function(){ window.print(); });
+  $('btnCsv').addEventListener('click',function(){ dl(stem()+'.csv','﻿'+buildCSV(),'text/csv;charset=utf-8;'); });
+  $('btnJson').addEventListener('click',function(){
+    dl(stem()+'.json', JSON.stringify({app:'solvix.freight-class-calculator',v:1,
+      exported:new Date().toISOString(),state:S,saved:SAVED},null,2),'application/json');
+  });
+  $('btnImport').addEventListener('click',function(){ $('fileIn').click(); });
+  $('fileIn').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        var st=o&&o.state?o.state:o;
+        if(!st||!st.units) throw 0;
+        S=normalise(st); S.banner=false;
+        if(o&&Array.isArray(o.saved)) SAVED=o.saved;
+        redrawAll(); save();
+      }catch(e){
+        var fl=$('flags');
+        fl.innerHTML='<div class="flag b">That file could not be read as a Solvix freight-class export.</div>'+fl.innerHTML;
+      }
+    };
+    rd.readAsText(f); this.value='';
+  });
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear the current shipment AND every saved shipment from this browser?\n\nThis cannot be undone. Export JSON first if you want a copy.')) return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    SAVED=[]; S=blankState(); S.banner=false; redrawAll(); save();
+  });
+  $('btnBlank').addEventListener('click',function(){
+    if(!window.confirm('Start a blank shipment? The sample on screen is replaced.')) return;
+    S=blankState(); S.banner=false; redrawAll(); save();
+  });
+  $('btnDismiss').addEventListener('click',function(){ S.banner=false; $('banner').hidden=true; save(); });
+
+  $('btnSave').addEventListener('click',function(){
+    var C=compute();
+    var nm=($('fSaveName').value||'').trim() || S.details.bol || S.details.consignee || ('Shipment '+(SAVED.length+1));
+    var meta=(C.tband?('cl '+C.tband.c):'—')+' · '+(C.any?fmt(C.tw,0)+' lb':'—');
+    var copy=JSON.parse(JSON.stringify(S)); copy.banner=false; copy.sample=false;
+    var ix=-1; for(var i=0;i<SAVED.length;i++) if(SAVED[i].name===nm) ix=i;
+    if(ix>=0){
+      if(!window.confirm('Replace the saved shipment “'+nm+'”?')) return;
+      SAVED[ix]={name:nm,meta:meta,ts:Date.now(),data:copy};
+    } else SAVED.unshift({name:nm,meta:meta,ts:Date.now(),data:copy});
+    $('fSaveName').value=''; renderSaved(); save();
+  });
+  $('saveList').addEventListener('click',function(ev){
+    var ld=ev.target.closest('.ld'), dlb=ev.target.closest('.dl');
+    if(ld){
+      var i=parseInt(ld.getAttribute('data-i'),10); var rec=SAVED[i]; if(!rec) return;
+      if(!window.confirm('Open “'+rec.name+'”? The shipment on screen is replaced.')) return;
+      S=normalise(JSON.parse(JSON.stringify(rec.data))); S.banner=false; redrawAll(); save();
+    } else if(dlb){
+      var j=parseInt(dlb.getAttribute('data-i'),10); var r2=SAVED[j]; if(!r2) return;
+      if(!window.confirm('Delete saved shipment “'+r2.name+'”?')) return;
+      SAVED.splice(j,1); renderSaved(); save();
+    }
+  });
+}
+
+/* ── boot ───────────────────────────────────────────────────────── */
+renderRef();
+if(!load()){ S=sampleState(); }
+redrawAll();
+bind();
+save();
+})();
+</script>
+</body>
+</html>
