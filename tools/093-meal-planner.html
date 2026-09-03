@@ -986,6 +986,10 @@ function renderPantry(C){
   var held=C.heldList.length;
   $('chipPantry').textContent=held+' of '+stap.length+' already held';
 }
+function fillGroup(h,aisle,cost,n){
+  var txt=esc(money(cost))+' · '+n+' item'+(n===1?'':'s');
+  return h.replace('@@'+aisle+'@@',function(){return txt;});
+}
 function renderList(C){
   var tb=$('slBody'), h='', lastAisle=null, aisleCost=0, aisleN=0, rows=[];
   if(!C.buyList.length){
@@ -994,7 +998,7 @@ function renderList(C){
     C.buyList.forEach(function(i,ix){
       rows.push(i);
       if(i.aisle!==lastAisle){
-        if(lastAisle!==null)h=h.replace('@@'+lastAisle+'@@',esc(money(aisleCost))+' · '+aisleN+' item'+(aisleN===1?'':'s'));
+        if(lastAisle!==null)h=fillGroup(h,lastAisle,aisleCost,aisleN);
         lastAisle=i.aisle;aisleCost=0;aisleN=0;
         h+='<tr class="grp"><td colspan="6">'+esc(i.aisle)+'<span class="gc">@@'+i.aisle+'@@</span></td></tr>';
       }
@@ -1009,7 +1013,7 @@ function renderList(C){
         '<td class="n">'+(i.price>0?esc(money(i.price*priceFactor(i.dim)))+'<br><span class="hint">'+esc(priceBasis(i.dim))+'</span>':'—')+'</td>'+
         '<td class="n">'+(i.price>0?esc(money(i.cost)):'—')+'</td></tr>';
     });
-    if(lastAisle!==null)h=h.replace('@@'+lastAisle+'@@',esc(money(aisleCost))+' · '+aisleN+' item'+(aisleN===1?'':'s'));
+    if(lastAisle!==null)h=fillGroup(h,lastAisle,aisleCost,aisleN);
     tb.innerHTML=h;
   }
   $('slTotal').textContent=C.buyList.length?money(C.total):'—';
@@ -1105,3 +1109,335 @@ function renderAll(){
   renderSetup(); renderWeek(); renderRecList(); renderRecEditor(); renderResults();
   $('sampleBanner').hidden=!S.sample;
 }
+
+/* ══ helpers for edits ═════════════════════════════════════════════ */
+function commit(opts){
+  opts=opts||{};
+  touch();
+  if(opts.week)renderWeek();
+  if(opts.recList)renderRecList();
+  if(opts.recEd)renderRecEditor();
+  if(opts.setup)renderSetup();
+  renderResults();
+  if(opts.recCost!==false)renderRecCost();
+  save();
+}
+function renderRecCost(){
+  var r=recipeById(S.sel); if(!r)return;
+  var one=0;
+  r.ings.forEach(function(ing){
+    var u=UNITS[ing.unit]||UNITS.g;
+    one+=nz(ing.qty)*u.f/baseDivisor(u.d)*nz(ing.price);
+  });
+  var per=nz(r.serves)>0?one/nz(r.serves):null;
+  $('recCost').innerHTML='Batch of '+esc(trimNum(nz(r.serves),2))+': <strong>'+esc(money(one))+
+    '</strong> &nbsp;·&nbsp; per portion: <strong>'+(per==null?'—':esc(money(per)))+'</strong>';
+}
+function setErr(inputId,errId,msg){
+  var i=$(inputId),e=$(errId);
+  if(msg){i.classList.add('inv');i.setAttribute('aria-invalid','true');e.textContent=msg;e.hidden=false;}
+  else{i.classList.remove('inv');i.removeAttribute('aria-invalid');e.textContent='';e.hidden=true;}
+}
+/* ══ wiring ════════════════════════════════════════════════════════ */
+function wire(){
+  /* setup */
+  $('iHouse').addEventListener('input',function(){S.meta.house=this.value;touch();renderResults();save();});
+  $('iStart').addEventListener('change',function(){S.meta.start=this.value;commit({week:true});});
+  $('iDays').addEventListener('change',function(){S.meta.days=Math.max(1,Math.min(14,parseInt(this.value,10)||7));commit({week:true});});
+  [['iAdults','eAdults',0,40,'Adults','adults'],['iKids','eKids',0,40,'Children','kids'],
+   ['iKidPct','eKidPct',10,100,'Child portion','kidPct']].forEach(function(c){
+    var el=$(c[0]);
+    el.addEventListener('input',function(){
+      var raw=el.value.trim(), v=parseFloat(raw);
+      if(raw===''||!Number.isFinite(v)){setErr(c[0],c[1],c[4]+' is required');return;}
+      if(v<c[2]||v>c[3]){setErr(c[0],c[1],c[4]+' must be between '+c[2]+' and '+c[3]);return;}
+      setErr(c[0],c[1],'');S.meta[c[5]]=v;commit({week:true});
+    });
+    el.addEventListener('blur',function(){
+      var raw=el.value.trim(), v=parseFloat(raw);
+      if(raw===''||!Number.isFinite(v)||v<c[2]||v>c[3]){el.value=trimNum(nz(S.meta[c[5]]),2);setErr(c[0],c[1],'');}
+    });
+  });
+  $('iCur').addEventListener('change',function(){
+    S.meta.cur=this.value;$('wCurCustom').hidden=(this.value!=='custom');
+    if(this.value==='custom'&&!S.meta.curCustom){S.meta.curCustom='¤';$('iCurCustom').value='¤';}
+    commit({recEd:true,setup:true});
+  });
+  $('iCurCustom').addEventListener('input',function(){S.meta.curCustom=this.value;commit({setup:true});});
+  $('iUnits').addEventListener('change',function(){S.meta.units=this.value;commit({recEd:true,setup:true});});
+
+  /* week grid */
+  $('wkBody').addEventListener('change',function(e){
+    var el=e.target;
+    if(!el.classList.contains('mSel'))return;
+    var k=el.getAttribute('data-k'), v=el.value, prev=S.plan[k]||{};
+    if(v===''){delete S.plan[k];}
+    else if(v.indexOf('LO:')===0){S.plan[k]={r:'LO',src:v.slice(3),p:prev.p==null?null:prev.p};}
+    else{S.plan[k]={r:v,src:null,p:prev.p==null?null:prev.p};}
+    touch();renderWeek();renderResults();save();
+    var again=document.querySelector('.mSel[data-k="'+k+'"]');if(again)again.focus();
+  });
+  $('wkBody').addEventListener('input',function(e){
+    var el=e.target;
+    if(!el.classList.contains('mPor'))return;
+    var k=el.getAttribute('data-k'), s=S.plan[k]; if(!s)return;
+    var raw=el.value.trim(), v=parseFloat(raw);
+    if(raw===''){s.p=null;el.classList.remove('ov');}
+    else if(Number.isFinite(v)&&v>=0&&v<=99){s.p=v;el.classList.add('ov');}
+    else return;
+    touch();renderResults();save();
+  });
+  $('btnClearWeek').addEventListener('click',function(){
+    if(!confirm('Empty every meal slot in the plan? Your recipes are kept.'))return;
+    S.plan={};commit({week:true});
+  });
+
+  /* recipes */
+  $('recList').addEventListener('click',function(e){
+    var b=e.target.closest('.rpill'); if(!b)return;
+    S.sel=b.getAttribute('data-r');renderRecList();renderRecEditor();save();
+  });
+  $('iRecName').addEventListener('input',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    r.name=this.value; setErr('iRecName','eRecName',this.value.trim()?'':'Give the recipe a name');
+    touch();renderRecList();renderWeek();renderResults();save();
+  });
+  $('iRecServ').addEventListener('input',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    var raw=this.value.trim(), v=parseFloat(raw);
+    if(raw===''||!Number.isFinite(v)||v<=0){setErr('iRecServ','eRecServ','Servings must be more than 0');return;}
+    if(v>200){setErr('iRecServ','eRecServ','Servings must be 200 or fewer');return;}
+    setErr('iRecServ','eRecServ','');r.serves=v;touch();renderRecList();renderResults();renderRecCost();save();
+  });
+  $('iRecServ').addEventListener('blur',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    var v=parseFloat(this.value);
+    if(!Number.isFinite(v)||v<=0||v>200){this.value=trimNum(nz(r.serves),2);setErr('iRecServ','eRecServ','');}
+  });
+  ['iTagB','iTagL','iTagD'].forEach(function(id,ix){
+    $(id).addEventListener('change',function(){
+      var r=recipeById(S.sel); if(!r)return;
+      var letters=['b','l','d'], t=String(r.tags||'').split('');
+      if(this.checked){if(t.indexOf(letters[ix])<0)t.push(letters[ix]);}
+      else{t=t.filter(function(x){return x!==letters[ix];});}
+      r.tags=letters.filter(function(l){return t.indexOf(l)>=0;}).join('');
+      commit({week:true});
+    });
+  });
+  function ingOf(el){
+    var tr=el.closest('tr'); if(!tr)return null;
+    var r=recipeById(S.sel); if(!r)return null;
+    var id=tr.getAttribute('data-i');
+    for(var i=0;i<r.ings.length;i++)if(r.ings[i].id===id)return r.ings[i];
+    return null;
+  }
+  $('ingBody').addEventListener('input',function(e){
+    var el=e.target, f=el.getAttribute('data-f'); if(!f)return;
+    var ing=ingOf(el); if(!ing)return;
+    if(f==='name'){ing.name=el.value;}
+    else if(f==='qty'){var q=parseFloat(el.value);if(el.value.trim()===''){ing.qty=0;}else if(Number.isFinite(q)&&q>=0){ing.qty=q;el.classList.remove('inv');}else{el.classList.add('inv');return;}el.classList.remove('inv');}
+    else if(f==='price'){var p=parseFloat(el.value);var dim=(UNITS[ing.unit]||UNITS.g).d;
+      if(el.value.trim()===''){ing.price=0;}else if(Number.isFinite(p)&&p>=0){ing.price=p/priceFactor(dim);el.classList.remove('inv');}else{el.classList.add('inv');return;}el.classList.remove('inv');}
+    else return;
+    touch();renderResults();renderRecCost();save();
+  });
+  $('ingBody').addEventListener('change',function(e){
+    var el=e.target, f=el.getAttribute('data-f'); if(!f)return;
+    var ing=ingOf(el); if(!ing)return;
+    if(f==='unit'){ing.unit=UNITS[el.value]?el.value:'g';commit({recEd:true});}
+    else if(f==='aisle'){ing.aisle=el.value;commit();}
+    else if(f==='staple'){ing.staple=el.checked;commit();}
+  });
+  $('ingBody').addEventListener('click',function(e){
+    var b=e.target.closest('[data-rm]'); if(!b)return;
+    var r=recipeById(S.sel); if(!r)return;
+    var id=b.getAttribute('data-rm');
+    r.ings=r.ings.filter(function(i){return i.id!==id;});
+    commit({recEd:true});
+  });
+  $('btnAddIng').addEventListener('click',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    var id=uid('i');
+    r.ings.push({id:id,name:'',qty:0,unit:'g',aisle:A[0],price:0,staple:false});
+    commit({recEd:true});
+    var el=document.querySelector('tr[data-i="'+id+'"] input[data-f="name"]'); if(el)el.focus();
+  });
+  $('btnNewRec').addEventListener('click',function(){
+    var r=mkRecipe(uid('r'),'New recipe',nz(S.meta.adults)+nz(S.meta.kids)||2,'bld',[['',0,'g',A[0],0,false]]);
+    r.ings[0].id=uid('i');
+    S.recipes.push(r);S.sel=r.id;
+    commit({recList:true,recEd:true,week:true});
+    $('iRecName').focus();$('iRecName').select();
+  });
+  $('btnDupRec').addEventListener('click',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    var c=clone(r); c.id=uid('r'); c.name=r.name+' (copy)';
+    c.ings.forEach(function(i){i.id=uid('i');});
+    S.recipes.push(c);S.sel=c.id;
+    commit({recList:true,recEd:true,week:true});
+  });
+  $('btnDelRec').addEventListener('click',function(){
+    var r=recipeById(S.sel); if(!r)return;
+    if(S.recipes.length<2){alertless('At least one recipe must remain.');return;}
+    if(!confirm('Delete the recipe “'+(r.name||'Untitled')+'”? Any meal using it becomes unplanned.'))return;
+    S.recipes=S.recipes.filter(function(x){return x.id!==r.id;});
+    Object.keys(S.plan).forEach(function(k){if(S.plan[k].r===r.id)delete S.plan[k];});
+    S.sel=S.recipes[0].id;
+    commit({recList:true,recEd:true,week:true});
+  });
+  function alertless(msg){
+    var w=$('warnBox');
+    w.innerHTML='<div class="note bad">'+esc(msg)+'</div>';
+    setTimeout(function(){renderResults();},2600);
+  }
+
+  /* pantry + list ticks */
+  $('pantryBody').addEventListener('change',function(e){
+    var el=e.target; if(!el.classList.contains('pchk'))return;
+    var k=el.getAttribute('data-k');
+    if(el.checked)S.pantry[k]=true; else delete S.pantry[k];
+    touch();renderResults();save();
+  });
+  $('slBody').addEventListener('change',function(e){
+    var el=e.target; if(!el.classList.contains('bchk'))return;
+    var k=el.getAttribute('data-k');
+    if(el.checked)S.bought[k]=true; else delete S.bought[k];
+    var row=el.closest('tr'); if(row)row.classList.toggle('done',el.checked);
+    save();
+  });
+  $('btnUntick').addEventListener('click',function(){S.bought={};renderResults();save();});
+
+  /* print */
+  function setPrintMode(){
+    var v=$('iPrintDoc').value;
+    document.body.className=document.body.className.replace(/\bpd-\w+\b/g,'').trim();
+    document.body.classList.add('pd-'+v);
+  }
+  $('iPrintDoc').addEventListener('change',setPrintMode);
+  setPrintMode();
+  $('btnPrint').addEventListener('click',function(){setPrintMode();window.print();});
+
+  /* exports */
+  $('btnCsv').addEventListener('click',exportShoppingCsv);
+  $('btnCsv2').addEventListener('click',exportShoppingCsv);
+  $('btnPlanCsv').addEventListener('click',exportPlanCsv);
+  $('btnRecCsv').addEventListener('click',exportRecipesCsv);
+  $('btnJson').addEventListener('click',exportJson);
+  $('btnImport').addEventListener('click',function(){$('fileIn').click();});
+  $('fileIn').addEventListener('change',importJson);
+
+  /* destructive */
+  $('btnBlank').addEventListener('click',function(){
+    if(!confirm('Clear the sample week and recipe library and start from scratch?'))return;
+    S=blankState();save();renderAll();
+  });
+  $('btnClear').addEventListener('click',function(){
+    if(!confirm('Delete every recipe, the whole plan and all saved settings from this browser? This cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();save();renderAll();
+  });
+}
+
+/* ══ exports ═══════════════════════════════════════════════════════ */
+function csvCell(v){
+  v=String(v==null?'':v);
+  return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+}
+function csvText(rows){return rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n');}
+function download(name,text,mime,bom){
+  try{
+    var blob=new Blob([(bom?'﻿':'')+text],{type:mime});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1200);
+  }catch(e){}
+}
+function fileStem(){
+  var h=(S.meta.house||'meal-plan').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+  return (h||'meal-plan')+'-'+(S.meta.start||'week');
+}
+function exportShoppingCsv(){
+  var C=calc(), rows=[];
+  rows.push(['Shopping list',S.meta.house||'']);
+  rows.push(['Week beginning',S.meta.start||'','Days',C.days]);
+  rows.push(['Portions per meal',trimNum(C.def,2),'Adults',nz(S.meta.adults),'Children',nz(S.meta.kids),'Child portion %',nz(S.meta.kidPct)]);
+  rows.push(['Units',imperial()?'imperial':'metric','Currency',sym()]);
+  rows.push(['Estimated total',trimNum(C.total,2),'Items to buy',C.buyList.length]);
+  rows.push([]);
+  rows.push(['Aisle','Item','Needed qty','Needed unit','Buy qty','Buy unit','Unit price','Price basis','Est. cost','In pantry','Used in']);
+  C.list.forEach(function(i){
+    var n=qtyDisp(i.need,i.dim), b=qtyDisp(i.buy,i.dim);
+    rows.push([i.aisle,i.name,trimNum(n.v,3),n.u,trimNum(b.v,3),b.u,
+      trimNum(i.price*priceFactor(i.dim),4),priceBasis(i.dim),
+      i.held?'0.00':trimNum(i.cost,2), i.held?'yes — not bought':'', i.used.join('; ')]);
+  });
+  rows.push([]);
+  rows.push(['','TOTAL','','','','','','',trimNum(C.total,2),'','']);
+  download(fileStem()+'-shopping-list.csv',csvText(rows),'text/csv;charset=utf-8',true);
+}
+function exportPlanCsv(){
+  var C=calc(), rows=[];
+  rows.push(['Meal plan',S.meta.house||'']);
+  rows.push(['Week beginning',S.meta.start||'','Days',C.days,'Portions per meal',trimNum(C.def,2)]);
+  rows.push([]);
+  rows.push(['Date','Day','Meal','Recipe','Portions eaten','Cooked portions','Scale factor','Leftovers of']);
+  for(var d=0;d<C.days;d++)for(var m=0;m<3;m++){
+    var k=slotKey(d,m), s=S.plan[k];
+    var dt=dateFor(d), ds=dt?(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')):'';
+    if(!s||!s.r){rows.push([ds,dayLong(d),MEALS[m],'—','','','','']);continue;}
+    var p=(s.p==null||!Number.isFinite(s.p))?C.def:s.p;
+    if(s.r==='LO'){
+      var src=s.src&&C.cooked[s.src];
+      rows.push([ds,dayLong(d),MEALS[m],'Leftovers',trimNum(p,2),'','',src?(dayLong(src.d)+' '+MEALS[src.m]):'unlinked']);
+    }else{
+      var r=recipeById(s.r), c=C.cooked[k];
+      rows.push([ds,dayLong(d),MEALS[m],r?r.name:'(deleted recipe)',trimNum(p,2),
+        c?trimNum(c.portions,2):'',c&&c.factor!=null?trimNum(c.factor,4):'','']);
+    }
+  }
+  download(fileStem()+'-meal-plan.csv',csvText(rows),'text/csv;charset=utf-8',true);
+}
+function exportRecipesCsv(){
+  var rows=[['Recipe','Serves','Suggested for','Ingredient','Qty','Unit','Aisle','Unit price','Price basis','Staple']];
+  S.recipes.forEach(function(r){
+    var tags=['b','l','d'].filter(function(t){return String(r.tags||'').indexOf(t)>=0;})
+      .map(function(t){return {b:'breakfast',l:'lunch',d:'dinner'}[t];}).join(' / ');
+    if(!r.ings.length){rows.push([r.name,trimNum(nz(r.serves),2),tags,'—','','','','','','']);return;}
+    r.ings.forEach(function(i){
+      var dim=(UNITS[i.unit]||UNITS.g).d;
+      rows.push([r.name,trimNum(nz(r.serves),2),tags,i.name,trimNum(nz(i.qty),3),
+        (UNITS[i.unit]?UNITS[i.unit].l:i.unit),i.aisle,
+        trimNum(nz(i.price)*priceFactor(dim),4),priceBasis(dim),i.staple?'yes':'']);
+    });
+  });
+  download(fileStem()+'-recipes.csv',csvText(rows),'text/csv;charset=utf-8',true);
+}
+function exportJson(){
+  download(fileStem()+'.json',JSON.stringify(S,null,2),'application/json',false);
+}
+function importJson(e){
+  var f=e.target.files&&e.target.files[0]; if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      S=normalise(o);
+      save();renderAll();
+    }catch(err){
+      $('warnBox').innerHTML='<div class="note bad"><strong>That file could not be read.</strong> '+
+        'Choose a JSON file exported from this planner.</div>';
+    }
+    $('fileIn').value='';
+  };
+  fr.readAsText(f);
+}
+
+/* ══ init ══════════════════════════════════════════════════════════ */
+S=load()||sampleState();
+renderAll();
+wire();
+})();
+</script>
+</body>
+</html>

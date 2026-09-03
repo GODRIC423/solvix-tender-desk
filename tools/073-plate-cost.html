@@ -211,6 +211,8 @@ table input:focus,table select:focus{background:var(--raise)}
 .lines th{white-space:normal;padding:8px 6px;line-height:1.2}
 .lines td.n{white-space:nowrap;font-size:13px}
 .lines td.i{padding-left:0}
+table input[type=number]{-moz-appearance:textfield;appearance:textfield}
+table input[type=number]::-webkit-outer-spin-button,table input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .lines td.i{color:var(--faint);font-family:var(--mono);font-size:12px;text-align:right;padding-right:2px}
 .qcell{display:flex;gap:4px;align-items:center}
 .qcell input{flex:1 1 auto;min-width:40px}
@@ -709,10 +711,10 @@ function calcDish(d){
  var out={lines:[],cost:0,plate:null,net:null,gross:null,vat:null,fc:null,gp:null,gpp:null,tnet:null,tgross:null,err:false,d:d};
  var any=false;
  d.lines.forEach(function(l){var c=calcLine(l);out.lines.push(c);if(c.err)out.err=true;if(fin(c.cost)){out.cost+=c.cost;any=true;}});
- if(!any&&!out.err)out.cost=0;
+ if(!any)out.cost=null;
  var portions=num(d.portions);
  out.portions=portions;
- out.plate=(fin(portions)&&portions>0)?out.cost/portions:null;
+ out.plate=(out.cost!==null&&fin(portions)&&portions>0)?out.cost/portions:null;
  var vr=vatR()/100;
  var mp=num(d.price);
  if(fin(mp)&&mp>=0){
@@ -787,10 +789,11 @@ function updateLines(c){
   $('ep'+i).textContent=r.epUnit===null?'—':money4(r.epUnit)+' /'+ul(l.ru);
   $('gr'+i).textContent=r.gross===null?'—':tr(ceil2(r.gross),2)+' '+ul(l.ru);
   $('lc'+i).textContent=r.cost===null?'—':money(r.cost);
-  var share=(c.cost>0&&fin(r.cost))?r.cost/c.cost*100:null;
+  var share=(fin(c.cost)&&c.cost>0&&fin(r.cost))?r.cost/c.cost*100:null;
   $('lp'+i).textContent=share===null?'—':Math.round(share)+'%';
  });
  $('tRecipe').textContent=money(c.cost);
+ $('tPct').textContent=c.cost===null?'—':'100%';
  $('portChip').textContent=(fin(c.portions)&&c.portions>0)?('Yields '+tr(c.portions,2)+' portion'+(c.portions===1?'':'s')+' · '+money(c.plate)+' per portion'):'Set the portions this recipe yields';
  $('lineHint').textContent=d.lines.length+' ingredient'+(d.lines.length===1?'':'s');
 }
@@ -947,7 +950,7 @@ function cardDoc(d,a){
    '<th class="n">AP cost/unit</th><th class="n">Yield</th><th class="n">EP cost/unit</th><th class="n">Recipe qty</th><th class="n">Gross qty</th><th class="n">Line cost</th><th class="n">%</th></tr></thead><tbody>';
  d.lines.forEach(function(l,i){
   var r=c.lines[i]||{};
-  var share=(c.cost>0&&fin(r.cost))?r.cost/c.cost*100:null;
+  var share=(fin(c.cost)&&c.cost>0&&fin(r.cost))?r.cost/c.cost*100:null;
   h+='<tr><td class="n">'+(i+1)+'</td><td>'+esc(l.ing||'—')+(r.err?'<br><b>'+esc(r.err)+'</b>':'')+'</td>'+
    '<td class="n">'+tr(num(l.pq),3)+' '+esc(ul(l.pu))+'</td><td class="n">'+money(num(l.pp))+'</td>'+
    '<td class="n">'+(fin(r.apUnit)?money4(r.apUnit)+' /'+esc(ul(l.pu)):'—')+'</td>'+
@@ -957,7 +960,7 @@ function cardDoc(d,a){
    '<td class="n">'+(fin(r.gross)?tr(ceil2(r.gross),2)+' '+esc(ul(l.ru)):'—')+'</td>'+
    '<td class="n">'+money(r.cost)+'</td><td class="n">'+(share===null?'—':Math.round(share)+'%')+'</td></tr>';
  });
- h+='</tbody><tfoot><tr><td colspan="9">Total recipe cost</td><td class="n">'+money(c.cost)+'</td><td class="n">100%</td></tr>'+
+ h+='</tbody><tfoot><tr><td colspan="9">Total recipe cost</td><td class="n">'+money(c.cost)+'</td><td class="n">'+(c.cost===null?'—':'100%')+'</td></tr>'+
     '<tr><td colspan="9">÷ portions yielded ('+(fin(c.portions)?tr(c.portions,2):'—')+')  =  plate cost per portion</td><td class="n">'+money(c.plate)+'</td><td class="n"></td></tr></tfoot></table>';
  h+='<div class="two"><div><h3 class="sec">Plate economics</h3><div class="recbox">'+
    '<div><span>Menu price '+(S.incVat?'(incl. VAT)':'(excl. VAT)')+'</span><span class="n">'+money(S.incVat?c.gross:c.net)+'</span></div>'+
@@ -1089,12 +1092,12 @@ function exportRecipeCsv(){
   ['Costing date',S.date],['Currency',n],['Service note',d.note],[],
   ['#','Ingredient','Pack qty','Pack unit','Pack price ('+n+')','AP cost per pack unit','Yield %','EP cost per recipe unit','Recipe qty','Recipe unit','Gross qty required (rounded up)','Line cost ('+n+')','% of plate','Note']];
  d.lines.forEach(function(l,i){
-  var r=c.lines[i],share=(c.cost>0&&fin(r.cost))?(r.cost/c.cost*100).toFixed(1):'';
+  var r=c.lines[i],share=(fin(c.cost)&&c.cost>0&&fin(r.cost))?(r.cost/c.cost*100).toFixed(1):'';
   rows.push([i+1,l.ing,l.pq,ul(l.pu),l.pp,fin(r.apUnit)?r.apUnit.toFixed(6):'',l.y,fin(r.epUnit)?r.epUnit.toFixed(6):'',
    l.rq,ul(l.ru),fin(r.gross)?ceil2(r.gross).toFixed(2):'',fin(r.cost)?r.cost.toFixed(4):'',share,r.err||'']);
  });
  rows.push([]);
- rows.push(['','Total recipe cost','','','','','','','','','',c.cost.toFixed(4),'100','']);
+ rows.push(['','Total recipe cost','','','','','','','','','',c.cost===null?'':c.cost.toFixed(4),c.cost===null?'':'100','']);
  rows.push(['','Plate cost per portion','','','','','','','','','',c.plate===null?'':c.plate.toFixed(4),'','']);
  rows.push(['','Net selling price','','','','','','','','','',c.net===null?'':c.net.toFixed(4),'','']);
  rows.push(['','Gross profit per plate','','','','','','','','','',c.gp===null?'':c.gp.toFixed(4),'','']);

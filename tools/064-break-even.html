@@ -1022,3 +1022,245 @@ function scenTableHTML(withActions){
   h+='</tbody>';
   return h;
 }
+
+/* ── paint everything ────────────────────────────────────── */
+function paint(){
+  var C=calc(S);
+  var P=C.pword;
+
+  /* fixed cost rows */
+  var fi=0;
+  document.querySelectorAll('#fixBody tr').forEach(function(tr){
+    var r=C.fixRows[fi], row=S.fixed[fi]; fi++;
+    if(!r)return;
+    tr.querySelector('[data-c="per"]').textContent=money(r.per);
+    var cell=tr.querySelector('td.n');
+    setErr(cell, (row.amt!=null&&row.amt<0)?'Cannot be negative':'');
+  });
+  $('#fixTot').textContent=money(C.F);
+  $('#fixChip').textContent=money(C.F)+' per '+P;
+  $('#fixAmtCur').textContent='in '+cur();
+
+  /* product rows */
+  var pi=0;
+  document.querySelectorAll('#prodBody tr').forEach(function(tr){
+    var p=C.prods[pi], row=S.prods[pi]; pi++;
+    if(!p)return;
+    tr.querySelector('[data-c="contrib"]').textContent=money(p.contrib);
+    tr.querySelector('[data-c="contrib"]').classList.toggle('neg',p.contrib<0);
+    tr.querySelector('[data-c="cmr"]').textContent=pct(p.cmr,1);
+    tr.querySelector('[data-c="mix"]').textContent=ok(p.mix)?pct(p.mix,1):'—';
+    tr.querySelector('[data-c="rev"]').textContent=money(p.rev);
+    var cells=tr.querySelectorAll('td.n');
+    setErr(cells[0],(row.price!=null&&row.price<0)?'Cannot be negative':'');
+    setErr(cells[1],(row.vcost!=null&&row.vcost<0)?'Cannot be negative':
+      (row.price!=null&&row.vcost!=null&&row.vcost>row.price)?'Above the selling price':'');
+    setErr(cells[2],(row.units!=null&&row.units<0)?'Cannot be negative':'');
+  });
+  $('#ptPrice').textContent=money(C.pbar);
+  $('#ptVar').textContent=ok(C.pbar)&&ok(C.cbar)?money(C.pbar-C.cbar):'—';
+  $('#ptUnits').textContent=units(C.totalUnits);
+  $('#ptContrib').textContent=money(C.cbar);
+  $('#ptCmr').textContent=pct(C.cmr,1);
+  $('#ptRev').textContent=money(C.revenue);
+  $('#prodChip').textContent=C.prods.length+(C.prods.length===1?' line':' lines')+' · '+money(C.revenue)+' forecast';
+
+  /* target validation */
+  var tp=numOrNull(S.target.profit);
+  var eT=$('#eTarget');
+  if(tp!=null&&tp<0){eT.textContent='Target profit cannot be negative.';eT.hidden=false;$('#iTarget').classList.add('inv');}
+  else{eT.hidden=true;$('#iTarget').classList.remove('inv');}
+
+  /* hero + stats */
+  var beRev=C.be?C.be.revenue:null, beU=C.be?C.be.units:null;
+  if(C.single){
+    $('#heroK').textContent='Break-even volume per '+P;
+    $('#heroV').textContent = C.be?units(beU)+' units':'—';
+    $('#heroU').innerHTML = C.be
+      ? '= '+money(beRev)+' of sales per '+P+' at '+money(C.prods[0].price)+' a unit. Every unit after that adds '+money(C.cbar)+' of profit.'
+      : 'Enter a selling price above the variable cost to get a break-even point.';
+    $('#k2').textContent='Break-even revenue';
+    $('#sUnits').textContent=C.be?money(beRev):'—';
+    $('#uUnits').textContent='sales per '+P+' to cover '+money(C.F)+' of fixed costs';
+    $('#kContrib').textContent='Contribution / unit';
+  }else{
+    $('#heroK').textContent='Break-even revenue per '+P;
+    $('#heroV').textContent = C.be?money(beRev):'—';
+    $('#heroU').innerHTML = C.be
+      ? '= '+units(beU)+' units per '+P+' in the current sales mix. Below that the '+money(C.F)+' of fixed costs is not covered.'
+      : 'Enter prices above variable costs, and forecast units, to weight the mix.';
+    $('#k2').textContent='Break-even units';
+    $('#sUnits').textContent=C.be?units(beU):'—';
+    $('#uUnits').textContent='units per '+P+' across '+C.prods.length+' lines';
+    $('#kContrib').textContent='Weighted contribution / unit';
+  }
+  $('#sContrib').textContent=money(C.cbar);
+  $('#uContrib').textContent=C.single?'price '+money(C.pbar)+' − variable '+money(ok(C.pbar)&&ok(C.cbar)?C.pbar-C.cbar:null)
+    :'average across the forecast mix';
+  $('#sCmr').textContent=pct(C.cmr,1);
+  $('#sMos').textContent=C.mosPct==null?'—':pct(C.mosPct,1);
+  $('#sMos').className='v'+(C.mosPct!=null&&C.mosPct<0?' neg':(C.mosPct!=null&&C.mosPct>=nz(S.target.minMos)/100?' pos':''));
+  $('#uMos').textContent=(C.mosRev==null)?'sales can fall by — before a loss'
+    :'sales can fall '+money(C.mosRev)+' ('+units(C.mosUnits)+' units) before a loss';
+  $('#sTgtU').textContent=C.tgt?units(C.tgt.units):'—';
+  $('#uTgtU').textContent=C.tgt?'= '+money(C.tgt.revenue)+' of sales to make '+money(nz(S.target.profit))
+    :'set a target profit and a positive contribution';
+  $('#sDol').textContent=C.dol==null?'—':fmtNum(C.dol,2)+'×';
+  $('#ftK').textContent=C.profit<0?'Loss at forecast volume':'Profit at forecast volume';
+  $('#ftProfit').textContent=money(C.profit);
+  $('#ftProfit').className='ftbig '+(C.profit<0?'neg':'pos');
+  $('#modeChip').textContent=C.single?'Single product':'Product mix · '+C.prods.length+' lines';
+
+  /* coverage gauge */
+  var covered = (C.be&&C.revenue>0)?C.be.revenue/C.revenue:null;
+  var w = covered==null?0:Math.max(0,Math.min(100,covered*100));
+  $('#gFill').style.width=w.toFixed(1)+'%';
+  $('#gL').textContent='Break-even '+(C.be?money0(C.be.revenue):'—');
+  $('#gR').textContent='Forecast '+money0(C.revenue);
+  $('#gCap').textContent = (C.beDay==null)
+    ? 'Enter a forecast volume to see when the period covers its costs.'
+    : (C.beDay>C.days
+        ? 'At this forecast the '+P+' never reaches break-even — the fixed costs are not covered by day '+C.days+'.'
+        : 'Selling evenly, the fixed costs are covered on day '+C.beDay+' of '+C.days+'; everything after that is contribution to profit.');
+
+  /* contribution mix bars */
+  var maxC=0; C.prods.forEach(function(p){if(p.contribTot>maxC)maxC=p.contribTot;});
+  var mixHTML='';
+  if(!C.prods.length||C.contribTot===0&&maxC===0){
+    mixHTML='<div class="tiny">Add products with a price and a forecast volume to see where the contribution comes from.</div>';
+  }else{
+    C.prods.forEach(function(p,i){
+      var share=C.contribTot>0?p.contribTot/C.contribTot:null;
+      var bw=maxC>0?Math.max(0,p.contribTot)/maxC*100:0;
+      mixHTML+='<div class="mixrow"><div class="bar" style="width:'+bw.toFixed(1)+'%"></div>'+
+        '<span class="nm">'+(esc(p.name)||'Line '+(i+1))+'</span>'+
+        '<b>'+money(p.contribTot)+'</b>'+
+        '<span class="pc">'+(share==null?'—':pct(share,0))+'</span></div>';
+    });
+  }
+  $('#mixList').innerHTML=mixHTML;
+
+  /* warnings */
+  var W=[];
+  if(!C.prods.length)W.push(['bad','!','No product lines. Add at least one product with a price.']);
+  if(C.F===0)W.push(['wk','0','No fixed costs entered — break-even is zero by definition. Add rent, wages, insurance and the rest for a meaningful answer.']);
+  C.prods.forEach(function(p,i){
+    if(p.price>0&&p.contrib<=0)W.push(['bad','×',(p.name||'Line '+(i+1))+' sells at or below its variable cost — each unit sold makes the loss '+money(Math.abs(p.contrib))+' worse.']);
+  });
+  if(!C.be){
+    if(C.totalUnits===0&&C.prods.length>1)W.push(['wk','?','Enter forecast units on at least one line — the sales mix is what weights the average contribution.']);
+    else W.push(['bad','∞','No break-even point exists: the weighted contribution per unit is zero or negative, so no volume covers the fixed costs. Raise a price or cut a variable cost.']);
+  }
+  if(C.mosPct!=null){
+    var minM=nz(S.target.minMos)/100;
+    if(C.mosPct<0)W.push(['bad','↓','The forecast is below break-even — this scenario loses '+money(Math.abs(C.profit))+' in the '+P+'.']);
+    else if(C.mosPct<minM)W.push(['wk','△','Margin of safety '+pct(C.mosPct,1)+' is below your '+fmtNum(nz(S.target.minMos),1)+'% threshold. A '+pct(C.mosPct,1)+' drop in sales wipes out the profit.']);
+    else W.push(['wo','✓','Forecast sales are '+pct(C.mosPct,1)+' above break-even ('+money(C.mosRev)+' of headroom).']);
+  }
+  if(C.dol!=null&&C.dol>=4)W.push(['wk','⚖','Operating leverage is '+fmtNum(C.dol,2)+'× — a 10% fall in sales cuts profit by about '+fmtNum(C.dol*10,0)+'%. High fixed costs make this scenario fragile.']);
+  if(C.tgt&&C.totalUnits>0&&C.tgt.units>C.totalUnits)W.push(['wk','▲','The target profit of '+money(nz(S.target.profit))+' needs '+units(C.tgt.units)+' units — '+units(C.tgt.units-C.totalUnits)+' more than the forecast.']);
+  $('#warns').innerHTML=W.map(function(w){
+    return '<div class="wrow '+w[0]+'"><b>'+w[1]+'</b><span>'+w[2]+'</span></div>';
+  }).join('');
+
+  /* output tables */
+  $('#cvpTab').innerHTML=cvpHTML(C);
+  $('#beTab').innerHTML=beTableHTML(C);
+  $('#sensTab').innerHTML=sensTableHTML(C);
+  $('#scenTab').innerHTML=scenTableHTML(true);
+  $('#scenHint').textContent=S.scenarios.length
+    ? S.scenarios.length+(S.scenarios.length===1?' scenario':' scenarios')+' saved in this browser. They travel with the JSON export.'
+    : 'Nothing saved yet. Scenarios are stored in this browser only.';
+
+  $('#barSub').textContent=(S.meta.scenario||'break-even')+' · per '+P;
+  paintDoc(C);
+  save();
+}
+
+/* ── the printed document ────────────────────────────────── */
+function paintDoc(C){
+  var P=C.pword;
+  $('#dBiz').textContent=S.meta.biz||'Your business name';
+  $('#dAddr').textContent=S.meta.addr||'';
+  $('#dTitle').textContent=(S.meta.scenario||'Break-even scenario')+' — per '+P;
+  $('#dScen').textContent=S.meta.scenario||'—';
+  $('#dRef').textContent=S.meta.ref||'—';
+  $('#dBy').textContent=S.meta.by||'—';
+  $('#dDate').textContent=dateLong(S.meta.date);
+  $('#dPeriod').textContent='Per '+P;
+  $('#dDays').textContent=units(C.days)+' days';
+  $('#dMode').textContent=C.single?'Single product':'Weighted sales mix ('+C.prods.length+' lines)';
+  $('#dCur').textContent=cur();
+  $('#dhRev').textContent=C.be?money(C.be.revenue):'—';
+  $('#dhUnits').textContent=C.be?units(C.be.units):'—';
+  $('#dhCmr').textContent=pct(C.cmr,1);
+  $('#dhMos').textContent=C.mosPct==null?'—':pct(C.mosPct,1);
+
+  var h='<thead><tr><th>Fixed cost</th><th>Frequency</th><th class="n">As entered</th><th class="n">Per '+P+'</th></tr></thead><tbody>';
+  if(!C.fixRows.length)h+='<tr><td colspan="4">None entered.</td></tr>';
+  C.fixRows.forEach(function(r,i){
+    h+='<tr><td>'+(esc(r.desc)||'Fixed cost '+(i+1))+'</td><td>'+FREQ[r.freq]+'</td>'+
+      '<td class="n">'+money(r.amt==null?0:r.amt)+'</td><td class="n">'+money(r.per)+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="3">Total fixed costs per '+P+'</td><td class="n">'+money(C.F)+'</td></tr></tfoot>';
+  $('#dFix').innerHTML=h;
+
+  h='<thead><tr><th>Product or service</th><th class="n">Unit price</th><th class="n">Variable cost</th>'+
+    '<th class="n">Contribution</th><th class="n">CM %</th><th class="n">Forecast units</th>'+
+    '<th class="n">Mix %</th><th class="n">Revenue</th><th class="n">Contribution total</th></tr></thead><tbody>';
+  if(!C.prods.length)h+='<tr><td colspan="9">None entered.</td></tr>';
+  C.prods.forEach(function(p,i){
+    h+='<tr><td>'+(esc(p.name)||'Line '+(i+1))+'</td><td class="n">'+money(p.price)+'</td>'+
+      '<td class="n">'+money(p.vcost)+'</td><td class="n">'+money(p.contrib)+'</td>'+
+      '<td class="n">'+pct(p.cmr,1)+'</td><td class="n">'+units(p.units)+'</td>'+
+      '<td class="n">'+(ok(p.mix)?pct(p.mix,1):'—')+'</td><td class="n">'+money(p.rev)+'</td>'+
+      '<td class="n">'+money(p.contribTot)+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td>Total / weighted average</td><td class="n">'+money(C.pbar)+'</td>'+
+    '<td class="n">'+(ok(C.pbar)&&ok(C.cbar)?money(C.pbar-C.cbar):'—')+'</td>'+
+    '<td class="n">'+money(C.cbar)+'</td><td class="n">'+pct(C.cmr,1)+'</td>'+
+    '<td class="n">'+units(C.totalUnits)+'</td><td class="n">'+(C.totalUnits>0?'100.0%':'—')+'</td>'+
+    '<td class="n">'+money(C.revenue)+'</td><td class="n">'+money(C.contribTot)+'</td></tr></tfoot>';
+  $('#dProd').innerHTML=h;
+
+  $('#dCvp').innerHTML=cvpHTML(C);
+
+  var rows=[
+    ['Contribution per unit'+(C.single?'':' (weighted by mix)'),money(C.cbar)],
+    ['Contribution margin ratio',pct(C.cmr,1)],
+    ['Break-even units per '+P,C.be?units(C.be.units):'—'],
+    ['Break-even revenue per '+P,C.be?money(C.be.revenue):'—'],
+    ['Forecast sales revenue',money(C.revenue)],
+    ['Margin of safety (revenue)',C.mosRev==null?'—':money(C.mosRev)],
+    ['Margin of safety (%)',C.mosPct==null?'—':pct(C.mosPct,1)],
+    ['Margin of safety (units)',C.mosUnits==null?'—':units(C.mosUnits)],
+    ['Target profit for the period',money(nz(S.target.profit))],
+    ['Units to reach the target profit',C.tgt?units(C.tgt.units):'—'],
+    ['Revenue to reach the target profit',C.tgt?money(C.tgt.revenue):'—'],
+    [(C.profit<0?'Loss':'Profit')+' at forecast volume',money(C.profit)],
+    ['Degree of operating leverage',C.dol==null?'—':fmtNum(C.dol,2)+'×'],
+    ['Break-even reached on day (even sales)',C.beDay==null?'—':(C.beDay>C.days?'not reached in the period':'day '+units(C.beDay)+' of '+units(C.days))]
+  ];
+  h='<tbody>';
+  rows.forEach(function(r){h+='<tr><td>'+r[0]+'</td><td class="n">'+r[1]+'</td></tr>';});
+  h+='</tbody>';
+  $('#dSum').innerHTML=h;
+
+  $('#dBe').innerHTML=beTableHTML(C);
+  $('#dSens').innerHTML=sensTableHTML(C);
+  $('#dScenTab').innerHTML=scenTableHTML(false);
+
+  var n='Assumptions and notes\n';
+  n+='Break-even units = total fixed costs ÷ contribution per unit'+(C.single?'':' (weighted by the forecast sales mix)')+
+     '; break-even revenue = break-even units × unit price, with unit volumes rounded up to whole units, so the '+
+     'revenue shown is the smallest that fully clears the fixed costs. Target-profit volume = (fixed costs + target '+
+     'profit) ÷ contribution per unit. Margin of safety = (forecast sales − break-even sales) ÷ forecast sales. '+
+     'All amounts exclude VAT and other sales taxes.\n';
+  if(S.meta.notes)n+='\n'+S.meta.notes;
+  $('#dNotes').textContent=n;
+
+  $('#dFoot').innerHTML='<span>'+esc(S.meta.biz||'Break-even analysis')+'</span>'+
+    '<span>'+esc(S.meta.ref||'')+'</span>'+
+    '<span>Prepared '+dateLong(S.meta.date)+(S.meta.by?' by '+esc(S.meta.by):'')+'</span>'+
+    '<span>Cost–volume–profit analysis · figures exclude VAT</span>';
+}
