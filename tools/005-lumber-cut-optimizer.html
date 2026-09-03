@@ -590,9 +590,9 @@ function sample(){
     job:{ref:'JOB-2418', client:'Marsden Joinery Ltd', site:'14 Bracken Rise — rear deck frame',
          mat:'47 × 150 C24 treated softwood', by:'D. Whitcombe', date:todayISO()},
     stock:[
-      {id:uid++, label:'2.40 m length', auto:true, len:2400, price:8.4,  qty:''},
-      {id:uid++, label:'3.60 m length', auto:true, len:3600, price:11.9, qty:''},
-      {id:uid++, label:'4.80 m length', auto:true, len:4800, price:16.5, qty:''}
+      {id:uid++, label:'2.4 m length', auto:true, len:2400, price:8.4,  qty:''},
+      {id:uid++, label:'3.6 m length', auto:true, len:3600, price:11.9, qty:''},
+      {id:uid++, label:'4.8 m length', auto:true, len:4800, price:16.5, qty:''}
     ],
     cuts:[
       {id:uid++, part:'Deck joist',      len:1850, qty:10},
@@ -1206,7 +1206,7 @@ function setUnit(u){
 $('uMm').addEventListener('click', function(){ setUnit('mm'); });
 $('uIn').addEventListener('click', function(){ setUnit('in'); });
 $('bSample').addEventListener('click', function(){
-  S=sample(); save(); renderForm(); renderTables(); paint(); validateAll();
+  S=sample(); refreshAutoNames(); save(); renderForm(); renderTables(); paint(); validateAll();
   toast('Sample deck-framing job loaded.','');
 });
 $('bClear').addEventListener('click', function(){
@@ -1296,13 +1296,18 @@ function csvText(){
     rows.push(['Total','',best.boards.length,'',best.cost.toFixed(2)]);
   }
   rows.push([]);
-  rows.push(['CUT PLAN — ONE ROW PER PIECE']);
-  rows.push(['Board','Stock item','Stock length ('+u+')','Part','Cut length ('+u+')','Cuts on board','Offcut ('+u+')','Offcut usable']);
+  rows.push(['CUT PLAN — ONE ROW PER BOARD']);
+  rows.push(['Board','Stock item','Stock length ('+u+')','Pieces','Cut length used ('+u+')','Saw cuts','Kerf lost ('+u+')','Offcut ('+u+')','Offcut usable']);
   if(best) best.boards.forEach(function(b,ix){
-    b.items.forEach(function(p,pi){
-      rows.push([ix+1, b.stock.label, rawn(b.stock.len,ND()), p.part, rawn(p.len,ND()),
-        pi===0?b.cuts:'', pi===0?rawn(b.offcut,ND()):'',
-        pi===0?((b.offcut>=R.minUse&&b.offcut>0)?'yes':'no'):'']);
+    rows.push([ix+1, b.stock.label, rawn(b.stock.len,ND()), b.items.length, rawn(b.S,ND()),
+      b.cuts, rawn(b.kerfLoss,ND()), rawn(b.offcut,ND()), (b.offcut>=R.minUse&&b.offcut>0)?'yes':'no']);
+  });
+  rows.push([]);
+  rows.push(['CUT PLAN — ONE ROW PER PIECE']);
+  rows.push(['Board','Stock item','Stock length ('+u+')','Part','Cut length ('+u+')']);
+  if(best) best.boards.forEach(function(b,ix){
+    b.items.forEach(function(p){
+      rows.push([ix+1, b.stock.label, rawn(b.stock.len,ND()), p.part, rawn(p.len,ND())]);
     });
   });
   if(best&&best.unfit.length){
@@ -1333,7 +1338,7 @@ $('fileIn').addEventListener('change', function(ev){
     try{
       var o=JSON.parse(String(rd.result));
       if(!o||typeof o!=='object'||(!Array.isArray(o.cuts)&&!Array.isArray(o.stock))) throw new Error('shape');
-      S=normalise(o);
+      S=normalise(o); refreshAutoNames();
       save(); renderForm(); renderTables(); paint(); validateAll();
       toast('Cut list imported.','');
     }catch(e){ toast('That file is not a Solvix cut plan.','bad'); }
