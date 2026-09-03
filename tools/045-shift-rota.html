@@ -553,3 +553,283 @@ td.cell.off select{color:var(--muted)}
 </footer>
 
 <script>
+"use strict";
+(function(){
+/* ══════════════════════════════════════════════════════════════════
+   Shift Rota Planner — all maths is done here. Nothing is hardcoded.
+   ══════════════════════════════════════════════════════════════════ */
+var KEY='solvix.shift-rota.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var DOWL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var DOW3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var CUSTOM='~';
+
+/* ── small helpers ─────────────────────────────────────────────── */
+function pad2(n){return n<10?'0'+n:''+n;}
+function isoOf(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function dOf(iso){var p=String(iso||'').split('-');var d=new Date(+p[0],(+p[1]||1)-1,+p[2]||1);
+  return isNaN(d.getTime())?new Date():d;}
+function addDays(d,n){var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x;}
+function dayNum(d){return Math.round(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000);}
+function shortDate(d){return d.getDate()+' '+MON[d.getMonth()];}
+function longDate(d){return DOW3[d.getDay()]+' '+d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear();}
+function weekStartOf(d,wsd){var diff=(d.getDay()-wsd+7)%7;return addDays(d,-diff);}
+function num(v,dflt){var n=parseFloat(v);return isFinite(n)?n:(dflt===undefined?0:dflt);}
+function r2(x){if(!isFinite(x))return 0;var v=Math.round((Math.abs(x)+1e-9)*100)/100;return x<0?-v:v;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function grp(s){var p=String(s).split('.');
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(p[1]?'.'+p[1]:'');}
+function money(x){if(x==null||!isFinite(x))return '—';
+  var v=r2(x);var s=Math.abs(v).toFixed(2);return (v<0?'-':'')+S.ccy+grp(s);}
+function hrs(x){if(x==null||!isFinite(x))return '—';return x.toFixed(2);}
+function hrs1(x){if(x==null||!isFinite(x))return '—';return (Math.round(x*10)/10).toFixed(1);}
+function uid(p){return p+Math.random().toString(36).slice(2,8);}
+function parseHM(t){var m=/^(\d{1,2}):(\d{2})$/.exec(String(t||'').trim());if(!m)return null;
+  var h=+m[1],mi=+m[2];if(h>23||mi>59)return null;return h*60+mi;}
+function hm(mins){mins=((mins%1440)+1440)%1440;return pad2(Math.floor(mins/60))+':'+pad2(mins%60);}
+
+/* ── state ─────────────────────────────────────────────────────── */
+var S=null, M=null, cellEls={}, staffEls={}, dirtyTimer=null;
+
+function sampleState(){
+  var ws=weekStartOf(new Date(),1);
+  var st={
+    v:1, sample:true, wsd:1, cur:isoOf(ws), ccy:'£',
+    org:{name:'Rivermill Care Home',unit:'Willow Unit — residential care',
+         addr:'14 Rivermill Way\nAshbourne, Derbyshire DE6 1QT',
+         ref:'ROTA-'+ws.getFullYear()+'-W'+pad2(isoWeek(ws)), mgr:'S. Fenton — Unit Manager'},
+    rules:{rest:11,consec:6,cap:48},
+    cover:{0:4,1:4,2:4,3:4,4:4,5:4,6:4},
+    tpls:[{id:'tE',code:'E',name:'Early',s:'07:00',e:'15:00',b:30},
+          {id:'tL',code:'L',name:'Late',s:'14:00',e:'22:00',b:30},
+          {id:'tN',code:'N',name:'Night',s:'21:45',e:'07:45',b:60},
+          {id:'tT',code:'T',name:'Twilight',s:'17:00',e:'21:00',b:0}],
+    staff:[{id:'p1',name:'A. Okafor',role:'Senior Care Assistant',rate:16.20,contract:37.5},
+           {id:'p2',name:'D. Whelan',role:'Care Assistant',rate:13.85,contract:30},
+           {id:'p3',name:'M. Silva',role:'Care Assistant',rate:13.85,contract:37.5},
+           {id:'p4',name:'J. Byrne',role:'Night Care Assistant',rate:14.90,contract:33},
+           {id:'p5',name:'P. Grant',role:'Kitchen &amp; Support',rate:12.60,contract:20}],
+    shifts:{}
+  };
+  st.staff[4].name='P. Grant'; st.staff[4].role='Kitchen & Support';
+  var plan={p1:['tE','tE','tE','tL','tE','',''],
+            p2:['tL','tL','','tE','tL','tL',''],
+            p3:['','tE','tE','tE','tE','tL','tL'],
+            p4:['tN','tN','tN','','tN','tN','tN'],
+            p5:['tT','tT','tT','tT','tT','tT','tT']};
+  for(var c=0;c<7;c++){
+    var iso=isoOf(addDays(ws,c));
+    for(var k in plan){ if(!plan.hasOwnProperty(k))continue;
+      var t=plan[k][c]; if(!t)continue;
+      if(!st.shifts[iso])st.shifts[iso]={};
+      st.shifts[iso][k]={t:t};
+    }
+  }
+  return st;
+}
+function isoWeek(d){var t=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  t.setDate(t.getDate()+3-((t.getDay()+6)%7));
+  var w1=new Date(t.getFullYear(),0,4);
+  return 1+Math.round(((t-w1)/86400000-3+((w1.getDay()+6)%7))/7);}
+
+function blankState(){
+  var ws=weekStartOf(new Date(),1);
+  return {v:1,sample:false,wsd:1,cur:isoOf(ws),ccy:'£',
+    org:{name:'',unit:'',addr:'',ref:'',mgr:''},
+    rules:{rest:11,consec:6,cap:48},
+    cover:{0:0,1:0,2:0,3:0,4:0,5:0,6:0},
+    tpls:[{id:'tE',code:'E',name:'Early',s:'07:00',e:'15:00',b:30},
+          {id:'tL',code:'L',name:'Late',s:'14:00',e:'22:00',b:30},
+          {id:'tN',code:'N',name:'Night',s:'21:45',e:'07:45',b:60}],
+    staff:[{id:uid('p'),name:'',role:'',rate:0,contract:0}],
+    shifts:{}};
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw)return null;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object')return null;
+    return normalise(o);
+  }catch(e){ return null; }
+}
+function normalise(o){
+  var b=blankState();
+  var st={v:1, sample:!!o.sample, wsd:(o.wsd===0||o.wsd===6||o.wsd===1)?o.wsd:1,
+    cur:/^\d{4}-\d{2}-\d{2}$/.test(o.cur)?o.cur:b.cur,
+    ccy:(typeof o.ccy==='string'&&o.ccy)?o.ccy.slice(0,4):'£',
+    org:{name:'',unit:'',addr:'',ref:'',mgr:''},
+    rules:{rest:11,consec:6,cap:48}, cover:{}, tpls:[], staff:[], shifts:{}};
+  if(o.org&&typeof o.org==='object'){['name','unit','addr','ref','mgr'].forEach(function(k){
+    if(typeof o.org[k]==='string')st.org[k]=o.org[k].slice(0,400);});}
+  if(o.rules&&typeof o.rules==='object'){
+    st.rules.rest=num(o.rules.rest,11); st.rules.consec=Math.max(1,Math.round(num(o.rules.consec,6)));
+    st.rules.cap=num(o.rules.cap,48);}
+  for(var d=0;d<7;d++){ st.cover[d]=Math.max(0,Math.round(num(o.cover&&o.cover[d],0))); }
+  if(Array.isArray(o.tpls)) o.tpls.forEach(function(t){ if(!t)return;
+    st.tpls.push({id:String(t.id||uid('t')),code:String(t.code||'').slice(0,4),
+      name:String(t.name||'').slice(0,40),s:String(t.s||'09:00'),e:String(t.e||'17:00'),
+      b:Math.max(0,Math.round(num(t.b,0)))}); });
+  if(!st.tpls.length) st.tpls=b.tpls;
+  if(Array.isArray(o.staff)) o.staff.forEach(function(p){ if(!p)return;
+    st.staff.push({id:String(p.id||uid('p')),name:String(p.name||'').slice(0,60),
+      role:String(p.role||'').slice(0,60),rate:Math.max(0,num(p.rate,0)),
+      contract:Math.max(0,num(p.contract,0))}); });
+  if(!st.staff.length) st.staff=[{id:uid('p'),name:'',role:'',rate:0,contract:0}];
+  if(o.shifts&&typeof o.shifts==='object'){
+    for(var iso in o.shifts){ if(!o.shifts.hasOwnProperty(iso))continue;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))continue;
+      var day=o.shifts[iso]; if(!day||typeof day!=='object')continue; var out={};
+      for(var pid in day){ if(!day.hasOwnProperty(pid))continue;
+        var c=day[pid]; if(!c||typeof c!=='object'||!c.t)continue;
+        if(c.t===CUSTOM) out[pid]={t:CUSTOM,s:String(c.s||'09:00'),e:String(c.e||'17:00'),
+          b:Math.max(0,Math.round(num(c.b,0)))};
+        else out[pid]={t:String(c.t)};
+      }
+      if(Object.keys(out).length) st.shifts[iso]=out;
+    }
+  }
+  return st;
+}
+
+/* ── shift maths ───────────────────────────────────────────────── */
+function tplById(id){for(var i=0;i<S.tpls.length;i++){if(S.tpls[i].id===id)return S.tpls[i];}return null;}
+/* resolve a stored cell into concrete times; returns null when off */
+function resolve(cell){
+  if(!cell||!cell.t)return null;
+  if(cell.t===CUSTOM) return {code:'C',name:'Custom',s:cell.s,e:cell.e,b:num(cell.b,0),custom:true};
+  var t=tplById(cell.t);
+  if(!t) return {code:'?',name:'Unknown shift',s:'',e:'',b:0,missing:true};
+  return {code:t.code,name:t.name,s:t.s,e:t.e,b:num(t.b,0),custom:false};
+}
+/* paid hours for a resolved shift. Overnight when finish <= start. */
+function shiftMaths(sh){
+  var out={ok:false,startMin:null,span:0,paid:0,hours:0,err:''};
+  if(!sh)return out;
+  var a=parseHM(sh.s), b=parseHM(sh.e);
+  if(a===null||b===null){out.err='Start or finish time is missing';return out;}
+  var span=b-a; if(span<=0) span+=1440;          /* overnight shift */
+  var brk=Math.max(0,num(sh.b,0));
+  if(brk>=span){out.err='Unpaid break is as long as the shift';out.startMin=a;out.span=span;return out;}
+  out.ok=true; out.startMin=a; out.span=span; out.paid=span-brk; out.hours=out.paid/60;
+  out.overnight=(b<=a);
+  return out;
+}
+function tplHours(t){var m=shiftMaths({s:t.s,e:t.e,b:t.b});return m.ok?m.hours:null;}
+
+/* ── the model: everything the screen and the print doc need ───── */
+function weekDates(){
+  var ws=dOf(S.cur), out=[];
+  for(var i=0;i<7;i++) out.push(addDays(ws,i));
+  return out;
+}
+function cellOf(iso,pid){var d=S.shifts[iso];return d?(d[pid]||null):null;}
+function setCell(iso,pid,cell){
+  if(!cell){ if(S.shifts[iso]){ delete S.shifts[iso][pid];
+      if(!Object.keys(S.shifts[iso]).length) delete S.shifts[iso]; } return; }
+  if(!S.shifts[iso]) S.shifts[iso]={};
+  S.shifts[iso][pid]=cell;
+}
+
+function compute(){
+  var dates=weekDates();
+  var isos=dates.map(isoOf);
+  var minRest=Math.max(0,num(S.rules.rest,11))*60;
+  var maxCon=Math.max(1,Math.round(num(S.rules.consec,6)));
+  var cap=Math.max(0,num(S.rules.cap,48));
+  var m={dates:dates,isos:isos,rows:[],days:[],breaches:[],
+         totHours:0,totCost:0,totShifts:0,coverShort:0,avg:null};
+
+  /* per-day tallies */
+  for(var c=0;c<7;c++) m.days.push({date:dates[c],iso:isos[c],head:0,hours:0,cost:0,
+    req:Math.max(0,Math.round(num(S.cover[dates[c].getDay()],0))),short:0});
+
+  S.staff.forEach(function(p){
+    var row={p:p,cells:[],hours:0,cost:0,shifts:0,flags:0};
+    /* --- resolve the seven cells --- */
+    for(var c=0;c<7;c++){
+      var raw=cellOf(isos[c],p.id);
+      var sh=resolve(raw);
+      var mm=shiftMaths(sh);
+      var cell={raw:raw,sh:sh,m:mm,flags:[],cost:0,dayNum:dayNum(dates[c])};
+      if(sh&&mm.ok){ cell.cost=r2(mm.hours*Math.max(0,num(p.rate,0)));
+        row.hours+=mm.hours; row.cost=r2(row.cost+cell.cost); row.shifts++;
+        m.days[c].head++; m.days[c].hours+=mm.hours; m.days[c].cost=r2(m.days[c].cost+cell.cost);
+      } else if(sh){ m.days[c].head++;                       /* rostered but unusable times */
+        cell.flags.push({k:'TIME',sev:'bad',msg:mm.err||'Shift times are not valid'});
+      }
+      row.cells.push(cell);
+    }
+    /* --- rest between shifts (looks back up to 4 days before the week) --- */
+    var seq=[];   /* every worked shift from 4 days before the week to its end */
+    for(var i=-4;i<7;i++){
+      var d=addDays(dates[0],i), iso=isoOf(d), rr=cellOf(iso,p.id);
+      if(!rr)continue; var s2=resolve(rr), m2=shiftMaths(s2);
+      if(!m2.ok)continue;
+      seq.push({idx:i,dn:dayNum(d),date:d,startAbs:dayNum(d)*1440+m2.startMin,
+                endAbs:dayNum(d)*1440+m2.startMin+m2.span,sh:s2,m:m2});
+    }
+    seq.sort(function(a,b){return a.startAbs-b.startAbs;});
+    for(var j=1;j<seq.length;j++){
+      var prev=seq[j-1], cur=seq[j];
+      if(cur.idx<0)continue;                                  /* only flag this week's cells */
+      var rest=cur.startAbs-prev.endAbs;
+      var cellRef=row.cells[cur.idx];
+      if(rest<0){
+        cellRef.flags.push({k:'REST',sev:'bad',
+          msg:'Overlaps the shift on '+longDate(prev.date)+' ('+prev.sh.s+'–'+prev.sh.e+'), which does not finish until '+hm(prev.endAbs%1440)+'.'});
+      } else if(rest<minRest-0.0001){
+        cellRef.flags.push({k:'REST '+hrs1(rest/60)+'h',sev:'bad',
+          msg:'Only '+hrs1(rest/60)+' h rest after the '+prev.sh.name.toLowerCase()+' shift on '+longDate(prev.date)+
+              ' (finished '+hm(prev.endAbs%1440)+') — minimum is '+hrs1(minRest/60)+' h.'});
+      }
+    }
+    /* --- consecutive days, carried in from the days before the week --- */
+    var run=0;
+    for(var b2=1;b2<=45;b2++){
+      var pd=isoOf(addDays(dates[0],-b2)), pc=cellOf(pd,p.id);
+      if(pc) run++; else break;
+    }
+    var carry=run;
+    for(var c3=0;c3<7;c3++){
+      if(row.cells[c3].sh){ run++;
+        if(run>maxCon) row.cells[c3].flags.push({k:run+' DAYS',sev:'bad',
+          msg:'Day '+run+' in a row'+(carry&&c3<carry?' (counting '+carry+' day'+(carry===1?'':'s')+' already worked before this week)':'')+
+              ' — the limit is '+maxCon+' consecutive days.'});
+      } else run=0;
+    }
+    row.consecMax=(function(){var r=carry,best=carry;for(var c4=0;c4<7;c4++){
+      if(row.cells[c4].sh){r++;if(r>best)best=r;}else r=0;} return best;})();
+    row.carry=carry;
+    /* --- weekly hours cap: flag from the shift that takes them past it --- */
+    row.overCap=row.hours>cap+0.0001;
+    if(row.overCap){
+      var runh=0;
+      for(var c5=0;c5<7;c5++){
+        var cc=row.cells[c5]; if(!cc.m.ok)continue;
+        runh+=cc.m.hours;
+        if(runh>cap+0.0001) cc.flags.push({k:'CAP',sev:'bad',
+          msg:'Takes '+(p.name||'this person')+' to '+hrs(runh)+' h this week — the cap is '+hrs1(cap)+' h.'});
+      }
+    }
+    row.cells.forEach(function(cl,ci){
+      row.flags+=cl.flags.length;
+      cl.flags.forEach(function(f){
+        m.breaches.push({who:p.name||'(unnamed)',date:dates[ci],day:DOW3[dates[ci].getDay()],
+          kind:f.k.split(' ')[0],sev:f.sev,msg:f.msg});
+      });
+    });
+    row.contractVar=(num(p.contract,0)>0)?(row.hours-num(p.contract,0)):null;
+    m.rows.push(row);
+    m.totHours+=row.hours; m.totCost=r2(m.totCost+row.cost); m.totShifts+=row.shifts;
+  });
+  m.days.forEach(function(d){ d.short=Math.max(0,d.req-d.head); if(d.short>0)m.coverShort++; });
+  m.avg=(m.totHours>0)?(m.totCost/m.totHours):null;
+  m.breachCount=m.breaches.length;
+  return m;
+}

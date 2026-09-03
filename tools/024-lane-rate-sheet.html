@@ -239,6 +239,20 @@ body>.appbar{margin:0;padding-left:0;padding-right:0}
 #hTable input[type=date]{font-family:var(--mono);font-size:13px;text-align:left}
 #hTable td.n input{min-width:86px}
 
+/* ranked list — the table is wide, so small screens get the ranking here */
+.ranklist{display:none}
+@media(max-width:900px){
+  .ranklist{display:block;border-top:1px solid var(--line);margin-top:2px;padding-top:10px}
+  .ranklist .rl-h{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .rl-row{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
+  .rl-row:last-child{border-bottom:0}
+  .rl-n{font:700 12px/1.2 var(--mono);color:var(--muted);flex:none;width:20px}
+  .rl-c{flex:1;min-width:0;font:600 13px/1.3 var(--sans);overflow:hidden;text-overflow:ellipsis}
+  .rl-c span{display:block;font:400 11.5px/1.3 var(--mono);color:var(--muted)}
+  .rl-v{font:700 13.5px/1.3 var(--mono);font-variant-numeric:tabular-nums;text-align:right;flex:none}
+  .rl-row.win .rl-n,.rl-row.win .rl-v{color:var(--accent-ink)}
+}
+
 /* trend chart */
 .chartwrap{border:1px solid var(--line);border-radius:4px;background:var(--raise);padding:8px 4px 4px}
 .chartwrap svg{display:block;width:100%;height:auto}
@@ -298,6 +312,8 @@ body>.appbar{margin:0;padding-left:0;padding-right:0}
   .f input,.f textarea,.f select{text-align:left;font-size:10.5pt;font-weight:600}
   .f>label{font-size:7.5pt}
   input[type=date]::-webkit-calendar-picker-indicator{display:none}
+  #fInv,#fShip{display:none!important}
+  #pvInv,#pvShip{display:block!important;font:600 10.5pt/1.3 var(--sans)}
   .ck-line{stroke:#000} .ck-dot{stroke:#000;fill:#fff} .ck-best{stroke:#666}
   .ck-t,.ck-v,.ck-b{fill:#333}
 }
@@ -384,6 +400,7 @@ body>.appbar{margin:0;padding-left:0;padding-right:0}
             <div class="stat"><div class="k">Awarded</div><div class="v" id="vAward" style="font-size:14px">—</div><div class="u" id="uAward">—</div></div>
             <div class="stat"><div class="k">Invoice vs quote</div><div class="v" id="vVar">—</div><div class="u" id="uVar">—</div></div>
           </div>
+          <div class="ranklist noprint" id="rankList"></div>
         </div>
         <div class="ft"><strong id="ftLabel">Recommended — lowest all-in</strong><span class="ftbig" id="ftV">—</span></div>
       </div>
@@ -547,9 +564,11 @@ body>.appbar{margin:0;padding-left:0;padding-right:0}
       <div class="grid cols-3">
         <div class="f"><label for="fInv">Invoiced all-in amount</label>
           <input type="number" id="fInv" min="0" step="0.01" inputmode="decimal">
+          <span class="pv" id="pvInv"></span>
           <span class="err" id="eInv" hidden></span></div>
         <div class="f"><label for="fInvRef">Invoice / pro number</label><input type="text" id="fInvRef" autocomplete="off"></div>
-        <div class="f"><label for="fShip">Shipped / delivered date</label><input type="date" id="fShip"></div>
+        <div class="f"><label for="fShip">Shipped / delivered date</label><input type="date" id="fShip">
+          <span class="pv" id="pvShip"></span></div>
       </div>
       <div class="grid cols-3">
         <div class="stat"><div class="k">Awarded carrier</div><div class="v" id="aCar" style="font-size:15px">—</div><div class="u" id="aEq">—</div></div>
@@ -1134,6 +1153,8 @@ function refresh(){
   /* award card */
   txt('aCar',c.award?(c.award.q.carrier||'Unnamed carrier'):'—');
   txt('aEq',c.award?((c.award.q.mc||'no MC entered')+' · '+(c.award.q.equip||'—')):'no carrier awarded');
+  txt('pvInv',c.inv>0?money(c.inv):'—');
+  txt('pvShip',dateLbl(lane.ship));
   txt('aQuo',c.award?money(c.award.total):'—');
   txt('aQuoU',c.award&&c.award.rpm!==null?rate(rOut(c.award.rpm))+u.per+' · '+fx(dOut(c.award.miles),dDp())+' '+u.d:'—');
   var av=$('aVar');
@@ -1182,6 +1203,24 @@ function refresh(){
     txt('uHDelta',(c.histDelta<0?'below':'above')+' the lane average paid');
   }else{hd.textContent='—';hd.className='v';txt('uHDelta','needs history and a priced quote');}
   renderChart(c);
+
+  /* ranked list (small screens) */
+  var rl=$('rankList');
+  if(rl){
+    if(c.n){
+      var byT=c.priced.slice().sort(function(a,b){return a.total-b.total;});
+      var rh='<div class="rl-h">Ranked by all-in cost</div>';
+      byT.forEach(function(r,i){
+        rh+='<div class="rl-row'+(i===0?' win':'')+'"><div class="rl-n">'+(i+1)+'</div>'+
+          '<div class="rl-c">'+esc(r.q.carrier||'Unnamed carrier')+
+          '<span>'+(r.rpm!==null?rate(rOut(r.rpm))+u.per:'—')+
+          (r.transit>0?' · '+fx(r.transit,r.transit%1?1:0)+'d':'')+
+          (lane.awardId===r.id?' · awarded':'')+'</span></div>'+
+          '<div class="rl-v">'+money(r.total)+'</div></div>';
+      });
+      rl.innerHTML=rh;
+    }else{rl.innerHTML='<div class="rl-h">Ranked by all-in cost</div><div class="hint">No priced quotes yet.</div>';}
+  }
 
   /* quotes hint */
   txt('qHint',lane.miles>0?('lane distance '+fx(dOut(lane.miles),dDp())+' '+u.d+' · '+lane.basis)

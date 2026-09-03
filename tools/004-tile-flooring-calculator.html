@@ -673,16 +673,14 @@ function calc(){
     var over = ded > gross && gross > 0;
     var waste = n(r.waste);
     var areaW = net * (1 + waste / 100);
-    var boxes = null;
-    if(net <= 0) boxes = 0;
-    else if(boxCov > 0) boxes = ceilQ(areaW / boxCov);
+    var boxes = (net > 0 && boxCov > 0) ? ceilQ(areaW / boxCov) : null;
     netTot += net; wTot += areaW;
-    if(boxes === null) anyRoomBoxNull = true; else roomBoxSum += boxes;
+    if(net > 0){ if(boxes === null) anyRoomBoxNull = true; else roomBoxSum += boxes; }
     return { name:r.name, l:l, w:w, cl:cl, cw:cw, cq:cq, ded:ded, gross:gross,
              net:net, waste:waste, areaW:areaW, boxes:boxes, pattern:r.pattern, over:over };
   });
 
-  var jobBoxes = (netTot > 0 && boxCov > 0) ? ceilQ(wTot / boxCov) : (netTot > 0 ? null : 0);
+  var jobBoxes = (netTot > 0 && boxCov > 0) ? ceilQ(wTot / boxCov) : null;
 
   /* grout — worked in inches / square feet, then converted for display */
   var f = met ? 1 / IN_MM : 1;                    /* mm or in -> in  */
@@ -692,20 +690,10 @@ function calc(){
   if(tl > 0 && tw > 0 && td > 0 && tj > 0 && areaSqft > 0)
     groutLb = ((tl + tw) / (tl * tw)) * tj * td * areaSqft * 1.5;
   var groutDisp = groutLb === null ? null : (met ? groutLb * LB_KG : groutLb);
-  var gBags = null;
-  if(groutDisp !== null && n(M.gBag) > 0) gBags = ceilQ(groutDisp / n(M.gBag));
-  else if(netTot <= 0) gBags = 0;
-
-  var aBags = null;
-  if(netTot <= 0) aBags = 0;
-  else if(n(M.aCov) > 0) aBags = ceilQ(netTot / n(M.aCov));
-
+  var gBags = (groutDisp !== null && n(M.gBag) > 0) ? ceilQ(groutDisp / n(M.gBag)) : null;
+  var aBags = (netTot > 0 && n(M.aCov) > 0) ? ceilQ(netTot / n(M.aCov)) : null;
   var uRolls = 0;
-  if(M.uOn){
-    if(netTot <= 0) uRolls = 0;
-    else if(n(M.uRoll) > 0) uRolls = ceilQ(netTot / n(M.uRoll));
-    else uRolls = null;
-  }
+  if(M.uOn) uRolls = (netTot > 0 && n(M.uRoll) > 0) ? ceilQ(netTot / n(M.uRoll)) : null;
 
   /* tiles */
   var tileArea = null;                            /* one tile, in display area units */
@@ -727,6 +715,7 @@ function calc(){
   var total = sub + tax;
 
   var avgWaste = netTot > 0 ? (wTot / netTot - 1) * 100 : null;
+  var empty = netTot <= 0 && total === 0;
 
   return { met:met, rooms:rooms, netTot:netTot, wTot:wTot, jobBoxes:jobBoxes,
            roomBoxSum:anyRoomBoxNull ? null : roomBoxSum, boxCov:boxCov,
@@ -734,7 +723,7 @@ function calc(){
            perBox:perBox, tiles:tiles, avgWaste:avgWaste,
            tileCost:tileCost, groutCost:groutCost, adhCost:adhCost, ulCost:ulCost,
            matSub:matSub, labCost:labCost, sundries:sundries, sub:sub,
-           taxPct:taxPct, tax:tax, total:total };
+           taxPct:taxPct, tax:tax, total:total, empty:empty };
 }
 
 /* ══ rooms table ═════════════════════════════════════════════════ */
@@ -807,14 +796,15 @@ function refresh(){
     : null;
   $('hero').textContent = R.jobBoxes === null ? '—' : plural(R.jobBoxes, 'box', 'boxes');
   txt('heroSub', R.jobBoxes === null
-    ? 'Enter the coverage printed on the tile box to get a box count.'
+    ? (R.netTot > 0 ? 'Enter the coverage printed on the tile box to get a box count.'
+                    : 'Add a room length and width to get a box count.')
     : (sizeTxt ? sizeTxt + ' · ' : '') + fmt(R.wTot, 2) + ' ' + A + ' incl. waste at ' +
       fmtT(R.boxCov, 2) + ' ' + A + '/box · ordered as one lot');
 
   /* stats */
-  txt('sNet', fmt(R.netTot, 2));
+  txt('sNet', R.netTot > 0 ? fmt(R.netTot, 2) : '—');
   txt('sNetU', A + ' over ' + plural(S.rooms.length, 'room', 'rooms'));
-  txt('sWaste', fmt(R.wTot, 2));
+  txt('sWaste', R.wTot > 0 ? fmt(R.wTot, 2) : '—');
   txt('sWasteU', A + ' to order');
   txt('sGrout', R.gBags === null ? '—' : plural(R.gBags, 'bag', 'bags'));
   txt('sGroutU', (R.groutDisp === null ? 'enter tile size and joint' : fmt(R.groutDisp, 2) + ' ' + un.mass) +
@@ -864,9 +854,9 @@ function refresh(){
   if(R.sundries > 0) kv += line('Sundries', money(R.sundries));
   kv += line('Subtotal', money(R.sub));
   kv += line('Tax / VAT @ ' + fmtT(R.taxPct, 2) + '%', money(R.tax));
-  $('totBox').innerHTML = kv;
-  txt('ftTotal', money(R.total));
-  txt('ftSub', R.taxPct > 0 ? 'incl. ' + fmtT(R.taxPct, 2) + '% tax' : 'no tax applied');
+  $('totBox').innerHTML = R.empty ? '<div class="kv"><span class="k">Nothing to price yet — add a room</span><span class="v">—</span></div>' : kv;
+  txt('ftTotal', R.empty ? '—' : money(R.total));
+  txt('ftSub', R.empty ? 'nothing priced yet' : (R.taxPct > 0 ? 'incl. ' + fmtT(R.taxPct, 2) + '% tax' : 'no tax applied'));
 
   /* schedule */
   var sh = '';
@@ -884,7 +874,7 @@ function refresh(){
     '</td><td colspan="3">Areas in ' + esc(A) + '</td><td class="n">' + fmt(R.netTot, 2) + '</td><td class="n">' +
     (R.avgWaste === null ? '—' : fmt(R.avgWaste, 1) + '%') + '</td><td class="n">' + fmt(R.wTot, 2) +
     '</td><td class="n">' + (R.jobBoxes === null ? '—' : fmt(R.jobBoxes, 0)) + '</td></tr>';
-  txt('schedNote', (R.jobBoxes === null || R.roomBoxSum === null) ? 'Areas in ' + A + '.' :
+  txt('schedNote', (R.jobBoxes === null || R.roomBoxSum === null || R.roomBoxSum === 0) ? 'Areas in ' + A + '.' :
     'Ordered as one lot: ' + plural(R.jobBoxes, 'box', 'boxes') + '.' +
     (R.roomBoxSum !== R.jobBoxes ? ' Room by room it would take ' + plural(R.roomBoxSum, 'box', 'boxes') + '.' : ''));
 
