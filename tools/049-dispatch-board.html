@@ -631,3 +631,324 @@ function actualMin(j){
   if(a==null||b==null) return null;
   var d=b-a; if(d<0) d+=1440; return d;
 }
+
+/* ── board ───────────────────────────────────────────────── */
+function opOptions(sel){
+  var h='<option value="">— Unassigned —</option>';
+  S.ops.forEach(function(o){
+    h+='<option value="'+esc(o.id)+'"'+(o.id===sel?' selected':'')+'>'+esc(o.name||'(unnamed)')+'</option>';
+  });
+  return h;
+}
+function jobCard(j,r){
+  var c=el('div','jc p-'+(PMAP[j.prio]?j.prio:'normal'));
+  c.setAttribute('draggable','true'); c.dataset.job=j.id;
+  var top=el('div','top');
+  top.appendChild(el('span','ref',j.ref||'—'));
+  var pc=el('span','chip sm'+(j.prio==='urgent'?' bad':j.prio==='high'?' warn':''),(PMAP[j.prio]||PMAP.normal).l);
+  top.appendChild(pc);
+  var sm=SMAP[j.status]||SMAP.booked;
+  var sc=el('span','chip sm'+(sm.c?' '+sm.c:''),sm.l);
+  sc.style.marginLeft='auto'; top.appendChild(sc);
+  c.appendChild(top);
+  c.appendChild(el('div','cust',j.cust||'(no customer)'));
+  if(j.addr) c.appendChild(el('div','addr',j.addr));
+  var meta=el('div','meta');
+  var win=(t2m(j.ws)!=null&&t2m(j.we)!=null)?(j.ws+'–'+j.we):'no window';
+  meta.appendChild(el('span',null,'◷ '+win));
+  meta.appendChild(el('span',null,fInt(Math.max(0,num(j.dur)))+' min on site'));
+  if(num(j.trav)>0) meta.appendChild(el('span',null,'+'+fInt(num(j.trav))+' travel'));
+  c.appendChild(meta);
+  if(r && j._eta && j._eta.arrive!=null){
+    var e=j._eta, l=el('div','meta');
+    var t=el('span',e.risk?'late':null,'ETA '+m2t(e.arrive)+' → '+m2t(e.leave));
+    l.appendChild(t);
+    if(e.risk) l.appendChild(el('span','late','after window closes'));
+    else if(e.wait) l.appendChild(el('span','warnt',fInt(e.wait)+' min wait'));
+    if(e.brk) l.appendChild(el('span',null,'break taken first'));
+    c.appendChild(l);
+  }
+  if(j.status==='failed' && j.fail) c.appendChild(el('div','addr','Failed: '+j.fail));
+  var acts=el('div','acts');
+  var sel=document.createElement('select');
+  sel.innerHTML=opOptions(j.opId);
+  sel.setAttribute('aria-label','Assign '+(j.ref||'job')+' to operative');
+  sel.addEventListener('change',function(){ j.opId=sel.value; touch(); renderBoard(); renderResults(); syncRow(j.id); });
+  acts.appendChild(sel);
+  if(NEXT[j.status]){
+    var b=el('button','btn sm pri',SMAP[NEXT[j.status]].l+' ▸');
+    b.type='button'; b.title='Mark '+(j.ref||'job')+' as '+SMAP[NEXT[j.status]].l.toLowerCase()+' and stamp the time';
+    b.addEventListener('click',function(){ setStatus(j,NEXT[j.status]); });
+    acts.appendChild(b);
+  }
+  if(j.status!=='failed'&&j.status!=='complete'){
+    var f=el('button','btn sm dgr','Fail');
+    f.type='button'; f.title='Mark as failed and record a reason';
+    f.addEventListener('click',function(){ setStatus(j,'failed'); focusRow(j.id,'fail'); });
+    acts.appendChild(f);
+  }
+  if(j.status==='complete'||j.status==='failed'){
+    var u=el('button','btn sm','Reopen');
+    u.type='button';
+    u.addEventListener('click',function(){ j.status='onsite'; delete j.stamps.complete; delete j.stamps.failed; touch(); renderAll(); });
+    acts.appendChild(u);
+  }
+  var ed=el('button','btn sm ico','✎'); ed.type='button';
+  ed.setAttribute('aria-label','Edit '+(j.ref||'job')+' in the job list');
+  ed.addEventListener('click',function(){ focusRow(j.id,'cust'); });
+  acts.appendChild(ed);
+  c.appendChild(acts);
+  c.addEventListener('dragstart',function(ev){
+    dragId=j.id; c.classList.add('drag');
+    try{ ev.dataTransfer.setData('text/plain',j.id); ev.dataTransfer.effectAllowed='move'; }catch(e){}
+  });
+  c.addEventListener('dragend',function(){ dragId=null; c.classList.remove('drag');
+    [].forEach.call(document.querySelectorAll('.col.over'),function(n){n.classList.remove('over');}); });
+  return c;
+}
+var dragId=null;
+function dropZone(node,opId){
+  node.addEventListener('dragover',function(ev){ ev.preventDefault(); try{ev.dataTransfer.dropEffect='move';}catch(e){} node.classList.add('over'); });
+  node.addEventListener('dragleave',function(ev){ if(!node.contains(ev.relatedTarget)) node.classList.remove('over'); });
+  node.addEventListener('drop',function(ev){
+    ev.preventDefault(); node.classList.remove('over');
+    var id=dragId; try{ id=ev.dataTransfer.getData('text/plain')||dragId; }catch(e){}
+    var j=S.jobs.filter(function(x){return x.id===id;})[0];
+    if(j && j.opId!==opId){ j.opId=opId; touch(); renderAll(); }
+  });
+}
+function renderBoard(){
+  var C=compute(), b=$('board'); b.innerHTML='';
+  var pool=el('div','col pool');
+  var ph=el('div','ch');
+  var nm=el('div','nm'); nm.appendChild(el('span','t','Unassigned pool'));
+  var cnt=el('span','chip sm'+(C.pool.length?' warn':' ok'),String(C.pool.length)); cnt.style.marginLeft='auto';
+  nm.appendChild(cnt); ph.appendChild(nm);
+  var pm=el('div','mt2'); pm.appendChild(el('span',null,'Waiting to be assigned'));
+  pm.appendChild(el('span',null,fInt(C.poolMin)+' min')); ph.appendChild(pm);
+  pool.appendChild(ph);
+  var pb=el('div','cb');
+  if(!C.pool.length) pb.appendChild(el('div','empty','Everything is assigned.'));
+  C.pool.forEach(function(j){ pb.appendChild(jobCard(j,null)); });
+  pool.appendChild(pb); dropZone(pool,''); b.appendChild(pool);
+
+  C.rows.forEach(function(r){
+    var col=el('div','col');
+    var ch=el('div','ch');
+    var n=el('div','nm'); n.appendChild(el('span','t',r.op.name||'(unnamed operative)'));
+    var chip=el('span','chip sm'+(r.over?' bad':(r.util!=null&&r.util>=85?' warn':' ok')),
+      r.over?('OVER '+fInt(r.overBy)+'m'):fPct(r.util,0));
+    chip.style.marginLeft='auto'; n.appendChild(chip); ch.appendChild(n);
+    var sub=el('div','mt2');
+    sub.appendChild(el('span',null,(r.op.role||'Operative')+(r.op.veh?' · '+r.op.veh:'')));
+    ch.appendChild(sub);
+    var sub2=el('div','mt2');
+    sub2.appendChild(el('span',null,r.op.start+'–'+r.op.end));
+    sub2.appendChild(el('span',null,fInt(r.committed)+' / '+(r.avail==null?'—':fInt(r.avail))+' min'));
+    ch.appendChild(sub2);
+    var bar=el('div','bar'+(r.over?' hot':(r.util!=null&&r.util>=85?' warm':'')));
+    var i=el('i'); i.style.width=(r.util==null?0:Math.max(0,Math.min(100,r.util)))+'%'; bar.appendChild(i);
+    ch.appendChild(bar);
+    col.appendChild(ch);
+    var cb=el('div','cb');
+    if(!r.jobs.length) cb.appendChild(el('div','empty','Drop a job here.'));
+    r.jobs.forEach(function(j){ cb.appendChild(jobCard(j,r)); });
+    col.appendChild(cb); dropZone(col,r.op.id); b.appendChild(col);
+  });
+  $('boardFoot').textContent = C.total+' job'+(C.total===1?'':'s')+' · '+S.ops.length+' operative'+
+    (S.ops.length===1?'':'s')+' · '+C.pool.length+' unassigned';
+}
+
+/* ── crew table ──────────────────────────────────────────── */
+function renderCrew(){
+  var C=compute(), tb=$('crewBody'); tb.innerHTML='';
+  if(!S.ops.length){
+    var tr=el('tr'); var td=el('td'); td.colSpan=8; td.appendChild(el('div','empty','No operatives yet. Add one to start dispatching.'));
+    tr.appendChild(td); tb.appendChild(tr);
+  }
+  C.rows.forEach(function(r){
+    var o=r.op, tr=el('tr'); tr.dataset.op=o.id;
+    function cell(field,type,ph,cls,w){
+      var td=el('td'); var inp=document.createElement('input'); inp.type=type||'text';
+      inp.value=o[field]==null?'':o[field]; if(ph) inp.placeholder=ph; if(cls) inp.className=cls;
+      if(w) inp.style.minWidth=w;
+      inp.setAttribute('aria-label',ph||field);
+      inp.addEventListener('input',function(){ o[field]=inp.value; touch(); renderBoard(); renderResults(); updCrewCalc(); });
+      inp.addEventListener('blur',function(){ validateOp(o,tr); });
+      td.appendChild(inp); return td;
+    }
+    tr.appendChild(cell('name','text','Operative name',null,'130px'));
+    tr.appendChild(cell('role','text','Role',null,'110px'));
+    tr.appendChild(cell('veh','text','Vehicle',null,'130px'));
+    tr.appendChild(cell('start','time','Shift start',null,'110px'));
+    tr.appendChild(cell('end','time','Shift end',null,'110px'));
+    var tdB=el('td'); var bi=document.createElement('input'); bi.type='number'; bi.min='0'; bi.step='5';
+    bi.value=o.brk; bi.setAttribute('aria-label','Unpaid break minutes'); bi.style.minWidth='72px';
+    bi.addEventListener('input',function(){ o.brk=bi.value===''?0:num(bi.value); touch(); renderBoard(); renderResults(); updCrewCalc(); });
+    bi.addEventListener('blur',function(){ if(num(bi.value)<0){ bi.value=0; o.brk=0; } validateOp(o,tr); });
+    tdB.appendChild(bi); tr.appendChild(tdB);
+    var tdA=el('td','n'); tdA.className='n avail'; tdA.textContent=r.avail==null?'—':fInt(r.avail);
+    tr.appendChild(tdA);
+    var tdX=el('td');
+    var x=el('button','btn sm dgr ico','✕'); x.type='button';
+    x.setAttribute('aria-label','Remove operative '+(o.name||''));
+    x.addEventListener('click',function(){
+      if(!confirm('Remove '+(o.name||'this operative')+'? Their jobs go back to the unassigned pool.')) return;
+      S.jobs.forEach(function(j){ if(j.opId===o.id) j.opId=''; });
+      S.ops=S.ops.filter(function(p){return p.id!==o.id;});
+      touch(); renderAll();
+    });
+    tdX.appendChild(x); tr.appendChild(tdX);
+    var er=el('tr'); er.className='errrow'; er.style.display='none';
+    var etd=el('td'); etd.colSpan=8; etd.appendChild(el('div','err','')); er.appendChild(etd);
+    tb.appendChild(tr); tb.appendChild(er);
+    validateOp(o,tr,true);
+  });
+  updCrewCalc();
+}
+function validateOp(o,tr,quiet){
+  var msgs=[];
+  if(!o.name.trim()) msgs.push('Operative needs a name so it can be printed on the run sheet.');
+  if(t2m(o.start)==null) msgs.push('Shift start must be a valid time.');
+  if(t2m(o.end)==null) msgs.push('Shift end must be a valid time.');
+  var er=tr.nextElementSibling;
+  [].forEach.call(tr.querySelectorAll('input'),function(i){i.classList.remove('inv');});
+  if(!o.name.trim()) tr.querySelectorAll('input')[0].classList.add('inv');
+  if(t2m(o.start)==null) tr.querySelectorAll('input')[3].classList.add('inv');
+  if(t2m(o.end)==null) tr.querySelectorAll('input')[4].classList.add('inv');
+  if(er&&er.className==='errrow'){
+    er.style.display=msgs.length?'':'none';
+    er.querySelector('.err').textContent=msgs.join(' ');
+  }
+  return !msgs.length;
+}
+function updCrewCalc(){
+  var C=compute();
+  var trs=$('crewBody').querySelectorAll('tr[data-op]');
+  C.rows.forEach(function(r,i){ if(trs[i]){ var c=trs[i].querySelector('td.avail'); if(c) c.textContent=r.avail==null?'—':fInt(r.avail); } });
+  $('crewFoot').textContent = S.ops.length? ('Total available today: '+fInt(C.totAvail)+' min ('+fDur(C.totAvail)+')') : 'No crew on shift.';
+}
+
+/* ── job table ───────────────────────────────────────────── */
+function renderJobs(){
+  var tb=$('jobBody'); tb.innerHTML='';
+  if(!S.jobs.length){
+    var tr0=el('tr'), td0=el('td'); td0.colSpan=13;
+    td0.appendChild(el('div','empty','No jobs on the board. Add the first call of the day.'));
+    tr0.appendChild(td0); tb.appendChild(tr0);
+  }
+  S.jobs.forEach(function(j){ tb.appendChild(jobRow(j)); tb.appendChild(errRow(j)); });
+  validateAllJobs();
+  $('jobFoot').textContent=S.jobs.length+' job'+(S.jobs.length===1?'':'s')+' on today’s board.';
+}
+function errRow(j){
+  var er=el('tr','errrow'); er.dataset.err=j.id; er.style.display='none';
+  var td=el('td'); td.colSpan=13; td.appendChild(el('div','err','')); er.appendChild(td); return er;
+}
+function jobRow(j){
+  var tr=el('tr'); tr.dataset.row=j.id;
+  function txt(field,ph,w,type){
+    var td=el('td'); var i=document.createElement('input'); i.type=type||'text';
+    i.value=j[field]==null?'':j[field]; i.placeholder=ph||''; i.setAttribute('aria-label',ph||field);
+    i.dataset.f=field; if(w) i.style.minWidth=w;
+    i.addEventListener('input',function(){ j[field]=i.value; touch(); renderBoard(); renderResults(); });
+    i.addEventListener('blur',function(){ validateJob(j); });
+    td.appendChild(i); return td;
+  }
+  function nu(field,ph,w){
+    var td=el('td'); var i=document.createElement('input'); i.type='number'; i.min='0'; i.step='5';
+    i.value=j[field]; i.placeholder=ph; i.setAttribute('aria-label',ph); i.dataset.f=field;
+    if(w) i.style.minWidth=w;
+    i.addEventListener('input',function(){ j[field]=i.value===''?0:num(i.value); touch(); renderBoard(); renderResults(); });
+    i.addEventListener('blur',function(){ if(num(i.value)<0){ i.value=0; j[field]=0; } validateJob(j); });
+    td.appendChild(i); return td;
+  }
+  tr.appendChild(txt('ref','Ref','82px'));
+  tr.appendChild(txt('cust','Customer','150px'));
+  tr.appendChild(txt('addr','Address','170px'));
+  tr.appendChild(txt('phone','Phone','118px'));
+  var tdW=el('td'); tdW.style.whiteSpace='nowrap';
+  var wrap=el('div'); wrap.style.display='flex'; wrap.style.gap='3px'; wrap.style.alignItems='center';
+  ['ws','we'].forEach(function(f,k){
+    var i=document.createElement('input'); i.type='time'; i.value=j[f]||''; i.dataset.f=f;
+    i.style.minWidth='104px';
+    i.setAttribute('aria-label',k?'Window closes':'Window opens');
+    i.addEventListener('input',function(){ j[f]=i.value; touch(); renderBoard(); renderResults(); });
+    i.addEventListener('blur',function(){ validateJob(j); });
+    if(k) wrap.appendChild(el('span','hint','–'));
+    wrap.appendChild(i);
+  });
+  tdW.appendChild(wrap); tr.appendChild(tdW);
+  tr.appendChild(nu('dur','On-site minutes','74px'));
+  tr.appendChild(nu('trav','Travel minutes','72px'));
+  var tdP=el('td'); var sp=document.createElement('select'); sp.style.minWidth='96px';
+  sp.setAttribute('aria-label','Priority'); sp.dataset.f='prio';
+  sp.innerHTML=PRIOS.map(function(p){return '<option value="'+p.k+'"'+(p.k===j.prio?' selected':'')+'>'+p.l+'</option>';}).join('');
+  sp.addEventListener('change',function(){ j.prio=sp.value; touch(); renderBoard(); renderResults(); });
+  tdP.appendChild(sp); tr.appendChild(tdP);
+  var tdA=el('td'); var sa=document.createElement('select'); sa.style.minWidth='132px';
+  sa.setAttribute('aria-label','Assigned operative'); sa.dataset.f='opId'; sa.innerHTML=opOptions(j.opId);
+  sa.addEventListener('change',function(){ j.opId=sa.value; touch(); renderBoard(); renderResults(); });
+  tdA.appendChild(sa); tr.appendChild(tdA);
+  var tdS=el('td'); var ss=document.createElement('select'); ss.style.minWidth='118px';
+  ss.setAttribute('aria-label','Status'); ss.dataset.f='status';
+  ss.innerHTML=STATUS.map(function(s){return '<option value="'+s.k+'"'+(s.k===j.status?' selected':'')+'>'+s.l+'</option>';}).join('');
+  ss.addEventListener('change',function(){ setStatus(j,ss.value,true); });
+  tdS.appendChild(ss); tr.appendChild(tdS);
+  tr.appendChild(txt('fail','Reason if failed','150px'));
+  tr.appendChild(txt('notes','Notes','190px'));
+  var tdX=el('td'); var x=el('button','btn sm dgr ico','✕'); x.type='button';
+  x.setAttribute('aria-label','Remove job '+(j.ref||''));
+  x.addEventListener('click',function(){
+    if(!confirm('Remove job '+(j.ref||'')+' — '+(j.cust||'')+'?')) return;
+    S.jobs=S.jobs.filter(function(k){return k.id!==j.id;}); touch(); renderAll();
+  });
+  tdX.appendChild(x); tr.appendChild(tdX);
+  return tr;
+}
+function rowOf(id){ return $('jobBody').querySelector('tr[data-row="'+id+'"]'); }
+function syncRow(id){
+  var tr=rowOf(id); if(!tr) return;
+  var j=S.jobs.filter(function(x){return x.id===id;})[0]; if(!j) return;
+  [].forEach.call(tr.querySelectorAll('[data-f]'),function(n){
+    var f=n.dataset.f; if(document.activeElement===n) return;
+    if(n.tagName==='SELECT' && f==='opId'){ n.innerHTML=opOptions(j.opId); }
+    else n.value=j[f]==null?'':j[f];
+  });
+}
+function focusRow(id,field){
+  var tr=rowOf(id); if(!tr) return;
+  var n=tr.querySelector('[data-f="'+field+'"]');
+  tr.scrollIntoView({block:'center'});
+  if(n){ n.focus(); if(n.select) try{n.select();}catch(e){} }
+}
+function validateJob(j){
+  var tr=rowOf(j.id); if(!tr) return true;
+  var msgs=[];
+  var ws=t2m(j.ws), we=t2m(j.we);
+  if(!String(j.cust||'').trim()) msgs.push('Customer name is needed for the run sheet.');
+  if((j.ws&&ws==null)||(j.we&&we==null)) msgs.push('Time window must be valid 24-hour times.');
+  if(ws!=null&&we!=null&&we<=ws) msgs.push('Window closes at or before it opens — check the times.');
+  if(num(j.dur)<=0) msgs.push('On-site minutes must be more than zero.');
+  if(j.status==='failed'&&!String(j.fail||'').trim()) msgs.push('A failed job needs a reason so it can be re-booked.');
+  var flag={cust:!String(j.cust||'').trim(), ws:(j.ws&&ws==null)||(ws!=null&&we!=null&&we<=ws),
+            we:(j.we&&we==null)||(ws!=null&&we!=null&&we<=ws), dur:num(j.dur)<=0,
+            fail:j.status==='failed'&&!String(j.fail||'').trim()};
+  [].forEach.call(tr.querySelectorAll('[data-f]'),function(n){
+    n.classList.toggle('inv', !!flag[n.dataset.f]);
+  });
+  var er=$('jobBody').querySelector('tr[data-err="'+j.id+'"]');
+  if(er){ er.style.display=msgs.length?'':'none'; er.querySelector('.err').textContent=msgs.join(' '); }
+  return !msgs.length;
+}
+function validateAllJobs(){ S.jobs.forEach(validateJob); }
+function setStatus(j,st,fromSelect){
+  if(!SMAP[st]) return;
+  j.status=st;
+  j.stamps=j.stamps||{};
+  if(!j.stamps[st]) j.stamps[st]=nowHM();
+  if(st!=='failed') j.fail=j.fail||'';
+  touch(); renderBoard(); renderResults(); renderEod(); buildDoc();
+  syncRow(j.id); validateJob(j);
+  if(st==='failed'&&!String(j.fail||'').trim()&&!fromSelect) focusRow(j.id,'fail');
+}
