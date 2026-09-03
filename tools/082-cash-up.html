@@ -1069,7 +1069,7 @@ function buildDoc(D){
   var h='';
   /* ── page 1: cash-up sheet ── */
   h+='<section class="doc">';
-  h+=lhead('DAILY CASH-UP SHEET','Trading date '+(dLong(S.org.date)||'—'));
+  h+=lhead('DAILY CASH-UP SHEET',[S.org.till,S.org.site,S.org.shift].filter(Boolean).join(' · ')||'End-of-day reconciliation');
   h+='<div class="meta">'+
      metaCell('Trading date',dLong(S.org.date))+metaCell('Site / department',S.org.site)+
      metaCell('Till / drawer',S.org.till)+metaCell('Shift',S.org.shift)+
@@ -1148,7 +1148,7 @@ function buildDoc(D){
   /* ── page 2: banking slip ── */
   if(S.opt.slip){
     h+='<section class="doc">';
-    h+=lhead('BANKING SLIP','Trading date '+(dLong(S.org.date)||'—'));
+    h+=lhead('BANKING SLIP',[S.org.till,dLong(S.org.date)].filter(Boolean).join(' · ')||'Cash to bank');
     h+='<div class="meta">'+
        metaCell('Trading date',dLong(S.org.date))+metaCell('Till / drawer',S.org.till)+
        metaCell('Bag / seal number',S.bank.bag)+metaCell('Banking date',dLong(S.bank.date))+
@@ -1378,6 +1378,7 @@ function renderScalars(){
   $('#curSymWrap').hidden=(S.cur.code!=='CUS');
 }
 function renderAll(){
+  lastCur=S.cur.code;
   renderScalars(); renderDen(); renderTerms(); renderOthers(); renderPaid(); renderHist(); calc();
 }
 function touched(){
@@ -1451,11 +1452,20 @@ document.addEventListener('click',function(ev){
   }
 },false);
 
+var lastCur=null;
 function switchCurrency(){
   var keep={}; S.denoms.forEach(function(d){ keep[d.f]=qty(d.q); });
   if(S.cur.code!=='CUS'){
-    S.denoms=stdDen(S.cur.code).map(function(d){ d.q=keep[d.f]||0; return d; });
+    var std=stdDen(S.cur.code), lost=0;
+    S.denoms.forEach(function(d){
+      if(qty(d.q)>0&&!std.some(function(x){ return x.f===d.f; })) lost+=qty(d.q); });
+    if(lost>0&&!confirm('Switching currency replaces the denomination list. '+lost+
+        ' counted piece'+(lost===1?'':'s')+' sit on denominations that do not exist in the new set and would be lost. Continue?')){
+      S.cur.code=lastCur||'GBP'; renderScalars(); return;
+    }
+    S.denoms=std.map(function(d){ d.q=keep[d.f]||0; return d; });
   }
+  lastCur=S.cur.code;
   mkCache={key:'',res:null};
   touched(); renderScalars(); renderDen(); calc(); save();
 }
