@@ -838,7 +838,8 @@ function compute(){
       startN:a,endN:b,inScheme:inScheme,factor:factor,dpw:dpw,ftF:ftF,
       ent:ent,carryRaw:carryRaw,carry:carry,capped:carryRaw>cap+1e-9,
       allow:ent+carry,appr:0,pend:0,other:0,rem:0,days:{},errs:[]};
-    if(!String(p.name||"").trim()) o.errs.push("Name required");
+    o.incomplete=!String(p.name||"").trim();
+    if(o.incomplete) o.errs.push("Name required");
     if(sN!==null&&eN!==null&&eN<sN) o.errs.push("Leaving date is before the start date");
     if(dpw>patDays&&patDays>0) o.errs.push("More than "+patDays+" working days");
     byId[p.id]=o;
@@ -906,8 +907,11 @@ function compute(){
   });
 
   // totals
-  var tot={ent:0,allow:0,appr:0,pend:0,rem:0,other:0};
-  staff.forEach(function(p){tot.ent+=p.ent;tot.allow+=p.allow;tot.appr+=p.appr;tot.pend+=p.pend;
+  var tot={ent:0,allow:0,appr:0,pend:0,rem:0,other:0},nDone=0;
+  staff.forEach(function(p){
+    if(p.incomplete) return;
+    nDone++;
+    tot.ent+=p.ent;tot.allow+=p.allow;tot.appr+=p.appr;tot.pend+=p.pend;
     tot.rem+=p.rem;tot.other+=p.other;});
 
   // who is off on the chosen date
@@ -920,7 +924,7 @@ function compute(){
   }
 
   C={lyS:lyS,lyE:lyE,totalDays:totalDays,patDays:patDays,holN:holN,holCount:holCount,
-     holInYear:holInYear,staff:staff,reqs:reqs,byId:byId,tot:tot,thr:thr,
+     holInYear:holInYear,staff:staff,reqs:reqs,byId:byId,tot:tot,thr:thr,nDone:nDone,
      clashSet:clashSet,clashRuns:clashRuns,clashDays:Object.keys(clashSet).length,
      asN:asN,off:off,teamDays:teamDays};
   return C;
@@ -1025,7 +1029,7 @@ function chartHTML(){
       cells+='<div class="'+cls+'"'+(title?' title="'+esc(title)+'"':"")+'></div>';
     }
     html+='<div class="crow"><div class="cname"><div class="nm">'+esc(p.name||"(unnamed)")+'</div>'+
-      '<div class="tm">'+esc(p.team||"—")+' · '+fmtD(p.rem)+' left</div></div>'+
+      '<div class="tm">'+esc(p.team||"—")+' · '+(p.incomplete?"—":fmtD(p.rem)+" left")+'</div></div>'+
       '<div class="strip" style="--n:'+n+'">'+cells+'</div></div>';
   });
   if(C.clashDays>0){
@@ -1061,15 +1065,16 @@ function clashHTML(){
 function setTxt(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
 function refresh(){
   compute();
-  var t=C.tot,any=C.staff.length>0;
+  var t=C.tot,any=C.nDone>0;
   // per-staff cells
   C.staff.forEach(function(p){
-    setTxt("v-ent-"+p.id,fmtD(p.ent));
-    setTxt("v-allow-"+p.id,fmtD(p.allow));
-    setTxt("v-appr-"+p.id,fmtD(p.appr));
-    setTxt("v-pend-"+p.id,fmtD(p.pend));
+    var D=function(x){return p.incomplete?"—":fmtD(x);};
+    setTxt("v-ent-"+p.id,D(p.ent));
+    setTxt("v-allow-"+p.id,D(p.allow));
+    setTxt("v-appr-"+p.id,D(p.appr));
+    setTxt("v-pend-"+p.id,D(p.pend));
     var rc=document.getElementById("v-rem-"+p.id);
-    if(rc){rc.textContent=fmtD(p.rem);rc.classList.toggle("neg",p.rem<-1e-9);}
+    if(rc){rc.textContent=D(p.rem);rc.classList.toggle("neg",!p.incomplete&&p.rem<-1e-9);}
     var eE=document.getElementById("es-"+p.id);
     var msg=p.errs.slice();
     if(p.capped) msg.push("Carry-over capped at "+fmtD(Math.max(0,num(S.cap,0)))+" — "+fmtD(p.carryRaw)+" entered");
@@ -1109,7 +1114,7 @@ function refresh(){
     }
   });
   // totals row
-  setTxt("staffCount",String(C.staff.length));
+  setTxt("staffCount",String(C.nDone)+(C.staff.length>C.nDone?" of "+C.staff.length:""));
   setTxt("tEnt",any?fmtD(t.ent):"—");
   setTxt("tAllow",any?fmtD(t.allow):"—");
   setTxt("tAppr",any?fmtD(t.appr):"—");
@@ -1117,7 +1122,7 @@ function refresh(){
   setTxt("tRem",any?fmtD(t.rem):"—");
   // hero band
   setTxt("sRemain",any?fmtD(t.rem):"—");
-  setTxt("sRemainSub",any?("of "+fmtD(t.allow)+" allowance · "+fmtD(t.appr)+" approved · "+fmtD(t.pend)+" pending · "+C.staff.length+" staff"):"Add an employee to begin");
+  setTxt("sRemainSub",any?("of "+fmtD(t.allow)+" allowance · "+fmtD(t.appr)+" approved · "+fmtD(t.pend)+" pending · "+C.nDone+" staff"):"Add an employee and name them to begin");
   setTxt("sAllow",any?fmtD(t.allow):"—");
   setTxt("sAllowSub",any?(fmtD(t.ent)+" earned + "+fmtD(t.allow-t.ent)+" brought forward"):" ");
   setTxt("sAppr",any?fmtD(t.appr):"—");
@@ -1382,12 +1387,13 @@ function buildDoc(){
      '<div><b>Full-time entitlement</b><span>'+fmtDU(num(S.base,0))+'</span></div>'+
      '<div><b>Working week</b><span>'+esc(wk)+' ('+C.patDays+')</span></div>'+
      '<div><b>Carry-over cap</b><span>'+fmtDU(num(S.cap,0))+'</span></div>'+
-     '<div><b>Staff</b><span>'+C.staff.length+'</span></div>'+
+     '<div><b>Staff</b><span>'+C.nDone+'</span></div>'+
      '<div><b>Public holidays in year</b><span>'+C.holInYear+'</span></div>'+
      '<div><b>Max off per team</b><span>'+C.thr+'</span></div>'+
      '<div><b>Prepared by</b><span>'+esc(S.by||"—")+'</span></div>'+
      '</div>';
 
+  var PD=function(p,x){return p.incomplete?"—":fmtD(x);};
   h+='<h3 class="sec">Leave balances</h3>';
   h+='<table><colgroup><col style="width:19%"><col style="width:15%"><col style="width:13%"><col style="width:7%">'+
      '<col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:10%"></colgroup>'+
@@ -1400,11 +1406,11 @@ function buildDoc(){
       ? ((p.ref.start?fmtDate(p.ref.start):"year start")+" – "+(p.ref.end?fmtDate(p.ref.end):"year end"))
       : "full year";
     h+='<tr><td>'+esc(p.name||"(unnamed)")+'</td><td>'+esc(p.team||"—")+'</td><td>'+esc(inpost)+'</td>'+
-      '<td class="n">'+fmtD(p.dpw)+'</td><td class="n">'+fmtD(p.ent)+'</td><td class="n">'+fmtD(p.carry)+'</td>'+
-      '<td class="n">'+fmtD(p.allow)+'</td><td class="n">'+fmtD(p.appr+p.pend)+'</td>'+
-      '<td class="n">'+fmtD(p.rem)+'</td></tr>';
+      '<td class="n">'+fmtD(p.dpw)+'</td><td class="n">'+PD(p,p.ent)+'</td><td class="n">'+PD(p,p.carry)+'</td>'+
+      '<td class="n">'+PD(p,p.allow)+'</td><td class="n">'+PD(p,p.appr+p.pend)+'</td>'+
+      '<td class="n">'+PD(p,p.rem)+'</td></tr>';
   });
-  h+='</tbody><tfoot><tr><td colspan="4">Total — '+C.staff.length+' staff</td>'+
+  h+='</tbody><tfoot><tr><td colspan="4">Total — '+C.nDone+' staff</td>'+
     '<td class="n">'+fmtD(C.tot.ent)+'</td><td class="n">'+fmtD(C.tot.allow-C.tot.ent)+'</td>'+
     '<td class="n">'+fmtD(C.tot.allow)+'</td><td class="n">'+fmtD(C.tot.appr+C.tot.pend)+'</td>'+
     '<td class="n">'+fmtD(C.tot.rem)+'</td></tr></tfoot></table>';

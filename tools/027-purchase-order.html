@@ -1,0 +1,1939 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Purchase Order Generator — Solvix Toolkit</title>
+<meta name="description" content="Raise a numbered purchase order: supplier address book, ship-to separate from bill-to, required-by date, line items with SKU, quantity, unit cost and tax, running total against a budget code limit, approval routing with signatures, partial goods-receipt tracking, printable PO document, CSV and JSON export.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Cpath d='M8.5 6.5h11l4 4v15h-15z' fill='%23fff'/%3E%3Cpath d='M19 6.5v4.5h4.5' fill='%23c9cdec'/%3E%3Cpath d='M11.5 15.5h9M11.5 19h9M11.5 22h5.5' stroke='%233F4A9E' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#3F4A9E; --accent-ink:#31397B; --accent-wash:#EAECF8; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#818BE0; --accent-ink:#A2AAEE; --accent-wash:#1C2038; --on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#818BE0; --accent-ink:#A2AAEE; --accent-wash:#1C2038; --on-accent:#0B1017}
+
+.app{padding-bottom:44px}
+.wrap{padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(304px,.56fr)}
+@media(max-width:980px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>div{min-width:0}
+[hidden]{display:none!important}
+.card+.card{margin-top:14px}
+.hd .tag{font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--muted)}
+.sticky{top:calc(var(--abh,58px) + 10px)}
+.fg{display:grid;gap:10px}
+.fg.c2{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.fg.c3{grid-template-columns:repeat(auto-fit,minmax(124px,1fr))}
+.fg+.fg{margin-top:10px}
+.mini{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.vh{position:absolute!important;left:-9999px;top:auto;width:1px;height:1px;padding:0;margin:0;overflow:hidden;white-space:nowrap;border:0}
+.samp{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.samp .btn{margin-left:auto}
+.spacer{margin-left:auto}
+
+/* line table */
+#tLines td,#tLines th{padding:6px 5px}
+#tLines td.n,#tLines th.n{white-space:nowrap;padding-left:3px;padding-right:5px}
+.w-sku{width:96px}.w-qty{width:58px}.w-unit{width:64px}.w-money{width:82px}.w-rate{width:48px}
+.desc-c{min-width:150px;width:30%}
+.desc-c input,.w-sku input,.w-unit input{text-align:left;font-family:var(--sans)}
+.w-sku input{font-family:var(--mono);font-size:12.5px}
+td .err{margin-top:2px;display:block;white-space:normal;max-width:120px}
+.idx{color:var(--muted);font:600 12px/1 var(--mono);width:22px;text-align:center;padding-left:6px!important}
+.swipe{display:none;margin-top:8px}
+@media(max-width:980px){.swipe{display:block}}
+.regempty td{color:var(--muted);text-align:center;padding:18px}
+.os-0{color:var(--ok)}
+.os-p{color:var(--warn)}
+.os-x{color:var(--bad)}
+
+/* results panel */
+.res .stat+.stat{margin-top:8px}
+.res .stat.hero .v{font-size:31px}
+.res .stat.hero .u{display:block;margin-top:4px;color:var(--accent-ink)}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.sgrid .stat{margin-top:0}
+.ln{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13.5px;border-bottom:1px dotted var(--line)}
+.ln:last-child{border-bottom:0}
+.ln .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln .k small{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.ln.tot{font-weight:650;border-top:1px solid var(--line-hard);border-bottom:0;margin-top:3px;padding-top:8px}
+.ln.neg .v{color:var(--bad)}
+.blk{margin-top:13px}
+.blk>.lbl{margin-bottom:5px;display:block}
+.meter{height:9px;border-radius:5px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:4px 0 0 4px;transition:width .18s}
+.meter.warn i{background:var(--warn)}
+.meter.bad i{background:var(--bad)}
+.mrow{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);margin-top:5px}
+.mrow .num{color:var(--ink-2)}
+
+.mbar{display:none}
+@media(max-width:980px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,96px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 10px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 20px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+  .sgrid{grid-template-columns:1fr}
+}
+
+/* ══ the printed / previewed purchase order ════════════════════════ */
+#docwrap{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);display:none}
+#docwrap.show{display:block}
+.doc{background:#fff;color:#111;border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 30px 30px;max-width:190mm;margin:0 auto 40px;box-shadow:var(--sh);font-size:13px;line-height:1.5}
+.doc h3{color:#111}
+.doc-hd{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;
+  border-bottom:2px solid #111;padding-bottom:12px}
+.doc-hd .who{font-size:12.5px;white-space:pre-line;color:#333;min-width:0}
+.doc-hd .who strong{display:block;font-size:15.5px;color:#111;margin-bottom:3px}
+.doc-ttl{text-align:right}
+.doc-ttl .t{font:700 22px/1.1 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:#111}
+.doc-ttl .no{font:700 17px/1.3 var(--mono);margin-top:5px;color:#111}
+.doc-ttl .dt{font-size:12.5px;color:#444;margin-top:3px}
+.doc-ttl .req{font-size:12.5px;color:#111;margin-top:5px;font-weight:650}
+.doc-meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.doc-meta.c3{grid-template-columns:1fr 1fr 1fr}
+.doc-meta .box{border:1px solid #bbb;padding:10px 12px;border-radius:3px}
+.doc-meta .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-meta .b{white-space:pre-line;font-size:12.5px;color:#111}
+.doc .kv{display:flex;gap:8px;font-size:12.5px;padding:1px 0;color:#111}
+.doc .kv span:first-child{color:#666;min-width:112px}
+.doc table{margin-top:14px;font-size:12px}
+.doc th{background:#eee;color:#333;border-bottom:1px solid #999;padding:7px 8px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc td{padding:6px 8px;border-bottom:1px solid #ddd;color:#111}
+.doc td.n{white-space:nowrap}
+.doc tbody tr:hover{background:transparent}
+.doc tfoot td{background:#f4f4f4;border-top:1px solid #999;color:#111;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-sec{margin-top:16px}
+.doc-sec>h3{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:6px}
+.doc-bot{display:grid;grid-template-columns:1fr minmax(248px,306px);gap:20px;margin-top:16px;align-items:start}
+.doc-tot{border:1px solid #999;border-radius:3px;overflow:hidden}
+.doc-tot .r{display:flex;justify-content:space-between;gap:12px;padding:6px 11px;font-size:12.5px;border-bottom:1px solid #ddd;color:#111}
+.doc-tot .r:last-child{border-bottom:0}
+.doc-tot .r.s{background:#f4f4f4;font-weight:650;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tot .r.g{background:#111;color:#fff;font-weight:700;font-size:14px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tot .r .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.doc-box{border:1px solid #bbb;border-radius:3px;padding:10px 12px;font-size:12px;color:#111}
+.doc-box+.doc-box{margin-top:10px}
+.doc-box .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-box .b{white-space:pre-line}
+.doc-tax{border:1px solid #bbb;border-radius:3px;overflow:hidden}
+.doc-tax .hr,.doc-tax .r{display:flex;gap:10px;padding:5px 10px;font-size:11.5px;border-bottom:1px solid #e2e2e2;color:#111}
+.doc-tax .hr{background:#f4f4f4;font-weight:650;color:#444;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tax .r:last-child{border-bottom:0}
+.doc-tax span:first-child{flex:1}
+.doc-tax .n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;width:86px}
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
+.sig .s{border:1px solid #bbb;border-radius:3px;padding:10px 12px}
+.sig .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666}
+.sig .nm{font-size:13px;font-weight:650;margin-top:5px;color:#111;min-height:17px}
+.sig .rl{font-size:11.5px;color:#555}
+.sig .rule{border-bottom:1px solid #777;margin-top:20px}
+.sig .cap{font-size:10px;color:#666;margin-top:3px;display:flex;justify-content:space-between;gap:8px}
+.doc-warn{margin-top:16px;border:1px solid #999;background:#f6f6f6;padding:10px 12px;border-radius:3px;
+  font-size:10.5px;line-height:1.45;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-warn strong{color:#000}
+.doc-ft{margin-top:14px;border-top:1px solid #ccc;padding-top:8px;font-size:10.5px;color:#555;
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(max-width:640px){.doc{padding:18px 16px}.doc-meta,.doc-meta.c3,.doc-bot,.sig{grid-template-columns:1fr}.doc-ttl{text-align:left}}
+@media print{
+  #docwrap{display:block!important;max-width:none;padding:0}
+  .doc{border:0;box-shadow:none;padding:0;max-width:none;margin:0;font-size:9.6pt;color:#000}
+  .doc-hd{border-bottom:2px solid #000;padding-bottom:8px}
+  .doc-ttl .t{font-size:19px}
+  .doc-meta{margin-top:10px;gap:10px}
+  .doc-meta .box{padding:7px 9px}
+  .doc table{margin-top:10px;font-size:8.6pt}
+  .doc th{padding:5px 6px}
+  .doc td{padding:4px 6px}
+  .doc-sec{margin-top:10px}
+  .doc-bot{margin-top:10px;gap:12px}
+  .doc-tot .r{padding:4px 9px}
+  .doc-box{padding:7px 10px}
+  .doc-tax .hr,.doc-tax .r{padding:4px 9px}
+  .doc-warn{margin-top:10px;padding:7px 10px;font-size:8pt;break-inside:avoid}
+  .sig{gap:12px;break-inside:avoid}
+  .doc-ft{margin-top:9px;padding-top:6px;font-size:8pt}
+  .wrap{padding-top:0}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" id="shell">
+<header class="appbar" id="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PO</div>
+    <div style="min-width:0">
+      <h1>Purchase Order Generator</h1>
+      <div class="sub">SUPPLIER · APPROVAL · GOODS RECEIPT</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="bPreview" aria-pressed="false">Preview document</button>
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">Save JSON</button>
+    <button type="button" class="btn" id="bImport">Load JSON</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fJson" accept="application/json,.json" class="vh" tabindex="-1" aria-hidden="true">
+  </div>
+</header>
+
+<main class="wrap" id="wrap">
+
+  <div class="mbar" id="mbar" aria-hidden="true">
+    <span class="k">PO total</span>
+    <span class="v num" id="mHero">—</span>
+  </div>
+
+  <div class="note" id="sampleBanner" style="margin-bottom:12px">
+    <div class="samp">
+      <span><strong>Sample data loaded.</strong> A real order for a depot fit-out, part-delivered. Edit anything, or start from an empty order.</span>
+      <button type="button" class="btn sm dgr" id="bBlank">Start blank</button>
+    </div>
+  </div>
+
+  <div class="note warn" id="disclaimer" style="margin-bottom:14px">
+    <strong>Read before you send this order.</strong> A purchase order is a commercial offer that becomes a binding
+    contract once your supplier accepts it. This tool builds and totals the document from the figures you type. It does
+    <strong>not</strong> check your supplier's terms of sale, it does not verify that the tax rates you enter are the
+    correct ones for those goods, that supplier or that country of supply, and it does not enforce your organisation's
+    delegated-authority limits — the budget check below compares your own numbers only. Confirm tax treatment with your
+    finance team or accountant, and have the order approved by someone authorised to commit the spend before issuing it.
+  </div>
+
+  <div class="split">
+    <div>
+
+      <!-- ── Order details ── -->
+      <section class="card">
+        <div class="hd"><h2>Order</h2><span class="tag" id="poNoTag">PO-0000</span></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f"><label for="iPrefix">Number prefix</label>
+              <input id="iPrefix" type="text" maxlength="12" autocomplete="off"></div>
+            <div class="f"><label for="iSeq">Next number</label>
+              <input id="iSeq" type="number" min="0" step="1" inputmode="numeric">
+              <span class="err" id="eSeq" hidden></span></div>
+            <div class="f"><label for="iPad">Digits</label>
+              <input id="iPad" type="number" min="1" max="8" step="1" inputmode="numeric"></div>
+          </div>
+          <p class="hint" style="margin-top:8px">The number advances when you issue the order to history, and the next one is remembered in this browser.</p>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f"><label for="iDate">Order date</label>
+              <input id="iDate" type="date">
+              <span class="err" id="eDate" hidden></span></div>
+            <div class="f"><label for="iReq">Required by (delivery)</label>
+              <input id="iReq" type="date">
+              <span class="err" id="eReq" hidden></span></div>
+            <div class="f"><label for="iReqRef">Requisition / job reference</label>
+              <input id="iReqRef" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iProject">Project / cost centre</label>
+              <input id="iProject" type="text" autocomplete="off"></div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f"><label for="iTerms">Payment terms</label>
+              <input id="iTerms" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iIncoterm">Delivery terms</label>
+              <input id="iIncoterm" type="text" autocomplete="off"></div>
+          </div>
+          <div class="fg c3" style="margin-top:10px">
+            <div class="f"><label for="iCur">Currency</label>
+              <select id="iCur">
+                <option value="GBP">GBP — £</option>
+                <option value="USD">USD — $</option>
+                <option value="EUR">EUR — €</option>
+                <option value="AUD">AUD — $</option>
+                <option value="CAD">CAD — $</option>
+                <option value="CUSTOM">Custom symbol</option>
+              </select></div>
+            <div class="f"><label for="iSym">Symbol</label>
+              <input id="iSym" type="text" maxlength="4" autocomplete="off"></div>
+            <div class="f"><label for="iFmt">Number format</label>
+              <select id="iFmt">
+                <option value="en">1,234.56</option>
+                <option value="eu">1.234,56</option>
+                <option value="fr">1 234,56</option>
+              </select></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Supplier ── -->
+      <section class="card">
+        <div class="hd"><h2>Supplier</h2><span class="tag" id="bookTag">0 saved</span></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f"><label for="iBook">Address book</label>
+              <select id="iBook"><option value="">— choose a saved supplier —</option></select></div>
+            <div class="f"><label class="lbl" for="bSaveSup" style="visibility:hidden">Actions</label>
+              <div class="row">
+                <button type="button" class="btn sm" id="bSaveSup">Save supplier</button>
+                <button type="button" class="btn sm dgr" id="bDelSup">Remove</button>
+              </div></div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f"><label for="iSupName">Supplier name</label>
+              <input id="iSupName" type="text" autocomplete="off">
+              <span class="err" id="eSupName" hidden></span></div>
+            <div class="f"><label for="iSupAcct">Our account number</label>
+              <input id="iSupAcct" type="text" autocomplete="off"></div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iSupAddr">Supplier address</label>
+            <textarea id="iSupAddr" rows="3"></textarea></div>
+          <div class="fg c3" style="margin-top:10px">
+            <div class="f"><label for="iSupContact">Contact</label>
+              <input id="iSupContact" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iSupEmail">Email</label>
+              <input id="iSupEmail" type="text" inputmode="email" autocomplete="off">
+              <span class="err" id="eSupEmail" hidden></span></div>
+            <div class="f"><label for="iSupPhone">Phone</label>
+              <input id="iSupPhone" type="text" inputmode="tel" autocomplete="off"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Line items ── -->
+      <section class="card">
+        <div class="hd"><h2>Order lines</h2>
+          <span class="tag" id="lineCount">0 lines</span>
+          <button type="button" class="btn sm" id="bAdd">+ Add line</button>
+        </div>
+        <div class="bd">
+          <div class="tw">
+            <table id="tLines">
+              <caption class="lbl" style="text-align:left;padding:0 0 7px">Net = quantity × unit cost. Tax is charged at each line's own rate. Receipt column records what has actually arrived.</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="idx"><span class="vh">Line</span>#</th>
+                  <th scope="col" class="w-sku">SKU / part no.</th>
+                  <th scope="col" class="desc-c">Description</th>
+                  <th scope="col" class="n">Qty</th>
+                  <th scope="col" class="w-unit">Unit</th>
+                  <th scope="col" class="n">Unit cost</th>
+                  <th scope="col" class="n">Tax %</th>
+                  <th scope="col" class="n">Rec'd</th>
+                  <th scope="col" class="n">O/S</th>
+                  <th scope="col" class="n">Net</th>
+                  <th scope="col"><span class="vh">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody id="tbLines"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="9" class="r">Net of goods</td>
+                  <td class="n" id="fNet">—</td><td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="hint swipe">Swipe the table sideways to reach every column.</p>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn sm" id="bAdd2">+ Add line</button>
+          <button type="button" class="btn sm" id="bRecvAll">Receive all outstanding</button>
+          <button type="button" class="btn sm" id="bRecvNone">Reset receipts</button>
+          <span class="mini spacer" id="recvNote">—</span>
+        </div>
+      </section>
+
+      <!-- ── Freight + budget ── -->
+      <section class="card">
+        <div class="hd"><h2>Carriage and budget control</h2></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f"><label for="iFreight">Carriage / delivery charge</label>
+              <input id="iFreight" type="number" min="0" step="0.01" inputmode="decimal">
+              <span class="err" id="eFreight" hidden></span></div>
+            <div class="f"><label for="iFreightTax">Tax on carriage %</label>
+              <input id="iFreightTax" type="number" min="0" max="100" step="0.01" inputmode="decimal">
+              <span class="err" id="eFreightTax" hidden></span></div>
+            <div class="f"><label for="iFreightDesc">Carriage description</label>
+              <input id="iFreightDesc" type="text" autocomplete="off"></div>
+          </div>
+          <div class="fg c3" style="margin-top:12px">
+            <div class="f"><label for="iBudCode">Budget code</label>
+              <input id="iBudCode" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iBudLimit">Budget limit (0 = no limit)</label>
+              <input id="iBudLimit" type="number" min="0" step="0.01" inputmode="decimal">
+              <span class="err" id="eBudLimit" hidden></span></div>
+            <div class="f"><label for="iBudBasis">Check budget against</label>
+              <select id="iBudBasis">
+                <option value="gross">PO total including tax</option>
+                <option value="net">Net of tax (recoverable tax)</option>
+              </select></div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iTaxLabel">Tax label on the document</label>
+            <input id="iTaxLabel" type="text" maxlength="24" autocomplete="off"></div>
+          <p class="hint" style="margin-top:9px">Carriage is taxed at its own rate and folded into the matching tax band. If your organisation recovers input tax, check the budget against the net figure.</p>
+        </div>
+      </section>
+
+      <!-- ── Ship to / bill to ── -->
+      <section class="card">
+        <div class="hd"><h2>Deliver to</h2><span class="tag">separate from the invoice address</span></div>
+        <div class="bd">
+          <label class="check" style="margin-bottom:10px">
+            <input type="checkbox" id="iShipSame">
+            <span>Deliver to our billing address (same as “Invoice to” below)</span>
+          </label>
+          <div id="shipFields">
+            <div class="fg c2">
+              <div class="f"><label for="iShipName">Site / delivery name</label>
+                <input id="iShipName" type="text" autocomplete="off"></div>
+              <div class="f"><label for="iShipContact">Site contact</label>
+                <input id="iShipContact" type="text" autocomplete="off"></div>
+            </div>
+            <div class="f" style="margin-top:10px"><label for="iShipAddr">Delivery address</label>
+              <textarea id="iShipAddr" rows="3"></textarea></div>
+            <div class="fg c2" style="margin-top:10px">
+              <div class="f"><label for="iShipPhone">Site phone</label>
+                <input id="iShipPhone" type="text" inputmode="tel" autocomplete="off"></div>
+              <div class="f"><label for="iShipHours">Delivery hours / access</label>
+                <input id="iShipHours" type="text" autocomplete="off"></div>
+            </div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iShipInstr">Delivery instructions to the supplier</label>
+            <textarea id="iShipInstr" rows="3"></textarea></div>
+        </div>
+      </section>
+
+      <!-- ── Buyer ── -->
+      <section class="card">
+        <div class="hd"><h2>Invoice to (your organisation)</h2><span class="tag">saved and reused</span></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f"><label for="iBuyName">Organisation name</label>
+              <input id="iBuyName" type="text" autocomplete="organization"></div>
+            <div class="f"><label for="iBuyTax">Tax / VAT registration</label>
+              <input id="iBuyTax" type="text" autocomplete="off"></div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iBuyAddr">Billing address</label>
+            <textarea id="iBuyAddr" rows="3"></textarea></div>
+          <div class="fg c3" style="margin-top:10px">
+            <div class="f"><label for="iBuyContact">Accounts payable contact</label>
+              <input id="iBuyContact" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iBuyEmail">Invoices to (email)</label>
+              <input id="iBuyEmail" type="text" inputmode="email" autocomplete="off">
+              <span class="err" id="eBuyEmail" hidden></span></div>
+            <div class="f"><label for="iBuyPhone">Phone</label>
+              <input id="iBuyPhone" type="text" inputmode="tel" autocomplete="off"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Approval ── -->
+      <section class="card">
+        <div class="hd"><h2>Approval routing</h2><span class="tag" id="apprTag">—</span></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f"><label for="iReqBy">Raised by</label>
+              <input id="iReqBy" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iReqRole">Role / department</label>
+              <input id="iReqRole" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iReqDate">Raised on</label>
+              <input id="iReqDate" type="date"></div>
+          </div>
+          <div class="fg c3" style="margin-top:10px">
+            <div class="f"><label for="iAppBy">Approved by</label>
+              <input id="iAppBy" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iAppRole">Approver role / authority</label>
+              <input id="iAppRole" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iAppDate">Approved on</label>
+              <input id="iAppDate" type="date">
+              <span class="err" id="eAppDate" hidden></span></div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f"><label for="iStatus">Order status</label>
+              <select id="iStatus">
+                <option value="Draft">Draft — not yet approved</option>
+                <option value="Awaiting approval">Awaiting approval</option>
+                <option value="Approved">Approved</option>
+                <option value="Issued to supplier">Issued to supplier</option>
+                <option value="Cancelled">Cancelled</option>
+              </select></div>
+            <div class="f"><label for="iAppLimit">Approver's authority limit (0 = not set)</label>
+              <input id="iAppLimit" type="number" min="0" step="0.01" inputmode="decimal">
+              <span class="err" id="eAppLimit" hidden></span></div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iNotes">Notes printed on the order</label>
+            <textarea id="iNotes" rows="3"></textarea></div>
+        </div>
+      </section>
+
+      <!-- ── History ── -->
+      <section class="card">
+        <div class="hd"><h2>Purchase order history</h2><span class="tag" id="histTag">0 orders</span>
+          <button type="button" class="btn sm pri" id="bIssue">Issue &amp; save to history</button>
+        </div>
+        <div class="bd">
+          <div class="tw">
+            <table id="tHist">
+              <thead><tr>
+                <th scope="col">PO number</th>
+                <th scope="col">Date</th>
+                <th scope="col">Supplier</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="n">Total</th>
+                <th scope="col"><span class="vh">Actions</span></th>
+              </tr></thead>
+              <tbody id="tbHist"></tbody>
+            </table>
+          </div>
+          <p class="hint" style="margin-top:9px">Issuing stores a full copy of this order in this browser and advances the number. Loading one back replaces the form on screen.</p>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── results ── -->
+    <div>
+      <section class="card sticky res" id="resCard">
+        <div class="hd"><h2>Order value</h2><span class="tag" id="resPo">—</span></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k">Purchase order total</div>
+            <div class="v" id="sTotal">—</div>
+            <div class="u" id="sTotalSub">—</div>
+          </div>
+          <div class="sgrid">
+            <div class="stat"><div class="k">Net of tax</div><div class="v" id="sNet" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k" id="kTax">Tax</div><div class="v" id="sTax" style="font-size:18px">—</div></div>
+          </div>
+
+          <div class="blk">
+            <span class="lbl">Breakdown</span>
+            <div class="ln"><span class="k">Goods net</span><span class="v" id="bGoods">—</span></div>
+            <div class="ln"><span class="k">Carriage</span><span class="v" id="bFreight">—</span></div>
+            <div class="ln"><span class="k" id="bTaxK">Tax</span><span class="v" id="bTax">—</span></div>
+            <div class="ln tot"><span class="k">PO total</span><span class="v" id="bTotal">—</span></div>
+          </div>
+
+          <div class="blk" id="bandBlk">
+            <span class="lbl">Tax summary</span>
+            <div id="bands"></div>
+          </div>
+
+          <div class="blk">
+            <span class="lbl">Budget code <span id="budCodeLbl" class="mono" style="text-transform:none;letter-spacing:0"></span></span>
+            <div class="meter" id="budMeter"><i id="budBar" style="width:0%"></i></div>
+            <div class="mrow"><span id="budUsed">—</span><span class="num" id="budPct">—</span></div>
+            <div class="stat" style="margin-top:9px"><div class="k" id="budK">Budget remaining</div><div class="v" id="sBudget" style="font-size:19px">—</div></div>
+            <div class="note bad" id="budWarn" style="margin-top:9px" hidden></div>
+            <div class="note warn" id="authWarn" style="margin-top:9px" hidden></div>
+          </div>
+
+          <div class="blk">
+            <span class="lbl">Goods receipt</span>
+            <div class="meter" id="recMeter"><i id="recBar" style="width:0%"></i></div>
+            <div class="mrow"><span id="recLbl">—</span><span class="num" id="recPct">—</span></div>
+            <div class="sgrid">
+              <div class="stat"><div class="k">Received (net)</div><div class="v" id="sRecv" style="font-size:17px">—</div></div>
+              <div class="stat"><div class="k">Outstanding (net)</div><div class="v" id="sOut" style="font-size:17px">—</div></div>
+            </div>
+            <p class="mini" style="margin-top:7px" id="outNote">—</p>
+          </div>
+        </div>
+        <div class="ft">
+          <span class="chip" id="statusChip">Draft</span>
+          <span class="chip" id="leadChip">—</span>
+          <button type="button" class="btn sm spacer" id="bPrint2">Print / PDF</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="hint" style="margin-top:18px;line-height:1.6">
+    Line net = quantity × unit cost. Line tax = line net × tax rate ÷ 100, each line rounded to 2 decimal places before
+    summing. PO total = goods net + carriage + total tax. Outstanding = (quantity ordered − quantity received) × unit cost.
+    Budget remaining = budget limit − PO total on the basis you select. Everything is stored in this browser only
+    (localStorage) — nothing is sent anywhere. Tax rates, delegated authority limits and supplier terms are yours to verify.
+  </footer>
+</main>
+</div>
+
+<!-- ══ the document ══════════════════════════════════════════════════ -->
+<div id="docwrap">
+  <div class="doc" id="doc">
+    <div class="doc-hd">
+      <div class="who"><strong id="dBuyName">—</strong><span id="dBuyAddr"></span></div>
+      <div class="doc-ttl">
+        <div class="t">Purchase Order</div>
+        <div class="no" id="dNo">—</div>
+        <div class="dt" id="dDate">—</div>
+        <div class="req" id="dReq">—</div>
+      </div>
+    </div>
+
+    <div class="doc-meta">
+      <div class="box">
+        <div class="k">Order to (supplier)</div>
+        <div class="b" id="dSup">—</div>
+      </div>
+      <div class="box">
+        <div class="k">Deliver to</div>
+        <div class="b" id="dShip">—</div>
+      </div>
+    </div>
+
+    <div class="doc-meta c3" style="margin-top:12px">
+      <div class="box">
+        <div class="k">Order details</div>
+        <div class="kv"><span>Order date</span><span id="dDate2">—</span></div>
+        <div class="kv"><span>Required by</span><span id="dReq2">—</span></div>
+        <div class="kv"><span>Status</span><span id="dStatus">—</span></div>
+        <div class="kv"><span>Requisition</span><span id="dReqRef">—</span></div>
+      </div>
+      <div class="box">
+        <div class="k">Terms</div>
+        <div class="kv"><span>Payment</span><span id="dTerms">—</span></div>
+        <div class="kv"><span>Delivery</span><span id="dInco">—</span></div>
+        <div class="kv"><span>Currency</span><span id="dCur">—</span></div>
+        <div class="kv"><span>Our account</span><span id="dAcct">—</span></div>
+      </div>
+      <div class="box">
+        <div class="k">Charge to</div>
+        <div class="kv"><span>Budget code</span><span id="dBudCode">—</span></div>
+        <div class="kv"><span>Project</span><span id="dProject">—</span></div>
+        <div class="kv"><span>Invoices to</span><span id="dBuyEmail">—</span></div>
+        <div class="kv"><span>Tax reg.</span><span id="dBuyTax">—</span></div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th scope="col" style="width:26px">#</th>
+        <th scope="col" style="width:88px">SKU</th>
+        <th scope="col">Description</th>
+        <th scope="col" class="n">Qty</th>
+        <th scope="col">Unit</th>
+        <th scope="col" class="n">Unit cost</th>
+        <th scope="col" class="n">Tax %</th>
+        <th scope="col" class="n">Net</th>
+      </tr></thead>
+      <tbody id="dLines"></tbody>
+      <tfoot><tr>
+        <td colspan="7" class="r">Goods net</td><td class="n" id="dGoods">—</td>
+      </tr></tfoot>
+    </table>
+
+    <div class="doc-bot">
+      <div>
+        <div class="doc-tax" id="dTaxWrap">
+          <div class="hr"><span>Tax summary</span><span class="n">Net</span><span class="n">Tax</span></div>
+          <div id="dBands"></div>
+        </div>
+        <div class="doc-box" id="dInstrWrap" style="margin-top:10px">
+          <div class="k">Delivery instructions</div>
+          <div class="b" id="dInstr">—</div>
+        </div>
+        <div class="doc-box" id="dNotesWrap">
+          <div class="k">Notes</div>
+          <div class="b" id="dNotes">—</div>
+        </div>
+      </div>
+      <div class="doc-tot">
+        <div class="r"><span>Goods net</span><span class="v" id="dtGoods">—</span></div>
+        <div class="r" id="dtFreightRow"><span id="dtFreightK">Carriage</span><span class="v" id="dtFreight">—</span></div>
+        <div class="r s"><span>Net total</span><span class="v" id="dtNet">—</span></div>
+        <div class="r"><span id="dtTaxK">Tax</span><span class="v" id="dtTax">—</span></div>
+        <div class="r g"><span>PO total</span><span class="v" id="dtTotal">—</span></div>
+      </div>
+    </div>
+
+    <div class="doc-sec" id="dRecvWrap">
+      <h3>Goods receipt status</h3>
+      <table style="margin-top:0">
+        <thead><tr>
+          <th scope="col" style="width:88px">SKU</th>
+          <th scope="col">Description</th>
+          <th scope="col" class="n">Ordered</th>
+          <th scope="col" class="n">Received</th>
+          <th scope="col" class="n">Outstanding</th>
+          <th scope="col" class="n">Value outstanding</th>
+        </tr></thead>
+        <tbody id="dRecv"></tbody>
+      </table>
+      <p style="font-size:11.5px;color:#444;margin-top:6px" id="dRecvSum">—</p>
+    </div>
+
+    <div class="doc-sec">
+      <h3>Authorisation</h3>
+      <div class="sig">
+        <div class="s">
+          <div class="k">Raised by</div>
+          <div class="nm" id="dReqBy">—</div>
+          <div class="rl" id="dReqRole">—</div>
+          <div class="rule"></div>
+          <div class="cap"><span>Signature</span><span id="dReqDate">Date —</span></div>
+        </div>
+        <div class="s">
+          <div class="k">Approved by</div>
+          <div class="nm" id="dAppBy">—</div>
+          <div class="rl" id="dAppRole">—</div>
+          <div class="rule"></div>
+          <div class="cap"><span>Signature</span><span id="dAppDate">Date —</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-warn">
+      <strong>Terms of this order.</strong> Please quote purchase order number <span id="dNo2">—</span> on all
+      delivery notes, packing lists, correspondence and invoices; invoices without it may be returned unpaid. Goods
+      remain subject to inspection and may be rejected if they do not match the description, quantity or quality
+      ordered. Deliveries outside the stated delivery window or address must be agreed in writing first. Prices are
+      those stated above and are fixed unless we agree a change in writing; no extra charge is accepted unless it
+      appears on this order.
+      <br><br>
+      <strong>Disclaimer.</strong> This document was prepared with a calculation tool from figures entered by the buyer.
+      Tax rates shown are as entered and have not been verified against any tax authority's rules; the budget and
+      authority checks compare the buyer's own stated limits and are not an assurance that funds or delegated authority
+      exist. This is not legal, tax or accounting advice. Confirm tax treatment with a qualified accountant and confirm
+      contract terms with your legal or procurement team before relying on this order.
+    </div>
+
+    <div class="doc-ft">
+      <span id="dFtLeft">—</span>
+      <span class="printonly" id="dFtRight">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+var KEY = "solvix.purchase-order.v1";
+var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var DASH = "—";
+function $(id){ return document.getElementById(id); }
+function num(v){ var n = parseFloat(v); return isFinite(n) ? n : NaN; }
+function r2(n){
+  if(!isFinite(n)) return NaN;
+  var s = n < 0 ? -1 : 1, x = Math.abs(n);
+  return s * Math.round((x + 1e-9) * 100) / 100;
+}
+function clean(n){ if(!isFinite(n)) return NaN; return Object.is(n,-0) ? 0 : n; }
+
+/* ── currency + number formatting ─────────────────────────────── */
+var SYMS = { GBP:"£", USD:"$", EUR:"€", AUD:"$", CAD:"$" };
+function grpSep(){ var f = S.cur.fmt; return f === "eu" ? "." : f === "fr" ? " " : ","; }
+function decSep(){ return S.cur.fmt === "en" ? "." : ","; }
+function fmtNum(n, dp){
+  n = clean(n);
+  if(!isFinite(n)) return DASH;
+  var neg = n < 0, s = Math.abs(n).toFixed(dp), parts = s.split("."), i = parts[0], f = parts[1];
+  i = i.replace(/\B(?=(\d{3})+(?!\d))/g, grpSep());
+  return (neg ? "−" : "") + i + (f ? decSep() + f : "");
+}
+function money(n){
+  n = clean(n);
+  if(!isFinite(n)) return DASH;
+  var neg = n < 0, body = fmtNum(Math.abs(n), 2);
+  return (neg ? "−" : "") + S.cur.sym + body;
+}
+function qty(n){
+  n = clean(n);
+  if(!isFinite(n)) return DASH;
+  return fmtNum(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 2);
+}
+function pct(n, dp){ n = clean(n); return isFinite(n) ? fmtNum(n, dp === undefined ? 1 : dp) + "%" : DASH; }
+
+/* ── dates ─────────────────────────────────────────────────────── */
+function isDate(s){ return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + "T00:00:00Z")); }
+function fmtDate(s){
+  if(!isDate(s)) return DASH;
+  var p = s.split("-");
+  return String(parseInt(p[2],10)) + " " + MON[parseInt(p[1],10)-1] + " " + p[0];
+}
+function dayDiff(a, b){
+  if(!isDate(a) || !isDate(b)) return NaN;
+  return Math.round((Date.parse(b+"T00:00:00Z") - Date.parse(a+"T00:00:00Z")) / 86400000);
+}
+function today(){
+  var d = new Date(), m = String(d.getMonth()+1), day = String(d.getDate());
+  return d.getFullYear() + "-" + (m.length<2?"0"+m:m) + "-" + (day.length<2?"0"+day:day);
+}
+function addDays(s, n){
+  if(!isDate(s)) return "";
+  var d = new Date(Date.parse(s + "T00:00:00Z") + n*86400000);
+  var m = String(d.getUTCMonth()+1), day = String(d.getUTCDate());
+  return d.getUTCFullYear() + "-" + (m.length<2?"0"+m:m) + "-" + (day.length<2?"0"+day:day);
+}
+
+/* ── state ─────────────────────────────────────────────────────── */
+function line(sku, desc, q, unit, cost, tax, recv){
+  return { sku:sku, desc:desc, qty:q, unit:unit, cost:cost, tax:tax, recv:recv };
+}
+function blankState(){
+  var t = today();
+  return {
+    v:1, sample:false,
+    cur:{ code:"GBP", sym:"£", fmt:"en" },
+    po:{ prefix:"PO-", seq:1001, pad:4, date:t, req:addDays(t,14), reqRef:"", project:"",
+         terms:"Net 30 days from date of invoice", incoterm:"Delivered to site, carriage paid", taxLabel:"VAT" },
+    sup:{ name:"", acct:"", addr:"", contact:"", email:"", phone:"" },
+    ship:{ same:false, name:"", contact:"", addr:"", phone:"", hours:"", instr:"" },
+    buy:{ name:"", tax:"", addr:"", contact:"", email:"", phone:"" },
+    lines:[ line("", "", 1, "each", 0, 20, 0) ],
+    freight:{ amount:0, tax:20, desc:"Carriage" },
+    budget:{ code:"", limit:0, basis:"gross" },
+    appr:{ reqBy:"", reqRole:"", reqDate:t, appBy:"", appRole:"", appDate:"", status:"Draft", limit:0 },
+    notes:"",
+    book:[], hist:[]
+  };
+}
+function sampleState(){
+  var s = blankState();
+  s.sample = true;
+  s.po.seq = 1043;
+  s.po.date = "2026-09-03";
+  s.po.req = "2026-09-17";
+  s.po.reqRef = "REQ-4471";
+  s.po.project = "Northgate Depot fit-out — phase 2";
+  s.po.terms = "Net 30 days from date of invoice";
+  s.po.incoterm = "Delivered to site, carriage paid, tailgate lift required";
+  s.sup = {
+    name:"Kingsmead Trade Supplies Ltd",
+    acct:"KTS-40912",
+    addr:"Unit 7, Bilton Industrial Estate\nHumber Road\nCoventry CV3 4AY\nUnited Kingdom",
+    contact:"Dawn Whitaker, Trade Sales",
+    email:"orders@kingsmeadtrade.co.uk",
+    phone:"024 7655 0180"
+  };
+  s.ship = {
+    same:false,
+    name:"Northgate Depot — Goods In",
+    contact:"Marcus Reilly, Site Manager",
+    addr:"Northgate Depot\nBrunswick Way\nLeicester LE4 6QB",
+    phone:"07700 900412",
+    hours:"Mon–Fri 07:30–15:30. No deliveries after 15:30. Book a slot 24h ahead.",
+    instr:"Deliver to Goods In on the Brunswick Way side, not the main office. HGV access via gate 2 only; vehicles over 7.5t must book. Pallets to be shrink-wrapped and labelled with our PO number. Leave a signed delivery note with the site manager — unbooked or unlabelled deliveries will be refused."
+  };
+  s.buy = {
+    name:"Harlow & Vine Facilities Ltd",
+    tax:"GB 418 2276 55",
+    addr:"Second Floor, Calder House\n18 Wellington Street\nLeeds LS1 4DL",
+    contact:"Accounts Payable",
+    email:"invoices@harlowvine.co.uk",
+    phone:"0113 496 2200"
+  };
+  s.lines = [
+    line("MS-2040","M20 x 160 galvanised anchor bolt, box of 50",8,"box",34.60,20,8),
+    line("TIM-C24","C24 treated timber 47 x 100mm, 4.8m length",60,"length",11.25,20,40),
+    line("SAF-HV3","Hi-vis jacket, class 3, size L",12,"each",18.40,20,0),
+    line("PPE-BT9","Safety boots S3 composite toe, size 9",6,"pair",47.90,20,6),
+    line("BKS-HS1","Site safety handbook, printed",25,"each",4.80,0,0)
+  ];
+  s.freight = { amount:45.00, tax:20, desc:"Carriage — two-drop delivery to site" };
+  s.budget = { code:"CAP-2026-NGD-07", limit:2000, basis:"gross" };
+  s.appr = {
+    reqBy:"Marcus Reilly", reqRole:"Site Manager, Northgate", reqDate:"2026-09-03",
+    appBy:"Priya Anand", appRole:"Regional Operations Manager (limit £5,000)", appDate:"2026-09-03",
+    status:"Approved", limit:5000
+  };
+  s.notes = "Substitutions must be agreed with the site manager before despatch. Part deliveries accepted; invoice on completion of each drop.";
+  s.book = [
+    { id:"s1", name:"Kingsmead Trade Supplies Ltd", acct:"KTS-40912",
+      addr:"Unit 7, Bilton Industrial Estate\nHumber Road\nCoventry CV3 4AY\nUnited Kingdom",
+      contact:"Dawn Whitaker, Trade Sales", email:"orders@kingsmeadtrade.co.uk", phone:"024 7655 0180" },
+    { id:"s2", name:"Fenwick Electrical Wholesale", acct:"HV-2210",
+      addr:"14 Aire Valley Road\nBradford BD4 8TN", contact:"Sales counter",
+      email:"trade@fenwickelec.co.uk", phone:"01274 550 991" },
+    { id:"s3", name:"Vertex Safety Equipment", acct:"VSE-8804",
+      addr:"Sovereign Park\nNottingham NG7 2PQ", contact:"Leah Cross",
+      email:"orders@vertexsafety.com", phone:"0115 774 3300" }
+  ];
+  s.hist = [
+    { no:"PO-1042", date:"2026-08-27", sup:"Fenwick Electrical Wholesale", status:"Issued to supplier",
+      total:1284.72, sym:"£", snap:null },
+    { no:"PO-1041", date:"2026-08-19", sup:"Vertex Safety Equipment", status:"Approved",
+      total:612.30, sym:"£", snap:null }
+  ];
+  return s;
+}
+
+var S = sampleState();
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ /* storage blocked — tool still works */ }
+}
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    if(!raw) return false;
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object") return false;
+    S = merge(blankState(), o);
+    if(!Array.isArray(S.lines) || !S.lines.length) S.lines = [ line("","",1,"each",0,20,0) ];
+    return true;
+  } catch(e){ return false; }
+}
+function merge(base, o){
+  var out = {}, k;
+  for(k in base){ if(Object.prototype.hasOwnProperty.call(base,k)) out[k] = base[k]; }
+  for(k in o){
+    if(!Object.prototype.hasOwnProperty.call(o,k)) continue;
+    var bv = base[k], ov = o[k];
+    if(bv && typeof bv === "object" && !Array.isArray(bv) && ov && typeof ov === "object" && !Array.isArray(ov)) out[k] = merge(bv, ov);
+    else out[k] = ov;
+  }
+  return out;
+}
+
+/* ── the maths ─────────────────────────────────────────────────── */
+function calc(){
+  var i, L, bands = {}, goods = 0, taxTot = 0, recvNet = 0, outNet = 0, outLines = 0, ordUnits = 0, recvUnits = 0, over = false;
+  var rows = [];
+  for(i = 0; i < S.lines.length; i++){
+    L = S.lines[i];
+    var q = num(L.qty), c = num(L.cost), t = num(L.tax), rq = num(L.recv);
+    if(!isFinite(q)) q = 0;
+    if(!isFinite(c)) c = 0;
+    if(!isFinite(t)) t = 0;
+    if(!isFinite(rq)) rq = 0;
+    var net = r2(q * c);                       // line net  = qty × unit cost
+    var tax = r2(net * t / 100);               // line tax  = net × rate ÷ 100
+    var osQ = q - rq;                          // outstanding quantity
+    var osV = r2(osQ * c);                     // outstanding value at cost
+    var rcV = r2(rq * c);
+    goods += net; taxTot += tax;
+    recvNet += rcV; outNet += osV > 0 ? osV : 0;
+    if(osQ > 1e-9) outLines++;
+    if(osQ < -1e-9) over = true;
+    ordUnits += q; recvUnits += rq;
+    var key = t.toFixed(4);
+    if(!bands[key]) bands[key] = { rate:t, net:0, tax:0 };
+    bands[key].net += net; bands[key].tax += tax;
+    rows.push({ i:i, L:L, q:q, c:c, t:t, rq:rq, net:net, tax:tax, osQ:osQ, osV:osV, rcV:rcV });
+  }
+  goods = r2(goods);
+  var fA = num(S.freight.amount), fT = num(S.freight.tax);
+  if(!isFinite(fA)) fA = 0;
+  if(!isFinite(fT)) fT = 0;
+  var freight = r2(fA), freightTax = r2(freight * fT / 100);
+  if(freight !== 0 || freightTax !== 0){
+    var fk = fT.toFixed(4);
+    if(!bands[fk]) bands[fk] = { rate:fT, net:0, tax:0 };
+    bands[fk].net += freight; bands[fk].tax += freightTax;
+  }
+  taxTot = r2(taxTot + freightTax);
+  var netTotal = r2(goods + freight);
+  var total = r2(netTotal + taxTot);           // PO total = net + tax
+
+  var bandList = [];
+  for(var k in bands){ if(Object.prototype.hasOwnProperty.call(bands,k)){
+    bandList.push({ rate:bands[k].rate, net:r2(bands[k].net), tax:r2(bands[k].tax) });
+  }}
+  bandList.sort(function(a,b){ return b.rate - a.rate; });
+
+  var lim = num(S.budget.limit); if(!isFinite(lim) || lim < 0) lim = 0;
+  var basis = S.budget.basis === "net" ? netTotal : total;
+  var hasBudget = lim > 0;
+  var remaining = hasBudget ? r2(lim - basis) : NaN;
+  var usedPct = hasBudget ? (basis / lim) * 100 : NaN;
+
+  var aLim = num(S.appr.limit); if(!isFinite(aLim) || aLim < 0) aLim = 0;
+  var overAuth = aLim > 0 && total > aLim + 1e-9;
+
+  var recvPct = goods !== 0 ? (recvNet / goods) * 100 : (recvNet === 0 ? 0 : NaN);
+  var recvState = "none";
+  if(over) recvState = "over";
+  else if(outLines === 0 && recvUnits > 0) recvState = "full";
+  else if(recvUnits > 0) recvState = "part";
+
+  var lead = dayDiff(S.po.date, S.po.req);
+
+  return { rows:rows, goods:goods, freight:freight, freightTax:freightTax, tax:taxTot,
+           netTotal:netTotal, total:total, bands:bandList,
+           hasBudget:hasBudget, limit:lim, basis:basis, remaining:remaining, usedPct:usedPct,
+           overBudget:hasBudget && basis > lim + 1e-9,
+           authLimit:aLim, overAuth:overAuth,
+           recvNet:r2(recvNet), outNet:r2(outNet), outLines:outLines, recvPct:recvPct,
+           recvState:recvState, overRecv:over, ordUnits:ordUnits, recvUnits:recvUnits, lead:lead };
+}
+
+function poNumber(){
+  var seq = parseInt(S.po.seq, 10);
+  if(!isFinite(seq) || seq < 0) seq = 0;
+  var pad = parseInt(S.po.pad, 10);
+  if(!isFinite(pad) || pad < 1) pad = 1;
+  if(pad > 8) pad = 8;
+  var s = String(seq);
+  while(s.length < pad) s = "0" + s;
+  return (S.po.prefix || "") + s;
+}
+
+/* ── error helpers ─────────────────────────────────────────────── */
+function setErr(inputEl, errEl, msg){
+  if(msg){
+    inputEl.classList.add("inv");
+    inputEl.setAttribute("aria-invalid","true");
+    if(errEl){ errEl.textContent = msg; errEl.hidden = false; }
+  } else {
+    inputEl.classList.remove("inv");
+    inputEl.removeAttribute("aria-invalid");
+    if(errEl){ errEl.textContent = ""; errEl.hidden = true; }
+  }
+}
+function validateAll(){
+  var v;
+  v = num($("iSeq").value); setErr($("iSeq"), $("eSeq"), (isFinite(v) && v >= 0) ? "" : "Whole number, 0 or more");
+  setErr($("iDate"), $("eDate"), isDate(S.po.date) ? "" : "Enter a valid order date");
+  var reqBad = "";
+  if(!isDate(S.po.req)) reqBad = "Enter a valid delivery date";
+  else if(isDate(S.po.date) && dayDiff(S.po.date, S.po.req) < 0) reqBad = "Delivery date is before the order date";
+  setErr($("iReq"), $("eReq"), reqBad);
+  v = num($("iFreight").value); setErr($("iFreight"), $("eFreight"), ($("iFreight").value === "" || (isFinite(v) && v >= 0)) ? "" : "0 or more");
+  v = num($("iFreightTax").value); setErr($("iFreightTax"), $("eFreightTax"), ($("iFreightTax").value === "" || (isFinite(v) && v >= 0 && v <= 100)) ? "" : "0 to 100");
+  v = num($("iBudLimit").value); setErr($("iBudLimit"), $("eBudLimit"), ($("iBudLimit").value === "" || (isFinite(v) && v >= 0)) ? "" : "0 or more");
+  v = num($("iAppLimit").value); setErr($("iAppLimit"), $("eAppLimit"), ($("iAppLimit").value === "" || (isFinite(v) && v >= 0)) ? "" : "0 or more");
+  var em = $("iSupEmail").value.trim();
+  setErr($("iSupEmail"), $("eSupEmail"), (!em || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) ? "" : "Check this email address");
+  var em2 = $("iBuyEmail").value.trim();
+  setErr($("iBuyEmail"), $("eBuyEmail"), (!em2 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em2)) ? "" : "Check this email address");
+  setErr($("iSupName"), $("eSupName"), S.sup.name.trim() ? "" : "A purchase order needs a supplier");
+  var ad = "";
+  if(S.appr.appDate && !isDate(S.appr.appDate)) ad = "Enter a valid date";
+  else if(isDate(S.appr.appDate) && isDate(S.appr.reqDate) && dayDiff(S.appr.reqDate, S.appr.appDate) < 0) ad = "Approved before it was raised";
+  setErr($("iAppDate"), $("eAppDate"), ad);
+}
+
+/* ── line table ────────────────────────────────────────────────── */
+var lineRefs = [];
+function mkInput(type, val, cls, aria, attrs){
+  var el = document.createElement("input");
+  el.type = type; el.value = val === null || val === undefined ? "" : val;
+  if(cls) el.className = cls;
+  el.setAttribute("aria-label", aria);
+  if(attrs){ for(var k in attrs){ if(Object.prototype.hasOwnProperty.call(attrs,k)) el.setAttribute(k, attrs[k]); } }
+  return el;
+}
+function renderLines(){
+  var tb = $("tbLines");
+  tb.textContent = "";
+  lineRefs = [];
+  if(!S.lines.length){
+    var tr0 = document.createElement("tr");
+    tr0.className = "regempty";
+    var td0 = document.createElement("td");
+    td0.colSpan = 11;
+    td0.textContent = "No lines yet — add the first item you are ordering.";
+    tr0.appendChild(td0); tb.appendChild(tr0);
+    return;
+  }
+  S.lines.forEach(function(L, idx){
+    var tr = document.createElement("tr");
+    var tdI = document.createElement("td"); tdI.className = "idx"; tdI.textContent = String(idx+1); tr.appendChild(tdI);
+
+    function cell(cls, el){ var td = document.createElement("td"); if(cls) td.className = cls; td.appendChild(el); tr.appendChild(td); return td; }
+
+    var iSku = mkInput("text", L.sku, "", "SKU, line " + (idx+1), { autocomplete:"off", maxlength:"24" });
+    cell("w-sku", iSku);
+    var iDesc = mkInput("text", L.desc, "", "Description, line " + (idx+1), { autocomplete:"off" });
+    cell("desc-c", iDesc);
+    var iQty = mkInput("number", L.qty, "", "Quantity, line " + (idx+1), { min:"0", step:"any", inputmode:"decimal" });
+    var tdQ = cell("w-qty", iQty);
+    var eQty = document.createElement("span"); eQty.className = "err"; eQty.hidden = true; tdQ.appendChild(eQty);
+    var iUnit = mkInput("text", L.unit, "", "Unit of measure, line " + (idx+1), { autocomplete:"off", maxlength:"14" });
+    cell("w-unit", iUnit);
+    var iCost = mkInput("number", L.cost, "", "Unit cost, line " + (idx+1), { min:"0", step:"0.01", inputmode:"decimal" });
+    var tdC = cell("w-money", iCost);
+    var eCost = document.createElement("span"); eCost.className = "err"; eCost.hidden = true; tdC.appendChild(eCost);
+    var iTax = mkInput("number", L.tax, "", "Tax rate percent, line " + (idx+1), { min:"0", max:"100", step:"0.01", inputmode:"decimal" });
+    var tdT = cell("w-rate", iTax);
+    var eTax = document.createElement("span"); eTax.className = "err"; eTax.hidden = true; tdT.appendChild(eTax);
+    var iRecv = mkInput("number", L.recv, "", "Quantity received, line " + (idx+1), { min:"0", step:"any", inputmode:"decimal" });
+    var tdR = cell("w-qty", iRecv);
+    var eRecv = document.createElement("span"); eRecv.className = "err"; eRecv.hidden = true; tdR.appendChild(eRecv);
+
+    var tdOs = document.createElement("td"); tdOs.className = "n"; tr.appendChild(tdOs);
+    var tdNet = document.createElement("td"); tdNet.className = "n"; tr.appendChild(tdNet);
+
+    var tdX = document.createElement("td");
+    var bx = document.createElement("button");
+    bx.type = "button"; bx.className = "btn sm ico"; bx.textContent = "✕";
+    bx.setAttribute("aria-label", "Remove line " + (idx+1));
+    bx.addEventListener("click", function(){
+      S.lines.splice(idx, 1);
+      if(!S.lines.length) S.lines.push(line("","",1,"each",0,20,0));
+      S.sample = false; renderLines(); update();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    function bind(el, prop, isNum){
+      el.addEventListener("input", function(){
+        S.lines[idx][prop] = isNum ? (el.value === "" ? "" : el.value) : el.value;
+        S.sample = false; update();
+      });
+    }
+    bind(iSku, "sku", false); bind(iDesc, "desc", false); bind(iUnit, "unit", false);
+    bind(iQty, "qty", true); bind(iCost, "cost", true); bind(iTax, "tax", true); bind(iRecv, "recv", true);
+
+    lineRefs.push({ tdOs:tdOs, tdNet:tdNet, iQty:iQty, eQty:eQty, iCost:iCost, eCost:eCost,
+                    iTax:iTax, eTax:eTax, iRecv:iRecv, eRecv:eRecv, idx:idx });
+    tb.appendChild(tr);
+  });
+}
+function syncLines(c){
+  for(var i = 0; i < lineRefs.length && i < c.rows.length; i++){
+    var R = lineRefs[i], row = c.rows[i], L = S.lines[i];
+    R.tdNet.textContent = money(row.net);
+    var os = row.osQ;
+    R.tdOs.textContent = qty(os);
+    R.tdOs.className = "n " + (Math.abs(os) < 1e-9 ? "os-0" : os < 0 ? "os-x" : "os-p");
+    var qv = num(L.qty);
+    setErr(R.iQty, R.eQty, (L.qty === "" || (isFinite(qv) && qv >= 0)) ? "" : "0 or more");
+    var cv = num(L.cost);
+    setErr(R.iCost, R.eCost, (L.cost === "" || (isFinite(cv) && cv >= 0)) ? "" : "0 or more");
+    var tv = num(L.tax);
+    setErr(R.iTax, R.eTax, (L.tax === "" || (isFinite(tv) && tv >= 0 && tv <= 100)) ? "" : "0 to 100");
+    var rv = num(L.recv);
+    var rmsg = "";
+    if(!(L.recv === "" || (isFinite(rv) && rv >= 0))) rmsg = "0 or more";
+    else if(isFinite(rv) && isFinite(qv) && rv > qv + 1e-9) rmsg = "More than ordered";
+    setErr(R.iRecv, R.eRecv, rmsg);
+  }
+}
+
+/* ── supplier book ─────────────────────────────────────────────── */
+function renderBook(){
+  var sel = $("iBook"), cur = sel.value;
+  sel.textContent = "";
+  var o0 = document.createElement("option");
+  o0.value = ""; o0.textContent = "— choose a saved supplier —";
+  sel.appendChild(o0);
+  S.book.forEach(function(b){
+    var o = document.createElement("option");
+    o.value = b.id; o.textContent = b.name || "(unnamed)";
+    sel.appendChild(o);
+  });
+  var match = "";
+  for(var i = 0; i < S.book.length; i++){ if(S.book[i].name === S.sup.name){ match = S.book[i].id; break; } }
+  sel.value = match || (cur && document.querySelector('#iBook option[value="' + cur + '"]') ? cur : "");
+  $("bookTag").textContent = S.book.length + (S.book.length === 1 ? " saved" : " saved");
+  $("bDelSup").disabled = !sel.value;
+}
+function renderHist(){
+  var tb = $("tbHist");
+  tb.textContent = "";
+  $("histTag").textContent = S.hist.length + (S.hist.length === 1 ? " order" : " orders");
+  if(!S.hist.length){
+    var tr0 = document.createElement("tr"); tr0.className = "regempty";
+    var td0 = document.createElement("td"); td0.colSpan = 6;
+    td0.textContent = "Nothing issued yet. Press “Issue & save to history” when this order is approved.";
+    tr0.appendChild(td0); tb.appendChild(tr0); return;
+  }
+  S.hist.forEach(function(h, i){
+    var tr = document.createElement("tr");
+    function td(txt, cls){ var d = document.createElement("td"); if(cls) d.className = cls; d.textContent = txt; tr.appendChild(d); return d; }
+    td(h.no || DASH, "mono");
+    td(fmtDate(h.date));
+    td(h.sup || DASH);
+    td(h.status || DASH);
+    var tot = document.createElement("td"); tot.className = "n";
+    tot.textContent = isFinite(h.total) ? (h.sym || S.cur.sym) + fmtNum(h.total, 2) : DASH;
+    tr.appendChild(tot);
+    var act = document.createElement("td");
+    var row = document.createElement("div"); row.className = "row";
+    var bl = document.createElement("button");
+    bl.type = "button"; bl.className = "btn sm"; bl.textContent = "Load";
+    bl.disabled = !h.snap;
+    bl.setAttribute("aria-label", "Load order " + (h.no || ""));
+    bl.addEventListener("click", function(){
+      if(!h.snap) return;
+      if(!confirm("Replace the order on screen with " + h.no + "?")) return;
+      var keepBook = S.book, keepHist = S.hist, keepSeq = S.po.seq;
+      S = merge(blankState(), JSON.parse(JSON.stringify(h.snap)));
+      S.book = keepBook; S.hist = keepHist; S.po.seq = keepSeq;
+      S.sample = false;
+      renderAll();
+    });
+    var bd = document.createElement("button");
+    bd.type = "button"; bd.className = "btn sm dgr"; bd.textContent = "Delete";
+    bd.setAttribute("aria-label", "Delete order " + (h.no || ""));
+    bd.addEventListener("click", function(){
+      if(!confirm("Delete " + h.no + " from the history? This cannot be undone.")) return;
+      S.hist.splice(i, 1); renderHist(); save();
+    });
+    row.appendChild(bl); row.appendChild(bd);
+    act.appendChild(row); tr.appendChild(act);
+    tb.appendChild(tr);
+  });
+}
+
+/* ── results panel + document ──────────────────────────────────── */
+function shipBlock(){
+  if(S.ship.same){
+    return (S.buy.name || DASH) + (S.buy.addr ? "\n" + S.buy.addr : "") +
+           (S.buy.contact ? "\nAttn: " + S.buy.contact : "");
+  }
+  var parts = [];
+  if(S.ship.name) parts.push(S.ship.name);
+  if(S.ship.addr) parts.push(S.ship.addr);
+  if(S.ship.contact) parts.push("Contact: " + S.ship.contact);
+  if(S.ship.phone) parts.push("Tel: " + S.ship.phone);
+  if(S.ship.hours) parts.push("Hours: " + S.ship.hours);
+  return parts.length ? parts.join("\n") : DASH;
+}
+function supBlock(){
+  var parts = [];
+  if(S.sup.name) parts.push(S.sup.name);
+  if(S.sup.addr) parts.push(S.sup.addr);
+  if(S.sup.contact) parts.push("Attn: " + S.sup.contact);
+  if(S.sup.email) parts.push(S.sup.email);
+  if(S.sup.phone) parts.push("Tel: " + S.sup.phone);
+  return parts.length ? parts.join("\n") : DASH;
+}
+function taxLabel(){ return (S.po.taxLabel || "Tax").trim() || "Tax"; }
+
+function update(){
+  var c = calc();
+  var no = poNumber();
+  S.po.number = no;
+
+  validateAll();
+  syncLines(c);
+
+  $("poNoTag").textContent = no;
+  $("resPo").textContent = no;
+  $("lineCount").textContent = S.lines.length + (S.lines.length === 1 ? " line" : " lines");
+  $("fNet").textContent = money(c.goods);
+
+  /* hero */
+  $("sTotal").textContent = money(c.total);
+  $("mHero").textContent = money(c.total);
+  $("sTotalSub").textContent = S.cur.code === "CUSTOM"
+    ? "Including " + taxLabel() + " of " + money(c.tax)
+    : S.cur.code + " · including " + taxLabel() + " of " + money(c.tax);
+  $("sNet").textContent = money(c.netTotal);
+  $("sTax").textContent = money(c.tax);
+  $("kTax").textContent = taxLabel();
+  $("bTaxK").textContent = taxLabel();
+  $("bGoods").textContent = money(c.goods);
+  $("bFreight").textContent = money(c.freight);
+  $("bTax").textContent = money(c.tax);
+  $("bTotal").textContent = money(c.total);
+
+  /* tax bands */
+  var bw = $("bands");
+  bw.textContent = "";
+  if(!c.bands.length){
+    var p = document.createElement("p"); p.className = "mini"; p.textContent = "No taxable value yet.";
+    bw.appendChild(p);
+  }
+  c.bands.forEach(function(b){
+    var d = document.createElement("div"); d.className = "ln";
+    var k = document.createElement("span"); k.className = "k";
+    k.appendChild(document.createTextNode(taxLabel() + " at " + fmtNum(b.rate, b.rate % 1 === 0 ? 0 : 2) + "%"));
+    var sm = document.createElement("small"); sm.textContent = "on " + money(b.net) + " net";
+    k.appendChild(sm);
+    var v = document.createElement("span"); v.className = "v"; v.textContent = money(b.tax);
+    d.appendChild(k); d.appendChild(v); bw.appendChild(d);
+  });
+
+  /* budget */
+  $("budCodeLbl").textContent = S.budget.code ? "· " + S.budget.code : "";
+  var meter = $("budMeter"), bar = $("budBar");
+  if(c.hasBudget){
+    var p1 = c.usedPct;
+    bar.style.width = Math.max(0, Math.min(100, p1)) + "%";
+    meter.className = "meter" + (p1 > 100 ? " bad" : p1 > 85 ? " warn" : "");
+    $("budUsed").textContent = money(c.basis) + " of " + money(c.limit) +
+      (S.budget.basis === "net" ? " (net basis)" : "");
+    $("budPct").textContent = pct(p1);
+    $("budK").textContent = c.remaining < 0 ? "Over budget by" : "Budget remaining";
+    $("sBudget").textContent = money(Math.abs(c.remaining));
+    $("sBudget").style.color = c.remaining < 0 ? "var(--bad)" : (p1 > 85 ? "var(--warn)" : "var(--ok)");
+  } else {
+    bar.style.width = "0%";
+    meter.className = "meter";
+    $("budUsed").textContent = "No budget limit set";
+    $("budPct").textContent = DASH;
+    $("budK").textContent = "Budget remaining";
+    $("sBudget").textContent = DASH;
+    $("sBudget").style.color = "";
+  }
+  var bwn = $("budWarn");
+  if(c.overBudget){
+    bwn.hidden = false;
+    bwn.textContent = "Over budget. This order is " + money(c.basis - c.limit) + " above the limit on budget code " +
+      (S.budget.code || "(unnamed)") + ". Reduce the order, split it, or get the budget increased before issuing it.";
+  } else { bwn.hidden = true; }
+  var awn = $("authWarn");
+  if(c.overAuth){
+    awn.hidden = false;
+    awn.textContent = "Above the approver's stated authority limit of " + money(c.authLimit) +
+      " by " + money(c.total - c.authLimit) + ". This order needs a higher level of sign-off.";
+  } else { awn.hidden = true; }
+
+  /* receipts */
+  var rMeter = $("recMeter"), rBar = $("recBar");
+  var rp = c.recvPct;
+  if(isFinite(rp)){
+    rBar.style.width = Math.max(0, Math.min(100, rp)) + "%";
+    rMeter.className = "meter" + (c.overRecv ? " bad" : rp >= 99.995 ? "" : " warn");
+    if(rp < 0.005 && !c.overRecv) rMeter.className = "meter";
+    $("recPct").textContent = pct(rp);
+  } else {
+    rBar.style.width = "0%"; rMeter.className = "meter"; $("recPct").textContent = DASH;
+  }
+  var stateTxt = c.recvState === "full" ? "Fully received" : c.recvState === "part" ? "Partially received" :
+                 c.recvState === "over" ? "Over-received — check the delivery" : "Nothing received yet";
+  $("recLbl").textContent = stateTxt;
+  $("sRecv").textContent = money(c.recvNet);
+  $("sOut").textContent = money(c.outNet);
+  $("outNote").textContent = c.outLines
+    ? c.outLines + (c.outLines === 1 ? " line" : " lines") + " still outstanding, worth " + money(c.outNet) + " at cost."
+    : (c.recvUnits > 0 ? "Every line has been received in full." : "Mark quantities in the Rec'd column as goods arrive.");
+  $("recvNote").textContent = qty(c.recvUnits) + " of " + qty(c.ordUnits) + " units received";
+
+  $("statusChip").textContent = S.appr.status || "Draft";
+  $("statusChip").className = "chip " + (S.appr.status === "Approved" || S.appr.status === "Issued to supplier" ? "ok" :
+                                         S.appr.status === "Cancelled" ? "bad" : "warn");
+  var leadTxt = isFinite(c.lead) ? (c.lead >= 0 ? c.lead + " day" + (c.lead === 1 ? "" : "s") + " lead time" : "delivery date is in the past") : DASH;
+  $("leadChip").textContent = leadTxt;
+  $("leadChip").className = "chip " + (isFinite(c.lead) && c.lead < 0 ? "bad" : "");
+  $("apprTag").textContent = (S.appr.status || "Draft") + (S.appr.appBy ? " · " + S.appr.appBy : "");
+
+  renderDoc(c);
+  save();
+  return c;
+}
+
+function renderDoc(c){
+  var no = poNumber();
+  $("dBuyName").textContent = S.buy.name || "Your organisation";
+  $("dBuyAddr").textContent = (S.buy.addr ? S.buy.addr : "") +
+    (S.buy.phone ? "\nTel: " + S.buy.phone : "");
+  $("dNo").textContent = no;
+  $("dNo2").textContent = no;
+  $("dDate").textContent = "Order date: " + fmtDate(S.po.date);
+  $("dReq").textContent = "Required by: " + fmtDate(S.po.req) +
+    (isFinite(c.lead) && c.lead >= 0 ? " (" + c.lead + " day" + (c.lead === 1 ? "" : "s") + ")" : "");
+  $("dSup").textContent = supBlock();
+  $("dShip").textContent = shipBlock();
+  $("dDate2").textContent = fmtDate(S.po.date);
+  $("dReq2").textContent = fmtDate(S.po.req);
+  $("dStatus").textContent = S.appr.status || "Draft";
+  $("dReqRef").textContent = S.po.reqRef || DASH;
+  $("dTerms").textContent = S.po.terms || DASH;
+  $("dInco").textContent = S.po.incoterm || DASH;
+  $("dCur").textContent = (S.cur.code === "CUSTOM" ? "Symbol " + S.cur.sym : S.cur.code + " (" + S.cur.sym + ")");
+  $("dAcct").textContent = S.sup.acct || DASH;
+  $("dBudCode").textContent = S.budget.code || DASH;
+  $("dProject").textContent = S.po.project || DASH;
+  $("dBuyEmail").textContent = S.buy.email || DASH;
+  $("dBuyTax").textContent = S.buy.tax || DASH;
+
+  var tb = $("dLines");
+  tb.textContent = "";
+  c.rows.forEach(function(row, i){
+    var tr = document.createElement("tr");
+    function td(txt, cls){ var d = document.createElement("td"); if(cls) d.className = cls; d.textContent = txt; tr.appendChild(d); }
+    td(String(i+1));
+    td(row.L.sku || DASH);
+    td(row.L.desc || DASH);
+    td(qty(row.q), "n");
+    td(row.L.unit || "");
+    td(money(row.c), "n");
+    td(fmtNum(row.t, row.t % 1 === 0 ? 0 : 2), "n");
+    td(money(row.net), "n");
+    tb.appendChild(tr);
+  });
+  if(!c.rows.length){
+    var tr0 = document.createElement("tr");
+    var td0 = document.createElement("td"); td0.colSpan = 8; td0.textContent = "No lines on this order.";
+    tr0.appendChild(td0); tb.appendChild(tr0);
+  }
+  $("dGoods").textContent = money(c.goods);
+
+  var bw = $("dBands");
+  bw.textContent = "";
+  c.bands.forEach(function(b){
+    var d = document.createElement("div"); d.className = "r";
+    var s1 = document.createElement("span");
+    s1.textContent = taxLabel() + " at " + fmtNum(b.rate, b.rate % 1 === 0 ? 0 : 2) + "%";
+    var s2 = document.createElement("span"); s2.className = "n"; s2.textContent = money(b.net);
+    var s3 = document.createElement("span"); s3.className = "n"; s3.textContent = money(b.tax);
+    d.appendChild(s1); d.appendChild(s2); d.appendChild(s3); bw.appendChild(d);
+  });
+  $("dTaxWrap").hidden = !c.bands.length;
+
+  $("dtGoods").textContent = money(c.goods);
+  $("dtFreightRow").hidden = !(c.freight !== 0);
+  $("dtFreightK").textContent = S.freight.desc || "Carriage";
+  $("dtFreight").textContent = money(c.freight);
+  $("dtNet").textContent = money(c.netTotal);
+  $("dtTaxK").textContent = taxLabel();
+  $("dtTax").textContent = money(c.tax);
+  $("dtTotal").textContent = money(c.total);
+
+  $("dInstr").textContent = S.ship.instr || DASH;
+  $("dInstrWrap").hidden = !S.ship.instr;
+  $("dNotes").textContent = S.notes || DASH;
+  $("dNotesWrap").hidden = !S.notes;
+
+  /* goods receipt block only once something has been received */
+  var any = c.recvUnits > 0;
+  $("dRecvWrap").hidden = !any;
+  if(any){
+    var rt = $("dRecv");
+    rt.textContent = "";
+    c.rows.forEach(function(row){
+      var tr = document.createElement("tr");
+      function td(txt, cls){ var d = document.createElement("td"); if(cls) d.className = cls; d.textContent = txt; tr.appendChild(d); }
+      td(row.L.sku || DASH);
+      td(row.L.desc || DASH);
+      td(qty(row.q) + (row.L.unit ? " " + row.L.unit : ""), "n");
+      td(qty(row.rq), "n");
+      td(qty(row.osQ), "n");
+      td(money(row.osV), "n");
+      rt.appendChild(tr);
+    });
+    $("dRecvSum").textContent = (c.recvState === "full" ? "Fully received." :
+      c.recvState === "over" ? "Over-received against at least one line — check the delivery." :
+      "Partially received.") + " " + money(c.recvNet) + " of " + money(c.goods) + " received by value (" +
+      pct(c.recvPct) + "), " + money(c.outNet) + " outstanding across " + c.outLines +
+      (c.outLines === 1 ? " line" : " lines") + ".";
+  }
+
+  $("dReqBy").textContent = S.appr.reqBy || DASH;
+  $("dReqRole").textContent = S.appr.reqRole || "";
+  $("dReqDate").textContent = "Date " + (isDate(S.appr.reqDate) ? fmtDate(S.appr.reqDate) : "……………");
+  $("dAppBy").textContent = S.appr.appBy || DASH;
+  $("dAppRole").textContent = S.appr.appRole || "";
+  $("dAppDate").textContent = "Date " + (isDate(S.appr.appDate) ? fmtDate(S.appr.appDate) : "……………");
+
+  $("dFtLeft").textContent = no + " · " + (S.buy.name || "Purchase order") + " · " +
+    (S.sup.name || "supplier") + " · " + money(c.total);
+  $("dFtRight").textContent = "Budget " + (S.budget.code || DASH) +
+    (c.hasBudget ? " · " + pct(c.usedPct) + " of " + money(c.limit) : "") +
+    " · Printed " + fmtDate(today());
+}
+
+/* ── render everything from state ──────────────────────────────── */
+function renderAll(){
+  $("iPrefix").value = S.po.prefix;
+  $("iSeq").value = S.po.seq;
+  $("iPad").value = S.po.pad;
+  $("iDate").value = S.po.date;
+  $("iReq").value = S.po.req;
+  $("iReqRef").value = S.po.reqRef;
+  $("iProject").value = S.po.project;
+  $("iTerms").value = S.po.terms;
+  $("iIncoterm").value = S.po.incoterm;
+  $("iTaxLabel").value = S.po.taxLabel;
+  $("iCur").value = S.cur.code;
+  $("iSym").value = S.cur.sym;
+  $("iFmt").value = S.cur.fmt;
+  $("iSym").disabled = S.cur.code !== "CUSTOM";
+
+  $("iSupName").value = S.sup.name; $("iSupAcct").value = S.sup.acct;
+  $("iSupAddr").value = S.sup.addr; $("iSupContact").value = S.sup.contact;
+  $("iSupEmail").value = S.sup.email; $("iSupPhone").value = S.sup.phone;
+
+  $("iShipSame").checked = !!S.ship.same;
+  $("shipFields").hidden = !!S.ship.same;
+  $("iShipName").value = S.ship.name; $("iShipContact").value = S.ship.contact;
+  $("iShipAddr").value = S.ship.addr; $("iShipPhone").value = S.ship.phone;
+  $("iShipHours").value = S.ship.hours; $("iShipInstr").value = S.ship.instr;
+
+  $("iBuyName").value = S.buy.name; $("iBuyTax").value = S.buy.tax;
+  $("iBuyAddr").value = S.buy.addr; $("iBuyContact").value = S.buy.contact;
+  $("iBuyEmail").value = S.buy.email; $("iBuyPhone").value = S.buy.phone;
+
+  $("iFreight").value = S.freight.amount;
+  $("iFreightTax").value = S.freight.tax;
+  $("iFreightDesc").value = S.freight.desc;
+  $("iBudCode").value = S.budget.code;
+  $("iBudLimit").value = S.budget.limit;
+  $("iBudBasis").value = S.budget.basis;
+
+  $("iReqBy").value = S.appr.reqBy; $("iReqRole").value = S.appr.reqRole; $("iReqDate").value = S.appr.reqDate;
+  $("iAppBy").value = S.appr.appBy; $("iAppRole").value = S.appr.appRole; $("iAppDate").value = S.appr.appDate;
+  $("iStatus").value = S.appr.status; $("iAppLimit").value = S.appr.limit;
+  $("iNotes").value = S.notes;
+
+  $("sampleBanner").hidden = !S.sample;
+  renderLines();
+  renderBook();
+  renderHist();
+  update();
+}
+
+/* ── input wiring ──────────────────────────────────────────────── */
+function txt(id, get, set){
+  var el = $(id);
+  el.addEventListener("input", function(){ set(el.value); S.sample = false; $("sampleBanner").hidden = true; update(); });
+}
+function wire(){
+  txt("iPrefix", null, function(v){ S.po.prefix = v; });
+  txt("iSeq", null, function(v){ S.po.seq = v; });
+  txt("iPad", null, function(v){ S.po.pad = v; });
+  txt("iDate", null, function(v){ S.po.date = v; });
+  txt("iReq", null, function(v){ S.po.req = v; });
+  txt("iReqRef", null, function(v){ S.po.reqRef = v; });
+  txt("iProject", null, function(v){ S.po.project = v; });
+  txt("iTerms", null, function(v){ S.po.terms = v; });
+  txt("iIncoterm", null, function(v){ S.po.incoterm = v; });
+  txt("iTaxLabel", null, function(v){ S.po.taxLabel = v; });
+
+  txt("iSupName", null, function(v){ S.sup.name = v; });
+  txt("iSupAcct", null, function(v){ S.sup.acct = v; });
+  txt("iSupAddr", null, function(v){ S.sup.addr = v; });
+  txt("iSupContact", null, function(v){ S.sup.contact = v; });
+  txt("iSupEmail", null, function(v){ S.sup.email = v; });
+  txt("iSupPhone", null, function(v){ S.sup.phone = v; });
+
+  txt("iShipName", null, function(v){ S.ship.name = v; });
+  txt("iShipContact", null, function(v){ S.ship.contact = v; });
+  txt("iShipAddr", null, function(v){ S.ship.addr = v; });
+  txt("iShipPhone", null, function(v){ S.ship.phone = v; });
+  txt("iShipHours", null, function(v){ S.ship.hours = v; });
+  txt("iShipInstr", null, function(v){ S.ship.instr = v; });
+
+  txt("iBuyName", null, function(v){ S.buy.name = v; });
+  txt("iBuyTax", null, function(v){ S.buy.tax = v; });
+  txt("iBuyAddr", null, function(v){ S.buy.addr = v; });
+  txt("iBuyContact", null, function(v){ S.buy.contact = v; });
+  txt("iBuyEmail", null, function(v){ S.buy.email = v; });
+  txt("iBuyPhone", null, function(v){ S.buy.phone = v; });
+
+  txt("iFreight", null, function(v){ S.freight.amount = v; });
+  txt("iFreightTax", null, function(v){ S.freight.tax = v; });
+  txt("iFreightDesc", null, function(v){ S.freight.desc = v; });
+  txt("iBudCode", null, function(v){ S.budget.code = v; });
+  txt("iBudLimit", null, function(v){ S.budget.limit = v; });
+  txt("iBudBasis", null, function(v){ S.budget.basis = v; });
+
+  txt("iReqBy", null, function(v){ S.appr.reqBy = v; });
+  txt("iReqRole", null, function(v){ S.appr.reqRole = v; });
+  txt("iReqDate", null, function(v){ S.appr.reqDate = v; });
+  txt("iAppBy", null, function(v){ S.appr.appBy = v; });
+  txt("iAppRole", null, function(v){ S.appr.appRole = v; });
+  txt("iAppDate", null, function(v){ S.appr.appDate = v; });
+  txt("iStatus", null, function(v){ S.appr.status = v; });
+  txt("iAppLimit", null, function(v){ S.appr.limit = v; });
+  txt("iNotes", null, function(v){ S.notes = v; });
+
+  $("iCur").addEventListener("input", function(){
+    S.cur.code = $("iCur").value;
+    if(S.cur.code !== "CUSTOM") S.cur.sym = SYMS[S.cur.code] || "£";
+    $("iSym").value = S.cur.sym;
+    $("iSym").disabled = S.cur.code !== "CUSTOM";
+    S.sample = false; $("sampleBanner").hidden = true; update();
+  });
+  $("iSym").addEventListener("input", function(){ S.cur.sym = $("iSym").value || "£"; update(); });
+  $("iFmt").addEventListener("input", function(){ S.cur.fmt = $("iFmt").value; update(); });
+
+  $("iShipSame").addEventListener("change", function(){
+    S.ship.same = $("iShipSame").checked;
+    $("shipFields").hidden = S.ship.same;
+    S.sample = false; $("sampleBanner").hidden = true; update();
+  });
+
+  function addLine(){
+    var last = S.lines[S.lines.length-1];
+    S.lines.push(line("", "", 1, last ? last.unit : "each", 0, last ? last.tax : 20, 0));
+    S.sample = false; $("sampleBanner").hidden = true;
+    renderLines(); update();
+    var refs = lineRefs[lineRefs.length-1];
+    if(refs){ var r = refs.iQty.closest("tr"); if(r){ var inp = r.querySelector("input"); if(inp) inp.focus(); } }
+  }
+  $("bAdd").addEventListener("click", addLine);
+  $("bAdd2").addEventListener("click", addLine);
+  $("bRecvAll").addEventListener("click", function(){
+    S.lines.forEach(function(L){ L.recv = L.qty; });
+    S.sample = false; renderLines(); update();
+  });
+  $("bRecvNone").addEventListener("click", function(){
+    S.lines.forEach(function(L){ L.recv = 0; });
+    S.sample = false; renderLines(); update();
+  });
+
+  /* supplier book */
+  $("iBook").addEventListener("change", function(){
+    var id = $("iBook").value;
+    if(!id){ $("bDelSup").disabled = true; return; }
+    for(var i = 0; i < S.book.length; i++){
+      if(S.book[i].id === id){
+        var b = S.book[i];
+        S.sup = { name:b.name||"", acct:b.acct||"", addr:b.addr||"", contact:b.contact||"", email:b.email||"", phone:b.phone||"" };
+        break;
+      }
+    }
+    S.sample = false; $("sampleBanner").hidden = true;
+    renderAll();
+  });
+  $("bSaveSup").addEventListener("click", function(){
+    if(!S.sup.name.trim()){ setErr($("iSupName"), $("eSupName"), "Give the supplier a name before saving"); $("iSupName").focus(); return; }
+    var found = -1;
+    for(var i = 0; i < S.book.length; i++){ if(S.book[i].name === S.sup.name){ found = i; break; } }
+    var rec = { id: found >= 0 ? S.book[found].id : "s" + Date.now().toString(36),
+                name:S.sup.name, acct:S.sup.acct, addr:S.sup.addr,
+                contact:S.sup.contact, email:S.sup.email, phone:S.sup.phone };
+    if(found >= 0) S.book[found] = rec; else S.book.push(rec);
+    renderBook(); save();
+  });
+  $("bDelSup").addEventListener("click", function(){
+    var id = $("iBook").value;
+    if(!id) return;
+    var nm = "";
+    for(var i = 0; i < S.book.length; i++){ if(S.book[i].id === id){ nm = S.book[i].name; S.book.splice(i,1); break; } }
+    if(!confirm("Remove " + (nm || "this supplier") + " from the address book?")){ renderBook(); return; }
+    renderBook(); save();
+  });
+
+  /* issue to history */
+  $("bIssue").addEventListener("click", function(){
+    var c = calc();
+    if(!S.sup.name.trim()){ setErr($("iSupName"), $("eSupName"), "A purchase order needs a supplier"); $("iSupName").focus(); return; }
+    var no = poNumber();
+    var msg = "Save " + no + " to the history and advance the next number?";
+    if(c.overBudget) msg = "This order is over the budget limit.\n\n" + msg;
+    if(c.overAuth) msg = "This order is above the approver's stated authority limit.\n\n" + msg;
+    if(!confirm(msg)) return;
+    var snap = JSON.parse(JSON.stringify(S));
+    delete snap.book; delete snap.hist;
+    S.hist.unshift({ no:no, date:S.po.date, sup:S.sup.name, status:S.appr.status || "Issued to supplier",
+                     total:c.total, sym:S.cur.sym, snap:snap });
+    if(S.hist.length > 60) S.hist.length = 60;
+    var seq = parseInt(S.po.seq, 10);
+    S.po.seq = (isFinite(seq) ? seq : 0) + 1;
+    $("iSeq").value = S.po.seq;
+    S.sample = false; $("sampleBanner").hidden = true;
+    renderHist(); update();
+  });
+
+  /* clear */
+  $("bBlank").addEventListener("click", function(){
+    if(!confirm("Clear the order on screen and start blank? Your supplier book and order history are kept.")) return;
+    var keepBook = S.book, keepHist = S.hist, keepCur = S.cur, keepBuy = S.buy;
+    S = blankState();
+    S.book = keepBook; S.hist = keepHist; S.cur = keepCur; S.buy = keepBuy;
+    renderAll();
+  });
+  $("bClear").addEventListener("click", function(){
+    if(!confirm("Delete everything this tool has saved in this browser — the order, the supplier address book and the order history? This cannot be undone.")) return;
+    try { localStorage.removeItem(KEY); } catch(e){}
+    S = blankState();
+    renderAll();
+  });
+
+  /* print + preview */
+  function doPrint(){ setPreview(true); window.print(); }
+  $("bPrint").addEventListener("click", doPrint);
+  $("bPrint2").addEventListener("click", doPrint);
+  $("bPreview").addEventListener("click", function(){ setPreview($("bPreview").getAttribute("aria-pressed") !== "true"); });
+
+  $("bCsv").addEventListener("click", exportCsv);
+  $("bJson").addEventListener("click", exportJson);
+  $("bImport").addEventListener("click", function(){ $("fJson").click(); });
+  $("fJson").addEventListener("change", importJson);
+}
+function setPreview(on){
+  $("bPreview").setAttribute("aria-pressed", on ? "true" : "false");
+  $("bPreview").textContent = on ? "Back to editing" : "Preview document";
+  $("wrap").hidden = !!on;
+  $("docwrap").classList.toggle("show", !!on);
+  if(on) window.scrollTo(0, 0);
+}
+
+/* ── exports ───────────────────────────────────────────────────── */
+function csvCell(v){
+  var s = (v === null || v === undefined) ? "" : String(v);
+  if(/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function csvRow(a){ return a.map(csvCell).join(","); }
+function dl(name, mime, text){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 800);
+  } catch(e){ /* download blocked */ }
+}
+function fixed(n){ return isFinite(n) ? n.toFixed(2) : ""; }
+function exportCsv(){
+  var c = calc(), no = poNumber(), rows = [];
+  rows.push(["Purchase order", no]);
+  rows.push(["Order date", S.po.date]);
+  rows.push(["Required by", S.po.req]);
+  rows.push(["Status", S.appr.status]);
+  rows.push(["Supplier", S.sup.name]);
+  rows.push(["Supplier account", S.sup.acct]);
+  rows.push(["Supplier email", S.sup.email]);
+  rows.push(["Bill to", (S.buy.name + " " + S.buy.addr).replace(/\n/g, ", ")]);
+  rows.push(["Deliver to", shipBlock().replace(/\n/g, ", ")]);
+  rows.push(["Requisition", S.po.reqRef]);
+  rows.push(["Project / cost centre", S.po.project]);
+  rows.push(["Budget code", S.budget.code]);
+  rows.push(["Payment terms", S.po.terms]);
+  rows.push(["Delivery terms", S.po.incoterm]);
+  rows.push(["Currency", S.cur.code === "CUSTOM" ? S.cur.sym : S.cur.code]);
+  rows.push([]);
+  rows.push(["Line","SKU","Description","Qty ordered","Unit","Unit cost","Tax %","Net","Tax","Line total",
+             "Qty received","Qty outstanding","Value outstanding"]);
+  c.rows.forEach(function(r, i){
+    rows.push([ i+1, r.L.sku, r.L.desc, r.q, r.L.unit, fixed(r.c), r.t, fixed(r.net), fixed(r.tax),
+                fixed(r2(r.net + r.tax)), r.rq, r.osQ, fixed(r.osV) ]);
+  });
+  rows.push([]);
+  rows.push(["Goods net", fixed(c.goods)]);
+  rows.push([S.freight.desc || "Carriage", fixed(c.freight)]);
+  rows.push(["Net total", fixed(c.netTotal)]);
+  c.bands.forEach(function(b){
+    rows.push([taxLabel() + " at " + b.rate + "% on " + fixed(b.net), fixed(b.tax)]);
+  });
+  rows.push([taxLabel() + " total", fixed(c.tax)]);
+  rows.push(["PO TOTAL", fixed(c.total)]);
+  rows.push([]);
+  rows.push(["Budget limit", c.hasBudget ? fixed(c.limit) : "not set"]);
+  rows.push(["Checked against", S.budget.basis === "net" ? "net of tax" : "total including tax"]);
+  rows.push(["Budget remaining", c.hasBudget ? fixed(c.remaining) : ""]);
+  rows.push(["Over budget", c.overBudget ? "YES" : "no"]);
+  rows.push(["Received (net value)", fixed(c.recvNet)]);
+  rows.push(["Outstanding (net value)", fixed(c.outNet)]);
+  rows.push(["Lines outstanding", c.outLines]);
+  rows.push([]);
+  rows.push(["Raised by", S.appr.reqBy, S.appr.reqRole, S.appr.reqDate]);
+  rows.push(["Approved by", S.appr.appBy, S.appr.appRole, S.appr.appDate]);
+  rows.push([]);
+  rows.push(["Prepared with the Solvix Purchase Order Generator. Tax rates as entered by the buyer and not verified; not legal, tax or accounting advice."]);
+  var text = "﻿" + rows.map(csvRow).join("\r\n") + "\r\n";
+  dl(no.replace(/[^\w.-]+/g, "_") + "-purchase-order.csv", "text/csv;charset=utf-8", text);
+}
+function exportJson(){
+  var payload = { tool:"solvix.purchase-order", version:1, saved:new Date().toISOString(), state:S };
+  dl(poNumber().replace(/[^\w.-]+/g, "_") + "-purchase-order.json", "application/json", JSON.stringify(payload, null, 2));
+}
+function importJson(ev){
+  var f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    var ok = false;
+    try {
+      var o = JSON.parse(String(rd.result));
+      var st = (o && o.state) ? o.state : o;
+      if(st && typeof st === "object" && st.po && st.lines){
+        S = merge(blankState(), st);
+        if(!Array.isArray(S.lines) || !S.lines.length) S.lines = [ line("","",1,"each",0,20,0) ];
+        if(!Array.isArray(S.book)) S.book = [];
+        if(!Array.isArray(S.hist)) S.hist = [];
+        S.sample = false;
+        renderAll();
+        ok = true;
+      }
+    } catch(e){ ok = false; }
+    if(!ok){
+      var d = $("disclaimer");
+      var warnEl = document.createElement("p");
+      warnEl.className = "err";
+      warnEl.style.marginTop = "6px";
+      warnEl.textContent = "That file could not be read as a saved purchase order. Choose a JSON file exported by this tool.";
+      var old = d.querySelector(".err");
+      if(old) old.remove();
+      d.appendChild(warnEl);
+      setTimeout(function(){ if(warnEl.parentNode) warnEl.remove(); }, 8000);
+    }
+    ev.target.value = "";
+  };
+  rd.readAsText(f);
+}
+
+/* ── appbar height for sticky offsets ──────────────────────────── */
+function measure(){
+  var h = $("appbar").getBoundingClientRect().height;
+  document.documentElement.style.setProperty("--abh", Math.round(h) + "px");
+}
+
+/* ── boot ──────────────────────────────────────────────────────── */
+if(!load()) S = sampleState();
+wire();
+renderAll();
+measure();
+window.addEventListener("resize", measure);
+window.addEventListener("beforeprint", function(){ setPreview(true); });
+})();
+</script>
+</body>
+</html>

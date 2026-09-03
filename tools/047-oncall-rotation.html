@@ -173,6 +173,7 @@ table input:focus,table select:focus{background:var(--raise)}
 :root[data-theme="dark"]{--accent:#3FB5BE;--accent-ink:#6ED2D9;--accent-wash:#102A2E;--on-accent:#04181A}
 
 [hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .app{max-width:1300px}
 .pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
 .fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
@@ -329,7 +330,7 @@ tr.inact td.who .nm{color:var(--muted);text-decoration:line-through}
   </div>
 
   <section class="statband" id="statband" aria-live="polite">
-    <div class="stat hero"><div class="k">On call now</div><div class="v" id="sNow">&mdash;</div><div class="sub2" id="sNowSub">&mdash;</div></div>
+    <div class="stat hero"><div class="k" id="sNowK">On call now</div><div class="v" id="sNow">&mdash;</div><div class="sub2" id="sNowSub">&mdash;</div></div>
     <div class="stat"><div class="k">Next handover</div><div class="v sm" id="sHand">&mdash;</div><div class="sub2" id="sHandSub">&mdash;</div></div>
     <div class="stat"><div class="k">Then on call</div><div class="v nm" id="sNext">&mdash;</div><div class="sub2" id="sNextSub">&mdash;</div></div>
     <div class="stat" id="sGapBox"><div class="k">Uncovered shifts</div><div class="v" id="sGap">&mdash;</div><div class="sub2" id="sGapSub">&mdash;</div></div>
@@ -526,3 +527,377 @@ tr.inact td.who .nm{color:var(--muted);text-decoration:line-through}
 </footer>
 
 <section class="printonly doc" id="printdoc"></section>
+
+<script>
+"use strict";
+(function(){
+/* ══════════════════════════════════════════════════════════════════
+   On-Call Rotation Planner
+   Round-robin allocation over a chosen period, honouring per-person
+   blackout dates, with a fairness report and a swap log. Everything
+   below is computed — nothing is hardcoded.
+   ══════════════════════════════════════════════════════════════════ */
+var KEY='solvix.oncall-rotation.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var DOW3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var DOWL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var WKSETS={satsun:[0,6],frisat:[5,6],thufri:[4,5],sunonly:[0],none:[]};
+var WKLABEL={satsun:'Saturday & Sunday',frisat:'Friday & Saturday',thufri:'Thursday & Friday',
+             sunonly:'Sunday only',none:'not counted'};
+var CAD={daily:1,weekly:7,fortnightly:14};
+var MAXSHIFTS=120;
+
+/* ── small helpers ─────────────────────────────────────────────── */
+function p2(n){return n<10?'0'+n:''+n;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:d;}
+function intv(v,d){var n=parseInt(v,10);return isFinite(n)?n:d;}
+function uid(){return 'm'+Math.random().toString(36).slice(2,9);}
+function dparse(s){
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var y=+m[1],mo=+m[2],d=+m[3];
+  if(mo<1||mo>12||d<1||d>31||y<1900||y>2200)return null;
+  var dt=new Date(y,mo-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return null;
+  return dt;
+}
+function diso(dt){return dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate());}
+function dadd(dt,n){return new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+n,
+  dt.getHours(),dt.getMinutes(),0,0);}
+function tparse(s){
+  var m=/^(\d{1,2}):(\d{2})/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var h=+m[1],mi=+m[2];
+  if(h<0||h>23||mi<0||mi>59)return null;
+  return {h:h,m:mi};
+}
+function fmtD(dt){return DOW3[dt.getDay()]+' '+dt.getDate()+' '+MON3[dt.getMonth()]+' '+dt.getFullYear();}
+function fmtDshort(dt){return DOW3[dt.getDay()]+' '+dt.getDate()+' '+MON3[dt.getMonth()];}
+function fmtT(dt){return p2(dt.getHours())+':'+p2(dt.getMinutes());}
+function fmtDT(dt){return fmtD(dt)+', '+fmtT(dt);}
+function dur(ms){
+  if(!isFinite(ms))return '—';
+  if(ms<0)ms=0;
+  var mins=Math.floor(ms/60000);
+  var d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60;
+  if(d>0)return d+' d '+h+' h';
+  if(h>0)return h+' h '+m+' m';
+  return m+' m';
+}
+function dtlocal(dt){return dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate())+'T'+
+  p2(dt.getHours())+':'+p2(dt.getMinutes());}
+function slug(s){return String(s||'rota').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+  .replace(/^-|-$/g,'').slice(0,40)||'rota';}
+function setErr(el,msg){
+  if(!el)return;
+  if(msg){el.textContent=msg;el.hidden=false;}else{el.textContent='';el.hidden=true;}
+}
+function mark(input,bad){if(input){if(bad)input.classList.add('inv');else input.classList.remove('inv');}}
+
+/* ── state ─────────────────────────────────────────────────────── */
+var S=null;
+
+function blankState(){
+  return {
+    v:1, sample:false,
+    org:{business:'',team:'',contact:'',esc:''},
+    rot:{start:diso(new Date()),time:'09:00',cad:'weekly',step:7,periods:8,
+         wknd:'satsun',mode:'balanced',b2b:true,tz:''},
+    members:[{id:uid(),name:'',contact:'',black:'',active:true},
+             {id:uid(),name:'',contact:'',black:'',active:true},
+             {id:uid(),name:'',contact:'',black:'',active:true}],
+    hol:'', ov:{}, swaps:[], asAt:''
+  };
+}
+
+function sampleState(){
+  var n=new Date();n.setHours(0,0,0,0);
+  var wd=n.getDay();
+  var mon=new Date(n.getFullYear(),n.getMonth(),n.getDate()+(wd===0?-6:1-wd));
+  var iso=function(off){return diso(dadd(mon,off));};
+  var st=blankState();
+  st.sample=true;
+  st.org={business:'Northgate Systems Ltd',team:'Platform Ops — primary on-call',
+    contact:'R. Iyer, operations lead — 07700 900010',
+    esc:'Second line: infrastructure duty manager — 07700 900020'};
+  st.rot={start:iso(0),time:'09:00',cad:'weekly',step:7,periods:12,
+    wknd:'satsun',mode:'balanced',b2b:true,tz:'Europe/London'};
+  st.members=[
+    {id:uid(),name:'Priya Raman',    contact:'07700 900118',black:'',                      active:true},
+    {id:uid(),name:'Daniel Okafor',  contact:'07700 900342',black:iso(7)+'..'+iso(20),     active:true},
+    {id:uid(),name:'Marta Lindqvist',contact:'07700 900507',black:iso(59),                 active:true},
+    {id:uid(),name:'Tom Whitfield',  contact:'07700 900661',black:'',                      active:true},
+    {id:uid(),name:'Aisha Bello',    contact:'07700 900774',black:iso(35)+'..'+iso(38),    active:true},
+    {id:uid(),name:'Jon Petrelli',   contact:'07700 900903',black:'',                      active:true}
+  ];
+  st.hol=iso(25)+' = Public holiday (sample entry)\n'+iso(60)+' = Company shutdown (sample entry)';
+  return st;
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+}
+function load(){
+  var raw=null;
+  try{raw=localStorage.getItem(KEY);}catch(e){raw=null;}
+  if(!raw)return null;
+  try{
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return null;
+    return normalise(o);
+  }catch(e){return null;}
+}
+function normalise(o){
+  var b=blankState();
+  var st={
+    v:1, sample:!!o.sample,
+    org:{business:'',team:'',contact:'',esc:''},
+    rot:{},members:[],hol:typeof o.hol==='string'?o.hol:'',
+    ov:{},swaps:[],asAt:typeof o.asAt==='string'?o.asAt:''
+  };
+  if(o.org&&typeof o.org==='object'){
+    st.org.business=String(o.org.business||'');st.org.team=String(o.org.team||'');
+    st.org.contact=String(o.org.contact||'');st.org.esc=String(o.org.esc||'');
+  }
+  var r=(o.rot&&typeof o.rot==='object')?o.rot:{};
+  st.rot={
+    start:typeof r.start==='string'?r.start:b.rot.start,
+    time:typeof r.time==='string'?r.time:b.rot.time,
+    cad:(r.cad==='daily'||r.cad==='weekly'||r.cad==='fortnightly'||r.cad==='custom')?r.cad:'weekly',
+    step:Math.min(31,Math.max(1,intv(r.step,7))),
+    periods:Math.min(MAXSHIFTS,Math.max(1,intv(r.periods,8))),
+    wknd:WKSETS[r.wknd]?r.wknd:'satsun',
+    mode:(r.mode==='strict')?'strict':'balanced',
+    b2b:r.b2b!==false,
+    tz:typeof r.tz==='string'?r.tz:''
+  };
+  if(Object.prototype.toString.call(o.members)==='[object Array]'){
+    for(var i=0;i<o.members.length&&i<60;i++){
+      var m=o.members[i]||{};
+      st.members.push({id:typeof m.id==='string'&&m.id?m.id:uid(),
+        name:String(m.name||''),contact:String(m.contact||''),
+        black:String(m.black||''),active:m.active!==false});
+    }
+  }
+  if(!st.members.length)st.members=b.members;
+  if(o.ov&&typeof o.ov==='object'){
+    for(var k in o.ov){if(Object.prototype.hasOwnProperty.call(o.ov,k)){
+      var val=o.ov[k];if(typeof val==='string')st.ov[k]=val;}}
+  }
+  if(Object.prototype.toString.call(o.swaps)==='[object Array]'){
+    for(var j=0;j<o.swaps.length&&j<400;j++){
+      var w=o.swaps[j]||{};
+      var legs=[];
+      if(Object.prototype.toString.call(w.legs)==='[object Array]'){
+        for(var q=0;q<w.legs.length&&q<2;q++){
+          var lg=w.legs[q]||{};
+          legs.push({date:String(lg.date||''),no:intv(lg.no,0),
+            label:String(lg.label||''),from:String(lg.from||''),to:String(lg.to||'')});
+        }
+      }
+      if(legs.length)st.swaps.push({ts:String(w.ts||''),
+        type:(w.type==='swap'?'swap':'cover'),legs:legs,note:String(w.note||'')});
+    }
+  }
+  return st;
+}
+
+/* ── parsing: blackout dates & holidays ────────────────────────── */
+function parseBlackout(txt){
+  var res={set:{},count:0,err:''};
+  var parts=String(txt||'').split(/[,;\n]+/);
+  for(var i=0;i<parts.length;i++){
+    var raw=parts[i].replace(/\s+/g,'');
+    if(!raw)continue;
+    var seg=raw.split('..');
+    if(seg.length===1){
+      var d=dparse(seg[0]);
+      if(!d){res.err='"'+parts[i].trim()+'" is not a date — use YYYY-MM-DD';return res;}
+      if(!res.set[diso(d)]){res.set[diso(d)]=1;res.count++;}
+    }else if(seg.length===2){
+      var a=dparse(seg[0]),b=dparse(seg[1]);
+      if(!a||!b){res.err='"'+parts[i].trim()+'" is not a valid range — use YYYY-MM-DD..YYYY-MM-DD';return res;}
+      var span=Math.round((b-a)/86400000);
+      if(span<0){res.err='range "'+parts[i].trim()+'" ends before it starts';return res;}
+      if(span>730){res.err='range "'+parts[i].trim()+'" is longer than two years';return res;}
+      for(var k=0;k<=span;k++){
+        var iso=diso(dadd(a,k));
+        if(!res.set[iso]){res.set[iso]=1;res.count++;}
+      }
+    }else{
+      res.err='"'+parts[i].trim()+'" is not a date or a range';return res;
+    }
+  }
+  return res;
+}
+function parseHolidays(txt){
+  var res={map:{},list:[],err:''};
+  var lines=String(txt||'').split(/[\n;,]+/);
+  for(var i=0;i<lines.length;i++){
+    var ln=lines[i].trim();
+    if(!ln)continue;
+    var eq=ln.indexOf('=');
+    var ds=eq>=0?ln.slice(0,eq).trim():ln;
+    var nm=eq>=0?ln.slice(eq+1).trim():'';
+    var d=dparse(ds);
+    if(!d){res.err='"'+ln+'" is not a date — use YYYY-MM-DD, one per line';return res;}
+    var iso=diso(d);
+    if(!res.map[iso]){res.map[iso]=nm||'Public holiday';res.list.push({iso:iso,d:d,name:res.map[iso]});}
+  }
+  res.list.sort(function(a,b){return a.d-b.d;});
+  return res;
+}
+
+/* ── the model ─────────────────────────────────────────────────── */
+function build(){
+  var M={ok:false,problems:[],shifts:[],mem:[],rota:[],hol:null,
+         step:0,periods:0,startDT:null,endDT:null,wkDays:[],
+         fair:[],totShifts:0,gaps:0,spread:0,wspread:0,hspread:0,target:0};
+
+  var hp=parseHolidays(S.hol);
+  M.hol=hp;
+
+  var wk=WKSETS[S.rot.wknd]||WKSETS.satsun;
+  M.wkDays=wk;
+
+  /* members on the rota, in rota order */
+  for(var i=0;i<S.members.length;i++){
+    var m=S.members[i];
+    var bp=parseBlackout(m.black);
+    var row={id:m.id,idx:i,name:(m.name||'').trim(),contact:(m.contact||'').trim(),
+      active:!!m.active,black:bp.set,blackCount:bp.count,blackErr:bp.err,
+      shifts:0,days:0,wkd:0,hold:0,onRota:false};
+    row.onRota=row.active&&row.name!=='';
+    M.mem.push(row);
+  }
+  M.rota=M.mem.filter(function(r){return r.onRota;});
+
+  /* period */
+  var sd=dparse(S.rot.start);
+  var tm=tparse(S.rot.time);
+  var step=S.rot.cad==='custom'?Math.min(31,Math.max(1,intv(S.rot.step,7))):CAD[S.rot.cad];
+  var periods=Math.min(MAXSHIFTS,Math.max(1,intv(S.rot.periods,8)));
+  M.step=step;M.periods=periods;
+  if(!sd)M.problems.push('start');
+  if(!tm)M.problems.push('time');
+  if(!M.rota.length)M.problems.push('team');
+  if(!sd||!tm)return M;
+
+  var base=new Date(sd.getFullYear(),sd.getMonth(),sd.getDate(),tm.h,tm.m,0,0);
+  M.startDT=base;
+
+  /* shift windows: shift i runs from base+i*step days to base+(i+1)*step days,
+     and covers the `step` calendar days beginning on its start date. */
+  for(var s=0;s<periods;s++){
+    var st=dadd(base,s*step), en=dadd(base,(s+1)*step);
+    var days=[],wkd=0,hold=0,holNames=[];
+    for(var d=0;d<step;d++){
+      var day=dadd(base,s*step+d);
+      var iso=diso(day);
+      days.push(iso);
+      if(wk.indexOf(day.getDay())>=0)wkd++;
+      if(hp.map[iso]){hold++;holNames.push(hp.map[iso]);}
+    }
+    M.shifts.push({no:s+1,start:st,end:en,startISO:diso(st),endISO:diso(en),
+      days:days,wkd:wkd,hold:hold,holNames:holNames,base:-1,fin:-1,src:'auto'});
+  }
+  M.endDT=M.shifts.length?M.shifts[M.shifts.length-1].end:base;
+  if(!M.rota.length)return M;
+
+  /* ── round-robin allocation ─────────────────────────────────── */
+  var n=M.rota.length,counts=[],k;
+  for(k=0;k<n;k++)counts.push(0);
+  var ptr=0,prev=-1;
+  for(var q=0;q<M.shifts.length;q++){
+    var sh=M.shifts[q],cand=[];
+    for(k=0;k<n;k++){
+      var idx=(ptr+k)%n;
+      if(free(M.rota[idx],sh))cand.push(idx);
+    }
+    if(!cand.length){sh.base=-1;prev=-1;continue;}
+    var pick=choose(cand,counts,S.rot.mode);
+    if(S.rot.b2b&&pick===prev&&cand.length>1){
+      var alt=[];
+      for(k=0;k<cand.length;k++)if(cand[k]!==prev)alt.push(cand[k]);
+      pick=choose(alt,counts,S.rot.mode);
+    }
+    sh.base=pick;counts[pick]++;ptr=(pick+1)%n;prev=pick;
+  }
+
+  /* ── manual overrides & swaps, applied on top ────────────────── */
+  for(var z=0;z<M.shifts.length;z++){
+    var sf=M.shifts[z];
+    sf.fin=sf.base;sf.src='auto';
+    var o=S.ov[sf.startISO];
+    if(typeof o==='string'&&o!==''){
+      if(o==='-'){sf.fin=-1;sf.src='manual';}
+      else{
+        var f=-1;
+        for(k=0;k<M.rota.length;k++)if(M.rota[k].id===o)f=k;
+        if(f>=0){sf.fin=f;sf.src=(f===sf.base?'auto':'manual');}
+      }
+    }
+    if(sf.fin<0)M.gaps++;
+  }
+
+  /* ── fairness, measured on the final (post-swap) allocation ──── */
+  for(var y=0;y<M.shifts.length;y++){
+    var s2=M.shifts[y];
+    if(s2.fin<0)continue;
+    var r=M.rota[s2.fin];
+    r.shifts++;r.days+=s2.days.length;r.wkd+=s2.wkd;r.hold+=s2.hold;
+    M.totShifts++;
+  }
+  var mins=null,maxs=null,minw=null,maxw=null,minh=null,maxh=null;
+  for(k=0;k<M.rota.length;k++){
+    var rr=M.rota[k];
+    if(mins===null||rr.shifts<mins)mins=rr.shifts;
+    if(maxs===null||rr.shifts>maxs)maxs=rr.shifts;
+    if(minw===null||rr.wkd<minw)minw=rr.wkd;
+    if(maxw===null||rr.wkd>maxw)maxw=rr.wkd;
+    if(minh===null||rr.hold<minh)minh=rr.hold;
+    if(maxh===null||rr.hold>maxh)maxh=rr.hold;
+  }
+  M.spread=(maxs===null)?0:maxs-mins;
+  M.wspread=(maxw===null)?0:maxw-minw;
+  M.hspread=(maxh===null)?0:maxh-minh;
+  M.target=M.rota.length?M.shifts.length/M.rota.length:0;
+  M.maxShifts=maxs||0;
+  M.ok=true;
+  return M;
+}
+function free(r,sh){
+  for(var i=0;i<sh.days.length;i++)if(r.black[sh.days[i]])return false;
+  return true;
+}
+function choose(cand,counts,mode){
+  if(mode==='strict')return cand[0];
+  var best=cand[0];
+  for(var j=1;j<cand.length;j++)if(counts[cand[j]]<counts[best])best=cand[j];
+  return best;
+}
+
+/* ── "as at" moment ────────────────────────────────────────────── */
+function asAtDate(){
+  if(S.asAt){
+    var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(S.asAt);
+    if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],0,0);
+  }
+  return new Date();
+}
+function positions(M,now){
+  var p={cur:-1,next:-1,state:'none'};
+  if(!M.shifts.length)return p;
+  if(now<M.shifts[0].start){p.state='before';p.next=0;return p;}
+  if(now>=M.shifts[M.shifts.length-1].end){p.state='after';return p;}
+  for(var i=0;i<M.shifts.length;i++){
+    if(now>=M.shifts[i].start&&now<M.shifts[i].end){
+      p.cur=i;p.next=(i+1<M.shifts.length)?i+1:-1;p.state='in';return p;
+    }
+  }
+  return p;
+}
