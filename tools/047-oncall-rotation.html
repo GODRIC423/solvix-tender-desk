@@ -901,3 +901,322 @@ function positions(M,now){
   }
   return p;
 }
+
+/* ══ rendering ════════════════════════════════════════════════════ */
+var M=null;
+
+function nameOf(M,i){return (i>=0&&M.rota[i])?M.rota[i].name:'';}
+
+function renderAll(opts){
+  opts=opts||{};
+  M=build();
+  var focusId=document.activeElement?document.activeElement.id:'';
+  validate();
+  paintNow();
+  renderFair();
+  renderSchedule();
+  renderSwaps();
+  renderTeamMeta();
+  renderMisc();
+  buildPrintDoc();
+  if(focusId&&/^sel-/.test(focusId)){
+    var el=document.getElementById(focusId);
+    if(el&&el.focus)el.focus();
+  }
+  if(!opts.noSave)save();
+}
+
+function validate(){
+  var sd=dparse(S.rot.start),tm=tparse(S.rot.time);
+  setErr($('#eStart'),sd?'':'Enter a valid start date.');mark($('#iStart'),!sd);
+  setErr($('#eTime'),tm?'':'Enter a valid handover time (HH:MM).');mark($('#iTime'),!tm);
+  var per=intv(S.rot.periods,0);
+  var perBad=!(per>=1&&per<=MAXSHIFTS);
+  setErr($('#ePeriods'),perBad?('Enter a whole number of shifts, 1 to '+MAXSHIFTS+'.'):'');
+  mark($('#iPeriods'),perBad);
+  var stBad=false;
+  if(S.rot.cad==='custom'){var st=intv(S.rot.step,0);stBad=!(st>=1&&st<=31);}
+  setErr($('#eStep'),stBad?'Enter a whole number of days, 1 to 31.':'');mark($('#iStep'),stBad);
+  setErr($('#eHol'),M.hol.err||'');mark($('#iHol'),!!M.hol.err);
+}
+
+function paintNow(){
+  if(!M)return;
+  var now=asAtDate();
+  var p=positions(M,now);
+  var kEl=$('#sNowK'),vEl=$('#sNow'),subEl=$('#sNowSub');
+  var handV=$('#sHand'),handS=$('#sHandSub'),nx=$('#sNext'),nxS=$('#sNextSub');
+  var tz=S.rot.tz?(' · '+S.rot.tz):'';
+
+  if(!M.shifts.length||!M.rota.length){
+    kEl.textContent='On call now';
+    vEl.textContent='—';
+    subEl.textContent=!M.rota.length?'Add at least one person with a name to the rota.'
+      :'Set a valid start date and handover time.';
+    handV.textContent='—';handS.textContent='—';
+    nx.textContent='—';nxS.textContent='—';
+  }else if(p.state==='before'){
+    var f=M.shifts[0];
+    kEl.textContent='On call from '+fmtDshort(f.start);
+    vEl.textContent=f.fin>=0?nameOf(M,f.fin):'Not covered';
+    subEl.textContent=(f.fin>=0&&M.rota[f.fin].contact?M.rota[f.fin].contact+' · ':'')+
+      'rota starts '+fmtDT(f.start)+tz;
+    handV.textContent=dur(f.start-now);
+    handS.textContent='First handover '+fmtDT(f.start);
+    var n2=M.shifts[1];
+    nx.textContent=n2?(n2.fin>=0?nameOf(M,n2.fin):'Not covered'):'—';
+    nxS.textContent=n2?('from '+fmtDT(n2.start)):'Only one shift generated';
+  }else if(p.state==='after'){
+    kEl.textContent='Rota ended';
+    vEl.textContent='—';
+    subEl.textContent='The last shift ended '+fmtDT(M.shifts[M.shifts.length-1].end)+
+      '. Extend the rota by generating more shifts.';
+    handV.textContent='—';handS.textContent='No handover scheduled';
+    nx.textContent='—';nxS.textContent='—';
+  }else{
+    var c=M.shifts[p.cur];
+    kEl.textContent='On call now';
+    vEl.textContent=c.fin>=0?nameOf(M,c.fin):'Not covered';
+    subEl.textContent=(c.fin>=0&&M.rota[c.fin].contact?M.rota[c.fin].contact+' · ':'')+
+      'shift '+c.no+' since '+fmtDT(c.start)+tz;
+    handV.textContent=dur(c.end-now);
+    handS.textContent=fmtDT(c.end)+tz;
+    var nn=p.next>=0?M.shifts[p.next]:null;
+    nx.textContent=nn?(nn.fin>=0?nameOf(M,nn.fin):'Not covered'):'—';
+    nxS.textContent=nn?((nn.fin>=0&&M.rota[nn.fin].contact?M.rota[nn.fin].contact+' · ':'')+
+      'shift '+nn.no):'Last shift of the rota';
+  }
+
+  var gapBox=$('#sGapBox');
+  $('#sGap').textContent=M.rota.length?String(M.gaps):'—';
+  $('#sGapSub').textContent=!M.rota.length?'—':(M.gaps?
+    'nobody is available — check blackout dates':'every shift has a named person');
+  gapBox.className='stat'+(M.rota.length?(M.gaps?' flagbad':' flagok'):'');
+
+  var fairBox=$('#sFairBox');
+  $('#sFair').textContent=M.rota.length?String(M.spread):'—';
+  $('#sFairSub').textContent=!M.rota.length?'—':(M.spread===0?'identical shift counts':
+    'shifts between busiest and quietest');
+  fairBox.className='stat'+(M.rota.length?(M.spread<=1?' flagok':(M.spread<=2?'':' flagbad')):'');
+
+  /* row highlights */
+  for(var i=0;i<M.shifts.length;i++){
+    var tr=document.getElementById('row-'+i);
+    if(!tr)continue;
+    tr.className=(i===p.cur?'isnow ':'')+(M.shifts[i].fin<0?'gap':'');
+    var stc=document.getElementById('st-'+i);
+    if(stc)stc.innerHTML=statusTags(M.shifts[i],i,p,now);
+  }
+}
+
+function statusTags(sh,i,p,now){
+  var t=[];
+  if(i===p.cur)t.push('<span class="tag now">On call now</span>');
+  else if(i===p.next)t.push('<span class="tag next">Next</span>');
+  else if(sh.end<=now)t.push('<span class="tag past">Done</span>');
+  if(sh.fin<0)t.push('<span class="tag gp">Uncovered</span>');
+  if(sh.src==='manual')t.push('<span class="tag sw">Manual</span>');
+  if(sh.hold>0)t.push('<span class="tag hol">Hol &times;'+sh.hold+'</span>');
+  return '<span class="tags">'+(t.join('')||'<span class="tag past">Scheduled</span>')+'</span>';
+}
+
+function renderFair(){
+  var host=$('#fairList');
+  if(!M.rota.length){
+    host.innerHTML='<p class="empty">Add people to the rota to see the split.</p>';
+    $('#fairChip').textContent='no team';$('#fairChip').className='chip';
+    $('#fShifts').textContent='—';$('#fTarget').textContent='—';
+    $('#fSpread').textContent='—';$('#fWspread').textContent='—';$('#fHspread').textContent='—';
+    return;
+  }
+  var maxS=M.maxShifts||1,h=[];
+  var tgt=M.target;
+  for(var i=0;i<M.rota.length;i++){
+    var r=M.rota[i];
+    var pct=Math.round((r.shifts/maxS)*100);
+    var cls=r.shifts>Math.ceil(tgt)?' hi':(r.shifts<Math.floor(tgt)?' lo':'');
+    var share=M.totShifts?((r.shifts/M.totShifts)*100).toFixed(1):'0.0';
+    h.push('<div class="kv"><div class="nm">'+esc(r.name)+'</div>'+
+      '<div class="nums">'+r.shifts+' shift'+(r.shifts===1?'':'s')+' · '+r.days+' d</div>'+
+      '<div class="bar"><i class="'+cls.trim()+'" style="width:'+pct+'%"></i></div>'+
+      '<div class="sub">'+r.wkd+' weekend day'+(r.wkd===1?'':'s')+' · '+r.hold+
+      ' holiday day'+(r.hold===1?'':'s')+' · '+share+'% of shifts'+
+      (r.blackCount?' · '+r.blackCount+' blackout day'+(r.blackCount===1?'':'s'):'')+'</div></div>');
+  }
+  host.innerHTML=h.join('');
+  $('#fShifts').textContent=M.totShifts+' of '+M.shifts.length;
+  $('#fTarget').textContent=(Math.round(tgt*100)/100).toFixed(2)+' each';
+  $('#fSpread').textContent=M.spread;
+  $('#fWspread').textContent=M.wspread+' day'+(M.wspread===1?'':'s');
+  $('#fHspread').textContent=M.hspread+' day'+(M.hspread===1?'':'s');
+  $('#fSpread').className='v '+(M.spread<=1?'ok':(M.spread<=2?'warn':'bad'));
+  var wkPerShift=0;
+  for(var q=0;q<M.shifts.length;q++)if(M.shifts[q].wkd>wkPerShift)wkPerShift=M.shifts[q].wkd;
+  $('#fWspread').className='v '+(M.wspread<=Math.max(1,wkPerShift)?'ok':'warn');
+  $('#fHspread').className='v '+(M.hspread<=1?'ok':'warn');
+  var chip=$('#fairChip');
+  if(M.spread<=1){chip.textContent='Even split';chip.className='chip ok';}
+  else if(M.spread<=2){chip.textContent='Slightly uneven';chip.className='chip warn';}
+  else{chip.textContent='Uneven — review';chip.className='chip bad';}
+}
+
+function renderSchedule(){
+  var body=$('#schedBody');
+  if(!M.shifts.length||!M.rota.length){
+    body.innerHTML='<tr><td colspan="9"><p class="empty">'+
+      (!M.rota.length?'Add at least one person with a name, then the rota builds itself.'
+        :'Set a valid start date and handover time.')+'</p></td></tr>';
+    $('#schedChip').textContent='—';$('#schedChip').className='chip';
+    $('#schedFoot').textContent='—';
+    return;
+  }
+  var now=asAtDate(),p=positions(M,now),h=[];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i];
+    var r=s.fin>=0?M.rota[s.fin]:null;
+    var opts=['<option value=""'+(!S.ov[s.startISO]?' selected':'')+'>Auto — '+
+      esc(s.base>=0?nameOf(M,s.base):'nobody available')+'</option>'];
+    for(var k=0;k<M.rota.length;k++){
+      opts.push('<option value="'+esc(M.rota[k].id)+'"'+
+        (S.ov[s.startISO]===M.rota[k].id?' selected':'')+'>'+esc(M.rota[k].name)+'</option>');
+    }
+    opts.push('<option value="-"'+(S.ov[s.startISO]==='-'?' selected':'')+'>&mdash; Nobody &mdash;</option>');
+    h.push('<tr id="row-'+i+'" class="'+(i===p.cur?'isnow ':'')+(s.fin<0?'gap':'')+'">'+
+      '<td class="n">'+s.no+'</td>'+
+      '<td class="dt"><span class="d1">'+esc(fmtD(s.start))+'</span><br><span class="d2">'+fmtT(s.start)+'</span></td>'+
+      '<td class="dt"><span class="d1">'+esc(fmtD(s.end))+'</span><br><span class="d2">'+fmtT(s.end)+'</span></td>'+
+      '<td class="n">'+s.days.length+'</td>'+
+      '<td class="n">'+s.wkd+'</td>'+
+      '<td class="n">'+s.hold+'</td>'+
+      '<td class="who">'+(r?('<span class="nm">'+esc(r.name)+'</span>'+
+        (r.contact?'<br><span class="ct">'+esc(r.contact)+'</span>':''))
+        :'<span class="nm" style="color:var(--bad)">Not covered</span>')+'</td>'+
+      '<td><label class="sr" for="sel-'+i+'">Assign shift '+s.no+'</label>'+
+        '<select id="sel-'+i+'" data-shift="'+i+'" class="asg">'+opts.join('')+'</select></td>'+
+      '<td id="st-'+i+'">'+statusTags(s,i,p,now)+'</td></tr>');
+  }
+  body.innerHTML=h.join('');
+  var chip=$('#schedChip');
+  chip.textContent=M.shifts.length+' shifts · '+M.step+' day'+(M.step===1?'':'s')+' each';
+  chip.className='chip';
+  var lastEnd=M.shifts[M.shifts.length-1].end;
+  $('#schedFoot').textContent='Rota runs '+fmtDT(M.startDT)+' to '+fmtDT(lastEnd)+
+    (S.rot.tz?(' ('+S.rot.tz+')'):'')+' · '+M.rota.length+' people on the rota · '+
+    'weekends counted as '+WKLABEL[S.rot.wknd]+' · '+M.hol.list.length+' holiday date'+
+    (M.hol.list.length===1?'':'s')+' entered.';
+  fillSwapSelects();
+}
+
+function fillSwapSelects(){
+  var a=$('#iSwapA'),b=$('#iSwapB');
+  var prevA=a.value,prevB=b.value,oa=[],ob=[];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i];
+    var lbl='Shift '+s.no+' — '+fmtDshort(s.start)+' — '+(s.fin>=0?nameOf(M,s.fin):'not covered');
+    oa.push('<option value="'+i+'">'+esc(lbl)+'</option>');
+    ob.push('<option value="'+i+'">'+esc(lbl)+'</option>');
+  }
+  a.innerHTML=oa.join('');b.innerHTML=ob.join('');
+  if(prevA&&a.querySelector('option[value="'+prevA+'"]'))a.value=prevA;
+  if(prevB&&b.querySelector('option[value="'+prevB+'"]'))b.value=prevB;
+  else if(M.shifts.length>1&&!prevB)b.value='1';
+}
+
+function renderSwaps(){
+  var body=$('#swapBody');
+  if(!S.swaps.length){
+    body.innerHTML='<tr><td colspan="7"><p class="empty">No swaps or cover changes recorded yet. '+
+      'Change the “Assign / cover” box on any shift, or use the swap panel above.</p></td></tr>';
+    $('#swapChip').textContent='none';$('#swapChip').className='chip';
+    return;
+  }
+  var h=[];
+  for(var i=0;i<S.swaps.length;i++){
+    var w=S.swaps[i],sh=[],was=[],now=[];
+    for(var k=0;k<w.legs.length;k++){
+      sh.push(esc(w.legs[k].label||('Shift '+w.legs[k].no)));
+      was.push(esc(w.legs[k].from||'Not covered'));
+      now.push(esc(w.legs[k].to||'Not covered'));
+    }
+    h.push('<tr><td class="mono" style="font-size:12px">'+esc(w.ts)+'</td>'+
+      '<td><span class="tag '+(w.type==='swap'?'sw':'')+'">'+(w.type==='swap'?'Swap':'Cover')+'</span></td>'+
+      '<td>'+sh.join('<br>')+'</td><td>'+was.join('<br>')+'</td><td>'+now.join('<br>')+'</td>'+
+      '<td>'+esc(w.note||'—')+'</td>'+
+      '<td><button type="button" class="rmbtn rmswap" data-i="'+i+'" '+
+      'title="Delete this log entry (it does not undo the change)" aria-label="Delete log entry '+(i+1)+'">&times;</button></td></tr>');
+  }
+  body.innerHTML=h.join('');
+  $('#swapChip').textContent=S.swaps.length+' recorded';
+  $('#swapChip').className='chip ok';
+}
+
+function renderTeam(){
+  var body=$('#memBody'),h=[];
+  for(var i=0;i<S.members.length;i++){
+    var m=S.members[i];
+    h.push('<tr data-i="'+i+'" class="'+(m.active?'':'inact')+'">'+
+      '<td class="n">'+(i+1)+'</td>'+
+      '<td><label class="sr" for="mn-'+i+'">Name of person '+(i+1)+'</label>'+
+        '<input id="mn-'+i+'" type="text" class="mname" data-i="'+i+'" value="'+esc(m.name)+'" placeholder="Full name"></td>'+
+      '<td><label class="sr" for="mc-'+i+'">Contact for person '+(i+1)+'</label>'+
+        '<input id="mc-'+i+'" type="text" class="mcontact" data-i="'+i+'" value="'+esc(m.contact)+'" placeholder="Phone or email"></td>'+
+      '<td><label class="sr" for="mb-'+i+'">Blackout dates for person '+(i+1)+'</label>'+
+        '<input id="mb-'+i+'" type="text" class="mblack bl" data-i="'+i+'" value="'+esc(m.black)+'" '+
+        'placeholder="2026-04-06, 2026-04-13..2026-04-20" spellcheck="false">'+
+        '<div class="blmeta" id="bm-'+i+'"></div></td>'+
+      '<td class="c"><label class="sr" for="ma-'+i+'">Person '+(i+1)+' is on the rota</label>'+
+        '<input id="ma-'+i+'" type="checkbox" class="mactive" data-i="'+i+'" '+(m.active?'checked':'')+
+        ' style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td><button type="button" class="rmbtn mup" data-i="'+i+'" aria-label="Move '+(i+1)+' up" title="Move up">&uarr;</button> '+
+        '<button type="button" class="rmbtn mdn" data-i="'+i+'" aria-label="Move '+(i+1)+' down" title="Move down">&darr;</button></td>'+
+      '<td><button type="button" class="rmbtn mrm" data-i="'+i+'" aria-label="Remove person '+(i+1)+'" title="Remove">&times;</button></td></tr>');
+  }
+  body.innerHTML=h.join('');
+}
+
+function renderTeamMeta(){
+  for(var i=0;i<M.mem.length;i++){
+    var r=M.mem[i],el=document.getElementById('bm-'+i),inp=document.getElementById('mb-'+i);
+    if(!el)continue;
+    if(r.blackErr){el.textContent=r.blackErr;el.className='blmeta bad';mark(inp,true);}
+    else{
+      el.className='blmeta';
+      el.textContent=r.blackCount?(r.blackCount+' day'+(r.blackCount===1?'':'s')+' unavailable'):'';
+      mark(inp,false);
+    }
+    var tr=el.closest('tr');
+    if(tr)tr.className=(S.members[i]&&S.members[i].active)?'':'inact';
+  }
+  var on=M.rota.length,tot=S.members.length;
+  var chip=$('#memChip');
+  chip.textContent=on+' of '+tot+' on rota';
+  chip.className='chip'+(on?' ok':' bad');
+}
+
+function renderMisc(){
+  $('#holChip').textContent=M.hol.err?'check dates':(M.hol.list.length+' date'+(M.hol.list.length===1?'':'s'));
+  $('#holChip').className='chip'+(M.hol.err?' bad':'');
+  $('#sampleBanner').hidden=!S.sample;
+  var st=dparse(S.rot.start);
+  if(st&&M.shifts.length){
+    $('#rangeHint').textContent='Handover on a '+DOWL[M.startDT.getDay()]+' at '+fmtT(M.startDT)+
+      '. '+M.shifts.length+' shifts of '+M.step+' day'+(M.step===1?'':'s')+' cover '+
+      fmtD(M.startDT)+' to '+fmtD(dadd(M.startDT,M.shifts.length*M.step-1))+' ('+
+      (M.shifts.length*M.step)+' days).';
+  }else{
+    $('#rangeHint').textContent='Enter a valid start date and handover time to generate the rota.';
+  }
+  $('#methodNote').innerHTML='Shift <em>i</em> starts at the first handover date and time plus '+
+    '<em>i</em> &times; the shift length, and ends when the next shift starts; it covers exactly that '+
+    'many calendar days beginning on its start date, and those days are what the weekend, public-holiday '+
+    'and blackout counts are measured on. Allocation walks the rota in order from the person after the '+
+    'last one picked, skips anyone whose blackout dates touch the shift, and'+
+    (S.rot.mode==='balanced'?' gives the shift to whichever available person has fewest shifts so far, '+
+      'ties going to whoever is next in rota order':' gives the shift to the first available person in that order')+
+    (S.rot.b2b?', avoiding two shifts in a row for the same person where someone else is free':'')+
+    '. Manual assignments and recorded swaps are applied on top and are what the fairness report counts. '+
+    'Weekend days are '+WKLABEL[S.rot.wknd]+'; public holidays are only the dates you enter. All times are '+
+    'local wall-clock times'+(S.rot.tz?(' for '+esc(S.rot.tz)):'')+
+    ' with no daylight-saving conversion applied. Data is saved only in this browser. '+
+    'Not legal, employment or working-time advice.';
+}

@@ -179,6 +179,10 @@ body{padding-bottom:0}
   display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
 .appbar .row{gap:6px}
 .split>*,.stack>*,.card>.bd,.card>.hd,.card>.ft,.build,.fg>*{min-width:0}
+/* the sticky summary travels within its column; anything below it must paint on top
+   so it never swallows clicks on the cards that follow */
+#colResults>.card.sticky{z-index:1}
+#colResults>.card:not(.sticky){position:relative;z-index:2;background:var(--surface)}
 .card{min-width:0;overflow:hidden}
 .tw{max-width:100%}
 .spacer{height:14px}
@@ -1116,18 +1120,25 @@ function download(name,mime,text){
 }
 function csvCell(v){ v=(v==null)?'':String(v);
   return /[",\r\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+/* CSV numbers carry no thousands separators so spreadsheets read them as numbers */
+function rnum(v,dp){
+  if(v==null||typeof v!=='number'||!isFinite(v)) return '';
+  var x=(v===0?0:v), s=x.toFixed(dp);
+  if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
 function toCSV(){
   var R=compute(), T=S.trailer, P=S.pallet, rows=[];
   rows.push(['Solvix Pallet & Trailer Load Planner']);
   rows.push(['Reference',S.ref],['Ship date',S.date],['Shipper',S.shipper],['Consignee',S.consignee],
             ['Planned by',S.planner],['Units',isMet()?'metric (cm / kg)':'imperial (in / lb)'],['Generated',todayISO()]);
   rows.push([]);
-  rows.push(['Pallet','size',palletName(),'length ('+uLen()+')',fnum(dLen(P.L),3),'width ('+uLen()+')',fnum(dLen(P.W),3)]);
-  rows.push(['Pallet','deck height ('+uLen()+')',fnum(dLen(P.deck),3),'tare ('+uWt()+')',fnum(dWt(P.tare),2),
-             'overhang per side ('+uLen()+')',fnum(dLen(P.overhang),3)]);
-  rows.push(['Pallet','max load height ('+uLen()+')',fnum(dLen(P.maxH),3),'max stack weight ('+uWt()+')',fnum(dWt(P.maxWt),2)]);
-  rows.push(['Trailer',trailerName(),'internal L ('+uLen()+')',fnum(dLen(T.L),3),'W',fnum(dLen(T.W),3),'H',fnum(dLen(T.H),3),
-             'payload ('+uWt()+')',fnum(dWt(T.payload),2)]);
+  rows.push(['Pallet','size',palletName(),'length ('+uLen()+')',rnum(dLen(P.L),3),'width ('+uLen()+')',rnum(dLen(P.W),3)]);
+  rows.push(['Pallet','deck height ('+uLen()+')',rnum(dLen(P.deck),3),'tare ('+uWt()+')',rnum(dWt(P.tare),2),
+             'overhang per side ('+uLen()+')',rnum(dLen(P.overhang),3)]);
+  rows.push(['Pallet','max load height ('+uLen()+')',rnum(dLen(P.maxH),3),'max stack weight ('+uWt()+')',rnum(dWt(P.maxWt),2)]);
+  rows.push(['Trailer',trailerName(),'internal L ('+uLen()+')',rnum(dLen(T.L),3),'W',rnum(dLen(T.W),3),'H',rnum(dLen(T.H),3),
+             'payload ('+uWt()+')',rnum(dWt(T.payload),2)]);
   rows.push(['Trailer','floor pattern',R.posLabel,'positions',R.positions,'tiers',R.tiers,
              'straight',R.straight,'turned',R.turned]);
   rows.push([]);
@@ -1136,17 +1147,17 @@ function toCSV(){
              'Loaded height ('+uLen()+')','Gross per pallet ('+uWt()+')','Line weight ('+uWt()+')','Limited by']);
   R.lines.forEach(function(l,i){
     var s=l.s;
-    rows.push([i+1,s.desc,fnum(dLen(s.L),3),fnum(dLen(s.W),3),fnum(dLen(s.H),3),fnum(dWt(s.wt),3),s.qty,
+    rows.push([i+1,s.desc,rnum(dLen(s.L),3),rnum(dLen(s.W),3),rnum(dLen(s.H),3),rnum(dWt(s.wt),3),s.qty,
       (l.perLayer>0?l.fit.label:'no fit'),l.perLayer,l.layers,l.cpp,(l.pallets==null?'':l.pallets),l.full,l.rem,
-      (l.cpp?fnum(dLen(l.loadH),2):''),(l.cpp?fnum(dWt(l.gross),2):''),fnum(dWt(l.lineWt),2),l.limitedBy]);
+      (l.cpp?rnum(dLen(l.loadH),2):''),(l.cpp?rnum(dWt(l.gross),2):''),rnum(dWt(l.lineWt),2),l.limitedBy]);
   });
   rows.push([]);
-  rows.push(['Totals','cases',R.totalCases,'pallets',R.totalPallets,'weight ('+uWt()+')',fnum(dWt(R.totalWeight),2),
-             'volume ('+uVol()+')',fnum(dVol(R.totalCube),3)]);
+  rows.push(['Totals','cases',R.totalCases,'pallets',R.totalPallets,'weight ('+uWt()+')',rnum(dWt(R.totalWeight),2),
+             'volume ('+uVol()+')',rnum(dVol(R.totalCube),3)]);
   rows.push(['Capacity','positions per trailer',R.capacity,'trailers required',(R.trailersNeeded==null?'':R.trailersNeeded)]);
   R.trailers.forEach(function(t,i){
-    rows.push(['Trailer '+(i+1),'pallets',t.pallets.length,'weight ('+uWt()+')',fnum(dWt(t.wt),2),
-      'payload used %',fnum(pct(t.wt,T.payload),1)]);
+    rows.push(['Trailer '+(i+1),'pallets',t.pallets.length,'weight ('+uWt()+')',rnum(dWt(t.wt),2),
+      'payload used %',rnum(pct(t.wt,T.payload),1)]);
   });
   rows.push([]);
   rows.push(['Planning aid only. Does not check axle loads, weight distribution, securement (49 CFR 393 Subpart I), stacking strength or state weight limits.']);
