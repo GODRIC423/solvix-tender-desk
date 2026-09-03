@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Risk Assessment Builder — 5×5 hazard scoring with residual risk and control effectiveness</title>
+<meta name="description" content="Build a hazard-by-hazard risk assessment and score it properly. Each hazard records what could cause harm, who might be harmed and how, the controls already in place, then likelihood 1-5 and severity 1-5 give a risk score of likelihood x severity banded Low 1-4, Medium 5-9, High 10-16 and Extreme 17-25 with the required action for each band. Enter additional controls and a residual likelihood and severity and the tool shows whether the control actually moved the hazard down a band or not. Records assessor, role, assessment date, review date and the persons at risk, plots every hazard on a 5x5 matrix, flags extreme residual scores as not acceptable to proceed, saves assessments to this device and prints a full risk assessment document with sign-off. Exports CSV and JSON.">
+<meta name="theme-color" content="#B3261E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23B3261E'/%3E%3Cpath d='M16 5.5 29 27.5 H3 Z' fill='%23fff'/%3E%3Crect x='14.8' y='12' width='2.4' height='8.4' rx='1.2' fill='%23B3261E'/%3E%3Crect x='14.8' y='22.2' width='2.4' height='2.6' rx='1.2' fill='%23B3261E'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Risk Assessment Builder — Compliance & Safety ══════════════════ */
+:root{
+  --accent:#B3261E; --accent-ink:#8D1E17; --accent-wash:#FBE7E5; --on-accent:#fff;
+  --bl-bg:#E3F2EA; --bl-fg:#14603C; --bl-bd:#8CC4A6;
+  --bm-bg:#FBF0DC; --bm-fg:#845408; --bm-bd:#D9B265;
+  --bh-bg:#FBE1D1; --bh-fg:#98420C; --bh-bd:#E19A67;
+  --bx-bg:#B3261E; --bx-fg:#FFFFFF; --bx-bd:#8D1E17;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E56D66; --accent-ink:#F0918B; --accent-wash:#2C1614; --on-accent:#1A0B09;
+  --bl-bg:#12251B; --bl-fg:#59C48A; --bl-bd:#2C6045;
+  --bm-bg:#2A2113; --bm-fg:#DCAE5E; --bm-bd:#6A5326;
+  --bh-bg:#301A10; --bh-fg:#EC9160; --bh-bd:#70401F;
+  --bx-bg:#C4332B; --bx-fg:#FFFFFF; --bx-bd:#E56D66;
+}}
+:root[data-theme="dark"]{
+  --accent:#E56D66; --accent-ink:#F0918B; --accent-wash:#2C1614; --on-accent:#1A0B09;
+  --bl-bg:#12251B; --bl-fg:#59C48A; --bl-bd:#2C6045;
+  --bm-bg:#2A2113; --bm-fg:#DCAE5E; --bm-bd:#6A5326;
+  --bh-bg:#301A10; --bh-fg:#EC9160; --bh-bd:#70401F;
+  --bx-bg:#C4332B; --bx-fg:#FFFFFF; --bx-bd:#E56D66;
+}
+body{padding-bottom:10px}
+.app{padding-bottom:40px}
+.stack.gap{gap:14px}
+@media(max-width:900px){
+  .split{display:flex;flex-direction:column;gap:14px}
+  .split>.res{order:-1}
+  .sticky{position:static}
+}
+.res .sticky{max-height:calc(100vh - 78px);overflow:auto}
+@media(max-width:900px){.res .sticky{max-height:none;overflow:visible}}
+
+/* sample + notices */
+.samp{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--sunk);
+  border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;
+  padding:9px 12px;font-size:13px;color:var(--ink-2);margin:14px 0 0}
+.samp b{color:var(--ink)}
+.samp .btn{margin-left:auto}
+.discl{margin:14px 0 0}
+.discl h3{margin-bottom:4px;font-size:13px;letter-spacing:.02em;text-transform:uppercase}
+.discl p+p{margin-top:6px}
+
+/* small field helpers */
+.ta-s{min-height:54px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:620px){.g2,.g3{grid-template-columns:1fr}}
+.subhd{font:650 11px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);
+  display:flex;align-items:center;gap:8px}
+.subhd::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* persons at risk */
+.pchips{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:6px 12px}
+.pchips .check{font-size:13.5px}
+
+/* hazard cards */
+.haz{border:1px solid var(--line);border-radius:5px;background:var(--surface);overflow:hidden}
+.haz+.haz{margin-top:12px}
+.haz>.hh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:7px 10px;
+  background:var(--sunk);border-bottom:1px solid var(--line)}
+.haz>.hh .ref{font:700 12px/1 var(--mono);background:var(--accent);color:var(--on-accent);
+  padding:5px 7px;border-radius:3px;letter-spacing:.04em}
+.haz>.hh .nm{font:600 13px/1.3 var(--sans);color:var(--ink-2);margin-right:auto;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;min-width:60px}
+.haz>.hb{padding:12px;display:grid;gap:11px}
+.haz .mini{display:flex;gap:4px}
+.haz .mini .btn{padding:5px 7px;font:600 12px/1 var(--mono)}
+
+/* scoring strip */
+.sbox{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end;background:var(--sunk);
+  border:1px solid var(--line);border-radius:4px;padding:10px}
+.sbox.res{background:var(--accent-wash);border-color:var(--accent)}
+.sbox .f{flex:1 1 120px;min-width:104px}
+.sbox .eq{font:700 17px/1 var(--mono);color:var(--muted);padding-bottom:8px;flex:none}
+.sbox .out{flex:1 1 130px;display:flex;flex-direction:column;gap:4px;min-width:118px}
+.sbox .sc{font:700 21px/1 var(--mono);font-variant-numeric:tabular-nums}
+.sbox .sc small{font:400 12px/1 var(--sans);color:var(--muted)}
+.sbox select{font-size:13.5px;padding:7px 6px}
+
+/* band pills */
+.band{display:inline-flex;align-items:center;gap:5px;font:700 10.5px/1.15 var(--sans);
+  letter-spacing:.06em;text-transform:uppercase;padding:5px 7px;border-radius:3px;border:1px solid;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.b-l{background:var(--bl-bg);color:var(--bl-fg);border-color:var(--bl-bd)}
+.b-m{background:var(--bm-bg);color:var(--bm-fg);border-color:var(--bm-bd)}
+.b-h{background:var(--bh-bg);color:var(--bh-fg);border-color:var(--bh-bd)}
+.b-x{background:var(--bx-bg);color:var(--bx-fg);border-color:var(--bx-bd)}
+.b-n{background:var(--sunk);color:var(--muted);border-color:var(--line-hard)}
+.band.big{font-size:12px;padding:8px 10px;justify-content:center;width:100%}
+
+/* results */
+.res .stat.hero .v{font-size:34px}
+.res .stat.hero .v .of{font:400 14px/1 var(--sans);color:var(--muted)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0;
+  border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650}
+.bcount{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.bcount .bc{text-align:center;border:1px solid;border-radius:4px;padding:6px 3px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.bcount .bc .n{font:700 18px/1 var(--mono)}
+.bcount .bc .t{font:650 9px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;margin-top:3px}
+
+/* matrix */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 11.5px/1 var(--sans);padding:6px 10px;border:0;background:var(--raise);
+  color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+table.mx{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+table.mx th{padding:4px 2px;text-align:center;font-size:9.5px;letter-spacing:.04em;background:transparent;
+  border:0;color:var(--muted);white-space:normal}
+table.mx th.ax{writing-mode:horizontal-tb}
+table.mx td{padding:0;border:1px solid var(--surface);text-align:center;height:34px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.mx tbody tr:hover{background:transparent}
+table.mx td .cell{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:34px;gap:1px;border-radius:2px}
+table.mx td .s{font:600 10px/1 var(--mono);opacity:.62}
+table.mx td .c{font:700 13px/1 var(--mono)}
+table.mx td.on{outline:2px solid var(--ink);outline-offset:-2px}
+.mxleg{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45}
+
+/* register table */
+.reg td .h{font-weight:600}
+.reg td .w{color:var(--muted);font-size:12.5px;display:block;margin-top:2px}
+.reg .arrow{color:var(--muted);font-family:var(--mono)}
+.reg td.ct{white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:4px;font:650 10px/1 var(--sans);letter-spacing:.04em;
+  text-transform:uppercase;padding:4px 6px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.tag.dn{background:var(--bl-bg);color:var(--bl-fg)}
+.tag.same{background:var(--bm-bg);color:var(--bm-fg)}
+.tag.up{background:var(--bx-bg);color:var(--bx-fg)}
+
+/* reference tables */
+.reftbl td{font-size:13px;vertical-align:top}
+.reftbl td:first-child{white-space:nowrap}
+
+/* saved list */
+.svd{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--line);
+  border-radius:4px;padding:8px 10px;background:var(--raise)}
+.svd+.svd{margin-top:7px}
+.svd .nm{font-weight:600;font-size:13.5px;margin-right:auto;min-width:110px}
+.svd .mt{font:11.5px/1.3 var(--mono);color:var(--muted)}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(120%);
+  background:var(--ink);color:var(--bg);font:600 13px/1.3 var(--sans);padding:10px 15px;
+  border-radius:5px;box-shadow:var(--sh);z-index:90;max-width:min(92vw,460px);transition:transform .18s ease}
+#toast.on{transform:translateX(-50%) translateY(0)}
+
+/* print document */
+.ph{margin-bottom:6mm}
+.ph-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;
+  border-bottom:2.5px solid #000;padding-bottom:5px}
+.ph-org{font:700 17pt/1.1 var(--sans)}
+.ph-sub{font:11pt/1.3 var(--sans);color:#333;margin-top:2px}
+.ph-doc{font:700 10.5pt/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;margin-top:7px}
+.ph-r{text-align:right;font:9.5pt/1.5 var(--mono);white-space:nowrap}
+table.metat{width:100%;margin-top:5px;font-size:10pt}
+table.metat th{width:31%;background:#f2f2f2!important;font-size:8pt;padding:4px 7px;border:1px solid #bbb;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.metat td{padding:4px 7px;border:1px solid #bbb;font-size:10pt}
+.prec{border:1px solid #999;border-radius:3px;padding:7px 9px;margin-bottom:4mm;break-inside:avoid}
+.prec>.ph1{display:flex;gap:8px;align-items:baseline;border-bottom:1px solid #ccc;padding-bottom:4px;margin-bottom:5px}
+.prec>.ph1 .n{font:700 10pt/1 var(--mono);background:#000;color:#fff;padding:4px 5px;border-radius:2px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.prec>.ph1 .t{font:700 11pt/1.3 var(--sans)}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-bottom:5px}
+.pg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 12px}
+.pf .lbl{display:block;font-size:7.5pt;letter-spacing:.07em}
+.pf p{font-size:9.5pt;line-height:1.35;white-space:pre-wrap;margin-top:1px}
+.pscore{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;background:#f4f4f4;
+  border:1px solid #ddd;border-radius:3px;padding:5px 7px;margin:5px 0;font-size:9pt;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pscore .lb{font:650 7.5pt/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:#555}
+.pscore .eq{font-family:var(--mono);font-weight:700}
+.signgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+.signbox{border:1px solid #999;border-radius:3px;padding:6px 8px;min-height:22mm}
+.signbox .lbl{font-size:7.5pt}
+.signbox .ln{border-bottom:1px dotted #777;height:9mm;margin-top:3px}
+.signbox .nm{font-size:9.5pt;margin-top:3px}
+footer.ft{margin-top:18px;padding-top:11px;border-top:1px solid var(--line);
+  font-size:11.5px;line-height:1.55;color:var(--muted)}
+@media print{
+  body{font-size:10pt}
+  .samp,.seg,#toast{display:none!important}
+  .app{padding:0}
+  .card{margin-bottom:6mm}
+  .discl{border-left:3px solid #000;background:#f4f4f4!important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .res .sticky{max-height:none;overflow:visible;position:static}
+  .stat.hero{border:1.5px solid #000!important}
+  table.mx td{border-color:#fff}
+  .bcount .bc,.band,table.mx td .cell{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  footer.ft{color:#333;font-size:8.5pt}
+  .pagebreak{break-before:page}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">RA</div>
+    <div style="min-width:0">
+      <h1>Risk Assessment Builder</h1>
+      <div class="sub">5×5 MATRIX · RESIDUAL RISK</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn pri" id="btnAdd">+ Add hazard</button>
+    <button type="button" class="btn" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">JSON</button>
+    <button type="button" class="btn" id="btnImport">Import</button>
+    <input type="file" id="fileJson" accept="application/json,.json" hidden>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</header>
+
+<main class="app">
+
+  <!-- ══ printed document header ══ -->
+  <div class="printonly ph">
+    <div class="ph-top">
+      <div>
+        <div class="ph-org" id="pOrg">—</div>
+        <div class="ph-sub" id="pTitle">—</div>
+        <div class="ph-doc">Risk Assessment</div>
+      </div>
+      <div class="ph-r">
+        <div>Ref: <b id="pRef">—</b></div>
+        <div id="pPrinted">—</div>
+        <div id="pHazN">—</div>
+      </div>
+    </div>
+    <table class="metat">
+      <tbody>
+        <tr><th scope="row">Activity / task assessed</th><td id="pAct">—</td>
+            <th scope="row">Location / site</th><td id="pLoc">—</td></tr>
+        <tr><th scope="row">Assessor</th><td id="pAssessor">—</td>
+            <th scope="row">Assessment date</th><td id="pDate">—</td></tr>
+        <tr><th scope="row">Review due</th><td id="pReview">—</td>
+            <th scope="row">Overall residual risk</th><td id="pOverall">—</td></tr>
+        <tr><th scope="row">Persons at risk</th><td colspan="3" id="pPersons">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="samp noprint" id="sampleBar">
+    <b>Sample assessment loaded.</b>
+    <span>A ground-floor office strip-out and re-fit — edit it, or clear it and start from scratch.</span>
+    <button type="button" class="btn sm" id="btnBlank">Start a blank assessment</button>
+  </div>
+
+  <div class="note bad discl" id="disclaimer">
+    <h3>Read this before you rely on it</h3>
+    <p><strong>This tool records and scores a risk assessment. It does not carry out the assessment for you.</strong>
+    The hazards, the controls, and every likelihood and severity number are entered and judged by you. The tool only
+    multiplies, bands and totals what it is given — a low score here is not evidence that a risk is actually low.</p>
+    <p>It is not legal advice and it does not certify compliance with the Management of Health and Safety at Work
+    Regulations 1999, the Health and Safety at Work etc. Act 1974, or any other legislation in any country. A suitable
+    and sufficient assessment must be made by a <strong>competent person</strong> who knows the work, the site and the
+    people exposed, and must be reviewed when anything changes. Where a hazard is significant or specialist —
+    asbestos, confined spaces, explosive atmospheres, lifting operations, hazardous substances, machinery guarding —
+    take advice from a qualified health and safety professional before work starts.</p>
+  </div>
+
+  <div class="split" style="margin-top:14px">
+
+    <!-- ══ inputs ══ -->
+    <section class="stack gap">
+
+      <div class="card noprint">
+        <div class="hd"><h2>Assessment details</h2><span class="chip" id="statusChip">—</span></div>
+        <div class="bd stack" style="gap:12px">
+          <div class="g2">
+            <div class="f"><label for="fOrg">Organisation</label>
+              <input id="fOrg" data-m="org" type="text" autocomplete="organization" placeholder="Company name"></div>
+            <div class="f"><label for="fRef">Assessment reference</label>
+              <input id="fRef" data-m="ref" type="text" placeholder="RA-2026-014"></div>
+          </div>
+          <div class="f"><label for="fTitle">Assessment title</label>
+            <input id="fTitle" data-m="title" type="text" placeholder="e.g. Office refurbishment — strip-out and re-fit">
+            <div class="err" id="eTitle" hidden></div></div>
+          <div class="g2">
+            <div class="f"><label for="fAct">Activity / task assessed</label>
+              <input id="fAct" data-m="act" type="text" placeholder="What is being done"></div>
+            <div class="f"><label for="fLoc">Location / site</label>
+              <input id="fLoc" data-m="loc" type="text" placeholder="Where"></div>
+          </div>
+          <div class="g2">
+            <div class="f"><label for="fAssessor">Assessor</label>
+              <input id="fAssessor" data-m="assessor" type="text" autocomplete="name" placeholder="Name of competent person">
+              <div class="err" id="eAssessor" hidden></div></div>
+            <div class="f"><label for="fRole">Assessor role / competence</label>
+              <input id="fRole" data-m="role" type="text" placeholder="e.g. Site Manager, NEBOSH General Cert"></div>
+          </div>
+          <div class="g2">
+            <div class="f"><label for="fDate">Assessment date</label>
+              <input id="fDate" data-m="date" type="date"></div>
+            <div class="f"><label for="fReview">Review due</label>
+              <input id="fReview" data-m="review" type="date">
+              <div class="err" id="eReview" hidden></div>
+              <div class="hint" id="hReview"></div></div>
+          </div>
+          <fieldset>
+            <legend>Persons at risk</legend>
+            <div class="pchips" id="personsBox"></div>
+            <div class="f" style="margin-top:9px"><label for="fOther">Others (free text)</label>
+              <input id="fOther" data-m="other" type="text" placeholder="e.g. school pupils next door, night security"></div>
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="card noprint">
+        <div class="hd">
+          <h2>Hazards</h2>
+          <span class="chip" id="hazChip">0 hazards</span>
+          <label class="lbl" for="libSel" style="margin-left:auto">Add from library</label>
+          <select id="libSel" style="width:auto;max-width:220px"></select>
+        </div>
+        <div class="bd" id="hazList"></div>
+        <div class="ft noprint">
+          <button type="button" class="btn pri" id="btnAdd2">+ Add hazard</button>
+          <span class="hint" style="margin-left:auto">Score the risk as it is now, add controls, then score what is left.</span>
+        </div>
+      </div>
+
+      <div class="card noprint">
+        <div class="hd"><h2>Saved assessments</h2><span class="chip" id="savedChip">0 saved</span></div>
+        <div class="bd stack">
+          <div class="row">
+            <input type="text" id="saveName" placeholder="Name this version" style="flex:1 1 180px;width:auto">
+            <button type="button" class="btn" id="btnSave">Save to this device</button>
+          </div>
+          <div class="hint">Saved in this browser only, on this computer. Use JSON export to move an assessment to another machine or to back it up.</div>
+          <div id="savedList"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══ results ══ -->
+    <aside class="res">
+      <div class="card sticky">
+        <div class="hd"><h2>Risk summary</h2><span class="chip" id="matChip">—</span></div>
+        <div class="bd stack" style="gap:12px">
+
+          <div class="stat hero">
+            <div class="k">Highest residual risk score</div>
+            <div class="v"><span id="heroScore">—</span> <span class="of">of 25</span></div>
+          </div>
+          <div class="band big b-n" id="heroBand">NO HAZARDS SCORED</div>
+          <div class="note" id="verdict" style="font-size:13px">—</div>
+
+          <div>
+            <div class="subhd" style="margin-bottom:7px">Residual risk by band</div>
+            <div class="bcount" id="bandCounts"></div>
+          </div>
+
+          <div>
+            <div class="kv"><span class="k">Hazards assessed</span><span class="v" id="mHaz">—</span></div>
+            <div class="kv"><span class="k">Highest initial score</span><span class="v" id="mInit">—</span></div>
+            <div class="kv"><span class="k">Total risk before controls</span><span class="v" id="mSumI">—</span></div>
+            <div class="kv"><span class="k">Total risk after controls</span><span class="v" id="mSumR">—</span></div>
+            <div class="kv"><span class="k">Risk reduction</span><span class="v" id="mRed">—</span></div>
+            <div class="kv"><span class="k">Controls that moved the band</span><span class="v" id="mMoved">—</span></div>
+          </div>
+
+          <div class="note warn" id="notMoved" hidden style="font-size:12.5px"></div>
+
+          <div>
+            <div class="row" style="margin-bottom:7px">
+              <div class="subhd" style="flex:1">Risk matrix</div>
+              <div class="seg noprint" role="group" aria-label="Matrix view">
+                <button type="button" data-mv="initial" aria-pressed="false">Initial</button>
+                <button type="button" data-mv="residual" aria-pressed="true">Residual</button>
+              </div>
+            </div>
+            <div id="matrixWrap"></div>
+            <div class="mxleg" id="mxLeg"></div>
+          </div>
+
+        </div>
+        <div class="ft">
+          <span class="lbl">Assessment status</span>
+          <span class="chip" id="ftStatus" style="margin-left:auto">—</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ══ register ══ -->
+  <section class="card" style="margin-top:14px">
+    <div class="hd"><h2>Risk register</h2><span class="chip" id="regChip">—</span></div>
+    <div class="bd" style="padding:0">
+      <div class="tw noprint">
+        <table class="reg">
+          <thead><tr>
+            <th scope="col">Ref</th>
+            <th scope="col">Hazard / who might be harmed</th>
+            <th scope="col" class="n">Initial<br>L × S</th>
+            <th scope="col">Band</th>
+            <th scope="col" class="n">Residual<br>L × S</th>
+            <th scope="col">Band</th>
+            <th scope="col">Effect</th>
+            <th scope="col">Action by</th>
+            <th scope="col">Due</th>
+          </tr></thead>
+          <tbody id="regBody"></tbody>
+          <tfoot id="regFoot"></tfoot>
+        </table>
+      </div>
+      <div class="printonly" id="printReg" style="padding:0"></div>
+    </div>
+  </section>
+
+  <!-- ══ reference ══ -->
+  <section class="card" style="margin-top:14px">
+    <div class="hd"><h2>Scoring scale and required action</h2></div>
+    <div class="bd stack" style="gap:14px">
+      <div class="g2">
+        <div>
+          <div class="subhd" style="margin-bottom:6px">Likelihood (L)</div>
+          <div class="tw"><table class="reftbl"><tbody id="likTbl"></tbody></table></div>
+        </div>
+        <div>
+          <div class="subhd" style="margin-bottom:6px">Severity (S)</div>
+          <div class="tw"><table class="reftbl"><tbody id="sevTbl"></tbody></table></div>
+        </div>
+      </div>
+      <div>
+        <div class="subhd" style="margin-bottom:6px">Risk score = L × S — band and required action</div>
+        <div class="tw"><table class="reftbl">
+          <thead><tr><th scope="col">Band</th><th scope="col">Score</th><th scope="col">Risk level</th><th scope="col">Required action</th></tr></thead>
+          <tbody id="bandTbl"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ print sign-off ══ -->
+  <section class="printonly" style="margin-top:6mm">
+    <div class="subhd" style="margin-bottom:5px">Declaration and sign-off</div>
+    <p style="font-size:9.5pt;line-height:1.4">The assessor confirms that the hazards recorded above are those
+    reasonably foreseeable for this activity, that the existing controls listed were in place at the time of the
+    assessment, and that the additional controls will be implemented by the persons and dates shown. This assessment
+    must be reviewed by the review date, or sooner if the work, the people, the equipment or the location changes,
+    or following any accident, incident or near miss.</p>
+    <div class="signgrid">
+      <div class="signbox"><span class="lbl">Assessed by</span><div class="ln"></div>
+        <div class="nm" id="sgA">—</div><div class="nm" id="sgAD">—</div></div>
+      <div class="signbox"><span class="lbl">Reviewed / approved by</span><div class="ln"></div>
+        <div class="nm">Name &amp; position</div><div class="nm">Date</div></div>
+      <div class="signbox"><span class="lbl">Briefed to (team leader)</span><div class="ln"></div>
+        <div class="nm">Name</div><div class="nm">Date</div></div>
+    </div>
+  </section>
+
+  <footer class="ft">
+    <p><strong>Method.</strong> Risk score = likelihood (1–5) × severity (1–5), giving 1–25, banded
+    Low 1–4, Medium 5–9, High 10–16, Extreme 17–25. The residual score uses the likelihood and severity you judge
+    will remain once the additional controls are actually in place; the tool compares the two bands and reports
+    whether the control moved the hazard down a band, left it where it was, or made it worse. An extreme residual
+    score is flagged as not acceptable to proceed.</p>
+    <p style="margin-top:6px">The 5×5 matrix and these band thresholds are a widely used industry convention, not a
+    legal standard — HSE guidance INDG163 <em>Risk assessment: a brief guide</em> does not require a numerical matrix
+    at all. Check the bands and the required actions against your own organisation's health and safety policy before
+    issuing this document. Nothing is sent anywhere: all data stays in this browser on this device.</p>
+  </footer>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+(function(){
+var KEY='solvix.risk-assessment.v1';
+
+/* ── scales ────────────────────────────────────────────────────────── */
+var LIK=[
+ ['1','Rare','Highly unlikely to happen — would need several things to fail at once'],
+ ['2','Unlikely','Could happen, but only rarely'],
+ ['3','Possible','May happen occasionally'],
+ ['4','Likely','Will probably happen at some point'],
+ ['5','Almost certain','Expected to happen, frequently or repeatedly']];
+var SEV=[
+ ['1','Negligible','No injury, or minor discomfort — no first aid needed'],
+ ['2','Minor','Minor injury or ill health — first aid only, no time off'],
+ ['3','Moderate','Injury needing medical treatment, or up to 7 days off work'],
+ ['4','Major','Major or specified injury, over-7-day absence, RIDDOR reportable'],
+ ['5','Catastrophic','Fatality, permanent disability, or multiple major injuries']];
+var BANDS=[
+ {k:'l',name:'Low',lo:1,hi:4,level:'Acceptable',
+  act:'No further controls needed. Keep the existing controls in place, monitor them, and review if anything changes.'},
+ {k:'m',name:'Medium',lo:5,hi:9,level:'Tolerable',
+  act:'Reduce the risk further where reasonably practicable. Name a person responsible and a target date, and check the controls stay in place.'},
+ {k:'h',name:'High',lo:10,hi:16,level:'Substantial',
+  act:'Work must not start until the risk has been reduced. If the work is already under way, take urgent action. Significant resources may be needed.'},
+ {k:'x',name:'Extreme',lo:17,hi:25,level:'Intolerable',
+  act:'Work must not start or continue. Prohibit the activity until the risk is reduced. If it cannot be reduced, the work must not be done.'}];
+
+/* ── hazard library ────────────────────────────────────────────────── */
+var LIB=[
+ {n:'Work at height',h:'Falls from height while working from ladders, steps, podiums or a tower scaffold.',w:'Operatives working at height; anyone below struck by a falling person or object.',c:'Podium steps and towers in place of ladders; pre-use inspection; trained and competent users; exclusion zone below.',a:'Ban stepladders for work above 1.2 m; tower erected and inspected by a PASMA card holder; tool tethers; supervisor spot checks.',il:3,is:4,rl:2,rs:4},
+ {n:'Manual handling',h:'Musculoskeletal injury lifting, carrying or lowering heavy or awkward loads.',w:'Operatives and labourers; back, shoulder and hand injuries.',c:'Two-person lift for awkward loads; trolleys and sack barrows available; loads broken down where possible.',a:'Hire a panel lifter; 25 kg single-person limit enforced; manual handling refresher for all operatives; delivery placed close to point of use.',il:4,is:3,rl:2,rs:3},
+ {n:'Slips, trips and falls on the level',h:'Slips, trips and falls caused by trailing cables, debris, spills and uneven surfaces.',w:'All site personnel, cleaners, visitors and anyone passing through the work area.',c:'Daily housekeeping; cable covers; spill kit on site; work area barriered off.',a:'End-of-shift clearance signed off; dedicated waste route and skip; wet floor signs; task lighting in low-light areas.',il:3,is:2,rl:2,rs:2},
+ {n:'Electricity',h:'Electric shock, burns or arc flash from live circuits, damaged leads or unidentified cables.',w:'Electricians primarily; any operative cutting into walls, floors or ceiling voids.',c:'Safe isolation, lock-off and prove-dead before work; 110 V site transformers; PAT-tested tools.',a:'Permit to work for all live-side activity; cable detection scan before any penetration; competent electrically skilled person only; RCD protection on all supplies.',il:2,is:5,rl:1,rs:5},
+ {n:'Hazardous substances (COSHH)',h:'Exposure to hazardous substances — solvents, adhesives, cleaning chemicals, resins.',w:'Operatives handling or mixing; others nearby through vapour; skin and respiratory effects.',c:'COSHH assessments held for each product; safety data sheets on site; gloves and eye protection issued.',a:'Substitute low-VOC water-based products; mix in ventilated area only; nitrile gloves specified by SDS; eyewash station at point of use.',il:3,is:3,rl:2,rs:3},
+ {n:'Dust — silica and wood',h:'Inhalation of respirable crystalline silica or wood dust from cutting, drilling and chasing.',w:'Operatives cutting; adjacent trades and building occupants; long-term lung disease.',c:'On-tool M-class extraction; damp-down where practicable; area segregated.',a:'Cut outside or in a dedicated enclosure; FFP3 masks with face-fit testing recorded; health surveillance for regular users; no dry sweeping.',il:3,is:3,rl:2,rs:3},
+ {n:'Noise',h:'Hearing damage from prolonged or peak noise — cutting, breaking, percussive tools.',w:'Operatives using the equipment and anyone working nearby.',c:'Quieter equipment selected where available; hearing protection available.',a:'Noise assessment against the 80/85 dB action values; hearing protection zones signed; job rotation to limit exposure time; audiometry for regular users.',il:3,is:3,rl:2,rs:2},
+ {n:'Hand-arm vibration (HAVS)',h:'Hand-arm vibration syndrome and carpal tunnel from prolonged use of vibrating tools.',w:'Operatives using breakers, grinders, SDS drills and similar.',c:'Low-vibration tools where available; anti-vibration gloves; tools maintained.',a:'Trigger-time limits set from tool vibration magnitudes and recorded daily; task rotation; health surveillance; replace worst tools at next service.',il:3,is:3,rl:2,rs:3},
+ {n:'Moving vehicles and plant',h:'Being struck by reversing vehicles, plant or deliveries in the yard or loading bay.',w:'Operatives on foot, delivery drivers, visitors and members of the public.',c:'Marked pedestrian route; hi-vis worn at all times; deliveries booked in.',a:'Segregate vehicles and pedestrians with barriers; banksman for all reversing; 5 mph limit signed; deliveries outside working hours where possible.',il:3,is:5,rl:2,rs:5},
+ {n:'Machinery and power tools',h:'Cuts, entanglement or ejected material from powered hand tools and bench machinery.',w:'Operatives using the equipment; others nearby struck by ejected material.',c:'Guards fitted and in use; trained users only; pre-use checks; eye protection issued.',a:'Formal tool register with inspection dates; abrasive wheel changes by a trained person only; no defeating of guards — disciplinary matter; face shield for cutting.',il:3,is:4,rl:2,rs:4},
+ {n:'Fire',h:'Fire from hot works, electrical faults, flammable materials or accumulated waste.',w:'Everyone in the building, including occupants of adjacent areas unable to self-evacuate.',c:'Extinguishers in the work area; flammables stored in a metal cabinet; escape routes kept clear.',a:'Hot work permit with 60-minute fire watch; daily waste removal; fire alarm interface maintained and occupants briefed on the evacuation route; weekly fire point check.',il:2,is:5,rl:1,rs:5},
+ {n:'Confined space',h:'Entry into a confined space — risers, ducts, tanks and voids where the atmosphere may be unsafe.',w:'Entrants and the rescue team; asphyxiation, engulfment or loss of consciousness.',c:'Entry avoided wherever the work can be done from outside.',a:'Where entry is unavoidable: confined space permit, trained entrants, continuous gas monitoring, tripod and winch, and a rehearsed rescue plan independent of the emergency services.',il:2,is:5,rl:1,rs:5},
+ {n:'Lone working',h:'Lone worker injured, taken ill or threatened with nobody present to raise the alarm.',w:'The lone worker; delayed discovery makes any incident much worse.',c:'Check-in by phone at the start and end of the shift.',a:'Lone worker device or app with man-down alert; no high-risk task done alone (height, electrical, confined space); escalation procedure with named contacts and response times.',il:3,is:4,rl:2,rs:4},
+ {n:'Display screen equipment',h:'Musculoskeletal discomfort and eye strain from prolonged display screen work at a temporary desk.',w:'Office staff relocated to temporary workstations during the works.',c:'Adjustable chairs provided; screens at existing desks.',a:'DSE self-assessment completed for every temporary position; monitor risers and separate keyboards issued; regular break routine communicated; eye test on request.',il:4,is:2,rl:2,rs:2},
+ {n:'Asbestos',h:'Disturbing asbestos-containing materials in a building constructed or refurbished before 2000.',w:'All operatives, building occupants and their families through fibre carry-over; fatal disease decades later.',c:'Asbestos register and management survey reviewed before work started.',a:'Refurbishment and demolition survey completed before any void, ceiling or duct is opened; stop-work-and-report rule for any suspect material; licensed contractor for any removal; survey issued to every operative at induction.',il:2,is:5,rl:1,rs:5},
+ {n:'Lifting operations',h:'Load falling or equipment failing during a lifting operation with lifting accessories.',w:'Slinger, banksman and anyone in the fall zone or under the load.',c:'Equipment within LOLER inspection date; trained operator.',a:'Lift plan by an appointed person; exclusion zone marked and enforced; accessories colour-coded and pre-use checked; no lifting over occupied areas.',il:2,is:5,rl:1,rs:5}];
+
+/* ── persons at risk ───────────────────────────────────────────────── */
+var PERSONS=['Employees','Contractors / subcontractors','Visitors','Members of the public',
+ 'Young persons (under 18)','New or expectant mothers','Lone workers','Cleaning staff',
+ 'Maintenance staff','Delivery drivers','Building occupants','Disabled persons'];
+
+/* ── helpers ───────────────────────────────────────────────────────── */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function nl2br(s){return esc(s).replace(/\n/g,'<br>');}
+function uid(){return 'h'+Math.random().toString(36).slice(2,9);}
+function isInt(v,lo,hi){var n=Number(v);return v!==''&&v!==null&&isFinite(n)&&n===Math.round(n)&&n>=lo&&n<=hi;}
+function dash(v){return (v===null||v===undefined||v===''||(typeof v==='number'&&!isFinite(v)))?'—':v;}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addMonths(iso,m){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '';
+ var p=iso.split('-'),d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+ var day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+m);
+ var last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();
+ d.setUTCDate(Math.min(day,last));
+ return d.toISOString().slice(0,10);}
+function fmtDate(iso){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '';
+ var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+ var p=iso.split('-');return (+p[2])+' '+M[+p[1]-1]+' '+p[0];}
+function daysBetween(a,b){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(a)||!/^\d{4}-\d{2}-\d{2}$/.test(b))return null;
+ return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);}
+function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('on');
+ clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('on');},2600);}
+
+function bandOf(score){
+ if(score===null||!isFinite(score)||score<1)return null;
+ for(var i=0;i<BANDS.length;i++){if(score>=BANDS[i].lo&&score<=BANDS[i].hi)return i;}
+ return null;}
+function bandCls(i){return i===null?'b-n':'b-'+BANDS[i].k;}
+function bandName(i){return i===null?'Not scored':BANDS[i].name;}
+
+/* score of one hazard: likelihood x severity, both must be 1-5 integers */
+function scoreOf(l,s){
+ if(!isInt(l,1,5)||!isInt(s,1,5))return null;
+ return Number(l)*Number(s);}
+
+/* ── state ─────────────────────────────────────────────────────────── */
+var S=null, sampleFlag=true;
+
+function blankHaz(){return {id:uid(),h:'',w:'',c:'',il:'',is:'',a:'',owner:'',due:'',rl:'',rs:''};}
+
+function sampleState(){
+ var d='2026-09-01';
+ return {
+  meta:{org:'Northgate Facilities Ltd',ref:'RA-2026-014',
+    title:'Ground-floor office refurbishment — strip-out and re-fit',
+    act:'Soft strip of partitions and ceilings, then re-fit of partitions, ceilings, power and data',
+    loc:'Unit 4, Northgate Business Park — ground floor, east wing',
+    assessor:'R. Ackroyd',role:'Contracts Manager — NEBOSH General Certificate',
+    date:d,review:addMonths(d,6),other:'Building occupants on the first floor remain in place throughout'},
+  persons:['Employees','Contractors / subcontractors','Visitors','Cleaning staff','Building occupants'],
+  hazards:[
+   {id:uid(),h:'Falls from height installing and stripping suspended ceiling grid and tiles, working from steps and podiums up to 2.7 m.',
+    w:'Ceiling fixers and electricians working at height; anyone below struck by a falling person, tile or tool.',
+    c:'Podium steps provided in place of stepladders; pre-use inspection recorded; trained operatives; area below barriered while work is overhead.',
+    il:3,is:4,
+    a:'Stepladders banned above 1.2 m. Mobile tower erected and tag-inspected by a PASMA card holder. Tool tethers on all hand tools. Supervisor spot check each morning.',
+    owner:'Site Supervisor',due:'2026-09-08',rl:2,rs:4},
+   {id:uid(),h:'Manual handling of plasterboard, partition studs and ceiling grid — heavy and awkward loads carried along corridors and up stairs.',
+    w:'Fitters and labourers; back, shoulder and hand injuries. Cleaners moving stacked material.',
+    c:'Two-person lift for full boards; sack barrow and board trolley on site; deliveries broken down at the vehicle.',
+    il:4,is:3,
+    a:'Panel lifter hired for the ceiling grid. 25 kg single-person limit enforced. Manual handling refresher for all operatives before start. Materials delivered to the floor by the supplier, not carried up.',
+    owner:'R. Ackroyd',due:'2026-09-05',rl:2,rs:3},
+   {id:uid(),h:'Contact with live electrical circuits when cutting into walls, floor boxes and the ceiling void — existing wiring not fully recorded.',
+    w:'Electricians primarily; any operative making a penetration. Electric shock, burns, arc flash.',
+    c:'Safe isolation with lock-off and prove-dead before work; 110 V transformers for all site tools; PAT-tested equipment.',
+    il:2,is:5,
+    a:'Permit to work for anything on the live side. Cable detection scan before every penetration. Electrical work by a competent electrically skilled person only. RCD protection on every temporary supply.',
+    owner:'Approved Electrician',due:'2026-09-04',rl:1,rs:5},
+   {id:uid(),h:'Respirable dust from cutting plasterboard, MDF and drilling masonry — silica and wood dust.',
+    w:'Operatives cutting; adjacent trades and first-floor occupants sharing the stair core. Long-term lung disease.',
+    c:'On-tool M-class extraction fitted to saws and drills; area segregated with dust screens; damp-down where practicable.',
+    il:3,is:3,
+    a:'All cutting done outside or in the dedicated cutting enclosure. FFP3 masks with face-fit test certificates held on site. No dry sweeping — vacuum only. Health surveillance for regular users.',
+    owner:'Site Supervisor',due:'2026-09-08',rl:2,rs:3},
+   {id:uid(),h:'Slips and trips from trailing leads, offcuts, packaging and dust on the shared corridor and stair core.',
+    w:'All site personnel; cleaners; first-floor staff and visitors passing through the shared corridor.',
+    c:'Daily housekeeping at breaks; cable covers on the crossing point; work area barriered and signed.',
+    il:3,is:2,
+    a:'End-of-shift clearance signed off by the supervisor. Dedicated waste route to the skip agreed with the landlord. Task lighting fitted in the stair core while the ceiling is open.',
+    owner:'Site Supervisor',due:'2026-09-03',rl:2,rs:2},
+   {id:uid(),h:'Disturbing asbestos-containing materials when opening the ceiling void and floor ducts — unit built 1987.',
+    w:'All operatives, first-floor occupants and their families through fibre carry-over. Fatal disease decades later.',
+    c:'Asbestos management survey and register obtained from the landlord and reviewed before pricing.',
+    il:2,is:5,
+    a:'Refurbishment and demolition survey completed and clear before any void, duct or riser is opened. Stop-work-and-report rule for any suspect material, briefed at induction. Licensed contractor for any removal.',
+    owner:'R. Ackroyd',due:'2026-09-02',rl:1,rs:5}
+  ],
+  matrixView:'residual',
+  saved:[],
+  sample:true};}
+
+function normalise(st){
+ var d=sampleState();
+ var o={meta:{},persons:[],hazards:[],matrixView:'residual',saved:[],sample:false};
+ st=st&&typeof st==='object'?st:{};
+ var mk=['org','ref','title','act','loc','assessor','role','date','review','other'];
+ for(var i=0;i<mk.length;i++){var v=(st.meta||{})[mk[i]];o.meta[mk[i]]=typeof v==='string'?v:'';}
+ o.persons=Array.isArray(st.persons)?st.persons.filter(function(p){return typeof p==='string';}):[];
+ var hz=Array.isArray(st.hazards)?st.hazards:[];
+ for(var j=0;j<hz.length;j++){
+  var h=hz[j]||{},n=blankHaz();
+  ['h','w','c','a','owner','due'].forEach(function(k){if(typeof h[k]==='string')n[k]=h[k];});
+  ['il','is','rl','rs'].forEach(function(k){n[k]=isInt(h[k],1,5)?Number(h[k]):'';});
+  if(typeof h.id==='string'&&h.id)n.id=h.id;
+  o.hazards.push(n);}
+ if(!o.hazards.length)o.hazards.push(blankHaz());
+ o.matrixView=st.matrixView==='initial'?'initial':'residual';
+ o.saved=Array.isArray(st.saved)?st.saved.filter(function(s){return s&&typeof s.name==='string';}).slice(0,60):[];
+ o.sample=!!st.sample;
+ return o;}
+
+function blankState(){
+ return {meta:{org:'',ref:'',title:'',act:'',loc:'',assessor:'',role:'',
+   date:today(),review:addMonths(today(),12),other:''},
+  persons:['Employees'],hazards:[blankHaz()],matrixView:'residual',
+  saved:(S&&S.saved)||[],sample:false};}
+
+/* ── persistence ───────────────────────────────────────────────────── */
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){/* storage blocked — tool still works */}}
+function load(){
+ try{
+  var raw=localStorage.getItem(KEY);
+  if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object')return normalise(p);}
+ }catch(e){}
+ return normalise(sampleState());}
+
+/* ── computation ───────────────────────────────────────────────────── */
+function compute(){
+ var r={rows:[],n:0,scored:0,sumI:0,sumR:0,maxI:null,maxR:null,
+  bandsI:[0,0,0,0],bandsR:[0,0,0,0],moved:0,same:0,worse:0,incomplete:[],extreme:[]};
+ for(var i=0;i<S.hazards.length;i++){
+  var h=S.hazards[i];
+  var si=scoreOf(h.il,h.is), sr=scoreOf(h.rl,h.rs);
+  var bi=bandOf(si), br=bandOf(sr);
+  var chg=null;
+  if(bi!==null&&br!==null)chg=(br<bi)?'down':(br===bi?'same':'up');
+  var row={ref:'H'+(i+1),h:h,si:si,sr:sr,bi:bi,br:br,chg:chg};
+  r.rows.push(row);
+  r.n++;
+  var miss=[];
+  if(!h.h.trim())miss.push('hazard description');
+  if(si===null)miss.push('initial score');
+  if(sr===null)miss.push('residual score');
+  if(miss.length)r.incomplete.push(row.ref+': '+miss.join(', '));
+  if(bi!==null)r.bandsI[bi]++;
+  if(br!==null)r.bandsR[br]++;
+  if(si!==null&&sr!==null){
+   r.scored++;r.sumI+=si;r.sumR+=sr;
+   if(chg==='down')r.moved++;else if(chg==='same')r.same++;else r.worse++;}
+  if(si!==null)r.maxI=(r.maxI===null||si>r.maxI)?si:r.maxI;
+  if(sr!==null)r.maxR=(r.maxR===null||sr>r.maxR)?sr:r.maxR;
+  if(br===3)r.extreme.push(row.ref);}
+ r.reduction=(r.sumI>0)?Math.round((r.sumI-r.sumR)/r.sumI*1000)/10:null;
+ r.maxRBand=bandOf(r.maxR);
+ r.maxIBand=bandOf(r.maxI);
+ return r;}
+
+/* ── rendering: hazard editor ──────────────────────────────────────── */
+function selOpts(list,val){
+ var o='<option value=""'+(val===''||val===null?' selected':'')+'>—</option>';
+ for(var i=0;i<list.length;i++){
+  o+='<option value="'+list[i][0]+'"'+(String(val)===list[i][0]?' selected':'')+'>'+
+     list[i][0]+' — '+esc(list[i][1])+'</option>';}
+ return o;}
+
+function hazHTML(h,i){
+ var id=h.id;
+ return '<article class="haz" data-id="'+id+'">'+
+  '<div class="hh">'+
+   '<span class="ref">H'+(i+1)+'</span>'+
+   '<span class="nm js-nm">'+(h.h.trim()?esc(h.h.trim().slice(0,90)):'New hazard — describe it below')+'</span>'+
+   '<span class="band js-hb b-n">—</span>'+
+   '<span class="mini">'+
+    '<button type="button" class="btn" data-act="up" title="Move up" aria-label="Move hazard H'+(i+1)+' up">▲</button>'+
+    '<button type="button" class="btn" data-act="down" title="Move down" aria-label="Move hazard H'+(i+1)+' down">▼</button>'+
+    '<button type="button" class="btn" data-act="dup" title="Duplicate" aria-label="Duplicate hazard H'+(i+1)+'">⧉</button>'+
+    '<button type="button" class="btn dgr" data-act="del" title="Remove" aria-label="Remove hazard H'+(i+1)+'">✕</button>'+
+   '</span>'+
+  '</div>'+
+  '<div class="hb">'+
+   '<div class="f"><label for="'+id+'-h">Hazard — what could cause harm</label>'+
+    '<textarea id="'+id+'-h" class="ta-s" data-f="h" placeholder="e.g. Falls from height installing ceiling grid at 2.7 m">'+esc(h.h)+'</textarea>'+
+    '<div class="err js-eh" hidden>Describe the hazard — this line is what appears on the printed assessment.</div></div>'+
+   '<div class="g2">'+
+    '<div class="f"><label for="'+id+'-w">Who might be harmed, and how</label>'+
+     '<textarea id="'+id+'-w" class="ta-s" data-f="w" placeholder="Who is exposed and what injury">'+esc(h.w)+'</textarea></div>'+
+    '<div class="f"><label for="'+id+'-c">Controls already in place</label>'+
+     '<textarea id="'+id+'-c" class="ta-s" data-f="c" placeholder="What is already being done">'+esc(h.c)+'</textarea></div>'+
+   '</div>'+
+   '<div class="sbox">'+
+    '<div class="f"><label for="'+id+'-il">Likelihood (L)</label>'+
+     '<select id="'+id+'-il" data-f="il">'+selOpts(LIK,h.il)+'</select></div>'+
+    '<span class="eq" aria-hidden="true">×</span>'+
+    '<div class="f"><label for="'+id+'-is">Severity (S)</label>'+
+     '<select id="'+id+'-is" data-f="is">'+selOpts(SEV,h.is)+'</select></div>'+
+    '<span class="eq" aria-hidden="true">=</span>'+
+    '<div class="out"><span class="lbl">Initial risk</span>'+
+     '<span class="sc js-si">—</span><span class="band js-bi b-n">Not scored</span></div>'+
+   '</div>'+
+   '<div class="f"><label for="'+id+'-a">Additional controls required</label>'+
+    '<textarea id="'+id+'-a" class="ta-s" data-f="a" placeholder="Eliminate · Substitute · Engineering · Administrative · PPE — in that order">'+esc(h.a)+'</textarea>'+
+    '<div class="hint">Hierarchy of control: eliminate the hazard first, then substitute, then engineering controls, then administrative controls, and PPE last.</div></div>'+
+   '<div class="g2">'+
+    '<div class="f"><label for="'+id+'-owner">Action by</label>'+
+     '<input id="'+id+'-owner" type="text" data-f="owner" placeholder="Name or role" value="'+esc(h.owner)+'"></div>'+
+    '<div class="f"><label for="'+id+'-due">Action due</label>'+
+     '<input id="'+id+'-due" type="date" data-f="due" value="'+esc(h.due)+'"></div>'+
+   '</div>'+
+   '<div class="sbox res">'+
+    '<div class="f"><label for="'+id+'-rl">Residual likelihood</label>'+
+     '<select id="'+id+'-rl" data-f="rl">'+selOpts(LIK,h.rl)+'</select></div>'+
+    '<span class="eq" aria-hidden="true">×</span>'+
+    '<div class="f"><label for="'+id+'-rs">Residual severity</label>'+
+     '<select id="'+id+'-rs" data-f="rs">'+selOpts(SEV,h.rs)+'</select></div>'+
+    '<span class="eq" aria-hidden="true">=</span>'+
+    '<div class="out"><span class="lbl">Residual risk</span>'+
+     '<span class="sc js-sr">—</span><span class="band js-br b-n">Not scored</span></div>'+
+   '</div>'+
+   '<div class="js-chg"></div>'+
+  '</div></article>';}
+
+function renderHazards(){
+ var box=$('hazList');
+ box.innerHTML=S.hazards.map(hazHTML).join('');
+ refreshHazScores();}
+
+function refreshHazScores(){
+ var arts=$('hazList').children;
+ for(var i=0;i<arts.length;i++){
+  var el=arts[i],h=S.hazards[i];
+  if(!h)continue;
+  var si=scoreOf(h.il,h.is),sr=scoreOf(h.rl,h.rs),bi=bandOf(si),br=bandOf(sr);
+  var q=function(c){return el.querySelector(c);};
+  q('.js-si').innerHTML=si===null?'—':si+' <small>/ 25</small>';
+  q('.js-sr').innerHTML=sr===null?'—':sr+' <small>/ 25</small>';
+  var e1=q('.js-bi');e1.className='band js-bi '+bandCls(bi);e1.textContent=bi===null?'Not scored':BANDS[bi].name+' — '+BANDS[bi].level;
+  var e2=q('.js-br');e2.className='band js-br '+bandCls(br);e2.textContent=br===null?'Not scored':BANDS[br].name+' — '+BANDS[br].level;
+  var e3=q('.js-hb');e3.className='band js-hb '+bandCls(br);e3.textContent=br===null?'—':(sr+' '+BANDS[br].name);
+  q('.js-nm').textContent=h.h.trim()?h.h.trim().slice(0,90):'New hazard — describe it below';
+  var chg=q('.js-chg');
+  if(bi===null||br===null){chg.innerHTML='';}
+  else if(br<bi){chg.innerHTML='<div class="note" style="border-color:var(--ok);background:var(--ok-wash);font-size:12.5px">'+
+    '<strong>Control works.</strong> The additional controls move this hazard from <strong>'+BANDS[bi].name+
+    '</strong> down to <strong>'+BANDS[br].name+'</strong> ('+si+' → '+sr+'). '+esc(BANDS[br].act)+'</div>';}
+  else if(br===bi){chg.innerHTML='<div class="note warn" style="font-size:12.5px">'+
+    '<strong>Band unchanged.</strong> The hazard is still <strong>'+BANDS[bi].name+'</strong> ('+si+' → '+sr+
+    '). Either the additional controls are not strong enough, or the residual score is too pessimistic — look at the top of the hierarchy of control before accepting this.</div>';}
+  else{chg.innerHTML='<div class="note bad" style="font-size:12.5px">'+
+    '<strong>Risk has gone up.</strong> The residual score ('+sr+') is worse than the initial score ('+si+
+    '). Check the numbers, or record why the control introduces a new risk.</div>';}
+  var eh=q('.js-eh');if(eh)eh.hidden=!!h.h.trim()||!el._touchedH;}}
+
+/* ── rendering: results ────────────────────────────────────────────── */
+function renderResults(r){
+ $('heroScore').textContent=r.maxR===null?'—':r.maxR;
+ var hb=$('heroBand');
+ hb.className='band big '+bandCls(r.maxRBand);
+ hb.textContent=r.maxRBand===null?'NO HAZARD FULLY SCORED YET':
+   (BANDS[r.maxRBand].name+' — '+BANDS[r.maxRBand].level).toUpperCase();
+
+ var v=$('verdict');
+ if(r.maxRBand===null){
+  v.className='note';
+  v.innerHTML='Score the likelihood and severity on at least one hazard, before and after controls, to get a result.';}
+ else if(r.maxRBand===3){
+  v.className='note bad';
+  v.innerHTML='<strong>NOT ACCEPTABLE TO PROCEED.</strong> '+r.extreme.length+' hazard'+(r.extreme.length===1?'':'s')+
+   ' ('+r.extreme.join(', ')+') still score'+(r.extreme.length===1?'s':'')+' in the <strong>Extreme</strong> band after controls. '+
+   'Work must not start or continue. Prohibit the activity until the residual risk is reduced; if it cannot be reduced, the work must not be done.';}
+ else if(r.maxRBand===2){
+  v.className='note warn';
+  v.innerHTML='<strong>Substantial risk remains.</strong> The worst residual score is <strong>'+r.maxR+
+   ' (High)</strong>. Work should not start until that risk is reduced further, and significant resources may be needed. '+
+   'If work is already under way, take urgent action.';}
+ else if(r.maxRBand===1){
+  v.className='note warn';
+  v.innerHTML='<strong>Tolerable with the controls listed.</strong> Worst residual score <strong>'+r.maxR+
+   ' (Medium)</strong>. Reduce further where reasonably practicable, and make sure every additional control is actually in place before work starts.';}
+ else{
+  v.className='note';v.style.borderColor='var(--ok)';v.style.background='var(--ok-wash)';
+  v.innerHTML='<strong>Acceptable to proceed</strong> with the controls listed. Worst residual score <strong>'+r.maxR+
+   ' (Low)</strong>. Maintain the controls, monitor them, and review if anything changes.';}
+ if(r.maxRBand!==0){v.style.borderColor='';v.style.background='';}
+
+ var bc='';
+ for(var i=0;i<4;i++){
+  bc+='<div class="bc b-'+BANDS[i].k+'"><div class="n">'+r.bandsR[i]+'</div><div class="t">'+BANDS[i].name+'</div></div>';}
+ $('bandCounts').innerHTML=bc;
+
+ $('mHaz').textContent=r.n+(r.scored<r.n?' ('+r.scored+' scored)':'');
+ $('mInit').textContent=r.maxI===null?'—':r.maxI+' '+bandName(r.maxIBand);
+ $('mSumI').textContent=r.scored?r.sumI:'—';
+ $('mSumR').textContent=r.scored?r.sumR:'—';
+ $('mRed').textContent=r.reduction===null?'—':(r.reduction.toFixed(1)+'%');
+ $('mMoved').textContent=r.scored?(r.moved+' of '+r.scored):'—';
+
+ var nm=$('notMoved');
+ if(r.scored&&(r.same+r.worse)>0){
+  nm.hidden=false;
+  nm.innerHTML='<strong>'+(r.same+r.worse)+' hazard'+((r.same+r.worse)===1?'':'s')+
+   ' did not change band</strong> after the additional controls. A control that does not move the band has not '+
+   'reduced the risk in any way this assessment can evidence — revisit it, or record why no further reduction is reasonably practicable.';}
+ else nm.hidden=true;
+
+ var pend=r.incomplete.length;
+ var chip=$('statusChip'),ft=$('ftStatus');
+ var txt=pend?pend+' hazard'+(pend===1?'':'s')+' incomplete':'All hazards scored';
+ chip.textContent=txt;chip.className='chip '+(pend?'warn':'ok');
+ ft.textContent=pend?txt+' — '+r.incomplete[0]:txt;
+ ft.className='chip '+(pend?'warn':'ok');
+ $('hazChip').textContent=r.n+' hazard'+(r.n===1?'':'s');
+ $('regChip').textContent=r.n+' hazard'+(r.n===1?'':'s')+(r.maxR!==null?' · worst residual '+r.maxR:'');
+ $('matChip').textContent=r.maxR===null?'not scored':(bandName(r.maxRBand)+' overall');
+}
+
+/* ── rendering: matrix ─────────────────────────────────────────────── */
+function renderMatrix(r){
+ var view=S.matrixView;
+ var counts={};
+ for(var i=0;i<r.rows.length;i++){
+  var row=r.rows[i],l,s;
+  if(view==='initial'){l=row.h.il;s=row.h.is;if(row.si===null)continue;}
+  else{l=row.h.rl;s=row.h.rs;if(row.sr===null)continue;}
+  var k=l+'x'+s;counts[k]=(counts[k]||0)+1;}
+ var html='<table class="mx"><caption class="lbl" style="text-align:left;padding-bottom:5px">'+
+  (view==='initial'?'Initial risk — before additional controls':'Residual risk — after additional controls')+
+  '</caption><thead><tr><th></th><th colspan="5" scope="colgroup">Severity →</th></tr><tr><th class="ax">L ↓</th>';
+ for(var s2=1;s2<=5;s2++)html+='<th scope="col">'+s2+'</th>';
+ html+='</tr></thead><tbody>';
+ for(var l2=5;l2>=1;l2--){
+  html+='<tr><th scope="row">'+l2+'</th>';
+  for(var s3=1;s3<=5;s3++){
+   var sc=l2*s3,b=bandOf(sc),c=counts[l2+'x'+s3]||0;
+   html+='<td'+(c?' class="on"':'')+'><div class="cell b-'+BANDS[b].k+'">'+
+    (c?'<span class="c">'+c+'</span>':'')+'<span class="s">'+sc+'</span></div></td>';}
+  html+='</tr>';}
+ html+='</tbody></table>';
+ $('matrixWrap').innerHTML=html;
+ var total=0;for(var k2 in counts)if(Object.prototype.hasOwnProperty.call(counts,k2))total+=counts[k2];
+ $('mxLeg').innerHTML='Numbers in bold are how many hazards sit in that cell — '+total+' plotted. '+
+  'Cell value is L × S. Bands: <span class="band b-l">Low 1–4</span> <span class="band b-m">Medium 5–9</span> '+
+  '<span class="band b-h">High 10–16</span> <span class="band b-x">Extreme 17–25</span>';
+ var segs=document.querySelectorAll('.seg button[data-mv]');
+ for(var q=0;q<segs.length;q++)segs[q].setAttribute('aria-pressed',String(segs[q].getAttribute('data-mv')===view));}
+
+/* ── rendering: register + print ───────────────────────────────────── */
+function chgTag(chg){
+ if(chg==='down')return '<span class="tag dn">Reduced</span>';
+ if(chg==='same')return '<span class="tag same">No change</span>';
+ if(chg==='up')return '<span class="tag up">Worse</span>';
+ return '<span class="tag">—</span>';}
+
+function renderRegister(r){
+ var b='';
+ if(!r.rows.length){
+  b='<tr><td colspan="9"><div class="empty">No hazards yet — add one to start the register.</div></td></tr>';}
+ for(var i=0;i<r.rows.length;i++){
+  var x=r.rows[i],h=x.h;
+  b+='<tr><td class="mono">'+x.ref+'</td>'+
+   '<td><span class="h">'+(h.h.trim()?esc(h.h.trim()):'<span style="color:var(--muted)">Not described</span>')+'</span>'+
+   (h.w.trim()?'<span class="w">'+esc(h.w.trim())+'</span>':'')+'</td>'+
+   '<td class="n">'+(x.si===null?'—':(h.il+' × '+h.is+' = '+x.si))+'</td>'+
+   '<td><span class="band '+bandCls(x.bi)+'">'+bandName(x.bi)+'</span></td>'+
+   '<td class="n">'+(x.sr===null?'—':(h.rl+' × '+h.rs+' = '+x.sr))+'</td>'+
+   '<td><span class="band '+bandCls(x.br)+'">'+bandName(x.br)+'</span></td>'+
+   '<td>'+chgTag(x.chg)+'</td>'+
+   '<td>'+(h.owner.trim()?esc(h.owner):'—')+'</td>'+
+   '<td class="ct">'+(fmtDate(h.due)||'—')+'</td></tr>';}
+ $('regBody').innerHTML=b;
+ $('regFoot').innerHTML=r.scored?('<tr><td colspan="2">Totals over '+r.scored+' fully scored hazard'+
+   (r.scored===1?'':'s')+'</td><td class="n">'+r.sumI+'</td><td>max '+bandName(r.maxIBand)+
+   '</td><td class="n">'+r.sumR+'</td><td>max '+bandName(r.maxRBand)+'</td><td colspan="3">'+
+   (r.reduction===null?'—':r.reduction.toFixed(1)+'% reduction in total scored risk')+'</td></tr>'):'';
+
+ /* printed hazard records */
+ var p='';
+ for(var j=0;j<r.rows.length;j++){
+  var y=r.rows[j],g=y.h;
+  p+='<article class="prec">'+
+   '<div class="ph1"><span class="n">'+y.ref+'</span><span class="t">'+
+    (g.h.trim()?esc(g.h.trim()):'(hazard not described)')+'</span></div>'+
+   '<div class="pg">'+
+    '<div class="pf"><span class="lbl">Who might be harmed, and how</span><p>'+(g.w.trim()?nl2br(g.w):'—')+'</p></div>'+
+    '<div class="pf"><span class="lbl">Controls already in place</span><p>'+(g.c.trim()?nl2br(g.c):'—')+'</p></div>'+
+   '</div>'+
+   '<div class="pscore">'+
+    '<span class="lb">Initial</span><span class="eq">L'+(isInt(g.il,1,5)?g.il:'—')+' × S'+(isInt(g.is,1,5)?g.is:'—')+
+     ' = '+(y.si===null?'—':y.si)+'</span>'+
+    '<span class="band '+bandCls(y.bi)+'">'+bandName(y.bi)+'</span>'+
+    '<span class="eq">→</span>'+
+    '<span class="lb">Residual</span><span class="eq">L'+(isInt(g.rl,1,5)?g.rl:'—')+' × S'+(isInt(g.rs,1,5)?g.rs:'—')+
+     ' = '+(y.sr===null?'—':y.sr)+'</span>'+
+    '<span class="band '+bandCls(y.br)+'">'+bandName(y.br)+'</span>'+
+    chgTag(y.chg)+
+   '</div>'+
+   '<div class="pf"><span class="lbl">Additional controls required</span><p>'+(g.a.trim()?nl2br(g.a):'—')+'</p></div>'+
+   '<div class="pg3" style="margin-top:5px">'+
+    '<div class="pf"><span class="lbl">Action by</span><p>'+(g.owner.trim()?esc(g.owner):'—')+'</p></div>'+
+    '<div class="pf"><span class="lbl">Action due</span><p>'+(fmtDate(g.due)||'—')+'</p></div>'+
+    '<div class="pf"><span class="lbl">Required action for residual band</span><p>'+
+      (y.br===null?'Not scored — complete before issue.':esc(BANDS[y.br].act))+'</p></div>'+
+   '</div></article>';}
+ if(!r.rows.length)p='<p style="font-size:10pt">No hazards recorded.</p>';
+ $('printReg').innerHTML=p;}
+
+/* ── rendering: print header ───────────────────────────────────────── */
+function renderPrintHead(r){
+ var m=S.meta;
+ $('pOrg').textContent=m.org.trim()||'(organisation not entered)';
+ $('pTitle').textContent=m.title.trim()||'(assessment title not entered)';
+ $('pRef').textContent=m.ref.trim()||'—';
+ $('pPrinted').textContent='Printed '+fmtDate(today());
+ $('pHazN').textContent=r.n+' hazard'+(r.n===1?'':'s');
+ $('pAct').textContent=m.act.trim()||'—';
+ $('pLoc').textContent=m.loc.trim()||'—';
+ $('pAssessor').textContent=(m.assessor.trim()||'—')+(m.role.trim()?' — '+m.role.trim():'');
+ $('pDate').textContent=fmtDate(m.date)||'—';
+ var rev=fmtDate(m.review)||'—';
+ var dd=daysBetween(today(),m.review);
+ if(dd!==null)rev+=dd<0?' (OVERDUE by '+Math.abs(dd)+' days)':' (in '+dd+' days)';
+ $('pReview').textContent=rev;
+ $('pOverall').textContent=r.maxR===null?'Not scored':
+   (r.maxR+' / 25 — '+BANDS[r.maxRBand].name+' ('+BANDS[r.maxRBand].level+')'+
+    (r.maxRBand===3?' — NOT ACCEPTABLE TO PROCEED':''));
+ var ps=S.persons.slice();
+ if(m.other.trim())ps.push(m.other.trim());
+ $('pPersons').textContent=ps.length?ps.join(' · '):'—';
+ $('sgA').textContent=m.assessor.trim()||'Name';
+ $('sgAD').textContent=fmtDate(m.date)||'Date';}
+
+/* ── rendering: saved list ─────────────────────────────────────────── */
+function renderSaved(){
+ var box=$('savedList');
+ $('savedChip').textContent=S.saved.length+' saved';
+ if(!S.saved.length){box.innerHTML='<div class="empty" style="padding:16px">Nothing saved yet. Save a version before you make big changes, or to keep one assessment per job.</div>';return;}
+ var h='';
+ for(var i=0;i<S.saved.length;i++){
+  var s=S.saved[i];
+  h+='<div class="svd"><span class="nm">'+esc(s.name)+'</span>'+
+   '<span class="mt">'+esc(s.at||'')+' · '+(s.payload&&s.payload.hazards?s.payload.hazards.length:0)+' hazards</span>'+
+   '<button type="button" class="btn sm" data-sv="load" data-i="'+i+'">Load</button>'+
+   '<button type="button" class="btn sm dgr" data-sv="del" data-i="'+i+'">Delete</button></div>';}
+ box.innerHTML=h;}
+
+/* ── rendering: reference tables ───────────────────────────────────── */
+function renderRef(){
+ var a='';
+ for(var i=0;i<LIK.length;i++)a+='<tr><th scope="row" style="background:transparent;border:0;border-bottom:1px solid var(--line);text-transform:none;font-size:13px;color:var(--ink)">'+
+  LIK[i][0]+' · '+esc(LIK[i][1])+'</th><td>'+esc(LIK[i][2])+'</td></tr>';
+ $('likTbl').innerHTML=a;
+ var b='';
+ for(var j=0;j<SEV.length;j++)b+='<tr><th scope="row" style="background:transparent;border:0;border-bottom:1px solid var(--line);text-transform:none;font-size:13px;color:var(--ink)">'+
+  SEV[j][0]+' · '+esc(SEV[j][1])+'</th><td>'+esc(SEV[j][2])+'</td></tr>';
+ $('sevTbl').innerHTML=b;
+ var c='';
+ for(var k=0;k<BANDS.length;k++)c+='<tr><td><span class="band b-'+BANDS[k].k+'">'+BANDS[k].name+'</span></td>'+
+  '<td class="mono">'+BANDS[k].lo+'–'+BANDS[k].hi+'</td><td>'+esc(BANDS[k].level)+'</td><td>'+esc(BANDS[k].act)+'</td></tr>';
+ $('bandTbl').innerHTML=c;}
+
+/* ── validation ────────────────────────────────────────────────────── */
+var touched={};
+function validate(){
+ var m=S.meta,bad=false;
+ function set(errId,inpId,msg,show){
+  var e=$(errId),i=$(inpId);
+  if(show){e.hidden=false;e.textContent=msg;i.classList.add('inv');bad=true;}
+  else{e.hidden=true;i.classList.remove('inv');}}
+ set('eTitle','fTitle','Give the assessment a title — it heads the printed document.',!!touched.fTitle&&!m.title.trim());
+ set('eAssessor','fAssessor','Name the competent person who made this assessment.',!!touched.fAssessor&&!m.assessor.trim());
+ var revBad=!!(m.date&&m.review&&m.review<m.date);
+ set('eReview','fReview','The review date must be on or after the assessment date.',revBad);
+ var dd=daysBetween(today(),m.review);
+ var hr=$('hReview');
+ if(!m.review)hr.textContent='';
+ else if(dd===null)hr.textContent='';
+ else if(dd<0)hr.innerHTML='<span style="color:var(--bad);font-weight:650">Review overdue by '+Math.abs(dd)+' day'+(Math.abs(dd)===1?'':'s')+' — reassess before this work goes ahead.</span>';
+ else if(dd<=30)hr.innerHTML='<span style="color:var(--warn);font-weight:650">Review due in '+dd+' day'+(dd===1?'':'s')+'.</span>';
+ else hr.textContent='Review due in '+dd+' days.';
+ return !bad;}
+
+/* ── master render ─────────────────────────────────────────────────── */
+function renderLive(){
+ var r=compute();
+ renderResults(r);renderMatrix(r);renderRegister(r);renderPrintHead(r);validate();
+ $('sampleBar').hidden=!S.sample;
+ return r;}
+function renderAll(){renderHazards();renderSaved();syncMeta();renderLive();}
+
+function syncMeta(){
+ var m=S.meta;
+ ['org','ref','title','act','loc','assessor','role','date','review','other'].forEach(function(k){
+  var el=document.querySelector('[data-m="'+k+'"]');if(el)el.value=m[k]||'';});
+ var boxes=$('personsBox').querySelectorAll('input[type=checkbox]');
+ for(var i=0;i<boxes.length;i++)boxes[i].checked=S.persons.indexOf(boxes[i].value)>=0;}
+
+/* ── export ────────────────────────────────────────────────────────── */
+function csvCell(v){
+ v=(v===null||v===undefined)?'':String(v);
+ return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function csvRow(a){return a.map(csvCell).join(',');}
+function slug(s){return (String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'risk-assessment').slice(0,50);}
+function download(name,mime,text,bom){
+ try{
+  var parts=bom?['\ufeff',text]:[text];
+  var blob=new Blob(parts,{type:mime});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download=name;a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  return true;
+ }catch(e){toast('Download failed: '+e.message);return false;}}
+
+function exportCSV(){
+ var r=compute(),m=S.meta,L=[];
+ L.push(csvRow(['Risk assessment',m.title]));
+ L.push(csvRow(['Organisation',m.org]));
+ L.push(csvRow(['Reference',m.ref]));
+ L.push(csvRow(['Activity assessed',m.act]));
+ L.push(csvRow(['Location',m.loc]));
+ L.push(csvRow(['Assessor',m.assessor+(m.role?' ('+m.role+')':'')]));
+ L.push(csvRow(['Assessment date',m.date]));
+ L.push(csvRow(['Review due',m.review]));
+ L.push(csvRow(['Persons at risk',S.persons.concat(m.other.trim()?[m.other.trim()]:[]).join('; ')]));
+ L.push(csvRow(['Highest residual score',r.maxR===null?'':r.maxR]));
+ L.push(csvRow(['Highest residual band',r.maxRBand===null?'':BANDS[r.maxRBand].name]));
+ L.push(csvRow(['Acceptable to proceed',r.maxRBand===null?'Not scored':(r.maxRBand===3?'NO — extreme residual risk':'Yes, with the controls listed')]));
+ L.push(csvRow(['Exported',today()]));
+ L.push('');
+ L.push(csvRow(['Ref','Hazard','Who might be harmed and how','Existing controls',
+  'Initial likelihood','Initial severity','Initial score','Initial band',
+  'Additional controls','Action by','Action due',
+  'Residual likelihood','Residual severity','Residual score','Residual band',
+  'Band change','Required action for residual band']));
+ for(var i=0;i<r.rows.length;i++){
+  var x=r.rows[i],h=x.h;
+  L.push(csvRow([x.ref,h.h,h.w,h.c,h.il,h.is,x.si===null?'':x.si,x.bi===null?'':BANDS[x.bi].name,
+   h.a,h.owner,h.due,h.rl,h.rs,x.sr===null?'':x.sr,x.br===null?'':BANDS[x.br].name,
+   x.chg==='down'?'Reduced':x.chg==='same'?'No change':x.chg==='up'?'Worse':'',
+   x.br===null?'':BANDS[x.br].act]));}
+ L.push('');
+ L.push(csvRow(['Totals','Fully scored hazards',r.scored,'Total initial',r.sumI,'Total residual',r.sumR,
+   'Reduction %',r.reduction===null?'':r.reduction.toFixed(1)]));
+ L.push('');
+ L.push(csvRow(['Disclaimer','This tool records and scores a risk assessment; it does not carry it out. Scores are the judgement of the assessor. Not legal advice and not a certificate of compliance. A suitable and sufficient assessment must be made by a competent person.']));
+ if(download(slug(m.ref||m.title)+'-'+today()+'.csv','text/csv;charset=utf-8',L.join('\r\n'),true))
+  toast('CSV exported — '+r.rows.length+' hazard rows.');}
+
+function exportJSON(){
+ var payload={tool:'solvix.risk-assessment',version:1,exported:new Date().toISOString(),state:S};
+ if(download(slug(S.meta.ref||S.meta.title)+'-'+today()+'.json','application/json',JSON.stringify(payload,null,2),false))
+  toast('JSON exported — import it here to restore everything.');}
+
+function importJSON(file){
+ var fr=new FileReader();
+ fr.onload=function(){
+  try{
+   var o=JSON.parse(String(fr.result));
+   var st=(o&&o.state)?o.state:o;
+   var next=normalise(st);
+   if(!next.hazards.length)throw new Error('no hazards found');
+   next.saved=S.saved;next.sample=false;
+   S=next;save();renderAll();
+   toast('Imported '+S.hazards.length+' hazard'+(S.hazards.length===1?'':'s')+'.');
+  }catch(e){toast('That file could not be read as a Solvix risk assessment.');}};
+ fr.onerror=function(){toast('Could not read that file.');};
+ fr.readAsText(file);}
+
+/* ── events ────────────────────────────────────────────────────────── */
+function bind(){
+ /* meta fields */
+ document.addEventListener('input',function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.m!==undefined){
+   S.meta[t.dataset.m]=t.value;
+   if(t.dataset.m==='date'&&S.meta.date&&!touched.fReview&&(!S.meta.review||S.meta.review<S.meta.date))
+    {S.meta.review=addMonths(S.meta.date,12);var rv=$('fReview');if(rv)rv.value=S.meta.review;}
+   S.sample=false;save();renderLive();}});
+
+ document.addEventListener('focusout',function(e){
+  var t=e.target;
+  if(t.id&&(t.id==='fTitle'||t.id==='fAssessor'||t.id==='fReview')){touched[t.id]=true;validate();}
+  var art=t.closest&&t.closest('.haz');
+  if(art&&t.dataset&&t.dataset.f==='h'){art._touchedH=true;refreshHazScores();}});
+
+ /* persons */
+ $('personsBox').addEventListener('change',function(e){
+  var t=e.target;if(t.type!=='checkbox')return;
+  var i=S.persons.indexOf(t.value);
+  if(t.checked&&i<0)S.persons.push(t.value);
+  if(!t.checked&&i>=0)S.persons.splice(i,1);
+  S.sample=false;save();renderLive();});
+
+ /* hazard fields */
+ var list=$('hazList');
+ function onHazEdit(e){
+  var t=e.target,art=t.closest?t.closest('.haz'):null;
+  if(!art||!t.dataset||t.dataset.f===undefined)return;
+  var id=art.getAttribute('data-id'),f=t.dataset.f;
+  for(var i=0;i<S.hazards.length;i++){
+   if(S.hazards[i].id===id){
+    if(f==='il'||f==='is'||f==='rl'||f==='rs')S.hazards[i][f]=t.value===''?'':Number(t.value);
+    else S.hazards[i][f]=t.value;
+    break;}}
+  S.sample=false;save();refreshHazScores();renderLive();}
+ list.addEventListener('input',onHazEdit);
+ list.addEventListener('change',onHazEdit);
+
+ list.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('button[data-act]'):null;
+  if(!b)return;
+  var art=b.closest('.haz'),id=art.getAttribute('data-id'),idx=-1;
+  for(var i=0;i<S.hazards.length;i++)if(S.hazards[i].id===id)idx=i;
+  if(idx<0)return;
+  var a=b.getAttribute('data-act');
+  if(a==='del'){
+   if(!confirm('Remove hazard H'+(idx+1)+' from this assessment?'))return;
+   S.hazards.splice(idx,1);
+   if(!S.hazards.length)S.hazards.push(blankHaz());}
+  else if(a==='up'&&idx>0){var t1=S.hazards[idx-1];S.hazards[idx-1]=S.hazards[idx];S.hazards[idx]=t1;}
+  else if(a==='down'&&idx<S.hazards.length-1){var t2=S.hazards[idx+1];S.hazards[idx+1]=S.hazards[idx];S.hazards[idx]=t2;}
+  else if(a==='dup'){var c=JSON.parse(JSON.stringify(S.hazards[idx]));c.id=uid();S.hazards.splice(idx+1,0,c);}
+  else return;
+  S.sample=false;save();renderHazards();renderLive();});
+
+ /* add / library */
+ function addHaz(){
+  S.hazards.push(blankHaz());S.sample=false;save();renderHazards();renderLive();
+  var arts=$('hazList').children,last=arts[arts.length-1];
+  if(last){last.scrollIntoView({block:'center'});var ta=last.querySelector('textarea');if(ta)ta.focus();}
+  toast('Hazard H'+S.hazards.length+' added.');}
+ $('btnAdd').addEventListener('click',addHaz);
+ $('btnAdd2').addEventListener('click',addHaz);
+
+ var sel=$('libSel');
+ var o='<option value="">Choose a common hazard…</option>';
+ for(var i=0;i<LIB.length;i++)o+='<option value="'+i+'">'+esc(LIB[i].n)+'</option>';
+ sel.innerHTML=o;
+ sel.addEventListener('change',function(){
+  var i=Number(sel.value);
+  if(sel.value===''||!isFinite(i)||!LIB[i]){sel.value='';return;}
+  var L2=LIB[i];
+  S.hazards.push({id:uid(),h:L2.h,w:L2.w,c:L2.c,il:L2.il,is:L2.is,a:L2.a,owner:'',due:'',rl:L2.rl,rs:L2.rs});
+  S.sample=false;sel.value='';save();renderHazards();renderLive();
+  var arts=$('hazList').children,last=arts[arts.length-1];
+  if(last)last.scrollIntoView({block:'center'});
+  toast('"'+L2.n+'" added as H'+S.hazards.length+' — check the wording and the scores against your own site.');});
+
+ /* matrix toggle */
+ var segs=document.querySelectorAll('.seg button[data-mv]');
+ for(var q=0;q<segs.length;q++)segs[q].addEventListener('click',function(){
+  S.matrixView=this.getAttribute('data-mv');save();renderLive();});
+
+ /* saved assessments */
+ $('btnSave').addEventListener('click',function(){
+  var nm=$('saveName').value.trim()||S.meta.title.trim()||('Assessment '+fmtDate(today()));
+  var copy=JSON.parse(JSON.stringify(S));delete copy.saved;
+  S.saved.unshift({name:nm,at:fmtDate(today()),payload:copy});
+  if(S.saved.length>60)S.saved.length=60;
+  $('saveName').value='';save();renderSaved();toast('Saved "'+nm+'" to this device.');});
+
+ $('savedList').addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('button[data-sv]'):null;
+  if(!b)return;
+  var i=Number(b.getAttribute('data-i')),s=S.saved[i];
+  if(!s)return;
+  if(b.getAttribute('data-sv')==='del'){
+   if(!confirm('Delete the saved assessment "'+s.name+'"? This cannot be undone.'))return;
+   S.saved.splice(i,1);save();renderSaved();toast('Deleted.');}
+  else{
+   if(!confirm('Load "'+s.name+'"? The assessment currently on screen will be replaced.'))return;
+   var keep=S.saved;
+   S=normalise(s.payload);S.saved=keep;S.sample=false;
+   save();renderAll();toast('Loaded "'+s.name+'".');}});
+
+ /* toolbar */
+ $('btnPrint').addEventListener('click',function(){window.print();});
+ $('btnCsv').addEventListener('click',exportCSV);
+ $('btnJson').addEventListener('click',exportJSON);
+ $('btnImport').addEventListener('click',function(){$('fileJson').click();});
+ $('fileJson').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];
+  if(f)importJSON(f);
+  e.target.value='';});
+ $('btnBlank').addEventListener('click',function(){
+  if(!confirm('Clear the sample assessment and start from a blank form?'))return;
+  S=blankState();touched={};save();renderAll();toast('Blank assessment ready.');});
+ $('btnClear').addEventListener('click',function(){
+  if(!confirm('Delete the current assessment AND every assessment saved on this device? This cannot be undone.'))return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  S=blankState();S.saved=[];touched={};save();renderAll();toast('All data cleared.');});}
+
+/* ── boot ──────────────────────────────────────────────────────────── */
+function buildPersons(){
+ var h='';
+ for(var i=0;i<PERSONS.length;i++){
+  h+='<label class="check"><input type="checkbox" value="'+esc(PERSONS[i])+'"><span>'+esc(PERSONS[i])+'</span></label>';}
+ $('personsBox').innerHTML=h;}
+
+buildPersons();
+renderRef();
+S=load();
+bind();
+renderAll();
+})();
+</script>
+</body>
+</html>
