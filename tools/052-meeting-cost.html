@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meeting Cost Calculator — Solvix Toolkit</title>
+<meta name="description" content="Work out what a meeting actually costs: attendee hourly rates or salaries converted at a configurable working-hours-per-year, a live ticking cost while the meeting runs, planned versus overrun cost, cost per agenda item, the annualised cost of a recurring meeting, and a printable summary with CSV export.">
+<meta name="theme-color" content="#0F6E75">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F6E75'/%3E%3Ccircle cx='16' cy='16' r='9.2' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Cpath d='M16 10.2V16.4l4.4 2.6' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Meeting Cost Calculator — tool styles ═════════════════════════ */
+:root{--accent:#0F6E75;--accent-ink:#0B555A;--accent-wash:#E1F0F1;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB9C2;--accent-ink:#6BD3DA;--accent-wash:#0E2C2F;--on-accent:#06181A}}
+:root[data-theme="dark"]{--accent:#3FB9C2;--accent-ink:#6BD3DA;--accent-wash:#0E2C2F;--on-accent:#06181A}
+
+.appbar{margin:0;padding-inline:max(clamp(10px,2vw,22px),calc((100% - 1180px)/2 + clamp(10px,2vw,22px)))}
+.split{grid-template-columns:minmax(0,1fr) minmax(300px,.52fr)}
+@media(max-width:980px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .split>div:last-child{order:-1}
+  .sticky{position:static}
+}
+.mt{margin-top:14px}
+.grid-in{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+.grid-in.wide{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.statgrid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+.chip.acc{background:var(--accent-wash);color:var(--accent-ink)}
+.sample{font:600 10.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--warn);
+  background:var(--warn-wash);border:1px solid var(--warn);padding:5px 8px;border-radius:3px;cursor:pointer}
+.sample:hover{background:var(--warn);color:#fff}
+.savedtag{font:11.5px/1.3 var(--mono);color:var(--muted)}
+
+/* hero + timer */
+.stat.hero .v{font-size:34px;line-height:1.05}
+@media(max-width:640px){.stat.hero .v{font-size:29px}}
+.stat.hero.over{background:var(--bad-wash);border-color:var(--bad)}
+.stat.hero.over .v{color:var(--bad)}
+.stat.hero.live{box-shadow:inset 0 0 0 1px var(--accent)}
+.stat .k .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-right:5px;vertical-align:middle}
+.clock{font:700 30px/1 var(--mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+@media(max-width:640px){.clock{font-size:26px}}
+.timerbox{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  border:1px solid var(--line);background:var(--sunk);border-radius:4px;padding:10px 12px}
+.timerbox .lb{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .25s linear;max-width:100%}
+.bar.over>i{background:var(--bad)}
+.barlab{display:flex;justify-content:space-between;gap:8px;font:11.5px/1.4 var(--mono);color:var(--muted);margin-top:5px}
+
+/* tables */
+.tbl-people{min-width:900px}
+.tbl-agenda{min-width:680px}
+.tbl-hist{min-width:820px}
+td .rm{color:var(--muted)}
+td .rm:hover{color:var(--bad);border-color:var(--bad)}
+table td.tight{padding:4px 6px}
+table .cellnum{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+tbody tr.out td{opacity:.5}
+tbody tr.now{background:var(--accent-wash)}
+.mini{font:11px/1.3 var(--sans);color:var(--muted)}
+.err{white-space:normal}
+
+/* summary line */
+.sumline{font:13.5px/1.55 var(--sans);background:var(--sunk);border:1px solid var(--line);
+  border-radius:4px;padding:11px 12px;word-break:break-word}
+.menu{position:relative}
+.menu>.mm{position:absolute;right:0;top:calc(100% + 5px);background:var(--surface);border:1px solid var(--line-hard);
+  border-radius:4px;box-shadow:var(--sh);padding:5px;display:none;z-index:60;min-width:210px}
+.menu.open>.mm{display:flex;flex-direction:column;gap:2px}
+.menu .mm button{width:100%;justify-content:flex-start;border:0;background:transparent;text-align:left}
+.menu .mm button:hover{background:var(--accent-wash)}
+
+/* print document */
+.doc{color:#000}
+.doc .dh{display:flex;justify-content:space-between;gap:10mm;border-bottom:2px solid #000;padding-bottom:3mm;margin-bottom:4mm}
+.doc .dh .t{font:700 18pt/1.1 var(--sans);letter-spacing:-.02em}
+.doc .dh .o{font:600 11pt/1.3 var(--sans);margin-top:1.5mm}
+.doc .dh .r{text-align:right;font-size:9.5pt;line-height:1.55}
+.doc h3{font-size:11pt;margin:5mm 0 2mm;border-bottom:1px solid #888;padding-bottom:1mm}
+.doc .kv{display:grid;grid-template-columns:1fr 1fr;gap:1mm 8mm;font-size:9.5pt;line-height:1.5}
+.doc .kv div{display:flex;gap:3mm}
+.doc .kv b{min-width:34mm;display:inline-block}
+.doc table{width:100%;font-size:9pt;border-collapse:collapse}
+.doc th,.doc td{border:1px solid #999;padding:1.5mm 2mm;text-align:left;vertical-align:top}
+.doc th{background:#eee;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc .big{border:2px solid #000;padding:3mm;margin:3mm 0;display:flex;justify-content:space-between;gap:6mm;align-items:baseline}
+.doc .big .l{font:600 10pt/1.2 var(--sans);text-transform:uppercase;letter-spacing:.06em}
+.doc .big .v{font:700 20pt/1 var(--mono)}
+.doc .sl{border:1px solid #999;background:#f4f4f4;padding:3mm;font-size:9.5pt;line-height:1.5;margin-top:2mm}
+.doc .disc{border:1.5px solid #000;padding:3mm;font-size:8.8pt;line-height:1.5;margin-top:4mm}
+.doc .foot{margin-top:5mm;border-top:1px solid #999;padding-top:2mm;font-size:8.2pt;color:#333}
+@media print{ .doc .brk{page-break-before:always} }
+
+@media(max-width:640px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .btn{font-size:12px;padding:7px 9px}
+  .appbar h1{font-size:14.5px}
+  .card>.bd{padding:13px}
+}
+</style>
+</head>
+<body>
+<header class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">MC</div>
+    <div style="min-width:0">
+      <h1>Meeting Cost Calculator</h1>
+      <div class="sub">SOLVIX · SCHEDULING &amp; WORKFORCE</div>
+    </div>
+  </div>
+  <div class="row" style="gap:7px">
+    <button type="button" class="btn pri" id="btnPrint">Print summary</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <div class="menu" id="menuWrap">
+      <button type="button" class="btn" id="btnMenu" aria-haspopup="true" aria-expanded="false">Data ▾</button>
+      <div class="mm" role="menu" aria-label="Data actions">
+        <button type="button" class="btn sm" id="btnJson" role="menuitem">Export JSON backup</button>
+        <button type="button" class="btn sm" id="btnImport" role="menuitem">Import JSON backup…</button>
+        <button type="button" class="btn sm" id="btnSample" role="menuitem">Reload sample meeting</button>
+        <button type="button" class="btn sm" id="btnTheme" role="menuitem">Theme: Auto</button>
+        <button type="button" class="btn sm dgr" id="btnClear" role="menuitem">Clear all data</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="fileJson" accept="application/json,.json" style="display:none">
+</header>
+
+<main class="app">
+
+  <!-- ══ printed document (stands alone) ══ -->
+  <section class="printonly doc" id="doc" aria-hidden="true"></section>
+
+  <div class="split noprint" style="margin-top:14px">
+
+    <!-- ── left: working area ── -->
+    <div class="stack" style="gap:14px">
+
+      <section class="card">
+        <div class="hd">
+          <h2>Meeting</h2>
+          <span class="savedtag" id="savedTag">&nbsp;</span>
+          <button type="button" class="sample" id="sampleTag" title="Clear the sample meeting and start from empty">Sample data — click to clear</button>
+        </div>
+        <div class="bd stack" style="gap:12px">
+          <div class="grid-in wide">
+            <div class="f">
+              <label for="mTitle">Meeting title</label>
+              <input id="mTitle" type="text" placeholder="Weekly ops review">
+            </div>
+            <div class="f">
+              <label for="mOrg">Organisation</label>
+              <input id="mOrg" type="text" autocomplete="organization" placeholder="Your company">
+            </div>
+            <div class="f">
+              <label for="mChair">Chair / organiser</label>
+              <input id="mChair" type="text" placeholder="Who called it">
+            </div>
+          </div>
+          <div class="grid-in">
+            <div class="f">
+              <label for="mDate">Date</label>
+              <input id="mDate" type="date">
+            </div>
+            <div class="f">
+              <label for="mStart">Start time</label>
+              <input id="mStart" type="time">
+            </div>
+            <div class="f">
+              <label for="mPlanned">Planned minutes</label>
+              <input id="mPlanned" type="number" min="0" max="1440" step="5" inputmode="numeric">
+              <span class="err" id="ePlanned" hidden></span>
+            </div>
+            <div class="f">
+              <label for="mLoc">Room / link</label>
+              <input id="mLoc" type="text" placeholder="Boardroom 2">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Attendees</h2>
+          <span class="chip acc" id="peopleChip">0 people</span>
+          <button type="button" class="btn sm" id="btnAddP">+ Add attendee</button>
+        </div>
+        <div class="tw">
+          <table class="tbl-people">
+            <caption class="visually-hidden" style="position:absolute;left:-9999px">Attendees, their pay basis and their share of the meeting cost</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="min-width:150px">Name</th>
+                <th scope="col" style="min-width:130px">Role</th>
+                <th scope="col" class="r" style="width:74px">People</th>
+                <th scope="col" style="width:104px">Pay basis</th>
+                <th scope="col" class="r" style="width:118px">Salary / rate</th>
+                <th scope="col" class="r" style="width:96px">Base / h</th>
+                <th scope="col" class="r" style="width:104px">Loaded / h</th>
+                <th scope="col" style="width:56px">In?</th>
+                <th scope="col" class="r" style="width:104px">Cost</th>
+                <th scope="col" style="width:44px"><span style="position:absolute;left:-9999px">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="pBody"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5">Total burn rate while these people are in the room</td>
+                <td class="n" id="pFootBase">—</td>
+                <td class="n" id="pFootLoaded">—</td>
+                <td></td>
+                <td class="n" id="pFootCost">—</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="bd" style="border-top:1px solid var(--line)">
+          <div class="grid-in">
+            <div class="f">
+              <label for="mHpy">Working hours per year</label>
+              <input id="mHpy" type="number" min="1" max="4000" step="10" inputmode="numeric">
+              <span class="hint">Divides salary into an hourly rate. 1,880 ≈ 37.5 h × 52 weeks less 6 weeks leave &amp; bank holidays. Use 2,080 for a US 40 h year.</span>
+              <span class="err" id="eHpy" hidden></span>
+            </div>
+            <div class="f">
+              <label for="mOnCost">Employer on-costs %</label>
+              <input id="mOnCost" type="number" min="0" max="200" step="0.5" inputmode="decimal">
+              <span class="hint">National insurance / payroll tax, pension, benefits. Set 0 to cost pay only.</span>
+              <span class="err" id="eOnCost" hidden></span>
+            </div>
+            <div class="f">
+              <label for="mCur">Currency</label>
+              <select id="mCur">
+                <option value="£">£ Pound</option>
+                <option value="$">$ Dollar</option>
+                <option value="€">€ Euro</option>
+                <option value="custom">Custom symbol…</option>
+              </select>
+            </div>
+            <div class="f" id="curCustomWrap" hidden>
+              <label for="mCurSym">Custom symbol</label>
+              <input id="mCurSym" type="text" maxlength="4" placeholder="R">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Agenda &amp; cost per item</h2>
+          <span class="chip" id="agChip">—</span>
+          <button type="button" class="btn sm" id="btnAddA">+ Add item</button>
+        </div>
+        <div class="tw">
+          <table class="tbl-agenda">
+            <thead>
+              <tr>
+                <th scope="col" style="min-width:190px">Agenda item</th>
+                <th scope="col" style="min-width:120px">Owner</th>
+                <th scope="col" class="r" style="width:92px">Minutes</th>
+                <th scope="col" class="r" style="width:84px">Ends</th>
+                <th scope="col" class="r" style="width:104px">Cost</th>
+                <th scope="col" class="r" style="width:78px">Share</th>
+                <th scope="col" style="width:44px"><span style="position:absolute;left:-9999px">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="aBody"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">Agenda total</td>
+                <td class="n" id="aFootMin">—</td>
+                <td class="n" id="aFootEnd">—</td>
+                <td class="n" id="aFootCost">—</td>
+                <td class="n">100%</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="bd" style="border-top:1px solid var(--line)">
+          <div id="agNote" class="hint">Each item is costed at the meeting burn rate for its allotted minutes.</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Recurring meeting — annual cost</h2></div>
+        <div class="bd stack" style="gap:12px">
+          <div class="grid-in">
+            <div class="f">
+              <label for="mFreq">How often</label>
+              <select id="mFreq">
+                <option value="260">Every weekday (260/yr)</option>
+                <option value="104">Twice a week (104/yr)</option>
+                <option value="52">Weekly (52/yr)</option>
+                <option value="26">Fortnightly (26/yr)</option>
+                <option value="12">Monthly (12/yr)</option>
+                <option value="4">Quarterly (4/yr)</option>
+                <option value="1">One-off (1)</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f">
+              <label for="mOcc">Occurrences per year</label>
+              <input id="mOcc" type="number" min="0" max="2000" step="1" inputmode="numeric">
+              <span class="err" id="eOcc" hidden></span>
+            </div>
+          </div>
+          <div class="statgrid">
+            <div class="stat"><div class="k">Cost per occurrence</div><div class="v" id="sOcc">—</div><div class="u" id="sOccU">&nbsp;</div></div>
+            <div class="stat"><div class="k">Annual cost</div><div class="v" id="sAnnual">—</div><div class="u" id="sAnnualU">&nbsp;</div></div>
+            <div class="stat"><div class="k">Person-hours / yr</div><div class="v" id="sPh">—</div><div class="u">time consumed</div></div>
+            <div class="stat"><div class="k">Full-time equivalent</div><div class="v" id="sFte">—</div><div class="u" id="sFteU">of one person</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Summary line for the notes</h2>
+          <button type="button" class="btn sm" id="btnCopy">Copy</button>
+        </div>
+        <div class="bd stack" style="gap:8px">
+          <p class="sumline" id="sumLine">—</p>
+          <span class="hint" id="copyHint">Paste this straight into the minutes, the chat thread or the calendar invite.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Meeting history</h2>
+          <span class="chip" id="histChip">0 saved</span>
+          <button type="button" class="btn sm pri" id="btnSaveHist">Save this meeting</button>
+        </div>
+        <div class="tw">
+          <table class="tbl-hist">
+            <thead>
+              <tr>
+                <th scope="col" style="min-width:180px">Meeting</th>
+                <th scope="col" style="width:106px">Date</th>
+                <th scope="col" class="r" style="width:74px">People</th>
+                <th scope="col" class="r" style="width:92px">Planned</th>
+                <th scope="col" class="r" style="width:88px">Actual</th>
+                <th scope="col" class="r" style="width:110px">Cost</th>
+                <th scope="col" class="r" style="width:120px">Annualised</th>
+                <th scope="col" style="width:92px"><span style="position:absolute;left:-9999px">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="hBody"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5">Total recorded meeting cost</td>
+                <td class="n" id="hFootCost">—</td>
+                <td class="n" id="hFootAnn">—</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── right: live answer ── -->
+    <div>
+      <div class="sticky stack" style="gap:14px">
+        <section class="card">
+          <div class="hd"><h2>Cost right now</h2><span class="chip" id="stateChip">Stopped</span></div>
+          <div class="bd stack" style="gap:11px">
+
+            <div class="stat hero" id="hero">
+              <div class="k" id="heroK">Scheduled cost</div>
+              <div class="v" id="heroV">—</div>
+              <div class="u" id="heroU">&nbsp;</div>
+              <div class="bar" id="heroBar"><i id="heroBarI" style="width:0%"></i></div>
+              <div class="barlab"><span id="barL">—</span><span id="barR">—</span></div>
+            </div>
+
+            <div class="timerbox">
+              <div>
+                <div class="lb">Elapsed</div>
+                <div class="clock" id="clock">00:00:00</div>
+              </div>
+              <div class="row" style="gap:6px">
+                <button type="button" class="btn pri" id="btnStart">Start</button>
+                <button type="button" class="btn" id="btnReset">Reset</button>
+              </div>
+            </div>
+
+            <div class="f">
+              <label for="mActual">Actual minutes (type it, or run the timer)</label>
+              <input id="mActual" type="number" min="0" max="1440" step="1" inputmode="numeric">
+              <span class="err" id="eActual" hidden></span>
+            </div>
+
+            <div class="statgrid">
+              <div class="stat"><div class="k">Burn rate</div><div class="v" id="sBurn">—</div><div class="u">per hour, all in</div></div>
+              <div class="stat"><div class="k">Per minute</div><div class="v" id="sMin">—</div><div class="u">every minute costs this</div></div>
+              <div class="stat"><div class="k">Scheduled cost</div><div class="v" id="sSched">—</div><div class="u" id="sSchedU">&nbsp;</div></div>
+              <div class="stat"><div class="k">Overrun cost</div><div class="v" id="sOver">—</div><div class="u" id="sOverU">&nbsp;</div></div>
+            </div>
+
+            <div class="note" id="basisNote">
+              <strong>How this is worked out.</strong> <span id="basisTxt"></span>
+            </div>
+
+            <div class="note warn">
+              <strong>Indicative estimate — not a payroll or billing figure.</strong>
+              It costs the time of the people you list, using the rates you type and the on-cost percentage you set.
+              It is not a chargeable rate, it does not include room, travel, software or preparation time, and it must
+              not be used for invoicing, pay decisions or any employment action. Check pay figures with your payroll or
+              finance team before sharing them, and treat individual salary data as confidential.
+            </div>
+
+          </div>
+          <div class="ft">
+            <strong style="margin-right:auto">Meeting cost</strong>
+            <span class="num" id="ftCost" style="font-weight:700">—</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="noprint" style="margin-top:18px;color:var(--muted);font-size:12.5px;line-height:1.6">
+    Salary is converted to an hourly rate by dividing by the working hours per year you set (default 1,880 h);
+    every rate is then multiplied by (1 + employer on-costs %). Meeting cost = total loaded hourly rate × minutes ÷ 60.
+    Annual cost = cost per occurrence × occurrences per year. Figures are estimates from your own inputs and are
+    rounded to two decimal places for display only. Everything stays in this browser — nothing is sent anywhere.
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.meeting-cost.v1', THEMEKEY='solvix.meeting-cost.theme';
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:0; }
+function isNum(v){ return v!==''&&v!=null&&isFinite(parseFloat(v)); }
+function uid(p){ return p+'-'+Math.random().toString(36).slice(2,9); }
+function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pad(n){ return (n<10?'0':'')+n; }
+function sym(){ return S.cur==='custom' ? (S.curSym||'¤') : (S.cur||'£'); }
+function grp(s){ var p=s.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
+function money(v,dp){
+  if(v==null||!isFinite(v)) return '—';
+  if(Object.is(v,-0)) v=0;
+  var d=(dp==null?2:dp), neg=v<0, a=Math.abs(v);
+  return (neg?'-':'')+sym()+grp(a.toFixed(d));
+}
+function n2(v,dp){
+  if(v==null||!isFinite(v)) return '—';
+  if(Object.is(v,-0)) v=0;
+  return grp(v.toFixed(dp==null?2:dp));
+}
+function mins(v){ if(v==null||!isFinite(v)) return '—'; return n2(v,0)+' min'; }
+function hms(sec){
+  if(!isFinite(sec)||sec<0) sec=0;
+  sec=Math.floor(sec);
+  var h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  return pad(h)+':'+pad(m)+':'+pad(s);
+}
+function t2m(t){ if(!t||!/^\d{1,2}:\d{2}/.test(t)) return null; var p=t.split(':');
+  var h=parseInt(p[0],10), m=parseInt(p[1],10); if(!isFinite(h)||!isFinite(m)) return null; return h*60+m; }
+function m2t(m){ if(m==null||!isFinite(m)) return '—'; m=Math.round(m); var d=((m%1440)+1440)%1440;
+  return pad(Math.floor(d/60))+':'+pad(d%60); }
+function dLong(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso||'—';
+  var M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var p=iso.split('-'); return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1]+' '+p[0];
+}
+function dShort(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso||'—';
+  var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var p=iso.split('-'); return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1]+' '+p[0].slice(2);
+}
+
+/* ── sample state ─────────────────────────────────────────── */
+function person(name,role,count,basis,amount,inm){
+  return {id:uid('p'),name:name,role:role,count:count,basis:basis,amount:amount,inm:inm!==false};
+}
+function item(name,owner,minutes){ return {id:uid('a'),name:name,owner:owner,min:minutes}; }
+function sample(){
+  return {
+    v:1, sample:true,
+    title:'Weekly Ops & Delivery Review',
+    org:'Northbank Facilities Ltd',
+    chair:'R. Ellery, Operations Director',
+    loc:'Boardroom 2 / Teams',
+    date:todayISO(), start:'09:30',
+    plannedMin:60,
+    hpy:1880, onCost:25,
+    cur:'£', curSym:'',
+    freq:'52', occ:52,
+    elapsed:4440, runningSince:null,
+    people:[
+      person('R. Ellery','Operations Director',1,'salary',96000),
+      person('D. Marsh','Finance Manager',1,'salary',62000),
+      person('Regional supervisors','Regional Supervisor',2,'hourly',28.5),
+      person('K. Osei','Contracts Lead',1,'salary',54000),
+      person('J. Whitlow','Scheduler / planner',1,'hourly',17.25),
+      person('A. Bhatti','Health & Safety Officer',1,'salary',45000)
+    ],
+    agenda:[
+      item('Safety moment','A. Bhatti',5),
+      item('KPI pack & SLA misses','D. Marsh',10),
+      item('Open jobs & engineer cover','R. Ellery',15),
+      item('Client escalations — Meridian, Halcyon','K. Osei',15),
+      item('Recruitment and rota gaps','J. Whitlow',10),
+      item('AOB and actions','R. Ellery',5)
+    ],
+    history:[
+      {id:uid('h'),title:'Weekly Ops & Delivery Review',date:shiftDays(-7),people:7,planned:60,actual:68,burn:263.69,occ:52},
+      {id:uid('h'),title:'Weekly Ops & Delivery Review',date:shiftDays(-14),people:6,planned:60,actual:55,burn:227.06,occ:52},
+      {id:uid('h'),title:'Monthly H&S committee',date:shiftDays(-21),people:9,planned:90,actual:105,burn:198.40,occ:12}
+    ]
+  };
+}
+function shiftDays(n){
+  var d=new Date(); d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+var S=sample();
+var timerHandle=null;
+
+/* ── persistence ──────────────────────────────────────────── */
+function setSaved(t){ var n=$('savedTag'); if(n) n.textContent=t; }
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); setSaved('Saved in this browser'); }
+  catch(e){ setSaved('Could not save — storage blocked'); }
+}
+function touch(){ S.sample=false; var t=$('sampleTag'); if(t) t.hidden=true; save(); }
+function loadState(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object'||!Array.isArray(o.people)) return false;
+    S=normalise(o); return true;
+  }catch(e){ return false; }
+}
+function normalise(o){
+  var out={
+    v:1, sample:!!o.sample,
+    title:str(o.title), org:str(o.org), chair:str(o.chair), loc:str(o.loc),
+    date:/^\d{4}-\d{2}-\d{2}$/.test(o.date||'')?o.date:todayISO(),
+    start:/^\d{1,2}:\d{2}$/.test(o.start||'')?o.start:'09:00',
+    plannedMin:clamp(isNum(o.plannedMin)?num(o.plannedMin):60,0,1440),
+    hpy:clamp(isNum(o.hpy)?num(o.hpy):1880,1,4000),
+    onCost:clamp(isNum(o.onCost)?num(o.onCost):25,0,200),
+    cur:(['£','$','€','custom'].indexOf(o.cur)>=0)?o.cur:'£',
+    curSym:str(o.curSym).slice(0,4),
+    freq:str(o.freq)||'52',
+    occ:clamp(isNum(o.occ)?Math.round(num(o.occ)):52,0,2000),
+    elapsed:Math.max(0,isNum(o.elapsed)?num(o.elapsed):0),
+    runningSince:(typeof o.runningSince==='number'&&isFinite(o.runningSince))?o.runningSince:null,
+    people:[], agenda:[], history:[]
+  };
+  (o.people||[]).forEach(function(p){
+    if(!p||typeof p!=='object') return;
+    out.people.push({id:str(p.id)||uid('p'), name:str(p.name), role:str(p.role),
+      count:clamp(isNum(p.count)?Math.round(num(p.count)):1,0,999),
+      basis:(p.basis==='hourly'?'hourly':'salary'),
+      amount:Math.max(0,isNum(p.amount)?num(p.amount):0),
+      inm:p.inm!==false});
+  });
+  (o.agenda||[]).forEach(function(a){
+    if(!a||typeof a!=='object') return;
+    out.agenda.push({id:str(a.id)||uid('a'), name:str(a.name), owner:str(a.owner),
+      min:clamp(isNum(a.min)?num(a.min):0,0,1440)});
+  });
+  (o.history||[]).forEach(function(h){
+    if(!h||typeof h!=='object') return;
+    out.history.push({id:str(h.id)||uid('h'), title:str(h.title), date:str(h.date),
+      people:Math.max(0,isNum(h.people)?Math.round(num(h.people)):0),
+      planned:Math.max(0,isNum(h.planned)?num(h.planned):0),
+      actual:Math.max(0,isNum(h.actual)?num(h.actual):0),
+      burn:Math.max(0,isNum(h.burn)?num(h.burn):0),
+      occ:Math.max(0,isNum(h.occ)?Math.round(num(h.occ)):0)});
+  });
+  if(out.runningSince && out.runningSince>Date.now()+60000) out.runningSince=null;
+  return out;
+}
+function str(v){ return (v==null)?'':String(v); }
+function clamp(v,lo,hi){ if(!isFinite(v)) return lo; return Math.min(hi,Math.max(lo,v)); }
+
+/* ── the maths ────────────────────────────────────────────── */
+function elapsedSec(){
+  var e=Math.max(0,num(S.elapsed));
+  if(S.runningSince) e+=Math.max(0,(Date.now()-S.runningSince)/1000);
+  return e;
+}
+function compute(){
+  var hpy=num(S.hpy), load=1+num(S.onCost)/100;
+  var rows=S.people.map(function(p){
+    var base=null;
+    if(p.basis==='hourly') base=Math.max(0,num(p.amount));
+    else base=(hpy>0)? Math.max(0,num(p.amount))/hpy : null;
+    var loaded=(base==null)?null:base*load;
+    var cnt=Math.max(0,Math.round(num(p.count)));
+    var lineHr=(loaded==null)?null:loaded*cnt;
+    return {p:p, base:base, loaded:loaded, count:cnt, lineHr:(p.inm?lineHr:0), rawLineHr:lineHr};
+  });
+  var burnHr=0, baseHr=0, headcount=0;
+  rows.forEach(function(r){
+    if(r.p.inm && r.lineHr!=null && isFinite(r.lineHr)){ burnHr+=r.lineHr; headcount+=r.count; }
+    if(r.p.inm && r.base!=null && isFinite(r.base)) baseHr+=r.base*r.count;
+  });
+  var burnMin=burnHr/60;
+  var planned=Math.max(0,num(S.plannedMin));
+  var elapsed=elapsedSec();
+  var actualMin=elapsed/60;
+  var running=!!S.runningSince;
+  var started=elapsed>0.5;
+  var usedMin=started?actualMin:planned;
+  var sched=burnMin*planned;
+  var actual=burnMin*actualMin;
+  var used=burnMin*usedMin;
+  var overMin=Math.max(0,actualMin-planned);
+  var overCost=burnMin*overMin;
+  var occ=Math.max(0,Math.round(num(S.occ)));
+  var annual=used*occ;
+  var personHours=(usedMin/60)*headcount*occ;
+  var fte=(hpy>0)?personHours/hpy : null;
+  var agMin=0; S.agenda.forEach(function(a){ agMin+=Math.max(0,num(a.min)); });
+  var startM=t2m(S.start);
+  var cum=0;
+  var ag=S.agenda.map(function(a){
+    var m=Math.max(0,num(a.min));
+    cum+=m;
+    return {a:a, min:m, cost:burnMin*m, cum:cum,
+      end:(startM==null?null:startM+cum),
+      share:(agMin>0? m/agMin : null)};
+  });
+  var nowIdx=-1;
+  if(started){ for(var i=0;i<ag.length;i++){ if(actualMin<ag[i].cum){ nowIdx=i; break; } } }
+  return {rows:rows, burnHr:burnHr, baseHr:baseHr, burnMin:burnMin, headcount:headcount,
+    planned:planned, elapsed:elapsed, actualMin:actualMin, running:running, started:started,
+    usedMin:usedMin, sched:sched, actual:actual, used:used, overMin:overMin, overCost:overCost,
+    occ:occ, annual:annual, personHours:personHours, fte:fte,
+    agenda:ag, agMin:agMin, agCost:burnMin*agMin, nowIdx:nowIdx, startM:startM};
+}
+
+/* ── render: attendees ────────────────────────────────────── */
+function renderPeople(){
+  var b=$('pBody'), h='';
+  if(!S.people.length){
+    h='<tr><td colspan="10"><div class="empty">No attendees yet — add the people who will be in the room.</div></td></tr>';
+  } else {
+    S.people.forEach(function(p){
+      h+='<tr data-id="'+esc(p.id)+'"'+(p.inm?'':' class="out"')+'>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="nm-'+esc(p.id)+'">Name</label>'+
+          '<input id="nm-'+esc(p.id)+'" type="text" data-f="name" value="'+esc(p.name)+'" placeholder="Name"></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="rl-'+esc(p.id)+'">Role</label>'+
+          '<input id="rl-'+esc(p.id)+'" type="text" data-f="role" value="'+esc(p.role)+'" placeholder="Role"></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="ct-'+esc(p.id)+'">People</label>'+
+          '<input id="ct-'+esc(p.id)+'" type="number" min="0" max="999" step="1" data-f="count" value="'+esc(p.count)+'"></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="bs-'+esc(p.id)+'">Pay basis</label>'+
+          '<select id="bs-'+esc(p.id)+'" data-f="basis">'+
+          '<option value="salary"'+(p.basis==='salary'?' selected':'')+'>Salary/yr</option>'+
+          '<option value="hourly"'+(p.basis==='hourly'?' selected':'')+'>Hourly</option></select></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="am-'+esc(p.id)+'">Salary or hourly rate</label>'+
+          '<input id="am-'+esc(p.id)+'" type="number" min="0" step="'+(p.basis==='hourly'?'0.25':'500')+'" data-f="amount" value="'+esc(p.amount)+'"></td>'+
+        '<td class="cellnum" data-c="base">—</td>'+
+        '<td class="cellnum" data-c="loaded">—</td>'+
+        '<td class="tight" style="text-align:center"><label style="position:absolute;left:-9999px" for="in-'+esc(p.id)+'">Attending</label>'+
+          '<input id="in-'+esc(p.id)+'" type="checkbox" data-f="inm"'+(p.inm?' checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)"></td>'+
+        '<td class="cellnum" data-c="cost">—</td>'+
+        '<td class="tight"><button type="button" class="btn ico sm rm" data-rm="'+esc(p.id)+'" aria-label="Remove attendee">✕</button></td>'+
+      '</tr>';
+    });
+  }
+  b.innerHTML=h;
+}
+function renderAgenda(){
+  var b=$('aBody'), h='';
+  if(!S.agenda.length){
+    h='<tr><td colspan="7"><div class="empty">No agenda items — add them to see what each slot costs.</div></td></tr>';
+  } else {
+    S.agenda.forEach(function(a){
+      h+='<tr data-id="'+esc(a.id)+'">'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="an-'+esc(a.id)+'">Agenda item</label>'+
+          '<input id="an-'+esc(a.id)+'" type="text" data-f="name" value="'+esc(a.name)+'" placeholder="Item"></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="ao-'+esc(a.id)+'">Owner</label>'+
+          '<input id="ao-'+esc(a.id)+'" type="text" data-f="owner" value="'+esc(a.owner)+'" placeholder="Owner"></td>'+
+        '<td class="tight"><label style="position:absolute;left:-9999px" for="am2-'+esc(a.id)+'">Minutes</label>'+
+          '<input id="am2-'+esc(a.id)+'" type="number" min="0" max="1440" step="1" data-f="min" value="'+esc(a.min)+'"></td>'+
+        '<td class="cellnum" data-c="end">—</td>'+
+        '<td class="cellnum" data-c="cost">—</td>'+
+        '<td class="cellnum" data-c="share">—</td>'+
+        '<td class="tight"><button type="button" class="btn ico sm rm" data-rm="'+esc(a.id)+'" aria-label="Remove agenda item">✕</button></td>'+
+      '</tr>';
+    });
+  }
+  b.innerHTML=h;
+}
+function renderHistory(){
+  var b=$('hBody'), h='', tc=0, ta=0;
+  if(!S.history.length){
+    h='<tr><td colspan="8"><div class="empty">Nothing saved yet — press “Save this meeting” to keep a record.</div></td></tr>';
+  } else {
+    S.history.forEach(function(r){
+      var cost=r.burn*Math.max(0,r.actual)/60, ann=cost*Math.max(0,r.occ);
+      tc+=cost; ta+=ann;
+      h+='<tr data-id="'+esc(r.id)+'">'+
+        '<td>'+esc(r.title||'(untitled)')+'</td>'+
+        '<td class="cellnum" style="text-align:left">'+esc(dShort(r.date))+'</td>'+
+        '<td class="cellnum">'+n2(r.people,0)+'</td>'+
+        '<td class="cellnum">'+n2(r.planned,0)+' min</td>'+
+        '<td class="cellnum">'+n2(r.actual,0)+' min</td>'+
+        '<td class="cellnum">'+money(cost)+'</td>'+
+        '<td class="cellnum">'+money(ann)+'</td>'+
+        '<td class="tight"><button type="button" class="btn ico sm rm" data-hrm="'+esc(r.id)+'" aria-label="Delete saved meeting">✕</button></td>'+
+      '</tr>';
+    });
+  }
+  b.innerHTML=h;
+  $('hFootCost').textContent = S.history.length?money(tc):'—';
+  $('hFootAnn').textContent  = S.history.length?money(ta):'—';
+  $('histChip').textContent  = S.history.length+' saved';
+}
+
+/* ── render: live numbers ─────────────────────────────────── */
+function renderResults(){
+  var C=compute();
+
+  /* attendee rows */
+  var trs=$('pBody').querySelectorAll('tr[data-id]');
+  [].forEach.call(trs,function(tr){
+    var id=tr.getAttribute('data-id');
+    var r=null; C.rows.forEach(function(x){ if(x.p.id===id) r=x; });
+    if(!r) return;
+    tr.className = r.p.inm?'':'out';
+    var cb=tr.querySelector('[data-c="base"]'), cl=tr.querySelector('[data-c="loaded"]'), cc=tr.querySelector('[data-c="cost"]');
+    cb.textContent = (r.base==null||!isFinite(r.base))?'—':money(r.base);
+    cl.textContent = (r.loaded==null||!isFinite(r.loaded))?'—':money(r.loaded)+(r.count!==1?' ×'+r.count:'');
+    cc.textContent = (!r.p.inm)?'—':((r.rawLineHr==null||!isFinite(r.rawLineHr))?'—':money(r.rawLineHr*C.usedMin/60));
+  });
+  $('pFootBase').textContent   = C.headcount===0?'—':money(C.baseHr);
+  $('pFootLoaded').textContent = money(C.burnHr);
+  $('pFootCost').textContent   = money(C.used);
+  $('peopleChip').textContent  = C.headcount+(C.headcount===1?' person':' people');
+
+  /* agenda rows */
+  var atrs=$('aBody').querySelectorAll('tr[data-id]');
+  [].forEach.call(atrs,function(tr,i){
+    var id=tr.getAttribute('data-id'), g=null, idx=-1;
+    C.agenda.forEach(function(x,j){ if(x.a.id===id){ g=x; idx=j; } });
+    if(!g) return;
+    tr.className=(idx===C.nowIdx)?'now':'';
+    tr.querySelector('[data-c="end"]').textContent  = (g.end==null)?'—':m2t(g.end);
+    tr.querySelector('[data-c="cost"]').textContent = money(g.cost);
+    tr.querySelector('[data-c="share"]').textContent= (g.share==null)?'—':n2(g.share*100,0)+'%';
+  });
+  $('aFootMin').textContent  = S.agenda.length?n2(C.agMin,0)+' min':'—';
+  $('aFootEnd').textContent  = (C.startM==null||!S.agenda.length)?'—':m2t(C.startM+C.agMin);
+  $('aFootCost').textContent = S.agenda.length?money(C.agCost):'—';
+  var chip=$('agChip'), note=$('agNote');
+  if(!S.agenda.length){ chip.textContent='No items'; chip.className='chip'; note.textContent='Add agenda items with their allotted minutes to see what each slot costs.'; }
+  else if(Math.abs(C.agMin-C.planned)<0.01){ chip.textContent='Fits the slot'; chip.className='chip ok';
+    note.textContent='Agenda adds up to the '+n2(C.planned,0)+'-minute slot exactly.'; }
+  else if(C.agMin>C.planned){ chip.textContent='Over by '+n2(C.agMin-C.planned,0)+' min'; chip.className='chip bad';
+    note.textContent='The agenda needs '+n2(C.agMin,0)+' minutes but only '+n2(C.planned,0)+' are booked — '+
+      money(C.burnMin*(C.agMin-C.planned))+' of the agenda has nowhere to go.'; }
+  else { chip.textContent=n2(C.planned-C.agMin,0)+' min spare'; chip.className='chip warn';
+    note.textContent='The agenda uses '+n2(C.agMin,0)+' of the '+n2(C.planned,0)+' booked minutes — '+
+      money(C.burnMin*(C.planned-C.agMin))+' of unallocated time.'; }
+  if(C.nowIdx>=0 && S.agenda[C.nowIdx]) {
+    note.textContent += ' At '+hms(C.elapsed)+' you should be on “'+(S.agenda[C.nowIdx].name||'item '+(C.nowIdx+1))+'”.';
+  }
+
+  /* hero */
+  var hero=$('hero'), over=C.started&&C.overMin>0.0001;
+  hero.className='stat hero'+(over?' over':'')+(C.running?' live':'');
+  var heroVal = C.started?C.actual:C.sched;
+  $('heroV').textContent = (C.headcount===0)?'—':money(heroVal);
+  if(C.running){
+    $('heroK').innerHTML='<span class="dot"></span>Cost so far — running';
+    $('heroU').textContent = hms(C.elapsed)+' elapsed of '+n2(C.planned,0)+' min booked';
+  } else if(C.started){
+    $('heroK').textContent='Actual cost — timer stopped';
+    $('heroU').textContent = n2(C.actualMin,0)+' min actual against '+n2(C.planned,0)+' min booked';
+  } else {
+    $('heroK').textContent='Scheduled cost';
+    $('heroU').textContent = n2(C.planned,0)+' minutes × '+C.headcount+(C.headcount===1?' person':' people')+' — press Start to time it live';
+  }
+  var pct=(C.planned>0)? (C.started?C.actualMin:C.planned)/C.planned*100 : (C.started?100:0);
+  if(!isFinite(pct)) pct=0;
+  $('heroBarI').style.width=Math.min(100,Math.max(0,pct))+'%';
+  $('heroBar').className='bar'+(over?' over':'');
+  $('barL').textContent = C.started? (n2(Math.min(pct,999),0)+'% of the booked time') : 'Not started';
+  $('barR').textContent = over? ('over by '+n2(C.overMin,0)+' min') : (C.started? (n2(Math.max(0,C.planned-C.actualMin),0)+' min left') : (money(C.burnMin)+' per minute'));
+  $('ftCost').textContent = (C.headcount===0)?'—':money(heroVal);
+  $('stateChip').textContent = C.running?'Running':(C.started?'Stopped':'Not started');
+  $('stateChip').className = 'chip'+(C.running?' bad':(C.started?' warn':''));
+  $('btnStart').textContent = C.running?'Pause':(C.started?'Resume':'Start');
+
+  /* stats */
+  $('sBurn').textContent = money(C.burnHr);
+  $('sMin').textContent  = money(C.burnMin);
+  $('sSched').textContent= money(C.sched);
+  $('sSchedU').textContent = n2(C.planned,0)+' min as booked';
+  $('sOver').textContent = C.started?money(C.overCost):'—';
+  $('sOverU').textContent = C.started? (C.overMin>0.0001? n2(C.overMin,0)+' min past the slot' : 'finished inside the slot') : 'no actual time yet';
+
+  /* clock */
+  var clk=$('clock'); if(clk) clk.textContent=hms(C.elapsed);
+  var ai=$('mActual');
+  if(ai && document.activeElement!==ai) ai.value = C.started? String(Math.round(C.actualMin)) : (C.elapsed>0?String(Math.round(C.actualMin)):'0');
+
+  /* annual */
+  $('sOcc').textContent   = (C.headcount===0)?'—':money(C.used);
+  $('sOccU').textContent  = (C.started?'actual ':'scheduled ')+n2(C.usedMin,0)+' min';
+  $('sAnnual').textContent= (C.headcount===0||C.occ===0)?'—':money(C.annual);
+  $('sAnnualU').textContent = C.occ+'× per year';
+  $('sPh').textContent    = (C.headcount===0||C.occ===0)?'—':n2(C.personHours,1)+' h';
+  $('sFte').textContent   = (C.fte==null||!isFinite(C.fte)||C.occ===0||C.headcount===0)?'—':n2(C.fte,3);
+  $('sFteU').textContent  = 'of one person at '+n2(num(S.hpy),0)+' h/yr';
+
+  /* basis note */
+  $('basisTxt').textContent =
+    'Salaries are divided by '+n2(num(S.hpy),0)+' working hours a year, then every rate is multiplied by '+
+    n2(num(S.onCost),1)+'% employer on-costs. '+C.headcount+(C.headcount===1?' person':' people')+
+    ' at '+money(C.burnHr)+' an hour is '+money(C.burnMin)+' a minute — a ten-minute late start costs '+
+    money(C.burnMin*10)+'.';
+
+  /* summary line */
+  $('sumLine').textContent = summaryLine(C);
+  return C;
+}
+function summaryLine(C){
+  if(C.headcount===0) return 'Add at least one attendee to generate the summary line.';
+  var t=(S.title||'Meeting')+' — '+dLong(S.date)+(S.start?', '+S.start:'')+'. ';
+  t+=C.headcount+(C.headcount===1?' person':' people')+' × '+n2(C.planned,0)+' min booked';
+  if(C.started) t+=', '+n2(C.actualMin,0)+' min actual';
+  t+='. Cost '+money(C.started?C.actual:C.sched)+' ('+money(C.burnMin)+'/min, '+money(C.burnHr)+'/h fully loaded).';
+  if(C.started&&C.overMin>0.0001) t+=' Overran by '+n2(C.overMin,0)+' min = '+money(C.overCost)+' of extra cost.';
+  if(C.occ>1) t+=' Repeated '+C.occ+'× a year that is '+money(C.annual)+' and '+n2(C.personHours,0)+' person-hours ('+
+    ((C.fte!=null&&isFinite(C.fte))?n2(C.fte,2)+' FTE':'—')+').';
+  return t;
+}
+
+/* ── printed document ─────────────────────────────────────── */
+function buildDoc(){
+  var C=compute();
+  var h='';
+  h+='<div class="dh"><div><div class="t">Meeting Cost Summary</div>'+
+     '<div class="o">'+esc(S.org||'—')+'</div></div>'+
+     '<div class="r"><b>'+esc(S.title||'Meeting')+'</b><br>'+esc(dLong(S.date))+
+     (S.start?' · '+esc(S.start):'')+'<br>Prepared '+esc(dLong(todayISO()))+'</div></div>';
+
+  h+='<h3>Meeting details</h3><div class="kv">'+
+     '<div><b>Meeting</b><span>'+esc(S.title||'—')+'</span></div>'+
+     '<div><b>Chair / organiser</b><span>'+esc(S.chair||'—')+'</span></div>'+
+     '<div><b>Date &amp; start</b><span>'+esc(dLong(S.date))+(S.start?' at '+esc(S.start):'')+'</span></div>'+
+     '<div><b>Room / link</b><span>'+esc(S.loc||'—')+'</span></div>'+
+     '<div><b>Planned duration</b><span>'+n2(C.planned,0)+' minutes</span></div>'+
+     '<div><b>Actual duration</b><span>'+(C.started?n2(C.actualMin,0)+' minutes':'not timed')+'</span></div>'+
+     '<div><b>Attendees</b><span>'+C.headcount+'</span></div>'+
+     '<div><b>Burn rate</b><span>'+money(C.burnHr)+' per hour · '+money(C.burnMin)+' per minute</span></div>'+
+     '</div>';
+
+  h+='<div class="big"><span class="l">'+(C.started?'Actual cost of this meeting':'Scheduled cost of this meeting')+'</span>'+
+     '<span class="v">'+money(C.started?C.actual:C.sched)+'</span></div>';
+
+  h+='<h3>Cost summary</h3><table><tbody>'+
+     row2('Scheduled cost ('+n2(C.planned,0)+' min as booked)',money(C.sched))+
+     row2('Actual cost'+(C.started?' ('+n2(C.actualMin,0)+' min)':' (not timed)'),C.started?money(C.actual):'—')+
+     row2('Overrun'+(C.started&&C.overMin>0?' ('+n2(C.overMin,0)+' min past the slot)':''),C.started?money(C.overCost):'—')+
+     row2('Cost per minute',money(C.burnMin))+
+     row2('Cost per attendee-hour (average)',C.headcount>0?money(C.burnHr/C.headcount):'—')+
+     '</tbody></table>';
+
+  h+='<h3>Attendees and rates</h3><table><thead><tr><th>Name</th><th>Role</th><th class="n">No.</th>'+
+     '<th>Basis</th><th class="n">Salary / rate</th><th class="n">Base /h</th><th class="n">Loaded /h</th>'+
+     '<th class="n">Cost</th></tr></thead><tbody>';
+  if(!C.rows.length) h+='<tr><td colspan="8">No attendees listed.</td></tr>';
+  C.rows.forEach(function(r){
+    h+='<tr><td>'+esc(r.p.name||'—')+(r.p.inm?'':' <i>(not attending)</i>')+'</td><td>'+esc(r.p.role||'—')+'</td>'+
+      '<td class="n">'+r.count+'</td><td>'+(r.p.basis==='hourly'?'Hourly':'Salary')+'</td>'+
+      '<td class="n">'+(r.p.basis==='hourly'?money(num(r.p.amount)):money(num(r.p.amount),0))+'</td>'+
+      '<td class="n">'+((r.base==null)?'—':money(r.base))+'</td>'+
+      '<td class="n">'+((r.loaded==null)?'—':money(r.loaded))+'</td>'+
+      '<td class="n">'+((!r.p.inm||r.rawLineHr==null)?'—':money(r.rawLineHr*C.usedMin/60))+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="6"><b>Total burn rate</b></td><td class="n"><b>'+money(C.burnHr)+'</b></td>'+
+     '<td class="n"><b>'+money(C.used)+'</b></td></tr></tfoot></table>';
+
+  if(S.agenda.length){
+    h+='<h3>Cost per agenda item</h3><table><thead><tr><th>Item</th><th>Owner</th><th class="n">Minutes</th>'+
+       '<th class="n">Ends</th><th class="n">Cost</th><th class="n">Share</th></tr></thead><tbody>';
+    C.agenda.forEach(function(g){
+      h+='<tr><td>'+esc(g.a.name||'—')+'</td><td>'+esc(g.a.owner||'—')+'</td><td class="n">'+n2(g.min,0)+'</td>'+
+        '<td class="n">'+(g.end==null?'—':m2t(g.end))+'</td><td class="n">'+money(g.cost)+'</td>'+
+        '<td class="n">'+(g.share==null?'—':n2(g.share*100,0)+'%')+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="n"><b>'+n2(C.agMin,0)+'</b></td>'+
+       '<td class="n">'+(C.startM==null?'—':m2t(C.startM+C.agMin))+'</td><td class="n"><b>'+money(C.agCost)+'</b></td>'+
+       '<td class="n">100%</td></tr></tfoot></table>';
+  }
+
+  h+='<h3>If this meeting repeats</h3><table><tbody>'+
+     row2('Occurrences per year',C.occ?n2(C.occ,0):'—')+
+     row2('Cost per occurrence ('+(C.started?'actual':'scheduled')+' '+n2(C.usedMin,0)+' min)',money(C.used))+
+     row2('Annual cost',C.occ?money(C.annual):'—')+
+     row2('Person-hours consumed per year',C.occ?n2(C.personHours,1)+' h':'—')+
+     row2('Equivalent share of one full-time person',(C.fte==null||!C.occ)?'—':n2(C.fte,3)+' FTE at '+n2(num(S.hpy),0)+' h/yr')+
+     '</tbody></table>';
+
+  h+='<h3>Summary line</h3><div class="sl">'+esc(summaryLine(C))+'</div>';
+
+  if(S.history.length){
+    h+='<h3>Recorded meeting history</h3><table><thead><tr><th>Meeting</th><th>Date</th><th class="n">People</th>'+
+       '<th class="n">Planned</th><th class="n">Actual</th><th class="n">Cost</th><th class="n">Annualised</th></tr></thead><tbody>';
+    var tc=0;
+    S.history.forEach(function(r){
+      var cost=r.burn*Math.max(0,r.actual)/60; tc+=cost;
+      h+='<tr><td>'+esc(r.title||'—')+'</td><td>'+esc(dShort(r.date))+'</td><td class="n">'+n2(r.people,0)+'</td>'+
+        '<td class="n">'+n2(r.planned,0)+'</td><td class="n">'+n2(r.actual,0)+'</td><td class="n">'+money(cost)+'</td>'+
+        '<td class="n">'+money(cost*Math.max(0,r.occ))+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="5"><b>Total recorded</b></td><td class="n"><b>'+money(tc)+'</b></td><td></td></tr></tfoot></table>';
+  }
+
+  h+='<div class="disc"><b>Basis and limitations.</b> Salaries are converted to an hourly rate by dividing by '+
+     n2(num(S.hpy),0)+' working hours a year; every rate is then increased by '+n2(num(S.onCost),1)+
+     '% for employer on-costs (national insurance / payroll tax, pension, benefits). Meeting cost = total loaded '+
+     'hourly rate × minutes ÷ 60. <b>This is an indicative estimate built from the figures entered above, not a '+
+     'payroll record and not a chargeable rate.</b> It excludes preparation and follow-up time, rooms, travel, '+
+     'software and any work displaced by the meeting. It must not be used for invoicing, pay decisions or any '+
+     'employment action. Individual pay data is confidential — check the figures with payroll or finance before '+
+     'circulating this document.</div>';
+
+  h+='<div class="foot">'+esc(S.org||'')+(S.org?' · ':'')+'Meeting Cost Summary · '+esc(S.title||'Meeting')+
+     ' · '+esc(dLong(S.date))+' · prepared '+esc(dLong(todayISO()))+' · all values in '+esc(sym())+
+     ' · produced with the Solvix Meeting Cost Calculator.</div>';
+
+  $('doc').innerHTML=h;
+}
+function row2(k,v){ return '<tr><td>'+esc(k)+'</td><td class="n" style="width:38%">'+esc(v)+'</td></tr>'; }
+
+/* ── exports ──────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v==null?'':String(v));
+  return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+  }catch(e){ setSaved('Download blocked by this browser'); }
+}
+function slug(s){ return (String(s||'meeting').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'meeting'); }
+function exportCsv(){
+  var C=compute();
+  var head=['Section','Item','Detail','Basis','Salary or rate','Base hourly','On-cost %','Loaded hourly',
+    'Minutes','Cost ('+sym()+')','Share %','Notes'];
+  var L=[head.map(csvCell).join(',')];
+  function push(a){ L.push(a.map(csvCell).join(',')); }
+  push(['MEETING','Title',S.title,'','','','','','','','','']);
+  push(['MEETING','Organisation',S.org,'','','','','','','','','']);
+  push(['MEETING','Chair / organiser',S.chair,'','','','','','','','','']);
+  push(['MEETING','Date',S.date,'','','','','','','','','']);
+  push(['MEETING','Start time',S.start,'','','','','','','','','']);
+  push(['MEETING','Room / link',S.loc,'','','','','','','','','']);
+  push(['MEETING','Working hours per year',n2(num(S.hpy),0),'','','','','','','','','']);
+  push(['MEETING','Employer on-costs %','','','','',n2(num(S.onCost),2),'','','','','']);
+  C.rows.forEach(function(r){
+    push(['ATTENDEE',r.p.name,r.p.role,(r.p.basis==='hourly'?'Hourly':'Salary/yr'),
+      n2(num(r.p.amount),2),(r.base==null?'':n2(r.base,4)),n2(num(S.onCost),2),
+      (r.loaded==null?'':n2(r.loaded,4)),n2(C.usedMin,1),
+      ((!r.p.inm||r.rawLineHr==null)?'0.00':n2(r.rawLineHr*C.usedMin/60,2)),
+      (C.burnHr>0&&r.p.inm&&r.rawLineHr!=null)?n2(r.rawLineHr/C.burnHr*100,1):'',
+      (r.p.inm?('×'+r.count+' attending'):'not attending')]);
+  });
+  C.agenda.forEach(function(g){
+    push(['AGENDA',g.a.name,g.a.owner,'','','','','',n2(g.min,0),n2(g.cost,2),
+      (g.share==null?'':n2(g.share*100,1)),(g.end==null?'':'ends '+m2t(g.end))]);
+  });
+  push(['TOTAL','Burn rate per hour','','','','','',n2(C.burnHr,2),'','','','fully loaded']);
+  push(['TOTAL','Burn rate per minute','','','','','',n2(C.burnMin,4),'','','','']);
+  push(['TOTAL','Scheduled cost','','','','','',n2(C.burnHr,2),n2(C.planned,0),n2(C.sched,2),'','as booked']);
+  push(['TOTAL','Actual cost','','','','','',n2(C.burnHr,2),n2(C.actualMin,1),n2(C.actual,2),'',
+    (C.started?'timer used':'not timed')]);
+  push(['TOTAL','Overrun cost','','','','','','',n2(C.overMin,1),n2(C.overCost,2),'',
+    (C.overMin>0?'past the booked slot':'inside the booked slot')]);
+  push(['ANNUAL','Occurrences per year','','','','','','',n2(C.occ,0),'','','']);
+  push(['ANNUAL','Cost per occurrence','','','','','','',n2(C.usedMin,1),n2(C.used,2),'',
+    (C.started?'actual duration':'scheduled duration')]);
+  push(['ANNUAL','Annual cost','','','','','','','',n2(C.annual,2),'','']);
+  push(['ANNUAL','Person-hours per year','','','','','','',n2(C.personHours*60,0),'','',n2(C.personHours,2)+' h']);
+  push(['ANNUAL','Full-time equivalent','','','','','','','','','',
+    (C.fte==null?'—':n2(C.fte,3)+' FTE at '+n2(num(S.hpy),0)+' h/yr')]);
+  S.history.forEach(function(r){
+    var cost=r.burn*Math.max(0,r.actual)/60;
+    push(['HISTORY',r.title,r.date,'','','','',n2(r.burn,2),n2(r.actual,0),n2(cost,2),'',
+      r.people+' people · planned '+n2(r.planned,0)+' min · annualised '+n2(cost*Math.max(0,r.occ),2)]);
+  });
+  push(['NOTE','Basis','Salary ÷ '+n2(num(S.hpy),0)+' h/yr, +'+n2(num(S.onCost),1)+
+    '% employer on-costs; cost = loaded hourly rate × minutes ÷ 60','','','','','','','','',
+    'Indicative estimate only — not a payroll record, not a chargeable rate, not for invoicing or pay decisions.']);
+  download('meeting-cost-'+slug(S.title)+'-'+(S.date||todayISO())+'.csv','text/csv;charset=utf-8',
+    '﻿'+L.join('\r\n')+'\r\n');
+}
+function exportJson(){
+  var out=JSON.parse(JSON.stringify(S));
+  out.elapsed=elapsedSec(); out.runningSince=null;
+  out.exportedAt=new Date().toISOString();
+  out.tool='solvix.meeting-cost.v1';
+  download('meeting-cost-'+slug(S.title)+'-'+(S.date||todayISO())+'.json','application/json',
+    JSON.stringify(out,null,2));
+}
+function importJson(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.people)) throw new Error('shape');
+      S=normalise(o); stopTimerLoop(); save(); bindAll(); renderAll();
+      setSaved('Backup restored — '+S.people.length+' attendee lines');
+    }catch(e){ setSaved('That file is not a Meeting Cost backup'); }
+  };
+  fr.onerror=function(){ setSaved('Could not read that file'); };
+  fr.readAsText(file);
+}
+
+/* ── timer ────────────────────────────────────────────────── */
+function startTimerLoop(){
+  if(timerHandle) return;
+  timerHandle=setInterval(function(){ renderResults(); },250);
+}
+function stopTimerLoop(){ if(timerHandle){ clearInterval(timerHandle); timerHandle=null; } }
+function toggleTimer(){
+  if(S.runningSince){ S.elapsed=elapsedSec(); S.runningSince=null; stopTimerLoop(); }
+  else { S.runningSince=Date.now(); startTimerLoop(); }
+  touch(); renderResults(); buildDoc();
+}
+function resetTimer(){
+  if(elapsedSec()>1 && !confirm('Reset the timer back to zero?')) return;
+  S.elapsed=0; S.runningSince=null; stopTimerLoop(); touch(); renderResults(); buildDoc();
+}
+
+/* ── history ──────────────────────────────────────────────── */
+function saveToHistory(){
+  var C=compute();
+  if(C.headcount===0){ setSaved('Add an attendee before saving to history'); return; }
+  S.history.unshift({id:uid('h'), title:S.title||'Untitled meeting', date:S.date||todayISO(),
+    people:C.headcount, planned:Math.round(C.planned), actual:Math.round(C.started?C.actualMin:C.planned),
+    burn:Math.round(C.burnHr*100)/100, occ:C.occ});
+  if(S.history.length>200) S.history.length=200;
+  touch(); renderHistory(); buildDoc(); setSaved('Saved to history — '+S.history.length+' records');
+}
+
+/* ── validation ───────────────────────────────────────────── */
+function setErr(inputId,errId,msg){
+  var i=$(inputId), e=$(errId);
+  if(msg){ i.classList.add('inv'); e.textContent=msg; e.hidden=false; }
+  else { i.classList.remove('inv'); e.textContent=''; e.hidden=true; }
+}
+function validate(){
+  setErr('mPlanned','ePlanned', (num(S.plannedMin)<=0)?'Enter the booked length in minutes.':'');
+  setErr('mHpy','eHpy', (num(S.hpy)<=0)?'Must be more than zero — salaries cannot be divided by nothing.':'');
+  setErr('mOnCost','eOnCost', (num(S.onCost)<0)?'On-costs cannot be negative.':'');
+  setErr('mOcc','eOcc', (num(S.occ)<0)?'Occurrences cannot be negative.':'');
+  setErr('mActual','eActual', (elapsedSec()<0)?'Actual minutes cannot be negative.':'');
+}
+
+/* ── binding ──────────────────────────────────────────────── */
+function bindAll(){
+  $('mTitle').value=S.title; $('mOrg').value=S.org; $('mChair').value=S.chair; $('mLoc').value=S.loc;
+  $('mDate').value=S.date; $('mStart').value=S.start;
+  $('mPlanned').value=S.plannedMin; $('mHpy').value=S.hpy; $('mOnCost').value=S.onCost;
+  $('mCur').value=S.cur; $('mCurSym').value=S.curSym;
+  $('curCustomWrap').hidden = S.cur!=='custom';
+  $('mOcc').value=S.occ;
+  var f=$('mFreq'), found=false;
+  [].forEach.call(f.options,function(o){ if(o.value===String(S.occ)&&o.value!=='custom'){ found=true; } });
+  f.value = found?String(S.occ):'custom';
+  $('mActual').value = Math.round(elapsedSec()/60);
+  $('sampleTag').hidden = !S.sample;
+}
+function txt(id,key){
+  $(id).addEventListener('input',function(){ S[key]=$(id).value; touch(); renderResults(); buildDoc(); });
+}
+function numf(id,key,lo,hi,intOnly){
+  var n=$(id);
+  n.addEventListener('input',function(){
+    var v=n.value===''?0:num(n.value);
+    if(intOnly) v=Math.round(v);
+    S[key]=clamp(v,lo,hi);
+    touch(); validate(); renderResults(); buildDoc();
+  });
+  n.addEventListener('blur',function(){
+    if(n.value==='') { n.value=S[key]; }
+    validate();
+  });
+}
+function renderAll(){ renderPeople(); renderAgenda(); renderHistory(); renderResults(); buildDoc(); }
+
+function addPerson(){
+  S.people.push({id:uid('p'),name:'',role:'',count:1,basis:'salary',amount:0,inm:true});
+  touch(); renderPeople(); renderResults(); buildDoc();
+  var rows=$('pBody').querySelectorAll('tr[data-id] input[data-f="name"]');
+  if(rows.length) rows[rows.length-1].focus();
+}
+function addItem(){
+  S.agenda.push({id:uid('a'),name:'',owner:'',min:5});
+  touch(); renderAgenda(); renderResults(); buildDoc();
+  var rows=$('aBody').querySelectorAll('tr[data-id] input[data-f="name"]');
+  if(rows.length) rows[rows.length-1].focus();
+}
+function clearAll(){
+  if(!confirm('Clear this meeting, the attendee list, the agenda and the saved history from this browser?\n\nThis cannot be undone. Export a JSON backup first if you need it.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  stopTimerLoop();
+  S={v:1,sample:false,title:'',org:'',chair:'',loc:'',date:todayISO(),start:'09:00',plannedMin:30,
+     hpy:1880,onCost:25,cur:'£',curSym:'',freq:'52',occ:52,elapsed:0,runningSince:null,
+     people:[{id:uid('p'),name:'',role:'',count:1,basis:'salary',amount:0,inm:true}],agenda:[],history:[]};
+  save(); bindAll(); renderAll(); validate(); setSaved('Cleared — empty form');
+}
+function applyTheme(t){
+  if(t==='light'||t==='dark') document.documentElement.setAttribute('data-theme',t);
+  else document.documentElement.removeAttribute('data-theme');
+  $('btnTheme').textContent='Theme: '+(t==='light'?'Light':t==='dark'?'Dark':'Auto');
+  try{ localStorage.setItem(THEMEKEY,t); }catch(e){}
+}
+function closeMenu(){
+  var mw=$('menuWrap'); mw.classList.remove('open');
+  $('btnMenu').setAttribute('aria-expanded','false');
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  var restored=loadState();
+  bindAll(); renderAll(); validate();
+  setSaved(restored?'Restored from this browser':'Sample meeting loaded');
+  if(S.runningSince) startTimerLoop();
+
+  txt('mTitle','title'); txt('mOrg','org'); txt('mChair','chair'); txt('mLoc','loc');
+  txt('mDate','date'); txt('mStart','start');
+  numf('mPlanned','plannedMin',0,1440,false);
+  numf('mHpy','hpy',0,4000,false);
+  numf('mOnCost','onCost',0,200,false);
+  numf('mOcc','occ',0,2000,true);
+
+  $('mOcc').addEventListener('input',function(){
+    var f=$('mFreq'), found=false;
+    [].forEach.call(f.options,function(o){ if(o.value===String(S.occ)){ found=true; } });
+    f.value=found?String(S.occ):'custom';
+  });
+  $('mFreq').addEventListener('change',function(){
+    var v=$('mFreq').value;
+    if(v==='custom'){ $('mOcc').focus(); return; }
+    S.occ=clamp(parseInt(v,10),0,2000); $('mOcc').value=S.occ;
+    touch(); renderResults(); buildDoc();
+  });
+  $('mCur').addEventListener('change',function(){
+    S.cur=$('mCur').value; $('curCustomWrap').hidden = S.cur!=='custom';
+    if(S.cur==='custom' && !S.curSym){ S.curSym=''; }
+    touch(); renderResults(); renderHistory(); buildDoc();
+    if(S.cur==='custom') $('mCurSym').focus();
+  });
+  $('mCurSym').addEventListener('input',function(){
+    S.curSym=$('mCurSym').value.slice(0,4); touch(); renderResults(); renderHistory(); buildDoc();
+  });
+  $('mActual').addEventListener('input',function(){
+    var v=clamp(num($('mActual').value),0,1440);
+    S.elapsed=v*60;
+    if(S.runningSince) S.runningSince=Date.now();
+    touch(); validate(); renderResults(); buildDoc();
+  });
+
+  /* attendee table events */
+  $('pBody').addEventListener('input',function(e){
+    var t=e.target, f=t.getAttribute&&t.getAttribute('data-f'); if(!f) return;
+    var tr=t.closest('tr'), id=tr&&tr.getAttribute('data-id'); if(!id) return;
+    S.people.forEach(function(p){
+      if(p.id!==id) return;
+      if(f==='name') p.name=t.value;
+      else if(f==='role') p.role=t.value;
+      else if(f==='count') p.count=clamp(Math.round(num(t.value)),0,999);
+      else if(f==='amount') p.amount=Math.max(0,num(t.value));
+    });
+    touch(); renderResults(); buildDoc();
+  });
+  $('pBody').addEventListener('change',function(e){
+    var t=e.target, f=t.getAttribute&&t.getAttribute('data-f'); if(!f) return;
+    var tr=t.closest('tr'), id=tr&&tr.getAttribute('data-id'); if(!id) return;
+    var redraw=false;
+    S.people.forEach(function(p){
+      if(p.id!==id) return;
+      if(f==='basis'){ p.basis=(t.value==='hourly'?'hourly':'salary'); redraw=true; }
+      else if(f==='inm'){ p.inm=!!t.checked; }
+    });
+    touch();
+    if(redraw) renderPeople();
+    renderResults(); buildDoc();
+  });
+  $('pBody').addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-rm]'); if(!b) return;
+    var id=b.getAttribute('data-rm');
+    S.people=S.people.filter(function(p){ return p.id!==id; });
+    touch(); renderPeople(); renderResults(); buildDoc();
+  });
+
+  /* agenda table events */
+  $('aBody').addEventListener('input',function(e){
+    var t=e.target, f=t.getAttribute&&t.getAttribute('data-f'); if(!f) return;
+    var tr=t.closest('tr'), id=tr&&tr.getAttribute('data-id'); if(!id) return;
+    S.agenda.forEach(function(a){
+      if(a.id!==id) return;
+      if(f==='name') a.name=t.value;
+      else if(f==='owner') a.owner=t.value;
+      else if(f==='min') a.min=clamp(num(t.value),0,1440);
+    });
+    touch(); renderResults(); buildDoc();
+  });
+  $('aBody').addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-rm]'); if(!b) return;
+    var id=b.getAttribute('data-rm');
+    S.agenda=S.agenda.filter(function(a){ return a.id!==id; });
+    touch(); renderAgenda(); renderResults(); buildDoc();
+  });
+
+  /* history events */
+  $('hBody').addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-hrm]'); if(!b) return;
+    var id=b.getAttribute('data-hrm');
+    S.history=S.history.filter(function(r){ return r.id!==id; });
+    touch(); renderHistory(); buildDoc();
+  });
+
+  $('btnAddP').addEventListener('click',addPerson);
+  $('btnAddA').addEventListener('click',addItem);
+  $('btnSaveHist').addEventListener('click',saveToHistory);
+  $('btnStart').addEventListener('click',toggleTimer);
+  $('btnReset').addEventListener('click',resetTimer);
+  $('sampleTag').addEventListener('click',clearAll);
+  $('btnCsv').addEventListener('click',exportCsv);
+  $('btnJson').addEventListener('click',function(){ closeMenu(); exportJson(); });
+  $('btnImport').addEventListener('click',function(){ closeMenu(); $('fileJson').click(); });
+  $('fileJson').addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0]; if(f) importJson(f); e.target.value='';
+  });
+  $('btnSample').addEventListener('click',function(){
+    closeMenu();
+    if(!confirm('Replace everything on screen with the sample meeting?')) return;
+    stopTimerLoop(); S=sample(); save(); bindAll(); renderAll(); validate(); setSaved('Sample meeting loaded');
+  });
+  $('btnClear').addEventListener('click',function(){ closeMenu(); clearAll(); });
+  $('btnPrint').addEventListener('click',function(){ buildDoc(); window.print(); });
+  window.addEventListener('beforeprint',buildDoc);
+
+  $('btnCopy').addEventListener('click',function(){
+    var t=$('sumLine').textContent, done=function(ok){
+      $('copyHint').textContent = ok?'Copied to the clipboard.':'Could not copy automatically — select the line above and copy it.';
+      setTimeout(function(){ $('copyHint').textContent='Paste this straight into the minutes, the chat thread or the calendar invite.'; },4000);
+    };
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(t).then(function(){done(true);},function(){ legacyCopy(t,done); });
+      } else legacyCopy(t,done);
+    }catch(e){ legacyCopy(t,done); }
+  });
+  function legacyCopy(t,done){
+    try{
+      var ta=document.createElement('textarea'); ta.value=t;
+      ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      var ok=document.execCommand('copy'); document.body.removeChild(ta); done(ok);
+    }catch(e){ done(false); }
+  }
+
+  var themes=['auto','light','dark'], cur='auto';
+  try{ cur=localStorage.getItem(THEMEKEY)||'auto'; }catch(e){}
+  if(themes.indexOf(cur)<0) cur='auto';
+  applyTheme(cur);
+  $('btnTheme').addEventListener('click',function(){
+    cur=themes[(themes.indexOf(cur)+1)%themes.length]; applyTheme(cur);
+  });
+
+  var mw=$('menuWrap');
+  $('btnMenu').addEventListener('click',function(e){
+    e.stopPropagation();
+    mw.classList.toggle('open');
+    $('btnMenu').setAttribute('aria-expanded',mw.classList.contains('open')?'true':'false');
+  });
+  document.addEventListener('click',function(e){ if(!mw.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenu(); });
+  window.addEventListener('beforeunload',function(){ save(); });
+});
+})();
+</script>
+</body>
+</html>
