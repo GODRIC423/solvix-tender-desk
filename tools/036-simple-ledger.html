@@ -1,0 +1,1517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Double-Entry Ledger — journals, trial balance, P&amp;L and balance sheet</title>
+<meta name="description" content="A small double-entry bookkeeping desk: chart of accounts, journal entries that must balance before they post, account ledgers with running balances, a trial balance that shows the difference if it does not balance, plus profit and loss and balance sheet for any period. Saves to your browser, prints as a report pack, exports CSV and JSON.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Cpath d='M16 6.5v19' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M7 11.5h6M7 16h6M7 20.5h6M19 11.5h6M19 16h6M19 20.5h6' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' opacity='.9'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ 036 Double-Entry Ledger — tool styles ════════════════════════ */
+:root{--accent:#3F4A9E; --accent-ink:#31397B; --accent-wash:#EAECF8; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#8E97E4; --accent-ink:#AAB2EE; --accent-wash:#1D2140; --on-accent:#0A0C18}}
+:root[data-theme="dark"]{--accent:#8E97E4; --accent-ink:#AAB2EE; --accent-wash:#1D2140; --on-accent:#0A0C18}
+
+main{padding-top:12px}
+.stack.gap{gap:14px}
+.split>.res{min-width:0}
+@media(max-width:900px){.split>.res{order:-1}.sticky{position:static}}
+
+.fgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.f.span2{grid-column:span 2}
+@media(max-width:520px){.f.span2{grid-column:span 1}}
+
+/* journal entry blocks */
+.je{border:1px solid var(--line);border-radius:4px;background:var(--raise);overflow:hidden}
+.je+.je{margin-top:10px}
+.je.bad{border-color:var(--bad)}
+.je>.jhd{display:grid;gap:8px;grid-template-columns:132px 130px minmax(0,1fr) auto;align-items:end;
+  padding:10px 11px;background:var(--sunk);border-bottom:1px solid var(--line)}
+@media(max-width:720px){.je>.jhd{grid-template-columns:1fr 1fr;align-items:end}
+  .je>.jhd .f.memo{grid-column:span 2}.je>.jhd .jact{grid-column:span 2;justify-content:flex-start}}
+.je .jact{display:flex;gap:6px;align-items:center;padding-bottom:1px}
+.je table{font-size:13.5px}
+.je th{padding:7px 9px}
+.je td{padding:4px 9px}
+.je .accsel{min-width:150px}
+.je .amt{max-width:130px;margin-left:auto}
+.jmsg{padding:8px 11px;font:12.5px/1.45 var(--sans);border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;background:var(--surface)}
+.jmsg.ok{color:var(--ok)}
+.jmsg.bad{color:var(--bad);background:var(--bad-wash)}
+.jmsg .tot{font-family:var(--mono);color:var(--ink-2)}
+.jmsg .tot b{color:var(--ink)}
+
+/* report tables */
+.rep td.lbl2{font-weight:600}
+.rep tr.sec td{background:var(--sunk);font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);padding:8px 10px}
+.rep tr.sec:hover td{background:var(--sunk)}
+.rep tr.sub td{border-top:1px solid var(--line-hard);font-weight:650}
+.rep tr.tot td{border-top:2px solid var(--line-hard);border-bottom:0;font-weight:700;background:var(--sunk)}
+.rep tr.tot:hover td{background:var(--sunk)}
+.rep tr.diff td{background:var(--bad-wash);color:var(--bad);font-weight:700}
+.rep tr.diff:hover td{background:var(--bad-wash)}
+.rep tr.chk td{background:var(--ok-wash);color:var(--ok);font-weight:700}
+.rep tr.chk:hover td{background:var(--ok-wash)}
+.rep td.ind{padding-left:24px}
+.neg{color:var(--bad)}
+.code{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.dim{color:var(--muted)}
+
+.statgrid{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.statgrid .full{grid-column:span 2}
+.stat.hero .v{font-size:30px}
+.stat .sub{font:12px/1.35 var(--sans);color:var(--muted);margin-top:4px}
+.balbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+
+/* print document */
+.doc{margin-bottom:8mm}
+.doc .dtop{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;
+  border-bottom:2px solid #000;padding-bottom:6px}
+.doc .dname{font:700 17pt/1.15 var(--sans);letter-spacing:-.01em}
+.doc .dmeta{font:9.5pt/1.5 var(--sans);text-align:right;color:#222}
+.doc .dtitle{font:600 12pt/1.3 var(--sans);margin-top:7px}
+.doc .dsub{font:9.5pt/1.45 var(--sans);color:#333;margin-top:2px}
+.doc .dnote{margin-top:7px;border:1px solid #888;padding:6px 8px;font:8.6pt/1.4 var(--sans)}
+.pfoot{margin-top:6mm;border-top:1px solid #888;padding-top:5px;font:8.4pt/1.45 var(--sans);color:#333}
+.sigrow{display:flex;gap:14mm;margin-top:8mm}
+.sigrow div{flex:1;border-top:1px solid #000;padding-top:4px;font:8.8pt/1.35 var(--sans);color:#333}
+
+footer.foot{margin-top:20px;padding-top:12px;border-top:1px solid var(--line);
+  font:12px/1.6 var(--sans);color:var(--muted)}
+@media print{
+  .je{border:1px solid #bbb}
+  .rep tr.sec td,.rep tr.tot td{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rep tr.chk td{background:#fff!important;color:#000}
+  .rep tr.diff td{background:#fff!important;color:#000;border:1px solid #000}
+  .statgrid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .statgrid .full{grid-column:span 4}
+  .stat.hero{border:2px solid #000}
+  .stat.hero .v{font-size:19pt}
+  .card{page-break-inside:auto}
+  .sticky{position:static}
+  main{padding-top:0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">DR</div>
+    <div style="min-width:0">
+      <h1>Double-Entry Ledger</h1>
+      <div class="sub">JOURNALS · TRIAL BALANCE · P&amp;L · BALANCE SHEET</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="btnCsv">CSV</button>
+    <button type="button" class="btn sm" id="btnJson">JSON</button>
+    <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileJson" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<!-- ═══ printed letterhead ═══ -->
+<div class="printonly doc" id="docHead">
+  <div class="dtop">
+    <div>
+      <div class="dname" id="pBiz">—</div>
+      <div class="dsub" id="pBook">—</div>
+    </div>
+    <div class="dmeta">
+      <div><strong>Report pack</strong></div>
+      <div id="pPeriod">—</div>
+      <div id="pPrepared">—</div>
+    </div>
+  </div>
+  <div class="dtitle">Trial balance, profit &amp; loss and balance sheet</div>
+  <div class="dsub" id="pBasis">—</div>
+  <div class="dnote"><strong>Not statutory accounts.</strong> This report pack is a bookkeeping working paper produced
+    from the entries recorded by the preparer. It has not been audited, reviewed or independently verified, it applies
+    no accounting framework (UK GAAP, FRS 102, IFRS or otherwise), and it calculates no VAT, corporation tax, payroll
+    tax or depreciation. Do not file it or rely on it for tax. Have a qualified accountant prepare and check your
+    statutory accounts and returns.</div>
+</div>
+
+<main>
+
+<div class="note noprint" id="sampleBanner" hidden style="margin-bottom:12px">
+  <div class="row" style="justify-content:space-between">
+    <div><strong>Sample book loaded.</strong> Northgate Joinery Ltd, quarter to 30 June 2026 — every figure below is
+      made-up demonstration data. Edit anything, or start with an empty book.</div>
+    <div class="row">
+      <button type="button" class="btn sm" id="btnBlank">Start a blank book</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<div class="split">
+  <!-- ═══ LEFT: the book ═══ -->
+  <div class="stack gap">
+
+    <section class="card noprint">
+      <div class="hd"><h2>Book details</h2><span class="hint">Shown on every printed report</span></div>
+      <div class="bd">
+        <div class="fgrid wide">
+          <div class="f span2"><label for="fBiz">Business name</label>
+            <input id="fBiz" type="text" autocomplete="organization" placeholder="Your business name"></div>
+          <div class="f span2"><label for="fBook">Book / entity reference</label>
+            <input id="fBook" type="text" placeholder="e.g. Main book — year to 31 Mar 2027"></div>
+          <div class="f"><label for="fFrom">Period from</label><input id="fFrom" type="date"></div>
+          <div class="f"><label for="fTo">Period to</label><input id="fTo" type="date"></div>
+          <div class="f"><label for="fCur">Currency</label>
+            <select id="fCur">
+              <option value="GBP">£ — Pound (GBP)</option>
+              <option value="USD">$ — Dollar (USD)</option>
+              <option value="EUR">€ — Euro (EUR)</option>
+              <option value="CUSTOM">Custom symbol…</option>
+            </select></div>
+          <div class="f" id="wrapCurSym" hidden><label for="fCurSym">Custom symbol</label>
+            <input id="fCurSym" type="text" maxlength="4" placeholder="e.g. R"></div>
+          <div class="f"><label for="fPrep">Prepared by</label>
+            <input id="fPrep" type="text" placeholder="Name"></div>
+          <div class="f"><label for="fDate">Prepared on</label><input id="fDate" type="date"></div>
+        </div>
+        <p class="err" id="errPeriod" hidden></p>
+      </div>
+    </section>
+
+    <section class="card noprint" id="cardJournal">
+      <div class="hd">
+        <h2>Journal</h2>
+        <span class="chip" id="chipJournal">—</span>
+        <button type="button" class="btn sm pri" id="btnAddEntry">+ New entry</button>
+      </div>
+      <div class="bd" id="entries"></div>
+      <div class="ft">
+        <span class="hint">Debits must equal credits before an entry posts. Unbalanced or incomplete
+          entries stay as drafts and are kept out of the ledger.</span>
+      </div>
+    </section>
+
+    <section class="card noprint" id="cardAccounts">
+      <div class="hd">
+        <h2>Chart of accounts</h2>
+        <span class="chip" id="chipAccounts">—</span>
+        <button type="button" class="btn sm" id="btnAddAccount">+ Add account</button>
+      </div>
+      <div class="tw">
+        <table>
+          <caption class="hint" style="text-align:left;padding:8px 16px 0">Nominal codes, names and types. Assets and
+            expenses are debit accounts; liabilities, equity and income are credit accounts.</caption>
+          <thead><tr>
+            <th scope="col" style="width:96px">Code</th>
+            <th scope="col">Account name</th>
+            <th scope="col" style="width:132px">Type</th>
+            <th scope="col" class="n" style="width:132px">Balance to date</th>
+            <th scope="col" style="width:44px"><span class="lbl">Del</span></th>
+          </tr></thead>
+          <tbody id="accRows"></tbody>
+        </table>
+      </div>
+      <div class="ft"><span class="hint" id="accMsg">Balance to date is the cumulative balance at the period end
+        date, from every posted entry.</span></div>
+    </section>
+
+    <section class="card" id="cardLedger">
+      <div class="hd">
+        <h2>Account ledger</h2>
+        <span class="chip printonly" id="pLedgerAcc">&mdash;</span>
+        <div class="f noprint" style="min-width:240px;margin-left:auto">
+          <label for="fLedgerAcc">Account</label>
+          <select id="fLedgerAcc"></select>
+        </div>
+      </div>
+      <div class="tw">
+        <table class="rep">
+          <thead><tr>
+            <th scope="col" style="width:92px">Date</th>
+            <th scope="col" style="width:80px">Ref</th>
+            <th scope="col">Narrative</th>
+            <th scope="col" class="n" style="width:104px">Debit</th>
+            <th scope="col" class="n" style="width:104px">Credit</th>
+            <th scope="col" class="n" style="width:130px">Balance</th>
+          </tr></thead>
+          <tbody id="ledgerRows"></tbody>
+        </table>
+      </div>
+      <div class="ft"><span class="hint" id="ledgerFoot">—</span></div>
+    </section>
+
+  </div>
+
+  <!-- ═══ RIGHT: live results ═══ -->
+  <div class="res">
+    <div class="sticky stack">
+      <section class="card">
+        <div class="hd"><h2>Result for the period</h2><span class="chip" id="chipPeriod">—</span></div>
+        <div class="bd">
+          <div class="statgrid">
+            <div class="stat hero full">
+              <div class="k" id="heroK">Net profit for the period</div>
+              <div class="v" id="heroV">—</div>
+              <div class="sub" id="heroSub">—</div>
+            </div>
+            <div class="stat"><div class="k">Income</div><div class="v" style="font-size:19px" id="sIncome">—</div></div>
+            <div class="stat"><div class="k">Expenses</div><div class="v" style="font-size:19px" id="sExpense">—</div></div>
+            <div class="stat"><div class="k">Total assets</div><div class="v" style="font-size:19px" id="sAssets">—</div>
+              <div class="sub" id="sAssetsAt">—</div></div>
+            <div class="stat"><div class="k">Liabilities</div><div class="v" style="font-size:19px" id="sLiab">—</div>
+              <div class="sub">Owed to others</div></div>
+            <div class="stat full"><div class="k">Total equity (capital + result to date)</div>
+              <div class="v" style="font-size:19px" id="sEquity">—</div></div>
+          </div>
+        </div>
+        <div class="ft">
+          <div class="balbar" style="width:100%">
+            <div>
+              <div class="k lbl">Trial balance</div>
+              <div class="mono" id="tbLine" style="font-size:13px">—</div>
+            </div>
+            <span class="chip" id="tbChip">—</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="note warn" id="discOnScreen">
+        <strong>Bookkeeping aid — not statutory accounts.</strong> This tool records what you enter and adds it up by
+        the rules of double entry. It does not audit your figures, apply an accounting framework, or work out VAT,
+        payroll tax, corporation tax, depreciation or accruals. Nothing here is accounting or tax advice — have a
+        qualified accountant prepare and check anything you file.
+      </div>
+
+      <div class="note noprint" id="privNote">
+        <strong>Your book stays on this device.</strong> Entries are saved in this browser only — nothing is uploaded.
+        Export JSON to back it up or move it to another machine.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REPORTS ═══ -->
+<div class="stack gap" style="margin-top:14px">
+
+  <section class="card" id="cardTB">
+    <div class="hd">
+      <h2>Trial balance</h2>
+      <span class="chip" id="tbChip2">—</span>
+      <div class="row noprint" style="margin-left:auto">
+        <div class="f" style="min-width:220px">
+          <label for="fTbBasis">Basis</label>
+          <select id="fTbBasis">
+            <option value="cum">Cumulative — all entries to period end</option>
+            <option value="per">Movements in the period only</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="bd" style="padding-bottom:0">
+      <label class="check noprint"><input type="checkbox" id="fIncludeDrafts">
+        <span>Include unposted draft entries (shows the resulting difference)</span></label>
+    </div>
+    <div class="tw">
+      <table class="rep">
+        <thead><tr>
+          <th scope="col" style="width:92px">Code</th>
+          <th scope="col">Account</th>
+          <th scope="col" style="width:110px">Type</th>
+          <th scope="col" class="n" style="width:140px">Debit</th>
+          <th scope="col" class="n" style="width:140px">Credit</th>
+        </tr></thead>
+        <tbody id="tbRows"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint" id="tbFoot">—</span></div>
+  </section>
+
+  <section class="card" id="cardPL">
+    <div class="hd"><h2>Profit &amp; loss</h2><span class="chip" id="plChip">—</span></div>
+    <div class="tw">
+      <table class="rep">
+        <thead><tr>
+          <th scope="col" style="width:92px">Code</th>
+          <th scope="col">Account</th>
+          <th scope="col" class="n" style="width:160px">Period</th>
+        </tr></thead>
+        <tbody id="plRows"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint">Income and expense accounts, movements between the period dates only.
+      Income shown as credits less debits; expenses as debits less credits.</span></div>
+  </section>
+
+  <section class="card" id="cardBS">
+    <div class="hd"><h2>Balance sheet</h2><span class="chip" id="bsChip">—</span></div>
+    <div class="tw">
+      <table class="rep">
+        <thead><tr>
+          <th scope="col" style="width:92px">Code</th>
+          <th scope="col">Account</th>
+          <th scope="col" class="n" style="width:160px">As at period end</th>
+        </tr></thead>
+        <tbody id="bsRows"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint">Cumulative balances from every posted entry dated on or before the period end
+      date. The result to date closes income and expenses into equity.</span></div>
+  </section>
+
+  <section class="card" id="cardJList">
+    <div class="hd"><h2>Journal listing</h2><span class="chip" id="jlChip">—</span></div>
+    <div class="tw">
+      <table class="rep">
+        <thead><tr>
+          <th scope="col" style="width:92px">Date</th>
+          <th scope="col" style="width:80px">Ref</th>
+          <th scope="col">Account / narrative</th>
+          <th scope="col" class="n" style="width:120px">Debit</th>
+          <th scope="col" class="n" style="width:120px">Credit</th>
+        </tr></thead>
+        <tbody id="jlRows"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint" id="jlFoot">—</span></div>
+  </section>
+
+</div>
+
+<div class="printonly">
+  <div class="sigrow">
+    <div>Prepared by — signature and date</div>
+    <div>Approved by — signature and date</div>
+  </div>
+  <div class="pfoot" id="pFoot">Not statutory accounts and not audited. No VAT, payroll tax, corporation tax,
+    depreciation or accrual has been calculated. Consult a qualified accountant before filing or relying on these
+    figures. Produced with the Solvix Double-Entry Ledger.</div>
+</div>
+
+<footer class="foot noprint">
+  Double entry throughout: every entry must have total debits equal to total credits before it posts, so the trial
+  balance can only differ if unposted drafts are included. Trial balance and balance sheet are cumulative to the period
+  end date; profit &amp; loss covers the period dates only. Assets and expenses carry debit balances; liabilities,
+  equity and income carry credit balances. Money is held to the exact penny (integer minor units) and shown to 2 dp;
+  negatives are shown in brackets. No framework (UK GAAP, FRS 102 or IFRS), tax or audit treatment is applied — this is
+  a bookkeeping aid, not statutory accounts. Everything is stored in this browser only.
+</footer>
+
+</main>
+</div>
+<script>
+(function(){
+'use strict';
+var KEY='solvix.simple-ledger.v1';
+var $=function(s){return document.querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+
+/* ── account types ───────────────────────────────────────────── */
+var TYPE={
+  asset:{label:'Asset',side:'D',grp:'bs',ord:1},
+  liability:{label:'Liability',side:'C',grp:'bs',ord:2},
+  equity:{label:'Equity',side:'C',grp:'bs',ord:3},
+  income:{label:'Income',side:'C',grp:'pl',ord:4},
+  expense:{label:'Expense',side:'D',grp:'pl',ord:5}
+};
+var TYPE_KEYS=['asset','liability','equity','income','expense'];
+var CUR={GBP:'\u00A3',USD:'$',EUR:'\u20AC'};
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ── small helpers ───────────────────────────────────────────── */
+var _uid=0;
+function uid(p){_uid++;return p+_uid.toString(36)+Math.floor(Math.random()*1296).toString(36);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function grp(str){var p=str.split('.');return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+p[1];}
+function sym(){var b=state&&state.biz;if(!b)return '\u00A3';
+  if(b.cur==='CUSTOM')return (b.curSym||'').trim()||'\u00A4';return CUR[b.cur]||'\u00A3';}
+function curName(){var b=state.biz;return b.cur==='CUSTOM'?((b.curSym||'\u00A4')+' (custom)'):b.cur;}
+/* amount from integer minor units, no symbol, brackets for negatives */
+function amt(c){
+  if(c===null||c===undefined||typeof c!=='number'||!isFinite(c))return '\u2014';
+  if(c===0)c=0;
+  var neg=c<0,v=grp((Math.abs(c)/100).toFixed(2));
+  return neg?('('+v+')'):v;
+}
+function amtz(c){return (typeof c==='number'&&c===0)?'\u2014':amt(c);}
+function cash(c){
+  if(c===null||c===undefined||typeof c!=='number'||!isFinite(c))return '\u2014';
+  if(c===0)c=0;
+  var neg=c<0,v=sym()+grp((Math.abs(c)/100).toFixed(2));
+  return neg?('('+v+')'):v;
+}
+function plain(c){return (typeof c==='number'&&isFinite(c))?(c/100).toFixed(2):'';}
+function fmtDate(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '\u2014';
+  var p=iso.split('-');var m=parseInt(p[1],10);
+  if(m<1||m>12)return iso;
+  return String(parseInt(p[2],10))+' '+MON[m-1]+' '+p[0];
+}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function parseAmt(s){
+  if(s===null||s===undefined)return {c:0,ok:true,empty:true};
+  var t=String(s).trim();
+  if(t==='')return {c:0,ok:true,empty:true};
+  var cl=t.replace(/[\s,]/g,'').replace(/[^0-9.\-]/g,'');
+  if(!/^-?\d*\.?\d*$/.test(cl)||cl===''||cl==='-'||cl==='.'||cl==='-.')return {c:0,ok:false,empty:false};
+  var n=parseFloat(cl);
+  if(!isFinite(n))return {c:0,ok:false,empty:false};
+  return {c:Math.round(n*100),ok:true,empty:false};
+}
+
+/* ── default chart of accounts ───────────────────────────────── */
+function defaultAccounts(){
+  var d=[['1000','Business bank account','asset'],['1010','Petty cash','asset'],
+    ['1100','Trade debtors','asset'],['1400','Stock','asset'],['1500','Equipment','asset'],
+    ['2100','Trade creditors','liability'],['2200','VAT control','liability'],['2300','Bank loan','liability'],
+    ['3000','Owner\u2019s capital','equity'],['3100','Drawings','equity'],
+    ['4000','Sales','income'],['4100','Other income','income'],
+    ['5000','Purchases \u2014 materials','expense'],['6000','Rent','expense'],['6100','Wages','expense'],
+    ['6200','Utilities','expense'],['6300','Insurance','expense'],['6400','Motor &amp; travel','expense'],
+    ['7000','Bank charges','expense']];
+  return d.map(function(r){return {id:uid('a'),code:r[0],name:r[1].replace('&amp;','&'),type:r[2]};});
+}
+function accByCode(list,code){for(var i=0;i<list.length;i++){if(list[i].code===code)return list[i].id;}return '';}
+function mkEntry(date,ref,memo,lines,accs){
+  return {id:uid('e'),date:date,ref:ref,memo:memo,
+    lines:lines.map(function(l){return {id:uid('l'),acc:accByCode(accs,l[0]),dr:l[1]?l[1]:'',cr:l[2]?l[2]:''};})};
+}
+
+/* ── sample book ─────────────────────────────────────────────── */
+function sampleState(){
+  var accs=defaultAccounts();
+  var E=[
+    ['2026-03-31','OB-01','Opening balances brought forward',[
+      ['1000','18400.00',''],['1100','3250.00',''],['1400','2150.00',''],['1500','6000.00',''],
+      ['2100','','2480.00'],['2300','','5000.00'],['3000','','22320.00']]],
+    ['2026-04-05','SI-04','Sales invoices raised \u2014 April (net 12,000.00 + VAT 20%)',[
+      ['1100','14400.00',''],['4000','','12000.00'],['2200','','2400.00']]],
+    ['2026-04-07','BP-101','Rent \u2014 April, paid from bank',[['6000','1250.00',''],['1000','','1250.00']]],
+    ['2026-04-12','PI-22','Purchase invoices \u2014 timber and fixings (net 4,600.00 + VAT)',[
+      ['5000','4600.00',''],['2200','920.00',''],['2100','','5520.00']]],
+    ['2026-04-28','PAY-04','Payroll \u2014 April, net wages paid',[['6100','5200.00',''],['1000','','5200.00']]],
+    ['2026-05-02','BR-210','Customer receipts banked',[['1000','11900.00',''],['1100','','11900.00']]],
+    ['2026-05-06','BP-104','Rent \u2014 May, paid from bank',[['6000','1250.00',''],['1000','','1250.00']]],
+    ['2026-05-09','BP-107','Utilities 385.40 and insurance 642.00',[
+      ['6200','385.40',''],['6300','642.00',''],['1000','','1027.40']]],
+    ['2026-05-18','BP-111','Payments to suppliers',[['2100','6300.00',''],['1000','','6300.00']]],
+    ['2026-05-29','PAY-05','Payroll \u2014 May, net wages paid',[['6100','5200.00',''],['1000','','5200.00']]],
+    ['2026-06-03','SI-05','Sales invoices raised \u2014 May/June (net 13,500.00 + VAT 20%)',[
+      ['1100','16200.00',''],['4000','','13500.00'],['2200','','2700.00']]],
+    ['2026-06-08','BP-118','Fuel and travel \u2014 quarter',[['6400','612.75',''],['1000','','612.75']]],
+    ['2026-06-15','DR-06','Owner drawings',[['3100','2000.00',''],['1000','','2000.00']]],
+    ['2026-06-26','BP-124','Bank charges \u2014 quarter',[['7000','46.80',''],['1000','','46.80']]],
+    ['2026-06-30','BP-126','Rent \u2014 June, paid from bank',[['6000','1250.00',''],['1000','','1250.00']]]
+  ];
+  return {
+    v:1,sample:true,
+    biz:{name:'Northgate Joinery Ltd',book:'Main book \u2014 quarter 1, year to 31 March 2027',
+      from:'2026-04-01',to:'2026-06-30',cur:'GBP',curSym:'',prep:'A. Whitfield',date:'2026-07-06'},
+    accounts:accs,
+    entries:E.map(function(r){return mkEntry(r[0],r[1],r[2],r[3],accs);}),
+    tbBasis:'cum',includeDrafts:false,ledgerAcc:accByCode(accs,'1000')
+  };
+}
+function blankState(){
+  var accs=defaultAccounts();var t=todayISO();
+  return {v:1,sample:false,
+    biz:{name:'',book:'',from:t.slice(0,4)+'-01-01',to:t,cur:'GBP',curSym:'',prep:'',date:t},
+    accounts:accs,entries:[],tbBasis:'cum',includeDrafts:false,ledgerAcc:accs[0].id};
+}
+
+/* ── state + storage ─────────────────────────────────────────── */
+var state=null;
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return null;
+    var o=JSON.parse(raw);
+    return normalise(o);
+  }catch(e){return null;}
+}
+function normalise(o){
+  if(!o||typeof o!=='object')return null;
+  if(o.data&&o.data.accounts)o=o.data;
+  if(!Array.isArray(o.accounts)||!Array.isArray(o.entries))return null;
+  var s=blankState();
+  s.sample=!!o.sample;
+  if(o.biz&&typeof o.biz==='object'){
+    ['name','book','from','to','cur','curSym','prep','date'].forEach(function(k){
+      if(typeof o.biz[k]==='string')s.biz[k]=o.biz[k];});
+  }
+  if(!CUR[s.biz.cur]&&s.biz.cur!=='CUSTOM')s.biz.cur='GBP';
+  s.accounts=o.accounts.map(function(a){
+    return {id:(a&&a.id)?String(a.id):uid('a'),code:String((a&&a.code)||''),
+      name:String((a&&a.name)||''),type:(a&&TYPE[a.type])?a.type:'asset'};});
+  if(!s.accounts.length)s.accounts=defaultAccounts();
+  var ids={};s.accounts.forEach(function(a){ids[a.id]=1;});
+  s.entries=o.entries.map(function(e){
+    var lines=Array.isArray(e&&e.lines)?e.lines:[];
+    return {id:(e&&e.id)?String(e.id):uid('e'),date:String((e&&e.date)||''),
+      ref:String((e&&e.ref)||''),memo:String((e&&e.memo)||''),
+      lines:(lines.length?lines:[{},{}]).map(function(l){
+        return {id:(l&&l.id)?String(l.id):uid('l'),
+          acc:(l&&l.acc&&ids[l.acc])?String(l.acc):'',
+          dr:String((l&&l.dr)||''),cr:String((l&&l.cr)||'')};})};});
+  s.tbBasis=(o.tbBasis==='per')?'per':'cum';
+  s.includeDrafts=!!o.includeDrafts;
+  s.ledgerAcc=(o.ledgerAcc&&ids[o.ledgerAcc])?o.ledgerAcc:s.accounts[0].id;
+  return s;
+}
+
+function sortedAccounts(){
+  return state.accounts.slice().sort(function(a,b){
+    var ta=TYPE[a.type]?TYPE[a.type].ord:9,tb=TYPE[b.type]?TYPE[b.type].ord:9;
+    if(ta!==tb)return ta-tb;
+    return String(a.code).localeCompare(String(b.code),'en',{numeric:true})||String(a.name).localeCompare(String(b.name));
+  });
+}
+function accLabel(a){return (a.code?a.code+' \u2014 ':'')+(a.name||'(unnamed account)');}
+
+/* ── the calculation ─────────────────────────────────────────── */
+function compute(){
+  var st=state,from=st.biz.from,to=st.biz.to;
+  var validPeriod=!!(from&&to&&from<=to);
+  var accs=sortedAccounts();
+  var A={};
+  accs.forEach(function(a){A[a.id]={acc:a,openD:0,openC:0,perD:0,perC:0,rows:[]};});
+  var UN={acc:{id:'__un',code:'\u2014',name:'(lines with no account)',type:'asset'},
+    openD:0,openC:0,perD:0,perC:0,rows:[],pseudo:true};
+  var usedUN=false;
+
+  var infos=[],posted=0,drafts=0,future=0;
+  st.entries.forEach(function(e){
+    var info={e:e,lines:[],drC:0,crC:0,problems:[],posted:false,bucket:null,included:false};
+    var nonZero=0,missing=0;
+    e.lines.forEach(function(ln,li){
+      var d=parseAmt(ln.dr),c=parseAmt(ln.cr);
+      var badD=(!d.ok)||d.c<0,badC=(!c.ok)||c.c<0;
+      var L={ln:ln,li:li,badD:badD,badC:badC,drC:badD?0:d.c,crC:badC?0:c.c};
+      if(!d.ok)info.problems.push('Line '+(li+1)+': the debit is not a number.');
+      else if(d.c<0)info.problems.push('Line '+(li+1)+': a debit cannot be negative \u2014 use the credit column.');
+      if(!c.ok)info.problems.push('Line '+(li+1)+': the credit is not a number.');
+      else if(c.c<0)info.problems.push('Line '+(li+1)+': a credit cannot be negative \u2014 use the debit column.');
+      if(L.drC>0&&L.crC>0)info.problems.push('Line '+(li+1)+': enter a debit or a credit, not both.');
+      if(L.drC!==0||L.crC!==0){nonZero++;if(!ln.acc)missing++;}
+      info.drC+=L.drC;info.crC+=L.crC;
+      info.lines.push(L);
+    });
+    info.diff=info.drC-info.crC;
+    if(!e.date)info.problems.push('This entry needs a date.');
+    if(nonZero<2)info.problems.push('An entry needs at least two lines with an amount.');
+    if(missing)info.problems.push(missing===1?'One line with an amount has no account selected.'
+      :missing+' lines with an amount have no account selected.');
+    if(info.diff!==0)info.problems.push('Out of balance by '+cash(Math.abs(info.diff))+
+      ' \u2014 debits '+cash(info.drC)+' against credits '+cash(info.crC)+'. Not posted.');
+    info.posted=info.problems.length===0;
+    if(info.posted)posted++;else drafts++;
+
+    if(e.date){
+      if(!validPeriod)info.bucket='per';
+      else if(e.date<from)info.bucket='open';
+      else if(e.date<=to)info.bucket='per';
+      else {info.bucket='future';future++;}
+    }
+    var take=(info.posted||st.includeDrafts)&&info.bucket&&info.bucket!=='future';
+    if(take){
+      info.included=true;
+      info.lines.forEach(function(L){
+        if(L.drC===0&&L.crC===0)return;
+        var t=(L.ln.acc&&A[L.ln.acc])?A[L.ln.acc]:(usedUN=true,UN);
+        if(info.bucket==='open'){t.openD+=L.drC;t.openC+=L.crC;}
+        else{t.perD+=L.drC;t.perC+=L.crC;
+          t.rows.push({date:e.date,ref:e.ref,memo:e.memo,dr:L.drC,cr:L.crC,posted:info.posted});}
+      });
+    }
+    infos.push(info);
+  });
+
+  var all=accs.map(function(a){return A[a.id];});
+  if(usedUN)all.push(UN);
+
+  /* trial balance */
+  var basis=st.tbBasis;
+  var tb=[],tdr=0,tcr=0;
+  all.forEach(function(t){
+    var D=basis==='per'?t.perD:(t.openD+t.perD);
+    var C=basis==='per'?t.perC:(t.openC+t.perC);
+    if(D===0&&C===0)return;
+    var net=D-C;
+    tb.push({t:t,D:D,C:C,net:net});
+    if(net>0)tdr+=net;else if(net<0)tcr+=-net;
+  });
+  var tbDiff=tdr-tcr;
+
+  /* profit & loss — period movements only */
+  var inc=[],exp=[],totInc=0,totExp=0;
+  all.forEach(function(t){
+    var ty=t.acc.type;
+    if(ty==='income'){
+      var vi=t.perC-t.perD;
+      if(t.perC!==0||t.perD!==0){inc.push({t:t,v:vi});totInc+=vi;}
+    }else if(ty==='expense'){
+      var ve=t.perD-t.perC;
+      if(t.perC!==0||t.perD!==0){exp.push({t:t,v:ve});totExp+=ve;}
+    }
+  });
+  var netResult=totInc-totExp;
+
+  /* balance sheet — cumulative to period end */
+  var as=[],li=[],eq=[],totAs=0,totLi=0,totEq=0,bfInc=0,bfExp=0;
+  all.forEach(function(t){
+    var D=t.openD+t.perD,C=t.openC+t.perC,ty=t.acc.type;
+    if(ty==='income'){bfInc+=(t.openC-t.openD);return;}
+    if(ty==='expense'){bfExp+=(t.openD-t.openC);return;}
+    if(D===0&&C===0)return;
+    if(ty==='asset'){var va=D-C;as.push({t:t,v:va});totAs+=va;}
+    else if(ty==='liability'){var vl=C-D;li.push({t:t,v:vl});totLi+=vl;}
+    else{var ve2=C-D;eq.push({t:t,v:ve2});totEq+=ve2;}
+  });
+  var resultBf=bfInc-bfExp;
+  var resultToDate=resultBf+netResult;
+  var totalEquity=totEq+resultToDate;
+  var bsCheck=totAs-(totLi+totalEquity);
+
+  /* margin, guarded */
+  var margin=(totInc>0)?(netResult/totInc*100):null;
+
+  return {infos:infos,accMap:A,all:all,posted:posted,drafts:drafts,future:future,
+    validPeriod:validPeriod,tb:tb,tdr:tdr,tcr:tcr,tbDiff:tbDiff,
+    inc:inc,exp:exp,totInc:totInc,totExp:totExp,netResult:netResult,
+    as:as,li:li,eq:eq,totAs:totAs,totLi:totLi,totEq:totEq,
+    resultBf:resultBf,resultToDate:resultToDate,totalEquity:totalEquity,bsCheck:bsCheck,
+    margin:margin,usedUN:usedUN,UN:UN};
+}
+
+/* ── rendering: journal ──────────────────────────────────────── */
+function accOptions(sel){
+  var h='<option value="">\u2014 choose account \u2014</option>';
+  sortedAccounts().forEach(function(a){
+    h+='<option value="'+esc(a.id)+'"'+(a.id===sel?' selected':'')+'>'+esc(accLabel(a))+'</option>';
+  });
+  return h;
+}
+function renderEntries(){
+  var box=$('#entries');
+  if(!state.entries.length){
+    box.innerHTML='<div class="empty">No journal entries yet.<br><br>'+
+      '<button type="button" class="btn pri" data-act="addentry">+ Add your first entry</button></div>';
+    return;
+  }
+  var h='';
+  state.entries.forEach(function(e,ei){
+    var n=ei+1;
+    h+='<div class="je" data-e="'+esc(e.id)+'">'+
+      '<div class="jhd">'+
+        '<div class="f"><label for="d_'+esc(e.id)+'">Date</label>'+
+          '<input type="date" id="d_'+esc(e.id)+'" data-f="date" value="'+esc(e.date)+'"></div>'+
+        '<div class="f"><label for="r_'+esc(e.id)+'">Reference</label>'+
+          '<input type="text" id="r_'+esc(e.id)+'" data-f="ref" value="'+esc(e.ref)+'" placeholder="JE-'+n+'"></div>'+
+        '<div class="f memo"><label for="m_'+esc(e.id)+'">Narrative</label>'+
+          '<input type="text" id="m_'+esc(e.id)+'" data-f="memo" value="'+esc(e.memo)+'" placeholder="What this entry records"></div>'+
+        '<div class="jact">'+
+          '<button type="button" class="btn sm" data-act="addline">+ Line</button>'+
+          '<button type="button" class="btn sm" data-act="copyentry" title="Duplicate this entry">Copy</button>'+
+          '<button type="button" class="btn sm dgr ico" data-act="delentry" title="Delete entry '+n+'" aria-label="Delete journal entry '+n+'">\u2715</button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="tw"><table><thead><tr>'+
+        '<th scope="col">Account</th>'+
+        '<th scope="col" class="n" style="width:132px">Debit</th>'+
+        '<th scope="col" class="n" style="width:132px">Credit</th>'+
+        '<th scope="col" style="width:42px"><span class="lbl">Del</span></th>'+
+      '</tr></thead><tbody>';
+    e.lines.forEach(function(l,li){
+      h+='<tr data-l="'+esc(l.id)+'">'+
+        '<td><select class="accsel" data-f="acc" aria-label="Account, entry '+n+' line '+(li+1)+'">'+accOptions(l.acc)+'</select></td>'+
+        '<td><input class="amt ta-r" data-f="dr" inputmode="decimal" value="'+esc(l.dr)+'" placeholder="0.00" aria-label="Debit, entry '+n+' line '+(li+1)+'"></td>'+
+        '<td><input class="amt ta-r" data-f="cr" inputmode="decimal" value="'+esc(l.cr)+'" placeholder="0.00" aria-label="Credit, entry '+n+' line '+(li+1)+'"></td>'+
+        '<td><button type="button" class="btn sm ico" data-act="delline" title="Remove line '+(li+1)+'" aria-label="Remove entry '+n+' line '+(li+1)+'">\u2715</button></td>'+
+      '</tr>';
+    });
+    h+='</tbody></table></div><div class="jmsg" data-msg></div></div>';
+  });
+  box.innerHTML=h;
+}
+function updateAccOptionLabels(){
+  var m={};state.accounts.forEach(function(a){m[a.id]=accLabel(a);});
+  $$('#entries select[data-f="acc"], #fLedgerAcc').forEach(function(sel){
+    $$('option',sel).forEach(function(o){if(o.value&&m[o.value]!==undefined)o.textContent=m[o.value];});
+  });
+}
+function renderLedgerSelect(){
+  var sel=$('#fLedgerAcc');
+  var cur=state.ledgerAcc;
+  var list=sortedAccounts();
+  if(!list.some(function(a){return a.id===cur;}))cur=list.length?list[0].id:'';
+  state.ledgerAcc=cur;
+  var h='';
+  list.forEach(function(a){
+    h+='<option value="'+esc(a.id)+'"'+(a.id===cur?' selected':'')+'>'+esc(accLabel(a))+'</option>';
+  });
+  sel.innerHTML=h||'<option value="">No accounts</option>';
+}
+
+/* ── rendering: accounts ─────────────────────────────────────── */
+function renderAccounts(){
+  var h='';
+  sortedAccounts().forEach(function(a,i){
+    h+='<tr data-a="'+esc(a.id)+'">'+
+      '<td><input type="text" data-f="code" value="'+esc(a.code)+'" aria-label="Code for account '+(i+1)+'" style="font-family:var(--mono)"></td>'+
+      '<td><input type="text" data-f="name" value="'+esc(a.name)+'" aria-label="Name for account '+(i+1)+'"></td>'+
+      '<td><select data-f="type" aria-label="Type for account '+(i+1)+'">'+
+        TYPE_KEYS.map(function(k){return '<option value="'+k+'"'+(a.type===k?' selected':'')+'>'+TYPE[k].label+'</option>';}).join('')+
+      '</select></td>'+
+      '<td class="n balcell">\u2014</td>'+
+      '<td><button type="button" class="btn sm ico" data-act="delacc" title="Delete account" aria-label="Delete account '+esc(accLabel(a))+'">\u2715</button></td>'+
+    '</tr>';
+  });
+  $('#accRows').innerHTML=h||'<tr><td colspan="5" class="empty">No accounts.</td></tr>';
+}
+
+/* ── rendering: everything computed ──────────────────────────── */
+function recalc(){
+  var r=compute(),st=state,b=st.biz;
+
+  /* period validity */
+  var ep=$('#errPeriod');
+  if(b.from&&b.to&&b.from>b.to){
+    ep.hidden=false;ep.textContent='Period “from” is after “to”. Dates swapped in reports would be meaningless, so every entry is being treated as in-period until you fix it.';
+    $('#fFrom').classList.add('inv');$('#fTo').classList.add('inv');
+  }else{ep.hidden=true;ep.textContent='';$('#fFrom').classList.remove('inv');$('#fTo').classList.remove('inv');}
+
+  var periodTxt=r.validPeriod?(fmtDate(b.from)+' \u2013 '+fmtDate(b.to)):'Period not set';
+
+  /* journal entry messages */
+  r.infos.forEach(function(info){
+    var el=document.querySelector('#entries .je[data-e="'+cssEsc(info.e.id)+'"]');
+    if(!el)return;
+    var msg=el.querySelector('[data-msg]');
+    el.classList.toggle('bad',!info.posted);
+    var tot='<span class="tot">Debits <b>'+cash(info.drC)+'</b> \u00B7 Credits <b>'+cash(info.crC)+'</b></span>';
+    if(info.posted){
+      var where=info.bucket==='open'?'Posted \u2014 dated before the period, included as an opening balance.'
+        :info.bucket==='future'?'Balanced, but dated after the period end \u2014 excluded from these reports.'
+        :'Posted \u2014 balanced and included.';
+      msg.className='jmsg '+(info.bucket==='future'?'':'ok');
+      msg.innerHTML='<span>'+(info.bucket==='future'?'\u26A0 ':'\u2714 ')+esc(where)+'</span>'+tot;
+    }else{
+      msg.className='jmsg bad';
+      msg.innerHTML='<span><strong>Draft \u2014 not posted.</strong> '+
+        info.problems.map(function(p){return esc(p);}).join(' ')+'</span>'+tot;
+    }
+    info.lines.forEach(function(L){
+      var tr=el.querySelector('tr[data-l="'+cssEsc(L.ln.id)+'"]');
+      if(!tr)return;
+      var di=tr.querySelector('[data-f="dr"]'),ci=tr.querySelector('[data-f="cr"]');
+      if(di)di.classList.toggle('inv',L.badD);
+      if(ci)ci.classList.toggle('inv',L.badC);
+    });
+  });
+  $('#chipJournal').textContent=r.posted+' posted \u00B7 '+r.drafts+' draft'+(r.drafts===1?'':'s')+
+    (r.future?' \u00B7 '+r.future+' after period end':'');
+  $('#chipJournal').className='chip '+(r.drafts?'bad':'ok');
+
+  /* accounts balances */
+  $('#chipAccounts').textContent=state.accounts.length+' accounts';
+  $$('#accRows tr[data-a]').forEach(function(tr){
+    var t=r.accMap[tr.getAttribute('data-a')];
+    var cell=tr.querySelector('.balcell');
+    if(!t||!cell)return;
+    var net=(t.openD+t.perD)-(t.openC+t.perC);
+    cell.textContent=net===0?'\u2014':(grp((Math.abs(net)/100).toFixed(2))+(net>0?' Dr':' Cr'));
+  });
+
+  /* results card */
+  var loss=r.netResult<0;
+  $('#heroK').textContent=loss?'Net loss for the period':'Net profit for the period';
+  $('#heroV').textContent=cash(Math.abs(r.netResult));
+  var marginTxt=(r.margin===null)?'no income recorded':(
+    (r.margin<0?'\u2212':'')+Math.abs(r.margin).toFixed(1)+'% net margin');
+  $('#heroSub').textContent=periodTxt+' \u00B7 '+marginTxt;
+  $('#chipPeriod').textContent=periodTxt;
+  $('#sIncome').textContent=cash(r.totInc);
+  $('#sExpense').textContent=cash(r.totExp);
+  $('#sAssets').textContent=cash(r.totAs);
+  $('#sAssetsAt').textContent='As at '+(r.validPeriod?fmtDate(b.to):'\u2014');
+  $('#sLiab').textContent=cash(r.totLi);
+  $('#sEquity').textContent=cash(r.totalEquity);
+
+  var balanced=r.tbDiff===0;
+  var tbTxt='Dr '+cash(r.tdr)+'  \u00B7  Cr '+cash(r.tcr);
+  $('#tbLine').textContent=balanced?tbTxt:(tbTxt+'  \u00B7  out by '+cash(Math.abs(r.tbDiff)));
+  var chipTxt=balanced?'In balance':'Out of balance';
+  $('#tbChip').textContent=chipTxt;$('#tbChip').className='chip '+(balanced?'ok':'bad');
+  $('#tbChip2').textContent=chipTxt+' \u00B7 '+curName();
+  $('#tbChip2').className='chip '+(balanced?'ok':'bad');
+
+  /* trial balance table */
+  var basisTxt=st.tbBasis==='per'?('Movements '+periodTxt):('Cumulative as at '+(r.validPeriod?fmtDate(b.to):'\u2014'));
+  var h='';
+  if(!r.tb.length){h='<tr><td colspan="5" class="empty">Nothing posted yet \u2014 add a balanced journal entry.</td></tr>';}
+  else{
+    var lastType='';
+    r.tb.forEach(function(row){
+      var ty=row.t.acc.type;
+      if(ty!==lastType&&!row.t.pseudo){
+        lastType=ty;
+        h+='<tr class="sec"><td colspan="5">'+esc(TYPE[ty].label)+' accounts</td></tr>';
+      }
+      h+='<tr><td class="code">'+esc(row.t.acc.code||'\u2014')+'</td>'+
+        '<td>'+esc(row.t.acc.name||'(unnamed)')+(row.t.pseudo?' <span class="chip bad">unassigned</span>':'')+'</td>'+
+        '<td class="dim">'+esc(row.t.pseudo?'\u2014':TYPE[ty].label)+'</td>'+
+        '<td class="n">'+(row.net>0?amt(row.net):'\u2014')+'</td>'+
+        '<td class="n">'+(row.net<0?amt(-row.net):'\u2014')+'</td></tr>';
+    });
+    h+='<tr class="tot"><td></td><td>Totals</td><td></td><td class="n">'+amt(r.tdr)+'</td><td class="n">'+amt(r.tcr)+'</td></tr>';
+    if(r.tbDiff!==0){
+      h+='<tr class="diff"><td></td><td>Difference \u2014 the trial balance does not balance</td><td></td>'+
+        '<td class="n" colspan="2">'+amt(Math.abs(r.tbDiff))+' '+(r.tbDiff>0?'excess debit':'excess credit')+'</td></tr>';
+    }else{
+      h+='<tr class="chk"><td></td><td>Debits equal credits \u2014 the trial balance balances</td><td></td>'+
+        '<td class="n" colspan="2">0.00</td></tr>';
+    }
+  }
+  $('#tbRows').innerHTML=h;
+  $('#tbFoot').textContent=basisTxt+'. All amounts in '+curName()+
+    (st.includeDrafts?'. Unposted draft entries ARE included in these figures, which is why a difference can appear.'
+      :'. Posted entries only \u2014 '+r.drafts+' draft entr'+(r.drafts===1?'y is':'ies are')+' excluded.')+
+    (r.future?' '+r.future+' entr'+(r.future===1?'y is':'ies are')+' dated after the period end and excluded.':'');
+
+  /* profit & loss */
+  var ph='';
+  if(!r.inc.length&&!r.exp.length){ph='<tr><td colspan="3" class="empty">No income or expense movements in this period.</td></tr>';}
+  else{
+    ph+='<tr class="sec"><td colspan="3">Income</td></tr>';
+    if(r.inc.length)r.inc.forEach(function(x){ph+=plRow(x);});
+    else ph+='<tr><td></td><td class="dim">No income recorded</td><td class="n">\u2014</td></tr>';
+    ph+='<tr class="sub"><td></td><td>Total income</td><td class="n">'+amt(r.totInc)+'</td></tr>';
+    ph+='<tr class="sec"><td colspan="3">Expenses</td></tr>';
+    if(r.exp.length)r.exp.forEach(function(x){ph+=plRow(x);});
+    else ph+='<tr><td></td><td class="dim">No expenses recorded</td><td class="n">\u2014</td></tr>';
+    ph+='<tr class="sub"><td></td><td>Total expenses</td><td class="n">'+amt(r.totExp)+'</td></tr>';
+    ph+='<tr class="tot"><td></td><td>'+(loss?'Net loss for the period':'Net profit for the period')+
+      '</td><td class="n'+(loss?' neg':'')+'">'+amt(r.netResult)+'</td></tr>';
+  }
+  $('#plRows').innerHTML=ph;
+  $('#plChip').textContent=periodTxt+' \u00B7 '+curName();
+  $('#plChip').className='chip';
+
+  /* balance sheet */
+  var bh='';
+  bh+='<tr class="sec"><td colspan="3">Assets</td></tr>';
+  if(r.as.length)r.as.forEach(function(x){bh+=plRow(x);});
+  else bh+='<tr><td></td><td class="dim">No asset balances</td><td class="n">\u2014</td></tr>';
+  bh+='<tr class="sub"><td></td><td>Total assets</td><td class="n">'+amt(r.totAs)+'</td></tr>';
+  bh+='<tr class="sec"><td colspan="3">Liabilities</td></tr>';
+  if(r.li.length)r.li.forEach(function(x){bh+=plRow(x);});
+  else bh+='<tr><td></td><td class="dim">No liability balances</td><td class="n">\u2014</td></tr>';
+  bh+='<tr class="sub"><td></td><td>Total liabilities</td><td class="n">'+amt(r.totLi)+'</td></tr>';
+  bh+='<tr class="sec"><td colspan="3">Equity</td></tr>';
+  r.eq.forEach(function(x){bh+=plRow(x);});
+  bh+='<tr><td></td><td class="ind">Result brought forward (before '+esc(r.validPeriod?fmtDate(b.from):'period start')+')</td>'+
+    '<td class="n">'+amt(r.resultBf)+'</td></tr>';
+  bh+='<tr><td></td><td class="ind">'+(loss?'Loss for the period':'Profit for the period')+'</td>'+
+    '<td class="n'+(loss?' neg':'')+'">'+amt(r.netResult)+'</td></tr>';
+  bh+='<tr class="sub"><td></td><td>Total equity</td><td class="n">'+amt(r.totalEquity)+'</td></tr>';
+  bh+='<tr class="tot"><td></td><td>Liabilities plus equity</td><td class="n">'+amt(r.totLi+r.totalEquity)+'</td></tr>';
+  if(r.bsCheck===0){
+    bh+='<tr class="chk"><td></td><td>Assets less liabilities and equity \u2014 the balance sheet balances</td><td class="n">0.00</td></tr>';
+  }else{
+    bh+='<tr class="diff"><td></td><td>Assets less liabilities and equity \u2014 does not balance</td>'+
+      '<td class="n">'+amt(r.bsCheck)+'</td></tr>';
+  }
+  $('#bsRows').innerHTML=bh;
+  $('#bsChip').textContent='As at '+(r.validPeriod?fmtDate(b.to):'\u2014')+' \u00B7 '+curName();
+  $('#bsChip').className='chip '+(r.bsCheck===0?'ok':'bad');
+
+  /* journal listing */
+  var order=r.infos.slice().sort(function(x,y){
+    var dx=x.e.date||'9999-99-99',dy=y.e.date||'9999-99-99';
+    if(dx!==dy)return dx<dy?-1:1;
+    return String(x.e.ref).localeCompare(String(y.e.ref),'en',{numeric:true});
+  });
+  var jh='',jd=0,jc=0,shown=0;
+  order.forEach(function(info){
+    if(!info.included)return;
+    shown++;
+    jh+='<tr class="sec"><td>'+esc(fmtDate(info.e.date))+'</td><td class="code">'+esc(info.e.ref||'\u2014')+'</td>'+
+      '<td colspan="3">'+esc(info.e.memo||'(no narrative)')+(info.posted?'':' \u2014 DRAFT, UNPOSTED')+'</td></tr>';
+    info.lines.forEach(function(L){
+      if(L.drC===0&&L.crC===0)return;
+      var a=L.ln.acc?accById(L.ln.acc):null;
+      jh+='<tr><td></td><td></td><td class="ind">'+esc(a?accLabel(a):'(no account)')+'</td>'+
+        '<td class="n">'+amtz(L.drC)+'</td><td class="n">'+amtz(L.crC)+'</td></tr>';
+      jd+=L.drC;jc+=L.crC;
+    });
+  });
+  if(!shown)jh='<tr><td colspan="5" class="empty">No entries fall inside this period.</td></tr>';
+  else jh+='<tr class="tot"><td></td><td></td><td>Totals</td><td class="n">'+amt(jd)+'</td><td class="n">'+amt(jc)+'</td></tr>';
+  $('#jlRows').innerHTML=jh;
+  $('#jlChip').textContent=shown+' entr'+(shown===1?'y':'ies')+' \u00B7 '+curName();
+  $('#jlChip').className='chip';
+  $('#jlFoot').textContent='Entries dated on or before '+(r.validPeriod?fmtDate(b.to):'the period end')+
+    ', in date order. Opening entries dated before '+(r.validPeriod?fmtDate(b.from):'the period start')+
+    ' are listed too, because they carry the balances forward.';
+
+  /* account ledger */
+  renderLedger(r);
+
+  /* printed letterhead */
+  $('#pBiz').textContent=b.name||'(business name not set)';
+  $('#pBook').textContent=b.book||'Double-entry ledger';
+  $('#pPeriod').textContent='Period: '+periodTxt;
+  $('#pPrepared').textContent='Prepared '+(b.date?fmtDate(b.date):'\u2014')+(b.prep?' by '+b.prep:'');
+  $('#pBasis').textContent='Trial balance basis: '+basisTxt+'. All amounts in '+curName()+
+    '. '+(balanced?'The trial balance is in balance.':'THE TRIAL BALANCE IS OUT OF BALANCE BY '+cash(Math.abs(r.tbDiff))+'.')+
+    (st.sample?'  \u2014  SAMPLE DEMONSTRATION DATA, NOT A REAL BOOK.':'');
+
+  $('#sampleBanner').hidden=!st.sample;
+  save();
+  return r;
+}
+function plRow(x){
+  return '<tr><td class="code">'+esc(x.t.acc.code||'\u2014')+'</td>'+
+    '<td class="ind">'+esc(x.t.acc.name||'(unnamed)')+(x.t.pseudo?' <span class="chip bad">unassigned</span>':'')+'</td>'+
+    '<td class="n'+(x.v<0?' neg':'')+'">'+amt(x.v)+'</td></tr>';
+}
+function accById(id){for(var i=0;i<state.accounts.length;i++){if(state.accounts[i].id===id)return state.accounts[i];}return null;}
+function cssEsc(s){return String(s).replace(/["\\]/g,'\\$&');}
+
+function renderLedger(r){
+  var a=accById(state.ledgerAcc);
+  var body=$('#ledgerRows');
+  $('#pLedgerAcc').textContent=a?accLabel(a):'\u2014';
+  if(!a){body.innerHTML='<tr><td colspan="6" class="empty">No account selected.</td></tr>';
+    $('#ledgerFoot').textContent='\u2014';return;}
+  var t=r.accMap[a.id];
+  var open=t?(t.openD-t.openC):0;
+  var run=open,h='';
+  h+='<tr class="sec"><td colspan="3">Opening balance brought forward'+
+    (state.biz.from?' at '+esc(fmtDate(state.biz.from)):'')+'</td>'+
+    '<td class="n">\u2014</td><td class="n">\u2014</td><td class="n">'+bal(open)+'</td></tr>';
+  var rows=t?t.rows.slice().sort(function(x,y){
+    var dx=x.date||'9999-99-99',dy=y.date||'9999-99-99';
+    if(dx!==dy)return dx<dy?-1:1;return 0;}):[];
+  rows.forEach(function(row){
+    run+=row.dr-row.cr;
+    h+='<tr><td>'+esc(fmtDate(row.date))+'</td><td class="code">'+esc(row.ref||'\u2014')+'</td>'+
+      '<td>'+esc(row.memo||'\u2014')+(row.posted?'':' <span class="chip bad">draft</span>')+'</td>'+
+      '<td class="n">'+amtz(row.dr)+'</td><td class="n">'+amtz(row.cr)+'</td>'+
+      '<td class="n">'+bal(run)+'</td></tr>';
+  });
+  if(!rows.length){
+    h+='<tr><td colspan="6" class="empty">No movements on this account in the period.</td></tr>';
+  }
+  h+='<tr class="tot"><td colspan="3">Closing balance at '+esc(state.biz.to?fmtDate(state.biz.to):'period end')+'</td>'+
+    '<td class="n">'+amt(t?t.perD:0)+'</td><td class="n">'+amt(t?t.perC:0)+'</td>'+
+    '<td class="n">'+bal(run)+'</td></tr>';
+  body.innerHTML=h;
+  var natural=TYPE[a.type].side==='D'?'debit':'credit';
+  $('#ledgerFoot').textContent=accLabel(a)+' \u2014 a '+TYPE[a.type].label.toLowerCase()+
+    ' account, so a '+natural+' balance is the normal side. Balances shown in '+curName()+
+    ' with Dr or Cr; movements are those dated inside the period, on top of the brought-forward balance.';
+}
+function bal(c){
+  if(typeof c!=='number'||!isFinite(c))return '\u2014';
+  if(c===0)return '0.00';
+  return grp((Math.abs(c)/100).toFixed(2))+(c>0?' Dr':' Cr');
+}
+
+/* ── full render ─────────────────────────────────────────────── */
+function renderAll(){
+  var b=state.biz;
+  $('#fBiz').value=b.name;$('#fBook').value=b.book;$('#fFrom').value=b.from;$('#fTo').value=b.to;
+  $('#fCur').value=b.cur;$('#fCurSym').value=b.curSym;$('#wrapCurSym').hidden=(b.cur!=='CUSTOM');
+  $('#fPrep').value=b.prep;$('#fDate').value=b.date;
+  $('#fTbBasis').value=state.tbBasis;$('#fIncludeDrafts').checked=state.includeDrafts;
+  renderAccounts();renderLedgerSelect();renderEntries();recalc();
+}
+
+/* ── entry / line / account operations ───────────────────────── */
+function findEntry(id){for(var i=0;i<state.entries.length;i++){if(state.entries[i].id===id)return state.entries[i];}return null;}
+function addEntry(){
+  var last=state.entries[state.entries.length-1];
+  var e={id:uid('e'),date:last&&last.date?last.date:(state.biz.to||todayISO()),ref:'',memo:'',
+    lines:[{id:uid('l'),acc:'',dr:'',cr:''},{id:uid('l'),acc:'',dr:'',cr:''}]};
+  state.entries.push(e);
+  renderEntries();recalc();
+  var el=document.querySelector('#entries .je[data-e="'+cssEsc(e.id)+'"]');
+  if(el){el.scrollIntoView({block:'center'});var f=el.querySelector('input[data-f="ref"]');if(f)f.focus();}
+}
+function copyEntry(id){
+  var e=findEntry(id);if(!e)return;
+  var c={id:uid('e'),date:e.date,ref:e.ref,memo:e.memo,
+    lines:e.lines.map(function(l){return {id:uid('l'),acc:l.acc,dr:l.dr,cr:l.cr};})};
+  var i=state.entries.indexOf(e);
+  state.entries.splice(i+1,0,c);
+  renderEntries();recalc();
+  var el=document.querySelector('#entries .je[data-e="'+cssEsc(c.id)+'"]');
+  if(el){el.scrollIntoView({block:'center'});var f=el.querySelector('input[data-f="date"]');if(f)f.focus();}
+}
+
+/* ── wiring ──────────────────────────────────────────────────── */
+function bindBiz(){
+  var map={fBiz:'name',fBook:'book',fFrom:'from',fTo:'to',fPrep:'prep',fDate:'date'};
+  Object.keys(map).forEach(function(id){
+    var el=document.getElementById(id);
+    el.addEventListener('input',function(){state.biz[map[id]]=el.value;recalc();});
+  });
+  $('#fCur').addEventListener('change',function(){
+    state.biz.cur=$('#fCur').value;$('#wrapCurSym').hidden=(state.biz.cur!=='CUSTOM');
+    if(state.biz.cur==='CUSTOM'&&!state.biz.curSym){state.biz.curSym='';}
+    recalc();
+  });
+  $('#fCurSym').addEventListener('input',function(){state.biz.curSym=$('#fCurSym').value;recalc();});
+  $('#fTbBasis').addEventListener('change',function(){state.tbBasis=$('#fTbBasis').value;recalc();});
+  $('#fIncludeDrafts').addEventListener('change',function(){state.includeDrafts=$('#fIncludeDrafts').checked;recalc();});
+  $('#fLedgerAcc').addEventListener('change',function(){state.ledgerAcc=$('#fLedgerAcc').value;recalc();});
+}
+
+function bindJournal(){
+  var box=$('#entries');
+  function handle(ev){
+    var t=ev.target;
+    var f=t.getAttribute&&t.getAttribute('data-f');
+    if(!f)return;
+    var je=t.closest('.je');if(!je)return;
+    var e=findEntry(je.getAttribute('data-e'));if(!e)return;
+    if(f==='date'||f==='ref'||f==='memo'){e[f]=t.value;recalc();return;}
+    var tr=t.closest('tr[data-l]');if(!tr)return;
+    var lid=tr.getAttribute('data-l'),line=null;
+    for(var i=0;i<e.lines.length;i++){if(e.lines[i].id===lid)line=e.lines[i];}
+    if(!line)return;
+    if(f==='acc'){line.acc=t.value;recalc();return;}
+    if(f==='dr'||f==='cr'){
+      line[f]=t.value;
+      /* one side per line: typing a real amount in one column clears the other */
+      var p=parseAmt(t.value);
+      if(p.ok&&!p.empty&&p.c!==0){
+        var other=f==='dr'?'cr':'dr';
+        if(line[other]!==''){
+          line[other]='';
+          var oi=tr.querySelector('[data-f="'+other+'"]');
+          if(oi&&document.activeElement!==oi)oi.value='';
+        }
+      }
+      recalc();
+    }
+  }
+  box.addEventListener('input',handle);
+  box.addEventListener('change',handle);
+  box.addEventListener('focusout',function(ev){
+    var t=ev.target;
+    var f=t.getAttribute&&t.getAttribute('data-f');
+    if(f!=='dr'&&f!=='cr')return;
+    var p=parseAmt(t.value);
+    if(p.ok&&!p.empty){
+      var v=(p.c/100).toFixed(2);
+      t.value=v;
+      var je=t.closest('.je'),tr=t.closest('tr[data-l]');
+      var e=findEntry(je.getAttribute('data-e'));
+      if(e){for(var i=0;i<e.lines.length;i++){if(e.lines[i].id===tr.getAttribute('data-l'))e.lines[i][f]=v;}}
+      recalc();
+    }
+  });
+  box.addEventListener('click',function(ev){
+    var btn=ev.target.closest('button[data-act]');if(!btn)return;
+    var act=btn.getAttribute('data-act');
+    if(act==='addentry'){addEntry();return;}
+    var je=btn.closest('.je');if(!je)return;
+    var e=findEntry(je.getAttribute('data-e'));if(!e)return;
+    if(act==='addline'){
+      e.lines.push({id:uid('l'),acc:'',dr:'',cr:''});
+      renderEntries();recalc();
+      var el=document.querySelector('#entries .je[data-e="'+cssEsc(e.id)+'"]');
+      if(el){var rows=el.querySelectorAll('tr[data-l] select');if(rows.length)rows[rows.length-1].focus();}
+    }else if(act==='delline'){
+      var tr=btn.closest('tr[data-l]');if(!tr)return;
+      if(e.lines.length<=2){
+        var lid=tr.getAttribute('data-l');
+        e.lines.forEach(function(l){if(l.id===lid){l.acc='';l.dr='';l.cr='';}});
+      }else{
+        e.lines=e.lines.filter(function(l){return l.id!==tr.getAttribute('data-l');});
+      }
+      renderEntries();recalc();
+    }else if(act==='copyentry'){
+      copyEntry(e.id);
+    }else if(act==='delentry'){
+      var label=(e.ref||e.memo||fmtDate(e.date)||'this entry');
+      if(!window.confirm('Delete journal entry \u201C'+label+'\u201D? This cannot be undone.'))return;
+      state.entries=state.entries.filter(function(x){return x.id!==e.id;});
+      renderEntries();recalc();
+    }
+  });
+  $('#btnAddEntry').addEventListener('click',addEntry);
+}
+
+function bindAccounts(){
+  var box=$('#accRows');
+  box.addEventListener('input',function(ev){
+    var t=ev.target,f=t.getAttribute&&t.getAttribute('data-f');
+    if(!f)return;
+    var tr=t.closest('tr[data-a]');if(!tr)return;
+    var a=accById(tr.getAttribute('data-a'));if(!a)return;
+    a[f]=t.value;
+    if(f==='code'||f==='name')updateAccOptionLabels();
+    recalc();
+  });
+  box.addEventListener('change',function(ev){
+    var t=ev.target;
+    if(t.getAttribute&&t.getAttribute('data-f')==='type'){
+      var tr=t.closest('tr[data-a]');var a=accById(tr.getAttribute('data-a'));
+      if(a){a.type=t.value;renderAccounts();renderLedgerSelect();renderEntries();recalc();}
+    }
+  });
+  box.addEventListener('click',function(ev){
+    var btn=ev.target.closest('button[data-act="delacc"]');if(!btn)return;
+    var tr=btn.closest('tr[data-a]');var a=accById(tr.getAttribute('data-a'));if(!a)return;
+    var used=0;
+    state.entries.forEach(function(e){e.lines.forEach(function(l){
+      if(l.acc===a.id){var d=parseAmt(l.dr),c=parseAmt(l.cr);
+        if((d.ok&&d.c!==0)||(c.ok&&c.c!==0)||!d.ok||!c.ok)used++;}});});
+    var msg=$('#accMsg');
+    if(used){
+      msg.innerHTML='<span class="err"><strong>'+esc(accLabel(a))+'</strong> is used by '+used+
+        ' journal line'+(used===1?'':'s')+'. Move or delete those lines first \u2014 deleting the account would '+
+        'unbalance the book.</span>';
+      tr.querySelector('input').focus();
+      return;
+    }
+    if(!window.confirm('Delete account \u201C'+accLabel(a)+'\u201D?'))return;
+    state.accounts=state.accounts.filter(function(x){return x.id!==a.id;});
+    state.entries.forEach(function(e){e.lines.forEach(function(l){if(l.acc===a.id)l.acc='';});});
+    msg.textContent='Account deleted.';
+    if(!state.accounts.length)state.accounts=defaultAccounts();
+    renderAccounts();renderLedgerSelect();renderEntries();recalc();
+  });
+  $('#btnAddAccount').addEventListener('click',function(){
+    var codes=state.accounts.map(function(a){return parseInt(a.code,10);}).filter(function(n){return !isNaN(n);});
+    var next=codes.length?String(Math.max.apply(null,codes)+10):'1000';
+    var a={id:uid('a'),code:next,name:'New account',type:'expense'};
+    state.accounts.push(a);
+    $('#accMsg').textContent='Account added \u2014 set its code, name and type.';
+    renderAccounts();renderLedgerSelect();renderEntries();recalc();
+    var tr=document.querySelector('#accRows tr[data-a="'+cssEsc(a.id)+'"]');
+    if(tr){tr.scrollIntoView({block:'center'});var inp=tr.querySelector('input[data-f="name"]');if(inp){inp.focus();inp.select();}}
+  });
+}
+
+/* ── export ──────────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  if(/[",\n\r]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function csvRow(a){return a.map(csvCell).join(',')+'\r\n';}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){}
+}
+function slug(){
+  var s=(state.biz.name||'ledger').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  return s||'ledger';
+}
+function buildCSV(){
+  var r=compute(),b=state.biz,out='';
+  out+=csvRow(['Solvix Double-Entry Ledger']);
+  out+=csvRow(['Business',b.name]);
+  out+=csvRow(['Book',b.book]);
+  out+=csvRow(['Period from',b.from,'Period to',b.to]);
+  out+=csvRow(['Currency',curName()]);
+  out+=csvRow(['Prepared by',b.prep,'Prepared on',b.date]);
+  out+=csvRow(['Trial balance basis',state.tbBasis==='per'?'Movements in period':'Cumulative to period end']);
+  out+=csvRow(['Unposted drafts included',state.includeDrafts?'Yes':'No']);
+  if(state.sample)out+=csvRow(['NOTE','SAMPLE DEMONSTRATION DATA']);
+  out+=csvRow(['NOTE','Not statutory accounts. Unaudited. No VAT, tax or depreciation calculated.']);
+  out+='\r\n';
+
+  out+=csvRow(['CHART OF ACCOUNTS']);
+  out+=csvRow(['Code','Account','Type','Balance to period end','Dr/Cr']);
+  sortedAccounts().forEach(function(a){
+    var t=r.accMap[a.id];var net=(t.openD+t.perD)-(t.openC+t.perC);
+    out+=csvRow([a.code,a.name,TYPE[a.type].label,plain(Math.abs(net)),net===0?'':(net>0?'Dr':'Cr')]);
+  });
+  out+='\r\n';
+
+  out+=csvRow(['JOURNAL']);
+  out+=csvRow(['Date','Reference','Narrative','Account code','Account','Type','Debit','Credit','Status']);
+  var ord=r.infos.slice().sort(function(x,y){
+    var dx=x.e.date||'9999-99-99',dy=y.e.date||'9999-99-99';return dx<dy?-1:(dx>dy?1:0);});
+  ord.forEach(function(info){
+    var status=info.posted?(info.bucket==='future'?'Posted, after period end':'Posted'):'DRAFT - not posted';
+    info.lines.forEach(function(L){
+      if(L.drC===0&&L.crC===0)return;
+      var a=L.ln.acc?accById(L.ln.acc):null;
+      out+=csvRow([info.e.date,info.e.ref,info.e.memo,a?a.code:'',a?a.name:'(no account)',
+        a?TYPE[a.type].label:'',L.drC?plain(L.drC):'',L.crC?plain(L.crC):'',status]);
+    });
+  });
+  out+='\r\n';
+
+  out+=csvRow(['TRIAL BALANCE',state.tbBasis==='per'?('movements '+b.from+' to '+b.to):('as at '+b.to)]);
+  out+=csvRow(['Code','Account','Type','Debit','Credit']);
+  r.tb.forEach(function(row){
+    out+=csvRow([row.t.acc.code,row.t.acc.name,row.t.pseudo?'':TYPE[row.t.acc.type].label,
+      row.net>0?plain(row.net):'',row.net<0?plain(-row.net):'']);
+  });
+  out+=csvRow(['','Totals','',plain(r.tdr),plain(r.tcr)]);
+  out+=csvRow(['','Difference','',plain(r.tbDiff),'']);
+  out+='\r\n';
+
+  out+=csvRow(['PROFIT AND LOSS',b.from+' to '+b.to]);
+  out+=csvRow(['Code','Account','Amount']);
+  out+=csvRow(['','INCOME','']);
+  r.inc.forEach(function(x){out+=csvRow([x.t.acc.code,x.t.acc.name,plain(x.v)]);});
+  out+=csvRow(['','Total income',plain(r.totInc)]);
+  out+=csvRow(['','EXPENSES','']);
+  r.exp.forEach(function(x){out+=csvRow([x.t.acc.code,x.t.acc.name,plain(x.v)]);});
+  out+=csvRow(['','Total expenses',plain(r.totExp)]);
+  out+=csvRow(['',(r.netResult<0?'Net loss for the period':'Net profit for the period'),plain(r.netResult)]);
+  out+='\r\n';
+
+  out+=csvRow(['BALANCE SHEET','as at '+b.to]);
+  out+=csvRow(['Code','Account','Amount']);
+  out+=csvRow(['','ASSETS','']);
+  r.as.forEach(function(x){out+=csvRow([x.t.acc.code,x.t.acc.name,plain(x.v)]);});
+  out+=csvRow(['','Total assets',plain(r.totAs)]);
+  out+=csvRow(['','LIABILITIES','']);
+  r.li.forEach(function(x){out+=csvRow([x.t.acc.code,x.t.acc.name,plain(x.v)]);});
+  out+=csvRow(['','Total liabilities',plain(r.totLi)]);
+  out+=csvRow(['','EQUITY','']);
+  r.eq.forEach(function(x){out+=csvRow([x.t.acc.code,x.t.acc.name,plain(x.v)]);});
+  out+=csvRow(['','Result brought forward',plain(r.resultBf)]);
+  out+=csvRow(['','Result for the period',plain(r.netResult)]);
+  out+=csvRow(['','Total equity',plain(r.totalEquity)]);
+  out+=csvRow(['','Liabilities plus equity',plain(r.totLi+r.totalEquity)]);
+  out+=csvRow(['','Assets less liabilities and equity (should be 0.00)',plain(r.bsCheck)]);
+  return out;
+}
+function bindExport(){
+  $('#btnPrint').addEventListener('click',function(){window.print();});
+  $('#btnCsv').addEventListener('click',function(){
+    download(slug()+'-ledger-'+(state.biz.to||todayISO())+'.csv','text/csv;charset=utf-8','\uFEFF'+buildCSV());
+  });
+  $('#btnJson').addEventListener('click',function(){
+    var payload={app:'solvix.simple-ledger',version:1,exported:new Date().toISOString(),data:state};
+    download(slug()+'-ledger-'+(state.biz.to||todayISO())+'.json','application/json',JSON.stringify(payload,null,2));
+  });
+  $('#btnImport').addEventListener('click',function(){$('#fileJson').click();});
+  $('#fileJson').addEventListener('change',function(ev){
+    var f=ev.target.files&&ev.target.files[0];
+    if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var s=null;
+      try{s=normalise(JSON.parse(String(rd.result)));}catch(e){s=null;}
+      if(!s){
+        $('#accMsg').innerHTML='<span class="err">That file is not a Solvix ledger export \u2014 nothing was imported.</span>';
+        return;
+      }
+      state=s;renderAll();
+      $('#accMsg').textContent='Book imported from '+f.name+'.';
+    };
+    rd.readAsText(f);
+    ev.target.value='';
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all data?\n\nThis deletes every journal entry, the book details and the saved copy in this browser, and returns to an empty book with the default chart of accounts. This cannot be undone \u2014 export JSON first if you want a backup.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    state=blankState();renderAll();
+  });
+  $('#btnBlank').addEventListener('click',function(){
+    if(!window.confirm('Replace the sample book with an empty one?'))return;
+    state=blankState();renderAll();
+  });
+  $('#btnDismiss').addEventListener('click',function(){
+    state.sample=false;$('#sampleBanner').hidden=true;save();
+  });
+}
+
+/* ── boot ────────────────────────────────────────────────────── */
+function boot(){
+  state=load();
+  if(!state)state=sampleState();
+  bindBiz();bindJournal();bindAccounts();bindExport();
+  renderAll();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+else boot();
+})();
+</script>
+</body>
+</html>

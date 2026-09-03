@@ -375,7 +375,7 @@ body{padding-bottom:0}
               <th scope="col" class="n">Height</th>
               <th scope="col" class="n">Unit wt</th>
               <th scope="col" class="n">Cases</th>
-              <th scope="col" style="width:34px"><span class="sr">Remove</span></th>
+              <th scope="col" style="width:34px" aria-label="Remove line"></th>
             </tr></thead>
             <tbody id="skuBody"></tbody>
           </table>
@@ -539,3 +539,692 @@ body{padding-bottom:0}
 </div>
 
 <script>
+"use strict";
+(function(){
+var KEY='solvix.pallet-load-planner.v1';
+var EPS=1e-9, IN_CM=2.54, LB_KG=2.2046226218;
+var $=function(s,r){return (r||document).querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+
+/* ── unit helpers ─────────────────────────────────────────────── */
+function isMet(){return S.units==='met';}
+function dLen(v){return isMet()? v*IN_CM : v;}                 // canonical in -> display
+function cLen(v){return isMet()? v/IN_CM : v;}                 // display -> canonical in
+function dWt(v){return isMet()? v/LB_KG : v;}                  // canonical lb -> display
+function cWt(v){return isMet()? v*LB_KG : v;}
+function uLen(){return isMet()?'cm':'in';}
+function uWt(){return isMet()?'kg':'lb';}
+function uVol(){return isMet()?'m³':'ft³';}
+function dVol(v){return isMet()? v*0.000016387064 : v/1728;}   // canonical in3
+
+function fnum(v,dp,minDp){
+  if(v===null||v===undefined||typeof v!=='number'||!isFinite(v))return '—';
+  var x=(v===0?0:v);
+  return x.toLocaleString('en-US',{minimumFractionDigits:(minDp==null?0:minDp),maximumFractionDigits:dp});
+}
+function LEN(v,dp){return fnum(dLen(v), dp==null?(isMet()?1:2):dp);}
+function WT(v,dp){return fnum(dWt(v), dp==null?(isMet()?1:1):dp);}
+function WT0(v){return fnum(dWt(v),0);}
+function VOL(v){return fnum(dVol(v),isMet()?2:1);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function pct(a,b){return (b>0)? (a/b*100) : null;}
+
+/* ── presets (canonical inches / lb) ──────────────────────────── */
+var PAL={
+  gma  :{L:48,   W:40,   deck:5.5,  tare:40},
+  eur1 :{L:120/IN_CM, W:80/IN_CM,  deck:14.4/IN_CM, tare:25*LB_KG},
+  eur2 :{L:120/IN_CM, W:100/IN_CM, deck:16.2/IN_CM, tare:33*LB_KG},
+  aus  :{L:116.5/IN_CM,W:116.5/IN_CM,deck:15/IN_CM, tare:40*LB_KG},
+  half :{L:48,   W:20,   deck:5.5,  tare:25}
+};
+var TRL={
+  dv53 :{L:636,W:100,H:110,payload:45000,name:'53 ft dry van'},
+  dv48 :{L:576,W:100,H:108,payload:45000,name:'48 ft dry van'},
+  box26:{L:312,W:96, H:96, payload:10000,name:'26 ft box truck'},
+  c20  :{L:232,W:92, H:94, payload:47900,name:'20 ft container'},
+  c40hc:{L:474,W:92, H:105,payload:58000,name:'40 ft high cube'}
+};
+function trailerName(){var p=S.trailer.preset; return TRL[p]?TRL[p].name:'Custom equipment';}
+function palletName(){
+  var m={gma:'GMA 48 × 40 in',eur1:'Euro EUR1 120 × 80 cm',eur2:'Euro EUR2 120 × 100 cm',
+         aus:'Australian 116.5 × 116.5 cm',half:'Half pallet 48 × 20 in'};
+  return m[S.pallet.preset]||('Custom '+LEN(S.pallet.L)+' × '+LEN(S.pallet.W)+' '+uLen());
+}
+
+/* ── state ────────────────────────────────────────────────────── */
+var seq=1;
+function todayISO(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+function sampleState(){
+  return {units:'imp',sample:true,
+    ref:'SO-48219',date:todayISO(),
+    shipper:'Northline Distribution — Columbus, OH',
+    consignee:'Marks & Co Regional DC — Nashville, TN',
+    planner:'D. Okafor',
+    notes:'Heaviest SKU to the nose. Do not double-stack the juice pallets. Load bars every 4 rows.',
+    pallet:{preset:'gma',L:48,W:40,deck:5.5,tare:40,maxH:96,maxWt:2200,overhang:0},
+    trailer:{preset:'dv53',L:636,W:100,H:110,payload:45000,pattern:'best',dbl:false},
+    skus:[
+      {id:seq++,desc:'Juice 1 L × 12 — SKU 40218',L:12,W:10,H:10,wt:26,qty:960},
+      {id:seq++,desc:'Paper towel 6 pk — SKU 71130',L:24,W:16,H:12,wt:11,qty:96},
+      {id:seq++,desc:'Soup 24 ct — SKU 55402',L:16,W:12,H:10,wt:28,qty:210}
+    ]};
+}
+function blankState(){
+  var s=sampleState();
+  s.sample=false; s.ref=''; s.shipper=''; s.consignee=''; s.planner=''; s.notes='';
+  s.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+  return s;
+}
+var S=sampleState();
+var viewTrailer=0;
+
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object') return false;
+    S=merge(sampleState(),o);
+    S.skus=(Array.isArray(o.skus)?o.skus:[]).map(function(r){
+      return {id:seq++,desc:String(r&&r.desc||''),L:n(r&&r.L),W:n(r&&r.W),H:n(r&&r.H),wt:n(r&&r.wt),qty:n(r&&r.qty)};
+    });
+    if(!S.skus.length) S.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+    return true;
+  }catch(e){ return false; }
+}
+function n(v){var x=parseFloat(v); return (isFinite(x)&&x>=0)?x:0;}
+function merge(base,o){
+  var out=JSON.parse(JSON.stringify(base));
+  ['units','ref','date','shipper','consignee','planner','notes'].forEach(function(k){
+    if(typeof o[k]==='string') out[k]=o[k]; });
+  out.sample = o.sample===true;
+  if(o.pallet&&typeof o.pallet==='object'){
+    ['L','W','deck','tare','maxH','maxWt','overhang'].forEach(function(k){
+      if(o.pallet[k]!=null) out.pallet[k]=n(o.pallet[k]); });
+    if(typeof o.pallet.preset==='string') out.pallet.preset=o.pallet.preset;
+  }
+  if(o.trailer&&typeof o.trailer==='object'){
+    ['L','W','H','payload'].forEach(function(k){ if(o.trailer[k]!=null) out.trailer[k]=n(o.trailer[k]); });
+    if(typeof o.trailer.preset==='string') out.trailer.preset=o.trailer.preset;
+    if(typeof o.trailer.pattern==='string') out.trailer.pattern=o.trailer.pattern;
+    out.trailer.dbl = o.trailer.dbl===true;
+  }
+  if(out.units!=='met') out.units='imp';
+  return out;
+}
+
+/* ── packing engine ───────────────────────────────────────────── */
+function fl(x){return Math.floor(x+EPS);}
+function packBlock(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var nx=fl(PL/a), ny=fl(PW/b), r=[],i,j;
+  if(nx<1||ny<1) return {count:0,rects:[]};
+  for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b});
+  return {count:nx*ny,rects:r};
+}
+function packSplitL(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var r=[],cnt=0,i,j;
+  var nx=fl(PL/a), ny=fl(PW/b);
+  if(nx>=1&&ny>=1){ for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b}); cnt=nx*ny; }
+  var used=Math.max(nx,0)*a, rl=PL-used;
+  var nx2=fl(rl/b), ny2=fl(PW/a);
+  if(nx2>=1&&ny2>=1){ for(j=0;j<ny2;j++) for(i=0;i<nx2;i++) r.push({x:used+i*b,y:j*a,w:b,h:a}); cnt+=nx2*ny2; }
+  return {count:cnt,rects:r};
+}
+function packSplitW(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var r=[],cnt=0,i,j;
+  var nx=fl(PL/a), ny=fl(PW/b);
+  if(nx>=1&&ny>=1){ for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b}); cnt=nx*ny; }
+  var used=Math.max(ny,0)*b, rw=PW-used;
+  var nx2=fl(PL/b), ny2=fl(rw/a);
+  if(nx2>=1&&ny2>=1){ for(j=0;j<ny2;j++) for(i=0;i<nx2;i++) r.push({x:i*b,y:used+j*a,w:b,h:a}); cnt+=nx2*ny2; }
+  return {count:cnt,rects:r};
+}
+/* best of: both pure orientations first (the classic check), then split blocks */
+function bestPack(PL,PW,a,b){
+  var cand=[
+    {label:'Block — lengthwise', p:packBlock(PL,PW,a,b)},
+    {label:'Block — turned',     p:packBlock(PL,PW,b,a)},
+    {label:'Split block',             p:packSplitL(PL,PW,a,b)},
+    {label:'Split block',             p:packSplitL(PL,PW,b,a)},
+    {label:'Split block',             p:packSplitW(PL,PW,a,b)},
+    {label:'Split block',             p:packSplitW(PL,PW,b,a)}
+  ];
+  var best=cand[0];
+  for(var i=1;i<cand.length;i++) if(cand[i].p.count>best.p.count) best=cand[i];
+  return {label:best.label,count:best.p.count,rects:best.p.rects,
+          straight:cand[0].p.count, turned:cand[1].p.count};
+}
+
+/* ── computation ──────────────────────────────────────────────── */
+function compute(){
+  var P=S.pallet, T=S.trailer;
+  var oh=P.overhang||0;
+  var uL=P.L+2*oh, uW=P.W+2*oh;
+  var R={lines:[],warn:[],bad:[]};
+  var palletList=[];
+  var maxLoadH=0;
+
+  R.lines=S.skus.map(function(s,idx){
+    var fit=bestPack(uL,uW,s.L,s.W);
+    var perLayer=fit.count;
+    var hAvail=P.maxH-P.deck;
+    var maxLayH=(s.H>0&&hAvail>0)? fl(hAvail/s.H) : 0;
+    var layerWt=perLayer*s.wt;
+    var wAvail=P.maxWt-P.tare;
+    var maxLayW=(layerWt>0)? ((wAvail>0)? fl(wAvail/layerWt) : 0) : Infinity;
+    var layers=Math.min(maxLayH,maxLayW); if(!isFinite(layers)) layers=maxLayH;
+    layers=Math.max(0,layers);
+    var cpp=perLayer*layers;
+    var pallets=(cpp>0)? Math.ceil(s.qty/cpp-EPS) : null;
+    var full=(cpp>0)? fl(s.qty/cpp) : 0;
+    var rem=(cpp>0)? s.qty-full*cpp : 0;
+    var loadH=P.deck+layers*s.H;
+    var gross=P.tare+cpp*s.wt;
+    var lineWt=s.qty*s.wt+((pallets||0)*P.tare);
+    var cube=s.qty*s.L*s.W*s.H;
+    var limitedBy=(perLayer===0||layers===0)?'—':(maxLayH<=maxLayW?'height':'weight');
+    var o={i:idx,s:s,fit:fit,perLayer:perLayer,layers:layers,maxLayH:maxLayH,
+      maxLayW:isFinite(maxLayW)?maxLayW:null,cpp:cpp,pallets:pallets,full:full,rem:rem,
+      loadH:loadH,gross:gross,lineWt:lineWt,cube:cube,limitedBy:limitedBy,
+      partialH:(perLayer>0&&rem>0)?(P.deck+Math.ceil(rem/perLayer-EPS)*s.H):0,
+      partialWt:P.tare+rem*s.wt};
+    if(s.L>0&&s.W>0&&perLayer===0)
+      R.bad.push('Line '+(idx+1)+': the case footprint is larger than the usable pallet footprint — nothing fits.');
+    if(cpp>0&&loadH>T.H+EPS)
+      R.bad.push('Line '+(idx+1)+': loaded pallet is '+LEN(loadH)+' '+uLen()+' tall — taller than the '+LEN(T.H)+' '+uLen()+' interior height.');
+    if(cpp>0&&s.qty>0){
+      var k;
+      for(k=0;k<full;k++) palletList.push({line:idx,cases:cpp,wt:gross,h:loadH,part:false});
+      if(rem>0) palletList.push({line:idx,cases:rem,wt:o.partialWt,h:o.partialH,part:true});
+      maxLoadH=Math.max(maxLoadH,loadH);
+    }
+    return o;
+  });
+
+  /* trailer floor */
+  var fpL=P.L+2*oh, fpW=P.W+2*oh;
+  var tb=bestPack(T.L,T.W,fpL,fpW);
+  var straightP=packBlock(T.L,T.W,fpL,fpW);
+  var turnedP  =packBlock(T.L,T.W,fpW,fpL);
+  var chosen, label;
+  if(T.pattern==='straight'){ chosen=straightP; label='Straight'; }
+  else if(T.pattern==='turned'){ chosen=turnedP; label='Turned / pinwheel'; }
+  else {
+    chosen={count:tb.count,rects:tb.rects};
+    label = tb.label==='Block — lengthwise' ? 'Straight'
+          : tb.label==='Block — turned' ? 'Turned / pinwheel' : 'Split block';
+  }
+  var rects=chosen.rects.slice().sort(function(a,b){return (a.x-b.x)||(a.y-b.y);});
+  R.positions=chosen.count; R.posLabel=label; R.rects=rects;
+  R.straight=straightP.count; R.turned=turnedP.count; R.bestPositions=tb.count;
+
+  var tiers=1;
+  if(T.dbl&&maxLoadH>0&&T.H>0&&2*maxLoadH<=T.H+EPS) tiers=2;
+  R.tiers=tiers; R.stackable=(maxLoadH>0&&T.H>0&&2*maxLoadH<=T.H+EPS);
+  R.capacity=R.positions*tiers;
+
+  /* fill trailers */
+  var trailers=[];
+  if(R.capacity>=1){
+    var cur={pallets:[],wt:0};
+    palletList.forEach(function(p){
+      var overCount=cur.pallets.length>=R.capacity;
+      var overWt=(T.payload>0)&&(cur.pallets.length>0)&&(cur.wt+p.wt>T.payload+EPS);
+      if(overCount||overWt){ trailers.push(cur); cur={pallets:[],wt:0}; }
+      cur.pallets.push(p); cur.wt+=p.wt;
+    });
+    if(cur.pallets.length) trailers.push(cur);
+  }
+  R.trailers=trailers;
+  R.palletList=palletList;
+  R.totalPallets=palletList.length;
+  R.totalCases=S.skus.reduce(function(a,s){return a+s.qty;},0);
+  R.totalWeight=R.lines.reduce(function(a,l){return a+(isFinite(l.lineWt)?l.lineWt:0);},0);
+  R.totalCube=R.lines.reduce(function(a,l){return a+l.cube;},0);
+  R.trailerCube=T.L*T.W*T.H;
+  R.trailersNeeded=(R.capacity>=1)? trailers.length : null;
+
+  if(R.capacity<1&&R.totalPallets>0)
+    R.bad.push('The pallet footprint does not fit inside the trailer interior — check the trailer dimensions.');
+  if(T.dbl&&!R.stackable&&R.totalPallets>0)
+    R.warn.push('Double-stacking is switched on but the tallest loaded pallet is '+LEN(maxLoadH)+' '+uLen()+
+      ' — two will not fit under the '+LEN(T.H)+' '+uLen()+' interior height, so one tier is planned.');
+  if(R.trailersNeeded&&R.trailersNeeded>1)
+    R.warn.push('This consignment does not fit one load: '+R.trailersNeeded+' trailers are required at '+
+      fnum(R.capacity,0)+' positions and '+WT0(T.payload)+' '+uWt()+' payload each.');
+  R.maxLoadH=maxLoadH;
+  return R;
+}
+
+/* ── SVG diagrams ─────────────────────────────────────────────── */
+function svgRect(x,y,w,h,fill,stroke,sw,dash){
+  return '<rect x="'+r3(x)+'" y="'+r3(y)+'" width="'+r3(w)+'" height="'+r3(h)+'" fill="'+fill+
+    '" stroke="'+stroke+'" stroke-width="'+r3(sw)+'"'+(dash?' stroke-dasharray="'+r3(dash)+'"':'')+
+    ' stroke-linejoin="miter"/>';
+}
+function r3(v){return Math.round(v*1000)/1000;}
+function svgText(x,y,size,txt,fill,weight){
+  return '<text x="'+r3(x)+'" y="'+r3(y)+'" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="'+
+    r3(size)+'" font-weight="'+(weight||600)+'" fill="'+fill+'" text-anchor="middle" dominant-baseline="central">'+esc(txt)+'</text>';
+}
+function layerSVG(l){
+  var P=S.pallet, oh=P.overhang||0;
+  var uL=P.L+2*oh, uW=P.W+2*oh;
+  if(!(uL>0&&uW>0)) return '<p class="hint">Enter pallet dimensions to draw the layer.</p>';
+  var pad=Math.max(uL,uW)*0.03;
+  var sw=Math.max(uL,uW)/170;
+  var out='<svg viewBox="'+r3(-pad)+' '+r3(-pad)+' '+r3(uL+2*pad)+' '+r3(uW+2*pad)+
+    '" role="img" aria-label="Pallet layer pattern, '+l.perLayer+' cases per layer">';
+  if(oh>0) out+=svgRect(0,0,uL,uW,'none','var(--faint)',sw,sw*3);
+  out+=svgRect(oh,oh,P.L,P.W,'var(--sunk)','var(--line-hard)',sw*1.4);
+  l.fit.rects.forEach(function(r,i){
+    out+=svgRect(r.x,r.y,r.w,r.h,'var(--accent-wash)','var(--accent)',sw*1.2);
+    var fs=Math.min(r.w,r.h)*0.44;
+    if(fs>=uL/30) out+=svgText(r.x+r.w/2,r.y+r.h/2,fs,String(i+1),'var(--accent-ink)');
+  });
+  out+='</svg>';
+  return out;
+}
+function trailerSVG(R,idx){
+  var T=S.trailer;
+  if(!(T.L>0&&T.W>0)) return '<p class="hint">Enter trailer dimensions to draw the floor plan.</p>';
+  var pad=T.W*0.06, sw=T.L/430;
+  var load=(R.trailers[idx]&&R.trailers[idx].pallets)||[];
+  var pos=R.positions||0;
+  var perPos=[];
+  for(var k=0;k<load.length;k++){ var pi=(pos>0)? (k%pos) : 0; perPos[pi]=(perPos[pi]||0)+1; }
+  var out='<svg viewBox="'+r3(-pad)+' '+r3(-pad)+' '+r3(T.L+2*pad)+' '+r3(T.W+2*pad)+
+    '" role="img" aria-label="Trailer floor plan, '+load.length+' of '+R.capacity+' positions loaded">';
+  out+=svgRect(0,0,T.L,T.W,'var(--surface)','var(--ink-2)',sw*2.4);
+  out+='<line x1="'+r3(T.L)+'" y1="0" x2="'+r3(T.L)+'" y2="'+r3(T.W)+'" stroke="var(--bad)" stroke-width="'+r3(sw*3)+'"/>';
+  R.rects.forEach(function(r,i){
+    var cnt=perPos[i]||0;
+    if(cnt>0){
+      out+=svgRect(r.x,r.y,r.w,r.h,'var(--accent-wash)','var(--accent)',sw*1.8);
+      var fs=Math.min(r.w,r.h)*0.34;
+      out+=svgText(r.x+r.w/2,r.y+r.h/2,fs,String(i+1)+(cnt>1?'×'+cnt:''),'var(--accent-ink)');
+    }else{
+      out+=svgRect(r.x,r.y,r.w,r.h,'none','var(--line-hard)',sw*1.2,sw*4);
+    }
+  });
+  out+='</svg>';
+  return out;
+}
+
+/* ── rendering ────────────────────────────────────────────────── */
+function setVal(id,v){var el=document.getElementById(id); if(el&&el.value!==String(v)) el.value=v;}
+function inpLen(v){return fnum(dLen(v),isMet()?2:3,0).replace(/,/g,'');}
+function inpWt(v){return fnum(dWt(v),isMet()?2:2,0).replace(/,/g,'');}
+
+function renderInputs(){
+  $$('[data-u="len"]').forEach(function(e){e.textContent='('+uLen()+')';});
+  $$('[data-u="wt"]').forEach(function(e){e.textContent='('+uWt()+')';});
+  $('#units').value=S.units;
+  $('#unitChip').textContent=isMet()?'Metric':'Imperial';
+  setVal('ref',S.ref); setVal('date',S.date); setVal('shipper',S.shipper);
+  setVal('consignee',S.consignee); setVal('planner',S.planner);
+  var nt=$('#notes'); if(nt.value!==S.notes) nt.value=S.notes;
+  setVal('pL',inpLen(S.pallet.L)); setVal('pW',inpLen(S.pallet.W));
+  setVal('pDeck',inpLen(S.pallet.deck)); setVal('pTare',inpWt(S.pallet.tare));
+  setVal('pMaxH',inpLen(S.pallet.maxH)); setVal('pMaxWt',inpWt(S.pallet.maxWt));
+  setVal('pOverhang',inpLen(S.pallet.overhang));
+  setVal('tL',inpLen(S.trailer.L)); setVal('tW',inpLen(S.trailer.W));
+  setVal('tH',inpLen(S.trailer.H)); setVal('tPay',inpWt(S.trailer.payload));
+  $('#palletPreset').value=S.pallet.preset; $('#tPreset').value=S.trailer.preset;
+  $('#tPattern').value=S.trailer.pattern; $('#tDbl').checked=!!S.trailer.dbl;
+  $('#sampleBar').hidden=!S.sample;
+}
+function renderRows(){
+  var tb=$('#skuBody'); tb.innerHTML='';
+  S.skus.forEach(function(s,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td class="rowno">'+(i+1)+'</td>'+
+      '<td class="dsc"><input aria-label="Description, line '+(i+1)+'" data-i="'+i+'" data-f="desc" value="'+esc(s.desc)+'" autocomplete="off"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case length, line '+(i+1)+'" data-i="'+i+'" data-f="L" value="'+inpLen(s.L)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case width, line '+(i+1)+'" data-i="'+i+'" data-f="W" value="'+inpLen(s.W)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case height, line '+(i+1)+'" data-i="'+i+'" data-f="H" value="'+inpLen(s.H)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.1" min="0" aria-label="Unit weight, line '+(i+1)+'" data-i="'+i+'" data-f="wt" value="'+inpWt(s.wt)+'"></td>'+
+      '<td class="nm"><input type="number" step="1" min="0" aria-label="Case count, line '+(i+1)+'" data-i="'+i+'" data-f="qty" value="'+fnum(s.qty,0).replace(/,/g,'')+'"></td>'+
+      '<td><button type="button" class="btn ico sm" data-del="'+i+'" aria-label="Remove line '+(i+1)+'">✕</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function alertHTML(R){
+  var h='';
+  R.bad.forEach(function(m){h+='<div class="note bad">'+esc(m)+'</div>';});
+  R.warn.forEach(function(m){h+='<div class="note warn">'+esc(m)+'</div>';});
+  return h;
+}
+function render(){
+  var R=compute(); var T=S.trailer, P=S.pallet;
+  $('#subline').textContent=palletName()+' · '+trailerName();
+
+  var haveLoad=R.totalPallets>0;
+  $('#hPallets').textContent=haveLoad?fnum(R.totalPallets,0):'—';
+  $('#hPalletsSub').textContent=haveLoad
+    ? (fnum(R.totalCases,0)+' cases · '+WT0(R.totalWeight)+' '+uWt()+' total')
+    : 'Add case dimensions and a case count';
+  $('#hPositions').innerHTML=(R.positions>0? fnum(R.capacity,0)+' <small>positions</small>' : '—');
+  $('#hPositionsSub').textContent=(R.positions>0)
+    ? (R.posLabel+' pattern in a '+trailerName()+(R.tiers>1?' · 2 tiers high':'')+
+       ' · straight '+R.straight+' / turned '+R.turned)
+    : 'Pallet does not fit this trailer';
+
+  $('#sTrailers').textContent=(R.trailersNeeded==null)?'—':fnum(R.trailersNeeded,0);
+  $('#sCases').textContent=fnum(R.totalCases,0);
+  $('#sWeight').innerHTML=(haveLoad? WT0(R.totalWeight)+' <small>'+uWt()+'</small>' : '—');
+  $('#sCube').innerHTML=(R.totalCube>0? VOL(R.totalCube)+' <small>'+uVol()+'</small>' : '—');
+
+  var t1=R.trailers[0]||{pallets:[],wt:0};
+  var payPct=pct(t1.wt,T.payload), posPct=pct(t1.pallets.length,R.capacity);
+  setBar('#bPay','#bPayTxt',payPct,(haveLoad? WT0(t1.wt)+' / '+WT0(T.payload)+' '+uWt() : '—'));
+  setBar('#bPos','#bPosTxt',posPct,(R.capacity>0? fnum(t1.pallets.length,0)+' / '+fnum(R.capacity,0) : '—'));
+
+  var chip=$('#fitChip');
+  if(!haveLoad){ chip.className='chip'; chip.textContent='No load'; }
+  else if(R.bad.length){ chip.className='chip bad'; chip.textContent='Will not load'; }
+  else if(R.trailersNeeded>1){ chip.className='chip warn'; chip.textContent=R.trailersNeeded+' trailers'; }
+  else if(payPct!=null&&payPct>100){ chip.className='chip bad'; chip.textContent='Over payload'; }
+  else { chip.className='chip ok'; chip.textContent='Fits 1 trailer'; }
+
+  $('#alerts').innerHTML=alertHTML(R);
+  $('#ftHint').innerHTML='Payload limit '+WT0(T.payload)+' '+uWt()+' · interior '+LEN(T.L)+' × '+LEN(T.W)+' × '+LEN(T.H)+' '+uLen()+
+    ' · max stack '+LEN(P.maxH)+' '+uLen()+' / '+WT0(P.maxWt)+' '+uWt();
+
+  /* builds */
+  var b=$('#builds'); var html='';
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    var name=s.desc?esc(s.desc):('Line '+(i+1));
+    html+='<div class="build"><h3>'+(i+1)+'. '+name+'</h3>'+
+      '<div class="meta">Case '+LEN(s.L)+' × '+LEN(s.W)+' × '+LEN(s.H)+' '+uLen()+' · '+WT(s.wt)+' '+uWt()+'</div>'+
+      '<div class="diag">'+layerSVG(l)+'</div>'+
+      '<div class="meta">'+(l.perLayer>0? l.fit.label+' · '+l.perLayer+' per layer on '+LEN(P.L)+' × '+LEN(P.W)+' '+uLen()
+         : 'Case does not fit the pallet footprint')+'</div>'+
+      '<dl class="dl">'+
+        '<dt>Cases per layer</dt><dd>'+(l.perLayer||'—')+'</dd>'+
+        '<dt>Layers high</dt><dd>'+(l.layers||'—')+'</dd>'+
+        '<dt>Cases per pallet</dt><dd>'+(l.cpp||'—')+'</dd>'+
+        '<dt>Loaded height</dt><dd>'+(l.cpp?LEN(l.loadH)+' '+uLen():'—')+'</dd>'+
+        '<dt>Gross per pallet</dt><dd>'+(l.cpp?WT0(l.gross)+' '+uWt():'—')+'</dd>'+
+        '<dt>Pallets</dt><dd>'+(l.pallets==null?'—':fnum(l.pallets,0)+(l.rem>0?' ('+l.full+' full + '+l.rem+' cases)':''))+'</dd>'+
+        '<dt>Cut by</dt><dd>'+(l.limitedBy==='height'?'stack height':l.limitedBy==='weight'?'stack weight':'—')+'</dd>'+
+      '</dl></div>';
+  });
+  b.innerHTML=html||'<p class="empty">Add a case line to see the pallet build.</p>';
+  $('#palChip').textContent=(R.lines.length||0)+' build'+(R.lines.length===1?'':'s');
+
+  /* trailer plan */
+  if(viewTrailer>=Math.max(R.trailers.length,1)) viewTrailer=0;
+  var pick=$('#trPick'), lbl=$('#trPickLbl'), many=R.trailers.length>1;
+  pick.hidden=!many; lbl.hidden=!many;
+  if(many){
+    var o=''; for(var i=0;i<R.trailers.length;i++) o+='<option value="'+i+'">Trailer '+(i+1)+' of '+R.trailers.length+'</option>';
+    pick.innerHTML=o; pick.value=String(viewTrailer);
+  }
+  $('#trDiag').innerHTML=trailerSVG(R,viewTrailer);
+  var tv=R.trailers[viewTrailer]||{pallets:[],wt:0};
+  $('#trChip').textContent=(R.positions>0? R.posLabel+' · '+R.positions+' floor positions' : 'No fit');
+  $('#legNote').textContent=(R.tiers>1?'×2 marks a double-stacked position.':'');
+  $('#trCap').innerHTML='Trailer '+(viewTrailer+1)+(R.trailers.length>1?' of '+R.trailers.length:'')+
+    ': <b>'+fnum(tv.pallets.length,0)+'</b> pallets on <b>'+fnum(R.positions,0)+'</b> floor positions'+
+    (R.tiers>1?' (2 tiers)':'')+', <b>'+WT0(tv.wt)+' '+uWt()+'</b> of <b>'+WT0(T.payload)+' '+uWt()+'</b> payload. '+
+    'Interior '+LEN(T.L)+' × '+LEN(T.W)+' × '+LEN(T.H)+' '+uLen()+
+    ' — straight '+R.straight+' positions, turned '+R.turned+', best fit '+R.bestPositions+'.';
+
+  /* detail table */
+  var body=$('#detBody'), foot=$('#detFoot'); var rows='';
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    rows+='<tr><td>'+(i+1)+'. '+(s.desc?esc(s.desc):'<span class="hint">(unnamed)</span>')+'</td>'+
+      '<td class="n">'+LEN(s.L)+' × '+LEN(s.W)+' × '+LEN(s.H)+'</td>'+
+      '<td class="n">'+WT(s.wt)+'</td>'+
+      '<td class="n">'+fnum(s.qty,0)+'</td>'+
+      '<td>'+(l.perLayer>0?esc(l.fit.label):'—')+'</td>'+
+      '<td class="n">'+(l.perLayer||'—')+'</td>'+
+      '<td class="n">'+(l.layers||'—')+'</td>'+
+      '<td class="n">'+(l.cpp||'—')+'</td>'+
+      '<td class="n">'+(l.pallets==null?'—':fnum(l.pallets,0))+'</td>'+
+      '<td class="n">'+(l.cpp?LEN(l.loadH):'—')+'</td>'+
+      '<td class="n">'+(l.cpp?WT0(l.gross):'—')+'</td>'+
+      '<td class="n">'+(l.lineWt>0?WT0(l.lineWt):'—')+'</td></tr>';
+  });
+  body.innerHTML=rows||'<tr><td colspan="12" class="empty">No case lines yet.</td></tr>';
+  foot.innerHTML=R.lines.length?
+    '<tr><td colspan="3">Totals ('+uLen()+' / '+uWt()+')</td>'+
+    '<td class="n">'+fnum(R.totalCases,0)+'</td><td colspan="4"></td>'+
+    '<td class="n">'+fnum(R.totalPallets,0)+'</td><td class="n"></td><td class="n"></td>'+
+    '<td class="n">'+WT0(R.totalWeight)+'</td></tr>':'';
+
+  $('#skuFoot').textContent=S.skus.length+' case line'+(S.skus.length===1?'':'s')+' · '+
+    fnum(R.totalCases,0)+' cases · '+WT0(R.totalWeight)+' '+uWt()+' incl. pallets';
+
+  renderPrint(R);
+  return R;
+}
+function setBar(barSel,txtSel,p,txt){
+  var bar=$(barSel), span=bar.firstElementChild;
+  var v=(p==null||!isFinite(p))?0:Math.max(0,Math.min(100,p));
+  span.style.width=v+'%';
+  bar.className='bar'+((p!=null&&p>100)?' bad':(p!=null&&p>90)?' warn':'');
+  $(txtSel).textContent=txt+((p==null||!isFinite(p))?'':'  ('+fnum(p,1)+'%)');
+}
+function renderPrint(R){
+  $('#pMeta').innerHTML=esc(S.ref||'—')+'<br>'+esc(S.date||'')+'<br>Printed '+esc(todayISO());
+  function cell(k,v){return '<div><div class="k">'+esc(k)+'</div><div class="v">'+esc(v||'—')+'</div></div>';}
+  $('#pGrid').innerHTML=
+    cell('Shipper / origin',S.shipper)+cell('Consignee / destination',S.consignee)+
+    cell('Planned by',S.planner)+cell('Equipment',trailerName()+' — interior '+LEN(S.trailer.L)+' × '+LEN(S.trailer.W)+' × '+LEN(S.trailer.H)+' '+uLen())+
+    (S.notes?('<div style="grid-column:1/-1"><div class="k">Loading notes</div><div class="v">'+esc(S.notes)+'</div></div>'):'');
+  $('#pSpecs').innerHTML=
+    cell('Pallet',palletName()+' · deck '+LEN(S.pallet.deck)+' '+uLen()+' · tare '+WT(S.pallet.tare)+' '+uWt())+
+    cell('Stack limits','max '+LEN(S.pallet.maxH)+' '+uLen()+' high, '+WT0(S.pallet.maxWt)+' '+uWt()+' gross'+
+      (S.pallet.overhang>0?(' · overhang '+LEN(S.pallet.overhang)+' '+uLen()+' per side'):' · no overhang'))+
+    cell('Floor pattern',R.posLabel+' — '+R.positions+' positions'+(R.tiers>1?' × 2 tiers':'')+
+      ' (straight '+R.straight+', turned '+R.turned+')')+
+    cell('Payload','load '+WT0(R.totalWeight)+' '+uWt()+' against '+WT0(S.trailer.payload)+' '+uWt()+' limit');
+}
+
+/* ── input wiring ─────────────────────────────────────────────── */
+function pathSet(p,val){
+  var parts=p.split('.');
+  if(parts.length===1){ S[parts[0]]=val; } else { S[parts[0]][parts[1]]=val; }
+}
+function pathGet(p){var parts=p.split('.'); return parts.length===1?S[parts[0]]:S[parts[0]][parts[1]];}
+function onField(e){
+  var el=e.target, p=el.getAttribute('data-path'); if(!p) return;
+  var kind=el.getAttribute('data-kind');
+  if(kind==='txt'){ pathSet(p,el.value); }
+  else{
+    var raw=parseFloat(el.value);
+    var v=(isFinite(raw)&&raw>=0)?raw:0;
+    pathSet(p, kind==='len'?cLen(v): kind==='wt'?cWt(v): v);
+    if(p.indexOf('pallet.')===0&&/\.(L|W|deck|tare)$/.test(p)){ S.pallet.preset='custom'; $('#palletPreset').value='custom'; }
+    if(p.indexOf('trailer.')===0){ S.trailer.preset='custom'; $('#tPreset').value='custom'; }
+  }
+  touch(); update();
+}
+function validateField(el){
+  var p=el.getAttribute('data-path'); if(!p) return;
+  var kind=el.getAttribute('data-kind'); if(kind==='txt') return;
+  var box=document.getElementById('e-'+p.replace('.','-'));
+  var raw=el.value.trim(), v=parseFloat(raw);
+  var optional=/overhang/.test(p);
+  var msg='';
+  if(raw===''||!isFinite(v)) msg=optional?'':'Enter a number.';
+  else if(v<0) msg='Cannot be negative.';
+  else if(v===0&&!optional) msg='Must be greater than zero.';
+  el.classList.toggle('inv',!!msg);
+  if(box){ box.textContent=msg; box.hidden=!msg; }
+}
+function onRow(e){
+  var el=e.target, i=el.getAttribute('data-i'); if(i===null) return;
+  var f=el.getAttribute('data-f'), s=S.skus[+i]; if(!s) return;
+  if(f==='desc'){ s.desc=el.value; }
+  else{
+    var raw=parseFloat(el.value); var v=(isFinite(raw)&&raw>=0)?raw:0;
+    s[f]=(f==='qty')? Math.round(v) : (f==='wt'? cWt(v) : cLen(v));
+    el.classList.toggle('inv', el.value.trim()!==''&&!(isFinite(raw)&&raw>=0));
+  }
+  touch(); update();
+}
+function touch(){ if(S.sample){ S.sample=false; $('#sampleBar').hidden=true; } }
+function update(){ render(); save(); }
+
+/* ── exports ──────────────────────────────────────────────────── */
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+  }catch(err){ /* never break the page */ }
+}
+function csvCell(v){ v=(v==null)?'':String(v);
+  return /[",\r\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function toCSV(){
+  var R=compute(), T=S.trailer, P=S.pallet, rows=[];
+  rows.push(['Solvix Pallet & Trailer Load Planner']);
+  rows.push(['Reference',S.ref],['Ship date',S.date],['Shipper',S.shipper],['Consignee',S.consignee],
+            ['Planned by',S.planner],['Units',isMet()?'metric (cm / kg)':'imperial (in / lb)'],['Generated',todayISO()]);
+  rows.push([]);
+  rows.push(['Pallet','size',palletName(),'length ('+uLen()+')',fnum(dLen(P.L),3),'width ('+uLen()+')',fnum(dLen(P.W),3)]);
+  rows.push(['Pallet','deck height ('+uLen()+')',fnum(dLen(P.deck),3),'tare ('+uWt()+')',fnum(dWt(P.tare),2),
+             'overhang per side ('+uLen()+')',fnum(dLen(P.overhang),3)]);
+  rows.push(['Pallet','max load height ('+uLen()+')',fnum(dLen(P.maxH),3),'max stack weight ('+uWt()+')',fnum(dWt(P.maxWt),2)]);
+  rows.push(['Trailer',trailerName(),'internal L ('+uLen()+')',fnum(dLen(T.L),3),'W',fnum(dLen(T.W),3),'H',fnum(dLen(T.H),3),
+             'payload ('+uWt()+')',fnum(dWt(T.payload),2)]);
+  rows.push(['Trailer','floor pattern',R.posLabel,'positions',R.positions,'tiers',R.tiers,
+             'straight',R.straight,'turned',R.turned]);
+  rows.push([]);
+  rows.push(['Line','Description','Case L ('+uLen()+')','Case W','Case H','Unit wt ('+uWt()+')','Cases',
+             'Layer pattern','Cases per layer','Layers','Cases per pallet','Pallets','Full pallets','Remainder cases',
+             'Loaded height ('+uLen()+')','Gross per pallet ('+uWt()+')','Line weight ('+uWt()+')','Limited by']);
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    rows.push([i+1,s.desc,fnum(dLen(s.L),3),fnum(dLen(s.W),3),fnum(dLen(s.H),3),fnum(dWt(s.wt),3),s.qty,
+      (l.perLayer>0?l.fit.label:'no fit'),l.perLayer,l.layers,l.cpp,(l.pallets==null?'':l.pallets),l.full,l.rem,
+      (l.cpp?fnum(dLen(l.loadH),2):''),(l.cpp?fnum(dWt(l.gross),2):''),fnum(dWt(l.lineWt),2),l.limitedBy]);
+  });
+  rows.push([]);
+  rows.push(['Totals','cases',R.totalCases,'pallets',R.totalPallets,'weight ('+uWt()+')',fnum(dWt(R.totalWeight),2),
+             'volume ('+uVol()+')',fnum(dVol(R.totalCube),3)]);
+  rows.push(['Capacity','positions per trailer',R.capacity,'trailers required',(R.trailersNeeded==null?'':R.trailersNeeded)]);
+  R.trailers.forEach(function(t,i){
+    rows.push(['Trailer '+(i+1),'pallets',t.pallets.length,'weight ('+uWt()+')',fnum(dWt(t.wt),2),
+      'payload used %',fnum(pct(t.wt,T.payload),1)]);
+  });
+  rows.push([]);
+  rows.push(['Planning aid only. Does not check axle loads, weight distribution, securement (49 CFR 393 Subpart I), stacking strength or state weight limits.']);
+  return '﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';
+}
+function fileStem(){
+  var base=(S.ref||'load-plan').toString().replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'');
+  return (base||'load-plan');
+}
+
+/* ── boot ─────────────────────────────────────────────────────── */
+function boot(){
+  if(!load()) S=sampleState();
+  renderInputs(); renderRows(); render();
+
+  document.addEventListener('input',function(e){
+    if(e.target.hasAttribute&&e.target.hasAttribute('data-path')) onField(e);
+    else if(e.target.hasAttribute&&e.target.hasAttribute('data-i')) onRow(e);
+  });
+  document.addEventListener('blur',function(e){
+    if(e.target.hasAttribute&&e.target.hasAttribute('data-path')) validateField(e.target);
+  },true);
+
+  $('#units').addEventListener('change',function(){
+    S.units=this.value==='met'?'met':'imp';
+    renderInputs(); renderRows(); update();
+  });
+  $('#palletPreset').addEventListener('change',function(){
+    var p=PAL[this.value];
+    S.pallet.preset=this.value;
+    if(p){ S.pallet.L=p.L; S.pallet.W=p.W; S.pallet.deck=p.deck; S.pallet.tare=p.tare; }
+    touch(); renderInputs(); update();
+  });
+  $('#tPreset').addEventListener('change',function(){
+    var t=TRL[this.value];
+    S.trailer.preset=this.value;
+    if(t){ S.trailer.L=t.L; S.trailer.W=t.W; S.trailer.H=t.H; S.trailer.payload=t.payload; }
+    touch(); renderInputs(); update();
+  });
+  $('#tPattern').addEventListener('change',function(){ S.trailer.pattern=this.value; touch(); update(); });
+  $('#tDbl').addEventListener('change',function(){ S.trailer.dbl=this.checked; touch(); update(); });
+  $('#trPick').addEventListener('change',function(){ viewTrailer=parseInt(this.value,10)||0; render(); });
+
+  $('#btnAdd').addEventListener('click',function(){
+    S.skus.push({id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0});
+    touch(); renderRows(); update();
+    var rows=$$('#skuBody tr'); var last=rows[rows.length-1];
+    if(last) last.querySelector('input').focus();
+  });
+  $('#skuBody').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('[data-del]'):null; if(!b) return;
+    var i=parseInt(b.getAttribute('data-del'),10);
+    S.skus.splice(i,1);
+    if(!S.skus.length) S.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+    touch(); renderRows(); update();
+  });
+  $('#btnClearSample').addEventListener('click',function(){
+    S=blankState(); S.units=S.units; viewTrailer=0;
+    renderInputs(); renderRows(); update();
+    $('#ref').focus();
+  });
+  $('#btnPrint').addEventListener('click',function(){ window.print(); });
+  $('#btnCsv').addEventListener('click',function(){ download(fileStem()+'.csv','text/csv;charset=utf-8',toCSV()); });
+  $('#btnJson').addEventListener('click',function(){
+    download(fileStem()+'.json','application/json',JSON.stringify({tool:'solvix.pallet-load-planner',version:1,saved:new Date().toISOString(),state:S},null,2));
+  });
+  $('#btnImport').addEventListener('click',function(){ $('#fileIn').click(); });
+  $('#fileIn').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        var st=(o&&o.state)?o.state:o;
+        var keep=S;
+        S=merge(sampleState(),st);
+        S.skus=(Array.isArray(st.skus)?st.skus:[]).map(function(r){
+          return {id:seq++,desc:String(r&&r.desc||''),L:n(r&&r.L),W:n(r&&r.W),H:n(r&&r.H),wt:n(r&&r.wt),qty:n(r&&r.qty)};
+        });
+        if(!S.skus.length) S.skus=keep.skus;
+        S.sample=false; viewTrailer=0;
+        renderInputs(); renderRows(); update();
+        flash('Imported ✓');
+      }catch(err){ flash('That file could not be read as a saved load plan.',true); }
+    };
+    rd.readAsText(f); this.value='';
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear every field and delete the saved copy in this browser? This cannot be undone.')) return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    var u=S.units; S=blankState(); S.units=u; viewTrailer=0;
+    renderInputs(); renderRows(); update();
+  });
+  window.addEventListener('beforeprint',function(){ render(); });
+}
+function flash(msg,bad){
+  var el=$('#alerts');
+  var d=document.createElement('div');
+  d.className='note '+(bad?'bad':'');
+  d.textContent=msg; el.insertBefore(d,el.firstChild);
+  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); },4000);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();
+</script>
+</body>
+</html>
