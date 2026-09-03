@@ -202,7 +202,6 @@ table input:focus,table select:focus{background:var(--raise)}
 .unit{font:11px/1 var(--mono);color:var(--muted)}
 
 @media(max-width:900px){
-  .tw{overflow-x:visible}
   .lines{min-width:0;font-size:14px}
   .lines thead,.lines tfoot{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lines tbody tr{display:block;border:1px solid var(--line-hard);border-radius:5px;margin-bottom:10px;background:var(--raise)}
@@ -282,7 +281,8 @@ table input:focus,table select:focus{background:var(--raise)}
 </head>
 <body>
 
-<header class="appbar noprint">
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
   <div class="brand">
     <div class="mark" aria-hidden="true">EX</div>
     <div>
@@ -299,8 +299,9 @@ table input:focus,table select:focus{background:var(--raise)}
     <input type="file" id="fImport" accept="application/json,.json" hidden>
   </div>
 </header>
+</div>
 
-<main class="app noprint">
+<main class="app noprint" style="padding-top:0">
   <p class="msg" id="msg" role="status" aria-live="polite"></p>
   <div class="pagestack">
 
@@ -396,7 +397,6 @@ table input:focus,table select:focus{background:var(--raise)}
       </div>
       <div class="tw">
         <table class="lines">
-          <caption class="printonly">Expense lines</caption>
           <thead>
             <tr>
               <th scope="col" class="idx" title="Line number">#</th>
@@ -750,12 +750,6 @@ rowsEl.addEventListener('input',function(e){
   if(f==='type'||f==='taxMode'){ redrawRow(tr,l); }
   touched(); recalc(); save();
 });
-rowsEl.addEventListener('change',function(e){
-  if(e.target.dataset && (e.target.dataset.f==='type'||e.target.dataset.f==='taxMode')){
-    var tr=e.target.closest('tr'); var l=lineById(tr.dataset.id); if(l) redrawRow(tr,l);
-    touched(); recalc(); save();
-  }
-});
 function redrawRow(tr,l){
   if(l.type==='expense'){ l.qty=null; }
   else if(l.qty===null||l.qty===0){ l.qty=1; }
@@ -828,11 +822,11 @@ catsEl.addEventListener('click',function(e){
   var b=e.target.closest('[data-act="rmcat"]'); if(!b) return;
   var id=b.closest('tr').dataset.id;
   S.cats=S.cats.filter(function(c){return c.id!==id;});
-  touched(); renderRows(); recalc(); save();
+  touched(); renderRows(); renderCats(); recalc(); save();
 });
 $('#bAddCat').addEventListener('click',function(){
   S.cats.push({id:uid(),name:'New category',limit:0});
-  touched(); renderRows(); recalc(); save();
+  touched(); renderRows(); renderCats(); recalc(); save();
   var last=catsEl.lastElementChild; if(last){ var i=last.querySelector('input'); if(i){ i.focus(); i.select(); } }
 });
 
@@ -933,6 +927,17 @@ function recalc(){
       '<td class="r" style="width:1%">'+(b.over>0?'<span class="chip bad">Over</span>':'')+'</td>';
     cs.appendChild(tr);
   });
+
+  /* category table live cells */
+  var ctrs=catsEl.children;
+  for(var ci=0;ci<ctrs.length && ci<S.cats.length;ci++){
+    var cc=S.cats[ci], cb=t.byCat[cc.name]||{gross:0}, lim=n0(cc.limit);
+    var tds=ctrs[ci].children;
+    tds[2].textContent=money(cb.gross);
+    tds[3].innerHTML = lim<=0 ? '<span class="chip">No cap</span>'
+      : (cb.gross>lim ? '<span class="chip bad">Over by '+esc(money(r2(cb.gross-lim)))+'</span>'
+      : '<span class="chip ok">'+esc(money(r2(lim-cb.gross)))+' left</span>');
+  }
 
   /* flags */
   var f=$('#flags'); f.innerHTML='';
