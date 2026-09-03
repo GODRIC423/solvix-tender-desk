@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bar &amp; Kitchen Stock Take — count, value, usage &amp; variance against sales</title>
+<meta name="description" content="A working stock take sheet for bars, pubs and kitchens: count full units plus part-units to tenths, value stock at cost, work out usage as opening plus purchases minus closing, compare it with expected usage from EPOS sales, and get the variance in units, cost and percentage — the number that finds over-pouring, wastage and theft. Flags items below par with a rounded-up order quantity, shows days of cover from the usage rate, saves in your browser, prints a stock count sheet and variance report, exports CSV and JSON.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Cpath d='M11 5h10l-1.2 4.6a3 3 0 0 0 .5 2.6l2 2.6a4 4 0 0 1 .8 2.4V26a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-8.8a4 4 0 0 1 .8-2.4l2-2.6a3 3 0 0 0 .5-2.6z' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linejoin='round'/%3E%3Cpath d='M9.4 20.5h13.2' stroke='%23fff' stroke-width='1.9'/%3E%3Cpath d='M9.6 17.2h13' stroke='%23fff' stroke-width='1' opacity='.7'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Bar & Kitchen Stock Take — Retail & Hospitality ═════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}}
+:root[data-theme="dark"]{
+  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}
+
+.split>*,.stack>*,.grid>*{min-width:0}
+
+/* sticky top block: appbar + running answer band */
+.top{position:sticky;top:0;z-index:45;background:var(--surface)}
+.top .appbar{position:static;margin-bottom:0;border-bottom:0}
+.hband{display:grid;grid-template-columns:1.55fr 1fr 1fr 1fr 1fr;gap:1px;
+  background:var(--line);border-top:1px solid var(--line);border-bottom:1px solid var(--line-hard)}
+.hband .hs{background:var(--surface);padding:7px clamp(10px,2vw,22px) 8px;min-width:0}
+.hband .hs:not(:first-child){padding-left:12px;padding-right:12px}
+.hband .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hband .v{font:700 21px/1.15 var(--mono);letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hband .s{font:400 11px/1.3 var(--sans);color:var(--muted);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hband .hs.hero{background:var(--accent-wash)}
+.hband .hs.hero .k{color:var(--accent-ink)}
+.hband .hs.hero .v{font-size:27px;color:var(--accent-ink)}
+.hband .hs.hero .s{color:var(--accent-ink);opacity:.85}
+.hband .v.loss{color:var(--bad)!important}
+.hband .v.gain{color:var(--ok)!important}
+@media(max-width:820px){
+  .hband{grid-template-columns:1.35fr 1fr}
+  .hband .hs:nth-child(n+3){display:none}
+  .hband .hs.hero .v{font-size:22px} .hband .v{font-size:17px}
+}
+
+.wrap{padding-top:14px}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
+.span2{grid-column:span 2}
+@media(max-width:560px){.span2{grid-column:span 1}.fgrid{grid-template-columns:1fr}}
+.card+.card,.note+.card,.card+.note,.note+.note{margin-top:14px}
+.card>.hd h2 .mono{font-size:12px;color:var(--muted);font-weight:400}
+
+/* sample banner */
+.sample{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px;
+  border:1px dashed var(--line-hard);background:var(--sunk);border-radius:4px;padding:8px 12px;margin-bottom:14px}
+.sample b{font-weight:650}
+.sample .btn{margin-left:auto}
+
+/* the count table */
+#tbl{font-size:13px;min-width:1090px}
+#tbl th{padding:6px 7px;font-size:9.5px;letter-spacing:.05em}
+#tbl thead tr:first-child th{border-bottom:1px solid var(--line)}
+#tbl thead th.grp{text-align:center;color:var(--accent-ink);background:var(--accent-wash)}
+#tbl td{padding:4px 5px;border-bottom:1px solid var(--line)}
+#tbl th[scope=row]{padding:4px 6px;font:inherit;letter-spacing:0;text-transform:none;
+  color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line);white-space:normal;vertical-align:middle}
+#tbl input,#tbl select{padding:4px 5px;font-size:13px}
+#tbl input[type=text]{text-align:left;font-family:var(--sans)}
+#tbl .nm{font-weight:600}
+#tbl .catsel{font-size:11px;color:var(--muted);margin-top:2px;padding:1px 3px}
+#tbl td.c{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;
+  background:var(--sunk)}
+#tbl td.c.k{background:var(--accent-wash);font-weight:650}
+#tbl td.x{width:30px;text-align:center;background:var(--surface)}
+#tbl tfoot td{padding:7px 5px;font-size:12.5px}
+#tbl .e{display:block;font:10.5px/1.3 var(--sans);color:var(--bad);text-align:right;margin-top:1px}
+#tbl th[scope=row],#tbl thead th:first-child,#tbl tfoot td:first-child{position:sticky;left:0;z-index:2;
+  border-right:1px solid var(--line)}
+#tbl thead th:first-child{z-index:3;background:var(--sunk)}
+#tbl tfoot td:first-child{background:var(--sunk)}
+#tbl tbody tr:hover th[scope=row],#tbl tbody tr:hover td{background:var(--accent-wash)}
+#tbl tbody tr:hover td.x{background:var(--accent-wash)}
+#tbl tr.f-bad th[scope=row]{box-shadow:inset 3px 0 0 var(--bad)}
+#tbl tr.f-warn th[scope=row]{box-shadow:inset 3px 0 0 var(--warn)}
+#tbl tr.f-ok th[scope=row]{box-shadow:inset 3px 0 0 var(--ok)}
+.vneg{color:var(--bad)} .vpos{color:var(--ok)}
+.w5{width:52px} .w4{width:44px} .w6{width:62px} .w7{width:72px} .w9{width:110px}
+#tbl input.w4,#tbl input.w5,#tbl input.w6,#tbl input.w7{min-width:0}
+.rowbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted)}
+.legend b{color:var(--ink-2);font-weight:650}
+
+.statband{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.mini{width:100%;font-size:13px}
+.mini th{font-size:9.5px;padding:6px 8px}
+.mini td{padding:5px 8px}
+.empty2{padding:16px;text-align:center;color:var(--muted);font-size:13px}
+
+/* ══ printed document ═══════════════════════════════════════════ */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:1.5pt solid #000;padding-bottom:5pt;margin-bottom:7pt}
+.doc .lh .bz{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .ad{font-size:8.6pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right;flex:none}
+.doc .lh h2{font-size:12pt;letter-spacing:.03em}
+.doc .lh .dt{font-family:var(--mono);font-size:9.2pt;margin-top:3pt;font-weight:700}
+.doc .lh .rf{font-family:var(--mono);font-size:8.2pt;color:#333;margin-top:2pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:8pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:21pt}
+.doc .meta b{display:block;font-size:6.6pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:10pt;font-family:var(--mono);font-weight:700}
+.doc .meta span.sm{font-size:8.4pt;font-family:var(--sans);font-weight:400}
+.doc .hero{border:1.5pt solid #000;padding:5pt 7pt;margin-bottom:8pt;display:flex;
+  justify-content:space-between;gap:12pt;align-items:flex-end}
+.doc .hero b.t{display:block;font-size:7.4pt;letter-spacing:.09em;text-transform:uppercase;margin-bottom:2pt}
+.doc .hero .big{font-size:16pt;font-weight:700;font-family:var(--mono);line-height:1.1}
+.doc .hero .sm{font-size:8pt;line-height:1.4;text-align:right}
+.doc .dnote{border:1pt solid #000;padding:5pt 7pt;font-size:8.2pt;line-height:1.42;margin-top:8pt}
+.doc .dnote b{display:block;font-size:8pt;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2pt}
+.doc h3.sec{font-size:8.4pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 3pt;
+  border-bottom:.75pt solid #000;padding-bottom:1.5pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:3pt;table-layout:fixed}
+.doc th,.doc td{border:.75pt solid #999;padding:2.4pt 3.4pt;text-align:left;vertical-align:top;word-wrap:break-word}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:6.8pt;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#000}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tr.sub td{background:#f4f4f4!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc tfoot td{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc .two{display:grid;grid-template-columns:1fr 1fr;gap:10pt}
+.doc .kvp{display:flex;justify-content:space-between;gap:8pt;font-size:8.4pt;padding:1.6pt 0;border-bottom:.5pt dotted #bbb}
+.doc .kvp b{font-family:var(--mono)}
+.doc .kvp.tt{border-bottom:0;border-top:1pt solid #000;margin-top:2pt;padding-top:3pt;font-weight:700}
+.doc .basis{font-size:7.4pt;line-height:1.42;color:#222;margin-top:4pt}
+.doc .sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14pt;margin-top:12pt}
+.doc .sign div{border-top:.75pt solid #000;padding-top:2.5pt;font-size:7.4pt;letter-spacing:.06em;text-transform:uppercase;color:#333}
+.doc .sign div u{display:block;height:16pt;text-decoration:none}
+.doc .foot{margin-top:9pt;border-top:.75pt solid #999;padding-top:3pt;font-size:7pt;color:#444;
+  display:flex;justify-content:space-between;gap:10pt}
+.doc .smpl{font-size:8pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  border:1pt dashed #000;padding:2pt 5pt;display:inline-block;margin-bottom:6pt}
+@media print{ .top,.wrap,footer.app{display:none!important}
+  .doc{display:block!important} .breakb{break-before:page} }
+</style>
+</head>
+<body>
+
+<div class="top">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">ST</div>
+    <div>
+      <h1>Bar &amp; Kitchen Stock Take</h1>
+      <div class="sub">COUNT · VALUE · USAGE · VARIANCE · PAR</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print sheet &amp; variance</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+<div class="hband" id="hband">
+  <div class="hs hero">
+    <div class="k">Variance at cost — the stock take answer</div>
+    <div class="v" id="hVar">—</div>
+    <div class="s" id="hVarSub">Actual usage vs expected usage from sales</div>
+  </div>
+  <div class="hs"><div class="k">Variance %</div><div class="v" id="hPct">—</div><div class="s" id="hPctSub">of expected usage</div></div>
+  <div class="hs"><div class="k">Closing stock at cost</div><div class="v" id="hVal">—</div><div class="s" id="hValSub">—</div></div>
+  <div class="hs"><div class="k">Usage at cost</div><div class="v" id="hUse">—</div><div class="s" id="hUseSub">—</div></div>
+  <div class="hs"><div class="k">Below par</div><div class="v" id="hPar">—</div><div class="s" id="hParSub">—</div></div>
+</div>
+</div>
+
+<main class="app wrap">
+
+<div class="sample" id="sampleBar">
+  <b>Sample stock take loaded</b>
+  <span class="hint">A 30-day count for a demo pub, so you can see the variance working. Replace it with your own.</span>
+  <button type="button" class="btn sm" id="bBlank">Start a blank count</button>
+</div>
+
+<div class="split">
+  <section class="card">
+    <div class="hd"><h2>Stock take details</h2><span class="hint" id="dDays">—</span></div>
+    <div class="bd stack">
+      <div class="fgrid">
+        <div class="f span2"><label for="bizName">Business</label><input id="bizName" type="text" autocomplete="organization"></div>
+        <div class="f span2"><label for="venue">Venue / outlet counted</label><input id="venue" type="text"></div>
+      </div>
+      <div class="fgrid">
+        <div class="f span2"><label for="bizAddr">Address</label><textarea id="bizAddr" rows="2" style="min-height:46px"></textarea></div>
+        <div class="f"><label for="ref">Sheet reference</label><input id="ref" type="text"></div>
+        <div class="f"><label for="pStart">Opening count date</label><input id="pStart" type="date"></div>
+      </div>
+      <div class="fgrid">
+        <div class="f"><label for="pEnd">Closing count date</label><input id="pEnd" type="date"></div>
+        <div class="f"><label for="counted">Counted by</label><input id="counted" type="text"></div>
+        <div class="f"><label for="checked">Checked by</label><input id="checked" type="text"></div>
+      </div>
+      <div class="fgrid">
+        <div class="f"><label for="cur">Currency</label>
+          <select id="cur"><option value="£">£ Pound</option><option value="$">$ Dollar</option><option value="€">€ Euro</option><option value="custom">Custom symbol</option></select></div>
+        <div class="f" id="curCWrap" hidden><label for="curC">Custom symbol</label><input id="curC" type="text" maxlength="4"></div>
+        <div class="f"><label for="tol">Tolerance ±%</label><input id="tol" type="number" min="0" max="100" step="0.5" inputmode="decimal">
+          <span class="err" id="eTol" hidden></span></div>
+        <div class="f"><label for="basis">Cost basis</label>
+          <select id="basis"><option value="ex">Purchase cost, ex VAT</option><option value="inc">Purchase cost, inc VAT</option></select></div>
+      </div>
+      <p class="hint">Counts are entered as full units plus a part-unit judged to tenths — a bottle three-quarters full is
+        <b>0.8</b> in the part column. Sales are entered in serving measures and converted to units with the pack size.</p>
+    </div>
+  </section>
+
+  <section class="card sticky" id="resCard">
+    <div class="hd"><h2>Period totals</h2><span class="chip" id="cStatus">—</span></div>
+    <div class="bd stack">
+      <div class="statband">
+        <div class="stat hero"><div class="k">Variance at cost</div><div class="v" id="sVar">—</div><div class="u" id="sVarU">—</div></div>
+        <div class="stat"><div class="k">Closing stock value</div><div class="v" id="sVal">—</div><div class="u" id="sValU">at cost</div></div>
+      </div>
+      <table class="mini">
+        <caption class="lbl" style="text-align:left;padding-bottom:5px">Movement at cost</caption>
+        <tbody>
+          <tr><th scope="row">Opening stock</th><td class="n" id="tOpen">—</td></tr>
+          <tr><th scope="row">Purchases in</th><td class="n" id="tPur">—</td></tr>
+          <tr><th scope="row">Closing stock</th><td class="n" id="tClose">—</td></tr>
+          <tr><th scope="row">Actual usage (cost of stock consumed)</th><td class="n" id="tUse">—</td></tr>
+          <tr><th scope="row">Expected usage from sales</th><td class="n" id="tExp">—</td></tr>
+          <tr><th scope="row"><b>Variance (actual − expected)</b></th><td class="n" id="tVar">—</td></tr>
+          <tr><th scope="row">Days of cover on closing stock</th><td class="n" id="tCover">—</td></tr>
+          <tr><th scope="row">Lines counted / below par</th><td class="n" id="tLines">—</td></tr>
+        </tbody>
+      </table>
+      <p class="hint">Usage = opening + purchases − closing. Expected = sales ÷ pack size.
+        A positive variance means more stock went than the till sold.</p>
+    </div>
+  </section>
+</div>
+
+<div class="note warn" style="margin-top:14px" id="discl">
+  <strong>Variance is an indicator, not proof.</strong> A gap between counted usage and till sales can come from
+  miscounts and part-unit estimates, wastage or line cleaning, unrecorded transfers between outlets, deliveries
+  booked into the wrong period, promotions and staff drinks not rung through, or till errors — as easily as from
+  over-pouring or theft. Recount the worst lines, check delivery notes and wastage records, and confirm the pack
+  sizes before you raise it with anyone. Figures are management information at purchase cost, not an audited stock
+  valuation; take advice from your accountant before using them in accounts or in any disciplinary process.
+</div>
+
+<section class="card" style="margin-top:14px">
+  <div class="hd">
+    <h2>Stock lines <span class="mono" id="hCount"></span></h2>
+    <div class="rowbar">
+      <button type="button" class="btn sm" id="bAdd">+ Add line</button>
+      <button type="button" class="btn sm" id="bAdd5">+ 5 lines</button>
+    </div>
+  </div>
+  <div class="tw">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th scope="col" rowspan="2">Item &amp; category</th>
+          <th scope="col" rowspan="2">Unit counted</th>
+          <th scope="col" rowspan="2" class="r">Pack<br>serves/unit</th>
+          <th scope="col" rowspan="2" class="r">Cost<br><span id="hCur">/unit</span></th>
+          <th scope="colgroup" colspan="2" class="grp">Opening</th>
+          <th scope="col" rowspan="2" class="r">In</th>
+          <th scope="colgroup" colspan="2" class="grp">Closing</th>
+          <th scope="col" rowspan="2" class="r">Sold<br>serves</th>
+          <th scope="col" rowspan="2" class="r">Par</th>
+          <th scope="colgroup" colspan="5" class="grp">Usage &amp; variance</th>
+          <th scope="col" rowspan="2" class="r">Value</th>
+          <th scope="col" rowspan="2" class="r">Cover<br>days</th>
+          <th scope="col" rowspan="2"><span class="lbl" style="font-size:9.5px">Del</span></th>
+        </tr>
+        <tr>
+          <th scope="col" class="r">Full</th><th scope="col" class="r">.1</th>
+          <th scope="col" class="r">Full</th><th scope="col" class="r">.1</th>
+          <th scope="col" class="r">Used</th><th scope="col" class="r">Expect</th>
+          <th scope="col" class="r">Var u</th><th scope="col" class="r">Var %</th><th scope="col" class="r">Var cost</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+      <tfoot>
+        <tr>
+          <td>Totals</td><td></td><td></td><td></td>
+          <td class="n" colspan="2" id="fOpen">—</td>
+          <td class="n" id="fIn">—</td>
+          <td class="n" colspan="2" id="fClose">—</td>
+          <td class="n" id="fSold">—</td><td></td>
+          <td class="n" id="fUse">—</td><td class="n" id="fExp">—</td><td class="n" id="fVarU">—</td>
+          <td class="n" id="fVarP">—</td><td class="n" id="fVarC">—</td><td class="n" id="fVal">—</td>
+          <td class="n" id="fCov">—</td><td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <div class="ft">
+    <div class="legend">
+      <span><b>Pack</b> = servings sold from one counted unit (70cl bottle at 25ml = 28; sold whole = 1).</span>
+      <span><b>.1</b> = part unit in tenths, 0 to 0.9.</span>
+      <span><b>Var</b> positive = stock gone that sales do not explain.</span>
+    </div>
+  </div>
+</section>
+
+<div class="grid cols-2" style="margin-top:14px">
+  <section class="card">
+    <div class="hd"><h2>Variance by category</h2></div>
+    <div class="tw">
+      <table class="mini" id="catTbl">
+        <thead><tr><th scope="col">Category</th><th scope="col" class="n">Closing value</th>
+          <th scope="col" class="n">Expected use</th><th scope="col" class="n">Variance</th><th scope="col" class="n">Var %</th></tr></thead>
+        <tbody id="catB"></tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <div class="hd"><h2>Order list — below par</h2><span class="chip" id="cOrder">—</span></div>
+    <div class="tw">
+      <table class="mini" id="parTbl">
+        <thead><tr><th scope="col">Item</th><th scope="col" class="n">Closing</th><th scope="col" class="n">Par</th>
+          <th scope="col" class="n">Order (units)</th><th scope="col" class="n">Cost</th></tr></thead>
+        <tbody id="parB"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint">Order quantities are rounded <b>up</b> to whole units to bring stock back to par.</span></div>
+  </section>
+</div>
+
+</main>
+
+<footer class="app wrap" style="padding-bottom:34px">
+  <p class="hint">Usage = opening stock + purchases − closing stock, in counted units. Expected usage = sales servings ÷ pack size
+    (servings per counted unit). Variance = actual usage − expected usage, valued at the purchase cost you enter; variance %
+    is measured against expected usage. Days of cover = closing units ÷ (usage ÷ days between counts). Stock is valued at
+    purchase cost on the basis you select, not at retail or at net realisable value, and no stock-valuation or accounting
+    standard is applied. Part units are the counter's estimate to the nearest tenth. Everything stays in this browser.</p>
+</footer>
+
+<section class="doc printonly" id="doc"></section>
+
+<script>
+"use strict";
+/* ══ helpers ════════════════════════════════════════════════════ */
+var $=function(s,r){return (r||document).querySelector(s);};
+var KEY="solvix.stock-take.v1";
+var MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var CATS=["Draught","Spirits","Wine","Bottled beer","Minerals","Food","Other"];
+var seq=0;
+function uid(){seq++;return "r"+Date.now().toString(36)+seq.toString(36);}
+function num(v,d){if(v===""||v===null||v===undefined)return d===undefined?0:d;
+  var n=parseFloat(v);return isFinite(n)?n:(d===undefined?0:d);}
+function ok(x){return typeof x==="number"&&isFinite(x);}
+function r2(x){if(!ok(x))return 0;var v=Math.round((x+(x<0?-1e-9:1e-9))*100)/100;return v===0?0:v;}
+function esc(s){return String(s===null||s===undefined?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function grp(n,dp){dp=dp===undefined?2:dp;
+  var p=Math.abs(n).toFixed(dp).split(".");
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,",")+(p[1]?"."+p[1]:"");}
+function sym(){return S.cur==="custom"?(String(S.curC||"").trim()||"¤"):S.cur;}
+/* money for display: uses a true minus sign, never -0 */
+function mny(x,dp){if(!ok(x))return "—";var v=r2(x);
+  return (v<0?"−":"")+sym()+grp(v,dp===undefined?2:dp);}
+function mnyS(x){/* signed, + shown */ if(!ok(x))return "—";var v=r2(x);
+  return (v<0?"−":(v>0?"+":""))+sym()+grp(v,2);}
+function u3(x,dp){if(!ok(x))return "—";dp=dp===undefined?2:dp;
+  var v=Math.round((x+(x<0?-1e-9:1e-9))*Math.pow(10,dp))/Math.pow(10,dp);if(v===0)v=0;
+  return (v<0?"−":"")+grp(v,dp);}
+function uS(x,dp){if(!ok(x))return "—";dp=dp===undefined?2:dp;
+  var v=Math.round((x+(x<0?-1e-9:1e-9))*Math.pow(10,dp))/Math.pow(10,dp);if(v===0)v=0;
+  return (v<0?"−":(v>0?"+":""))+grp(v,dp);}
+function pct(x){if(!ok(x))return "—";var v=Math.round(x*10)/10;if(v===0)v=0;
+  return (v<0?"−":(v>0?"+":""))+grp(v,1)+"%";}
+function dmy(iso){if(!iso)return "—";var p=String(iso).split("-");
+  if(p.length!==3)return String(iso);var d=parseInt(p[2],10),m=parseInt(p[1],10);
+  if(!(d>=1&&m>=1&&m<=12))return String(iso);return d+" "+MONS[m-1]+" "+p[0];}
+function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+
+/* ══ state ══════════════════════════════════════════════════════ */
+function sampleRows(){
+  var R=[
+   ["Carling Lager","Draught","Keg 50L",88,128.50,2,0.4,4,1,0.7,380,2],
+   ["Guinness Draught","Draught","Keg 30L",52,118.00,1,0.2,2,0,0.8,130,1],
+   ["Gordon's Gin","Spirits","Bottle 70cl",28,14.20,3,0.5,6,2,0.8,174,2],
+   ["Smirnoff Vodka","Spirits","Bottle 70cl",28,13.80,4,0.2,6,3,0.6,186,3],
+   ["Jameson Whiskey","Spirits","Bottle 70cl",28,19.50,2,0.7,3,2,0.1,88,2],
+   ["Jack Daniel's","Spirits","Bottle 70cl",28,21.40,3,0,3,1,0.4,108,2],
+   ["Pinot Grigio","Wine","Bottle 75cl",5,6.40,9,0,24,11,0,108,10],
+   ["Malbec","Wine","Bottle 75cl",5,7.10,7,0.2,12,6,0.4,62,6],
+   ["Peroni 330ml","Bottled beer","Bottle 330ml",1,1.35,46,0,72,51,0,66,48],
+   ["Coca-Cola 200ml","Minerals","Bottle 200ml",1,0.55,88,0,48,66,0,68,72],
+   ["Beef burger 6oz","Food","Each",1,1.85,42,0,60,38,0,62,40],
+   ["Skin-on fries","Food","Bag 2.5kg",10,4.10,6,0.4,12,5,0.2,128,6]
+  ];
+  return R.map(function(a){return {id:uid(),name:a[0],cat:a[1],unit:a[2],pack:a[3],cost:a[4],
+    of:a[5],op:a[6],pur:a[7],cf:a[8],cp:a[9],sold:a[10],par:a[11]};});
+}
+function blankRow(){return {id:uid(),name:"",cat:"Spirits",unit:"Bottle 70cl",pack:28,cost:0,
+  of:0,op:0,pur:0,cf:0,cp:0,sold:0,par:0};}
+function sampleState(){
+  return {v:1,sample:true,
+    biz:{name:"The Fennel & Fig",addr:"18 Harbour Street\nWhitstable CT5 1AQ\n01227 555 0140",
+         venue:"Main bar & kitchen",ref:"ST-2026-08"},
+    p:{start:"2026-08-01",end:"2026-08-31",counted:"R. Okafor (Bar Manager)",checked:"L. Meadows (GM)"},
+    cur:"£",curC:"",tol:2,basis:"ex",
+    rows:sampleRows()};
+}
+function blankState(){
+  var s=sampleState();s.sample=false;
+  s.biz={name:"",addr:"",venue:"",ref:""};
+  s.p={start:todayISO(),end:todayISO(),counted:"",checked:""};
+  s.rows=[blankRow(),blankRow(),blankRow()];
+  return s;
+}
+var S=sampleState();
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);if(!raw)return false;
+    var o=JSON.parse(raw);if(!o||typeof o!=="object"||!Array.isArray(o.rows))return false;
+    S=normalise(o);return true;
+  }catch(e){return false;}
+}
+function normalise(o){
+  var d=sampleState();
+  var s={v:1,sample:!!o.sample,
+    biz:{name:String((o.biz&&o.biz.name)||""),addr:String((o.biz&&o.biz.addr)||""),
+         venue:String((o.biz&&o.biz.venue)||""),ref:String((o.biz&&o.biz.ref)||"")},
+    p:{start:String((o.p&&o.p.start)||d.p.start),end:String((o.p&&o.p.end)||d.p.end),
+       counted:String((o.p&&o.p.counted)||""),checked:String((o.p&&o.p.checked)||"")},
+    cur:["£","$","€","custom"].indexOf(o.cur)>=0?o.cur:"£",
+    curC:String(o.curC||""),
+    tol:ok(num(o.tol,NaN))?Math.max(0,num(o.tol,2)):2,
+    basis:o.basis==="inc"?"inc":"ex",
+    rows:[]};
+  s.rows=(o.rows||[]).map(function(r){
+    r=r||{};
+    return {id:String(r.id||uid()),name:String(r.name||""),
+      cat:CATS.indexOf(r.cat)>=0?r.cat:"Other",unit:String(r.unit||""),
+      pack:num(r.pack,0),cost:num(r.cost,0),of:num(r.of,0),op:num(r.op,0),
+      pur:num(r.pur,0),cf:num(r.cf,0),cp:num(r.cp,0),sold:num(r.sold,0),par:num(r.par,0)};
+  });
+  return s;
+}
+
+/* ══ the maths ══════════════════════════════════════════════════ */
+function periodDays(){
+  var a=Date.parse(S.p.start+"T00:00:00"),b=Date.parse(S.p.end+"T00:00:00");
+  if(!ok(a)||!ok(b))return 1;
+  var d=Math.round((b-a)/86400000);
+  return d>=1?d:1;
+}
+function calc(){
+  var days=periodDays();
+  var tol=ok(S.tol)?S.tol:2;
+  var t={openU:0,inU:0,closeU:0,sold:0,useU:0,expU:0,varU:0,
+         openV:0,purV:0,closeV:0,useV:0,expV:0,varV:0,below:0,order:0,orderV:0,lines:S.rows.length};
+  var cats={};
+  var rows=S.rows.map(function(r){
+    var openU=num(r.of)+num(r.op), closeU=num(r.cf)+num(r.cp);
+    var inU=num(r.pur), cost=num(r.cost), pack=num(r.pack), sold=num(r.sold), par=num(r.par);
+    var useU=openU+inU-closeU;
+    var expU=pack>0?sold/pack:null;
+    var varU=(expU===null)?null:useU-expU;
+    var varP=(expU!==null&&expU>0)?(varU/expU)*100:null;
+    var varV=(varU===null)?null:varU*cost;
+    var closeV=closeU*cost, openV=openU*cost, purV=inU*cost, useV=useU*cost;
+    var expV=(expU===null)?null:expU*cost;
+    var rate=useU>0?useU/days:null;
+    var cover=(rate&&rate>0)?closeU/rate:null;
+    var below=par>0&&closeU<par-1e-9;
+    var order=below?Math.ceil(par-closeU-1e-9):0;
+    var st="none";
+    if(useU<-1e-9) st="check";
+    else if(expU===null) st="none";
+    else if(varP===null) st=(Math.abs(useU)>1e-9?"bad":"ok");
+    else if(Math.abs(varP)<=tol+1e-9) st="ok";
+    else if(Math.abs(varP)<=tol*2+1e-9) st="warn";
+    else st="bad";
+    t.openU+=openU;t.inU+=inU;t.closeU+=closeU;t.sold+=sold;t.useU+=useU;
+    t.openV+=openV;t.purV+=purV;t.closeV+=closeV;t.useV+=useV;
+    if(expU!==null){t.expU+=expU;t.expV+=expV;t.varU+=varU;t.varV+=varV;}
+    if(below){t.below++;t.order+=order;t.orderV+=order*cost;}
+    var c=cats[r.cat]||(cats[r.cat]={cat:r.cat,closeV:0,expV:0,varV:0,lines:0});
+    c.closeV+=closeV;c.lines++;
+    if(expU!==null){c.expV+=expV;c.varV+=varV;}
+    return {r:r,openU:openU,closeU:closeU,inU:inU,useU:useU,expU:expU,varU:varU,varP:varP,
+            varV:varV,closeV:closeV,openV:openV,purV:purV,useV:useV,expV:expV,
+            cover:cover,below:below,order:order,orderCost:order*cost,st:st,pack:pack,cost:cost,sold:sold,par:par};
+  });
+  t.varP=t.expV>0?(t.varV/t.expV)*100:null;
+  t.cover=(t.useV>0)?t.closeV/(t.useV/days):null;
+  var catList=CATS.filter(function(c){return cats[c];}).map(function(c){
+    var x=cats[c];x.varP=x.expV>0?(x.varV/x.expV)*100:null;return x;});
+  var st="ok";
+  if(t.lines===0)st="none";
+  else if(t.varP===null)st="none";
+  else if(Math.abs(t.varP)<=tol+1e-9)st="ok";
+  else if(Math.abs(t.varP)<=tol*2+1e-9)st="warn";
+  else st="bad";
+  return {days:days,tol:tol,rows:rows,t:t,cats:catList,st:st};
+}
+
+/* ══ table build (structure only — values are painted separately) ══ */
+function rowHTML(r){
+  var o=[];
+  o.push('<tr data-id="'+esc(r.id)+'">');
+  o.push('<th scope="row"><input class="nm" type="text" data-f="name" value="'+esc(r.name)+'" aria-label="Item name" placeholder="Item name">'+
+         '<select class="catsel" data-f="cat" aria-label="Category">'+
+         CATS.map(function(c){return '<option'+(c===r.cat?' selected':'')+'>'+esc(c)+'</option>';}).join("")+'</select></th>');
+  o.push('<td><input type="text" class="w9" data-f="unit" value="'+esc(r.unit)+'" aria-label="Unit counted"></td>');
+  o.push('<td><input type="number" class="w5" data-f="pack" min="0" step="0.01" inputmode="decimal" value="'+esc(r.pack)+'" aria-label="Pack, serves per unit"><span class="e" data-e="pack" hidden></span></td>');
+  o.push('<td><input type="number" class="w6" data-f="cost" min="0" step="0.01" inputmode="decimal" value="'+esc(r.cost)+'" aria-label="Cost per unit"><span class="e" data-e="cost" hidden></span></td>');
+  o.push('<td><input type="number" class="w5" data-f="of" step="1" inputmode="decimal" value="'+esc(r.of)+'" aria-label="Opening full units"></td>');
+  o.push('<td><input type="number" class="w4" data-f="op" min="0" max="0.9" step="0.1" inputmode="decimal" value="'+esc(r.op)+'" aria-label="Opening part unit, tenths"><span class="e" data-e="op" hidden></span></td>');
+  o.push('<td><input type="number" class="w5" data-f="pur" step="1" inputmode="decimal" value="'+esc(r.pur)+'" aria-label="Purchases in, units"></td>');
+  o.push('<td><input type="number" class="w5" data-f="cf" step="1" inputmode="decimal" value="'+esc(r.cf)+'" aria-label="Closing full units"></td>');
+  o.push('<td><input type="number" class="w4" data-f="cp" min="0" max="0.9" step="0.1" inputmode="decimal" value="'+esc(r.cp)+'" aria-label="Closing part unit, tenths"><span class="e" data-e="cp" hidden></span></td>');
+  o.push('<td><input type="number" class="w6" data-f="sold" min="0" step="1" inputmode="decimal" value="'+esc(r.sold)+'" aria-label="Sold, serves"></td>');
+  o.push('<td><input type="number" class="w4" data-f="par" min="0" step="1" inputmode="decimal" value="'+esc(r.par)+'" aria-label="Par level, units"></td>');
+  o.push('<td class="c" data-c="use">—</td><td class="c" data-c="exp">—</td><td class="c" data-c="varu">—</td>');
+  o.push('<td class="c" data-c="varp">—</td><td class="c k" data-c="varc">—</td>');
+  o.push('<td class="c" data-c="val">—</td><td class="c" data-c="cov">—</td>');
+  o.push('<td class="x"><button type="button" class="btn ico sm bDel" aria-label="Delete line" title="Delete line">✕</button></td>');
+  o.push('</tr>');
+  return o.join("");
+}
+function buildTable(){
+  var tb=$("#tb");
+  if(!S.rows.length){
+    tb.innerHTML='<tr><td colspan="19"><div class="empty">No stock lines yet — press <b>+ Add line</b> to start counting.</div></td></tr>';
+    return;
+  }
+  tb.innerHTML=S.rows.map(rowHTML).join("");
+}
+function rowById(id){for(var i=0;i<S.rows.length;i++){if(S.rows[i].id===id)return S.rows[i];}return null;}
+
+/* ══ paint ══════════════════════════════════════════════════════ */
+function setTxt(id,v){var e=$(id);if(e)e.textContent=v;}
+function paint(){
+  var C=calc(), t=C.t, dash="—";
+  var has=C.rows.length>0;
+
+  /* per-row cells */
+  var trs=$("#tb").children;
+  for(var i=0;i<C.rows.length;i++){
+    var o=C.rows[i], tr=trs[i];
+    if(!tr||tr.getAttribute("data-id")!==o.r.id)continue;
+    var q=function(k){return tr.querySelector('[data-c="'+k+'"]');};
+    q("use").textContent=u3(o.useU);
+    q("exp").textContent=o.expU===null?dash:u3(o.expU);
+    var vu=q("varu");vu.textContent=o.varU===null?dash:uS(o.varU);
+    vu.className="c"+(o.varU===null?"":(o.varU>0.004?" vneg":(o.varU<-0.004?" vpos":"")));
+    q("varp").textContent=o.varP===null?dash:pct(o.varP);
+    var vc=q("varc");vc.textContent=o.varV===null?dash:mnyS(o.varV);
+    vc.className="c k"+(o.varV===null?"":(o.varV>0.004?" vneg":(o.varV<-0.004?" vpos":"")));
+    q("val").textContent=mny(o.closeV);
+    q("cov").textContent=o.cover===null?dash:u3(o.cover,1);
+    tr.className=(o.st==="bad"||o.st==="check")?"f-bad":(o.st==="warn"?"f-warn":(o.st==="ok"?"f-ok":""));
+    var ttl=o.st==="check"?"Closing count is higher than opening plus purchases — check the counts":
+            (o.st==="bad"?"Outside tolerance — investigate":
+            (o.st==="warn"?"Watch — outside tolerance but within twice it":
+            (o.st==="ok"?"Within tolerance":"")));
+    tr.title=ttl;
+  }
+
+  /* table foot */
+  setTxt("#fOpen",has?u3(t.openU):dash);
+  setTxt("#fIn",has?u3(t.inU):dash);
+  setTxt("#fClose",has?u3(t.closeU):dash);
+  setTxt("#fSold",has?u3(t.sold,0):dash);
+  setTxt("#fUse",has?u3(t.useU):dash);
+  setTxt("#fExp",has?u3(t.expU):dash);
+  setTxt("#fVarU",has?uS(t.varU):dash);
+  setTxt("#fVarP",has&&t.varP!==null?pct(t.varP):dash);
+  setTxt("#fVarC",has?mnyS(t.varV):dash);
+  setTxt("#fVal",has?mny(t.closeV):dash);
+  setTxt("#fCov",has&&t.cover!==null?u3(t.cover,1):dash);
+
+  /* hero band */
+  var hv=$("#hVar"), sv=$("#sVar");
+  hv.textContent=has?mnyS(t.varV):dash;
+  hv.className="v"+(has?(t.varV>0.004?" loss":(t.varV<-0.004?" gain":"")):"");
+  sv.textContent=has?mnyS(t.varV):dash;
+  setTxt("#hVarSub",has?(t.varV>0.004?"stock gone that sales do not explain":
+        (t.varV<-0.004?"more stock than sales suggest — check counts":"in line with sales")):
+        "Add stock lines to see the variance");
+  setTxt("#hPct",has&&t.varP!==null?pct(t.varP):dash);
+  setTxt("#hPctSub","of "+(has?mny(t.expV):dash)+" expected use");
+  setTxt("#hVal",has?mny(t.closeV):dash);
+  setTxt("#hValSub",has?u3(t.closeU)+" units over "+t.lines+" line"+(t.lines===1?"":"s"):dash);
+  setTxt("#hUse",has?mny(t.useV):dash);
+  setTxt("#hUseSub",C.days+" day period");
+  setTxt("#hPar",has?String(t.below):dash);
+  setTxt("#hParSub",t.below?(u3(t.order,0)+" units to order · "+mny(t.orderV)):"all lines at or above par");
+  setTxt("#sVarU",has?(uS(t.varU)+" units · "+(t.varP!==null?pct(t.varP):dash)):dash);
+  setTxt("#sVal",has?mny(t.closeV):dash);
+  setTxt("#sValU","at "+(S.basis==="inc"?"cost inc VAT":"cost ex VAT"));
+
+  var chip=$("#cStatus");
+  chip.className="chip "+(C.st==="ok"?"ok":(C.st==="warn"?"warn":(C.st==="bad"?"bad":"")));
+  chip.textContent=C.st==="ok"?"Within ±"+u3(C.tol,1)+"%":
+    (C.st==="warn"?"Watch":(C.st==="bad"?"Investigate":"No data"));
+
+  /* movement table */
+  setTxt("#tOpen",has?mny(t.openV):dash);
+  setTxt("#tPur",has?mny(t.purV):dash);
+  setTxt("#tClose",has?mny(t.closeV):dash);
+  setTxt("#tUse",has?mny(t.useV):dash);
+  setTxt("#tExp",has?mny(t.expV):dash);
+  setTxt("#tVar",has?(mnyS(t.varV)+(t.varP!==null?"  ("+pct(t.varP)+")":"")):dash);
+  setTxt("#tCover",has&&t.cover!==null?u3(t.cover,1)+" days":dash);
+  setTxt("#tLines",has?(t.lines+" / "+t.below):dash);
+  setTxt("#dDays",C.days+" day period · "+dmy(S.p.start)+" to "+dmy(S.p.end));
+  setTxt("#hCount",S.rows.length?S.rows.length+" lines":"");
+  var hc=$("#hCur");if(hc)hc.textContent=sym()+"/unit";
+
+  /* category table */
+  var cb=$("#catB");
+  cb.innerHTML=C.cats.length?C.cats.map(function(c){
+    return '<tr><th scope="row">'+esc(c.cat)+'</th><td class="n">'+mny(c.closeV)+'</td><td class="n">'+
+      mny(c.expV)+'</td><td class="n'+(c.varV>0.004?" vneg":(c.varV<-0.004?" vpos":""))+'">'+mnyS(c.varV)+
+      '</td><td class="n">'+(c.varP===null?dash:pct(c.varP))+'</td></tr>';
+  }).join("")+'<tr><th scope="row"><b>All categories</b></th><td class="n"><b>'+mny(t.closeV)+
+    '</b></td><td class="n"><b>'+mny(t.expV)+'</b></td><td class="n"><b>'+mnyS(t.varV)+
+    '</b></td><td class="n"><b>'+(t.varP===null?dash:pct(t.varP))+'</b></td></tr>'
+    :'<tr><td colspan="5"><div class="empty2">No lines counted yet.</div></td></tr>';
+
+  /* order list */
+  var below=C.rows.filter(function(o){return o.below;})
+    .sort(function(a,b){return b.orderCost-a.orderCost;});
+  var pb=$("#parB");
+  pb.innerHTML=below.length?below.map(function(o){
+    return '<tr><th scope="row">'+esc(o.r.name||"(unnamed)")+'<div class="hint">'+esc(o.r.unit)+'</div></th>'+
+      '<td class="n">'+u3(o.closeU)+'</td><td class="n">'+u3(o.par,0)+'</td>'+
+      '<td class="n"><b>'+u3(o.order,0)+'</b></td><td class="n">'+mny(o.orderCost)+'</td></tr>';
+  }).join("")+'<tr><th scope="row"><b>Order total</b></th><td class="n"></td><td class="n"></td><td class="n"><b>'+
+    u3(C.t.order,0)+'</b></td><td class="n"><b>'+mny(C.t.orderV)+'</b></td></tr>'
+    :'<tr><td colspan="5"><div class="empty2">Nothing below par.</div></td></tr>';
+  var co=$("#cOrder");
+  co.className="chip "+(below.length?"warn":"ok");
+  co.textContent=below.length?below.length+" to order":"All at par";
+
+  $("#sampleBar").hidden=!S.sample;
+  buildDoc(C);
+}
+
+/* ══ printed document ═══════════════════════════════════════════ */
+function letterhead(title){
+  var b=S.biz;
+  return '<div class="lh"><div><div class="bz">'+esc(b.name||"Stock take")+'</div>'+
+    (b.addr?'<div class="ad">'+esc(b.addr)+'</div>':'')+
+    (b.venue?'<div class="ad"><b>Outlet:</b> '+esc(b.venue)+'</div>':'')+
+    '</div><div class="ttl"><h2>'+title+'</h2>'+
+    '<div class="dt">'+dmy(S.p.start)+' – '+dmy(S.p.end)+'</div>'+
+    '<div class="rf">Ref '+esc(b.ref||"—")+' · printed '+dmy(todayISO())+'</div></div></div>';
+}
+function metaGrid(C){
+  return '<div class="meta">'+
+    '<div><b>Period</b><span>'+C.days+' days</span></div>'+
+    '<div><b>Lines counted</b><span>'+C.t.lines+'</span></div>'+
+    '<div><b>Counted by</b><span class="sm">'+esc(S.p.counted||"—")+'</span></div>'+
+    '<div><b>Checked by</b><span class="sm">'+esc(S.p.checked||"—")+'</span></div>'+
+    '</div>';
+}
+function docNote(){
+  return '<div class="dnote"><b>Important — variance is an indicator, not proof</b>'+
+    'A gap between counted usage and till sales can come from miscounts and part-unit estimates, wastage or line '+
+    'cleaning, unrecorded transfers between outlets, deliveries booked into the wrong period, promotions or staff '+
+    'drinks not rung through, or till errors, as easily as from over-pouring or theft. Recount the worst lines and '+
+    'check delivery notes and wastage records before raising it with anyone. Figures are management information at '+
+    'purchase cost ('+(S.basis==="inc"?"inc VAT":"ex VAT")+'), not an audited stock valuation; take advice from your '+
+    'accountant before using them in accounts or in any disciplinary process.</div>';
+}
+function signRow(a,b,c){
+  return '<div class="sign"><div><u></u>'+a+'</div><div><u></u>'+b+'</div><div><u></u>'+c+'</div></div>';
+}
+function docFoot(C){
+  return '<div class="foot"><span>'+esc(S.biz.name||"Stock take")+' · '+esc(S.biz.venue||"")+
+    '</span><span>Usage = opening + purchases − closing · Expected = sales ÷ pack size · '+
+    'Tolerance ±'+u3(C.tol,1)+'%</span></div>';
+}
+function byCat(C){
+  var out=[],seen={};
+  C.cats.forEach(function(c){seen[c.cat]=true;});
+  CATS.forEach(function(cat){
+    if(!seen[cat])return;
+    out.push({cat:cat,rows:C.rows.filter(function(o){return o.r.cat===cat;})});
+  });
+  return out;
+}
+function buildDoc(C){
+  var d=$("#doc"),t=C.t,dash="—",o=[];
+  var smpl=S.sample?'<div class="smpl">Sample data — not a real stock take</div>':'';
+
+  /* ── document 1: stock count sheet ── */
+  o.push(smpl);
+  o.push(letterhead("STOCK COUNT SHEET"));
+  o.push(metaGrid(C));
+  o.push('<div class="hero"><div><b class="t">Closing stock at '+(S.basis==="inc"?"cost inc VAT":"cost ex VAT")+
+    '</b><div class="big">'+mny(t.closeV)+'</div></div><div class="sm">'+
+    u3(t.closeU)+' units counted across '+t.lines+' lines<br>Days of cover on current usage: '+
+    (t.cover===null?dash:u3(t.cover,1)+' days')+'</div></div>');
+  o.push('<h3 class="sec">Count detail</h3>');
+  o.push('<table><colgroup><col style="width:20%"><col style="width:11%"><col style="width:8%"><col style="width:8%">'+
+    '<col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:11%"><col style="width:9%"><col style="width:9%"></colgroup>'+
+    '<thead><tr><th>Item</th><th>Unit</th><th class="n">Cost</th><th class="n">Opening</th><th class="n">In</th>'+
+    '<th class="n">Closing</th><th class="n">Used</th><th class="n">Value at cost</th><th class="n">Par</th><th class="n">Order</th></tr></thead><tbody>');
+  var groups=byCat(C);
+  if(!C.rows.length){o.push('<tr><td colspan="10">No lines counted.</td></tr>');}
+  groups.forEach(function(g){
+    var sv=0;
+    g.rows.forEach(function(x){
+      sv+=x.closeV;
+      o.push('<tr><td>'+esc(x.r.name||"(unnamed)")+'</td><td>'+esc(x.r.unit)+'</td><td class="n">'+mny(x.cost)+
+        '</td><td class="n">'+u3(x.openU)+'</td><td class="n">'+u3(x.inU)+'</td><td class="n">'+u3(x.closeU)+
+        '</td><td class="n">'+u3(x.useU)+'</td><td class="n">'+mny(x.closeV)+'</td><td class="n">'+u3(x.par,0)+
+        '</td><td class="n">'+(x.order?u3(x.order,0):"–")+'</td></tr>');
+    });
+    o.push('<tr class="sub"><td colspan="7">'+esc(g.cat)+' — '+g.rows.length+' line'+(g.rows.length===1?"":"s")+
+      '</td><td class="n">'+mny(sv)+'</td><td colspan="2"></td></tr>');
+  });
+  o.push('</tbody><tfoot><tr><td colspan="3">Total stock at cost</td><td class="n">'+u3(t.openU)+'</td><td class="n">'+
+    u3(t.inU)+'</td><td class="n">'+u3(t.closeU)+'</td><td class="n">'+u3(t.useU)+'</td><td class="n">'+mny(t.closeV)+
+    '</td><td class="n"></td><td class="n">'+u3(t.order,0)+'</td></tr></tfoot></table>');
+  o.push('<div class="two"><div>'+
+    '<div class="kvp"><span>Opening stock at cost</span><b>'+mny(t.openV)+'</b></div>'+
+    '<div class="kvp"><span>Purchases into stock</span><b>'+mny(t.purV)+'</b></div>'+
+    '<div class="kvp"><span>Closing stock at cost</span><b>'+mny(t.closeV)+'</b></div>'+
+    '<div class="kvp tt"><span>Cost of stock consumed</span><b>'+mny(t.useV)+'</b></div></div><div>'+
+    '<div class="kvp"><span>Expected usage from sales</span><b>'+mny(t.expV)+'</b></div>'+
+    '<div class="kvp"><span>Variance at cost</span><b>'+mnyS(t.varV)+'</b></div>'+
+    '<div class="kvp"><span>Variance %</span><b>'+(t.varP===null?dash:pct(t.varP))+'</b></div>'+
+    '<div class="kvp tt"><span>Lines below par</span><b>'+t.below+'</b></div></div></div>');
+  o.push('<div class="basis">Counts are full units plus a part unit estimated to the nearest tenth. '+
+    'Stock is valued at the purchase cost entered against each line ('+(S.basis==="inc"?"inc VAT":"ex VAT")+'). '+
+    'Order quantities are rounded up to whole units to return each line to its par level.</div>');
+  o.push(signRow("Counted by · "+esc(S.p.counted||""),"Checked by · "+esc(S.p.checked||""),"Date"));
+  o.push(docFoot(C));
+
+  /* ── document 2: variance report ── */
+  o.push('<div class="breakb">'+smpl);
+  o.push(letterhead("STOCK VARIANCE REPORT"));
+  o.push(metaGrid(C));
+  o.push('<div class="hero"><div><b class="t">Variance at cost — actual usage vs sales</b><div class="big">'+
+    mnyS(t.varV)+'</div></div><div class="sm">'+uS(t.varU)+' units · '+
+    (t.varP===null?dash:pct(t.varP))+' of '+mny(t.expV)+' expected usage<br>Tolerance set at ±'+
+    u3(C.tol,1)+'% · '+t.lines+' lines, '+C.rows.filter(function(x){return x.st==="bad"||x.st==="check";}).length+
+    ' outside tolerance</div></div>');
+  o.push('<h3 class="sec">Line variance</h3>');
+  o.push('<table><colgroup><col style="width:22%"><col style="width:9%"><col style="width:9%"><col style="width:9%">'+
+    '<col style="width:9%"><col style="width:9%"><col style="width:11%"><col style="width:11%"><col style="width:11%"></colgroup>'+
+    '<thead><tr><th>Item</th><th class="n">Used</th><th class="n">Sold</th><th class="n">Expected</th>'+
+    '<th class="n">Var units</th><th class="n">Var %</th><th class="n">Var at cost</th><th class="n">Cover (days)</th><th class="c">Status</th></tr></thead><tbody>');
+  if(!C.rows.length){o.push('<tr><td colspan="9">No lines counted.</td></tr>');}
+  groups.forEach(function(g){
+    var sv=0;
+    g.rows.forEach(function(x){
+      if(x.varV!==null)sv+=x.varV;
+      var lab=x.st==="check"?"CHECK":(x.st==="bad"?"INVESTIGATE":(x.st==="warn"?"WATCH":(x.st==="ok"?"OK":"–")));
+      o.push('<tr><td>'+esc(x.r.name||"(unnamed)")+'</td><td class="n">'+u3(x.useU)+'</td><td class="n">'+
+        u3(x.sold,0)+'</td><td class="n">'+(x.expU===null?dash:u3(x.expU))+'</td><td class="n">'+
+        (x.varU===null?dash:uS(x.varU))+'</td><td class="n">'+(x.varP===null?dash:pct(x.varP))+'</td><td class="n">'+
+        (x.varV===null?dash:mnyS(x.varV))+'</td><td class="n">'+(x.cover===null?dash:u3(x.cover,1))+
+        '</td><td class="c">'+lab+'</td></tr>');
+    });
+    o.push('<tr class="sub"><td colspan="6">'+esc(g.cat)+' subtotal</td><td class="n">'+mnyS(sv)+'</td><td colspan="2"></td></tr>');
+  });
+  o.push('</tbody><tfoot><tr><td colspan="6">Total variance at cost · '+
+    (t.varP===null?dash:pct(t.varP))+' of expected usage</td><td class="n">'+mnyS(t.varV)+
+    '</td><td class="n">'+(t.cover===null?dash:u3(t.cover,1))+'</td><td class="c"></td></tr></tfoot></table>');
+
+  var below=C.rows.filter(function(x){return x.below;}).sort(function(a,b){return b.orderCost-a.orderCost;});
+  o.push('<h3 class="sec">Order list — lines below par</h3>');
+  if(below.length){
+    o.push('<table><colgroup><col style="width:34%"><col style="width:16%"><col style="width:12%"><col style="width:12%">'+
+      '<col style="width:13%"><col style="width:13%"></colgroup>'+
+      '<thead><tr><th>Item</th><th>Unit</th><th class="n">Closing</th><th class="n">Par</th>'+
+      '<th class="n">Order (up)</th><th class="n">Cost</th></tr></thead><tbody>');
+    below.forEach(function(x){
+      o.push('<tr><td>'+esc(x.r.name||"(unnamed)")+'</td><td>'+esc(x.r.unit)+'</td><td class="n">'+u3(x.closeU)+
+        '</td><td class="n">'+u3(x.par,0)+'</td><td class="n">'+u3(x.order,0)+'</td><td class="n">'+mny(x.orderCost)+'</td></tr>');
+    });
+    o.push('</tbody><tfoot><tr><td colspan="4">Order total</td><td class="n">'+u3(t.order,0)+'</td><td class="n">'+
+      mny(t.orderV)+'</td></tr></tfoot></table>');
+  } else {
+    o.push('<div class="basis">No lines are below par at this count.</div>');
+  }
+  o.push(docNote());
+  o.push(signRow("Prepared by · "+esc(S.p.counted||""),"Reviewed by · "+esc(S.p.checked||""),"Date"));
+  o.push(docFoot(C));
+  o.push('</div>');
+  d.innerHTML=o.join("");
+}
+
+/* ══ CSV ════════════════════════════════════════════════════════ */
+function q(v){var s=String(v===null||v===undefined?"":v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function n2(x,dp){return ok(x)?(Math.round(x*Math.pow(10,dp))/Math.pow(10,dp)).toFixed(dp):"";}
+function csv(){
+  var C=calc(),t=C.t,L=[];
+  L.push([q("Bar & Kitchen Stock Take"),q(S.biz.name),q(S.biz.venue)].join(","));
+  L.push([q("Period"),q(S.p.start),q(S.p.end),q(C.days+" days"),q("Ref "+(S.biz.ref||""))].join(","));
+  L.push([q("Counted by"),q(S.p.counted),q("Checked by"),q(S.p.checked),
+          q("Cost basis: "+(S.basis==="inc"?"inc VAT":"ex VAT")),q("Tolerance +/-"+n2(C.tol,1)+"%"),
+          q("Currency: "+sym())].join(","));
+  L.push("");
+  L.push(["Item","Category","Unit","Pack (serves/unit)","Cost per unit","Opening full","Opening part",
+    "Opening units","Purchases units","Closing full","Closing part","Closing units","Usage units",
+    "Sold (serves)","Expected units","Variance units","Variance %","Variance cost","Closing value",
+    "Days cover","Par","Order qty","Status"].map(q).join(","));
+  C.rows.forEach(function(x){
+    var st=x.st==="check"?"CHECK":(x.st==="bad"?"INVESTIGATE":(x.st==="warn"?"WATCH":(x.st==="ok"?"OK":"")));
+    L.push([q(x.r.name),q(x.r.cat),q(x.r.unit),n2(x.pack,2),n2(x.cost,2),n2(num(x.r.of),2),n2(num(x.r.op),2),
+      n2(x.openU,2),n2(x.inU,2),n2(num(x.r.cf),2),n2(num(x.r.cp),2),n2(x.closeU,2),n2(x.useU,2),
+      n2(x.sold,2),x.expU===null?"":n2(x.expU,3),x.varU===null?"":n2(x.varU,3),
+      x.varP===null?"":n2(x.varP,2),x.varV===null?"":n2(x.varV,2),n2(x.closeV,2),
+      x.cover===null?"":n2(x.cover,1),n2(x.par,2),n2(x.order,0),q(st)].join(","));
+  });
+  L.push(["TOTALS","","","","",'','',n2(t.openU,2),n2(t.inU,2),'','',n2(t.closeU,2),n2(t.useU,2),
+    n2(t.sold,2),n2(t.expU,3),n2(t.varU,3),t.varP===null?"":n2(t.varP,2),n2(t.varV,2),n2(t.closeV,2),
+    t.cover===null?"":n2(t.cover,1),"",n2(t.order,0),""].map(q).join(","));
+  L.push("");
+  L.push([q("Opening stock at cost"),n2(t.openV,2)].join(","));
+  L.push([q("Purchases at cost"),n2(t.purV,2)].join(","));
+  L.push([q("Closing stock at cost"),n2(t.closeV,2)].join(","));
+  L.push([q("Actual usage at cost"),n2(t.useV,2)].join(","));
+  L.push([q("Expected usage at cost"),n2(t.expV,2)].join(","));
+  L.push([q("Variance at cost"),n2(t.varV,2)].join(","));
+  L.push([q("Variance %"),t.varP===null?"":n2(t.varP,2)].join(","));
+  L.push([q("Days of cover"),t.cover===null?"":n2(t.cover,1)].join(","));
+  L.push([q("Lines below par"),String(t.below)].join(","));
+  return L.join("\r\n");
+}
+function slug(s){return String(s||"stock-take").toLowerCase().replace(/[^a-z0-9]+/g,"-")
+  .replace(/^-+|-+$/g,"").slice(0,40)||"stock-take";}
+function dl(text,name,mime){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b), a=document.createElement("a");
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
+  }catch(e){}
+}
+
+/* ══ wiring ═════════════════════════════════════════════════════ */
+function fillForm(){
+  $("#bizName").value=S.biz.name; $("#bizAddr").value=S.biz.addr;
+  $("#venue").value=S.biz.venue; $("#ref").value=S.biz.ref;
+  $("#pStart").value=S.p.start; $("#pEnd").value=S.p.end;
+  $("#counted").value=S.p.counted; $("#checked").value=S.p.checked;
+  $("#cur").value=S.cur; $("#curC").value=S.curC; $("#curCWrap").hidden=S.cur!=="custom";
+  $("#tol").value=S.tol; $("#basis").value=S.basis;
+}
+function touch(){ if(S.sample){S.sample=false;} }
+function bindHead(){
+  var map=[["#bizName",function(v){S.biz.name=v;}],["#bizAddr",function(v){S.biz.addr=v;}],
+    ["#venue",function(v){S.biz.venue=v;}],["#ref",function(v){S.biz.ref=v;}],
+    ["#pStart",function(v){S.p.start=v;}],["#pEnd",function(v){S.p.end=v;}],
+    ["#counted",function(v){S.p.counted=v;}],["#checked",function(v){S.p.checked=v;}],
+    ["#curC",function(v){S.curC=v;}]];
+  map.forEach(function(m){
+    var el=$(m[0]);
+    el.addEventListener("input",function(){m[1](el.value);touch();paint();save();});
+  });
+  $("#cur").addEventListener("change",function(){S.cur=$("#cur").value;
+    $("#curCWrap").hidden=S.cur!=="custom";touch();paint();save();});
+  $("#basis").addEventListener("change",function(){S.basis=$("#basis").value;touch();paint();save();});
+  var tol=$("#tol");
+  tol.addEventListener("input",function(){
+    var v=num(tol.value,NaN);
+    S.tol=ok(v)&&v>=0?v:0; paint();save();
+  });
+  tol.addEventListener("blur",function(){
+    var v=num(tol.value,NaN), bad=!ok(v)||v<0;
+    tol.classList.toggle("inv",bad);
+    var e=$("#eTol");e.hidden=!bad;e.textContent=bad?"Enter a tolerance of 0 or more":"";
+    if(bad){tol.value=S.tol;}
+  });
+}
+function validateCell(inp){
+  var f=inp.getAttribute("data-f"), v=num(inp.value,NaN), msg="";
+  if(f==="pack"&&(!ok(v)||v<=0))msg="Must be more than 0";
+  if(f==="cost"&&ok(v)&&v<0)msg="Cannot be negative";
+  if((f==="op"||f==="cp")&&ok(v)&&(v<0||v>=1))msg="0 to 0.9";
+  var e=inp.parentNode.querySelector('.e[data-e="'+f+'"]');
+  inp.classList.toggle("inv",!!msg);
+  if(e){e.hidden=!msg;e.textContent=msg;}
+}
+function bindTable(){
+  var tb=$("#tb");
+  tb.addEventListener("input",function(ev){
+    var inp=ev.target;if(!inp.getAttribute)return;
+    var f=inp.getAttribute("data-f");if(!f)return;
+    var tr=inp.closest("tr");if(!tr)return;
+    var r=rowById(tr.getAttribute("data-id"));if(!r)return;
+    if(f==="name"||f==="unit"||f==="cat"){r[f]=inp.value;}
+    else{r[f]=num(inp.value,0);}
+    touch();
+    if(inp.classList.contains("inv"))validateCell(inp);
+    paint();save();
+  });
+  tb.addEventListener("change",function(ev){
+    var inp=ev.target;
+    if(inp.getAttribute&&inp.getAttribute("data-f")==="cat"){
+      var tr=inp.closest("tr"),r=tr&&rowById(tr.getAttribute("data-id"));
+      if(r){r.cat=inp.value;touch();paint();save();}
+    }
+  });
+  tb.addEventListener("blur",function(ev){
+    var inp=ev.target;
+    if(inp.getAttribute&&inp.getAttribute("data-f"))validateCell(inp);
+  },true);
+  tb.addEventListener("click",function(ev){
+    var b=ev.target.closest?ev.target.closest(".bDel"):null;if(!b)return;
+    var tr=b.closest("tr"),id=tr.getAttribute("data-id");
+    S.rows=S.rows.filter(function(r){return r.id!==id;});
+    touch();buildTable();paint();save();
+  });
+}
+function addRows(n){
+  for(var i=0;i<n;i++)S.rows.push(blankRow());
+  touch();buildTable();paint();save();
+  var last=$("#tb").lastElementChild;
+  if(last){var inp=last.querySelector("input");if(inp)inp.focus();}
+}
+function boot(){
+  var restored=load();
+  if(!restored)save();
+  fillForm();buildTable();paint();bindHead();bindTable();
+
+  $("#bAdd").addEventListener("click",function(){addRows(1);});
+  $("#bAdd5").addEventListener("click",function(){addRows(5);});
+  $("#bBlank").addEventListener("click",function(){
+    S=blankState();fillForm();buildTable();paint();save();
+    var i=$("#bizName");if(i)i.focus();
+  });
+  $("#bPrint").addEventListener("click",function(){window.print();});
+  $("#bCsv").addEventListener("click",function(){
+    dl("﻿"+csv(),slug(S.biz.venue||S.biz.name)+"-stock-take-"+(S.p.end||todayISO())+".csv","text/csv;charset=utf-8");
+  });
+  $("#bJson").addEventListener("click",function(){
+    dl(JSON.stringify(S,null,2),slug(S.biz.venue||S.biz.name)+"-stock-take-"+(S.p.end||todayISO())+".json",
+      "application/json");
+  });
+  $("#bImport").addEventListener("click",function(){$("#fImport").click();});
+  $("#fImport").addEventListener("change",function(ev){
+    var f=ev.target.files&&ev.target.files[0];if(!f)return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{
+        var o=JSON.parse(String(fr.result));
+        if(!o||!Array.isArray(o.rows))throw new Error("bad");
+        S=normalise(o);fillForm();buildTable();paint();save();
+        flash("Imported "+S.rows.length+" stock lines.",false);
+      }catch(e){flash("That file is not a stock take export.",true);}
+      ev.target.value="";
+    };
+    fr.onerror=function(){flash("Could not read that file.",true);ev.target.value="";};
+    fr.readAsText(f);
+  });
+  $("#bClear").addEventListener("click",function(){
+    if(!window.confirm("Clear all stock take data from this browser? This cannot be undone."))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();S.rows=[blankRow()];
+    fillForm();buildTable();paint();save();
+  });
+  window.addEventListener("beforeprint",function(){paint();});
+}
+function flash(msg,bad){
+  var n=$("#flash");
+  if(!n){n=document.createElement("div");n.id="flash";n.className="note";
+    n.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;box-shadow:var(--sh);max-width:min(92vw,460px)";
+    document.body.appendChild(n);}
+  n.className="note"+(bad?" bad":" ");n.textContent=msg;n.hidden=false;
+  clearTimeout(flash._t);flash._t=setTimeout(function(){n.hidden=true;},3200);
+}
+boot();
+</script>
+</body>
+</html>
