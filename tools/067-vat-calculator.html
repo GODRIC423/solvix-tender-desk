@@ -229,7 +229,7 @@ main.app{padding-top:14px}
 .lt tbody tr.bad-row td{background:var(--bad-wash)}
 #lineTab{min-width:770px}
 #lineTab td.td input{min-width:120px}
-#lineTab th:first-child,#lineTab td.td{width:30%}
+#lineTab th:first-child,#lineTab td.td{width:34%}
 #lineTab select{font-size:12.5px;padding:5px 2px 5px 5px}
 #rateTab{min-width:520px}
 .cellerr{display:block;font:10.5px/1.3 var(--sans);color:var(--bad);margin-top:1px;white-space:normal}
@@ -899,7 +899,7 @@ function compute(){
   for(i=0;i<S.lines.length;i++){
     var l=S.lines[i],c2=codeById(l.code);
     var q=pv(l.q),p=pv(l.p);
-    var rec={id:l.id,ok:false,net:NaN,tax:NaN,gross:NaN,code:c2,err:''};
+    var rec={id:l.id,ok:false,net:NaN,tax:NaN,gross:NaN,dNet:NaN,dTax:NaN,dGross:NaN,code:c2,err:''};
     if(q===null&&p===null){rec.err='';}
     else if(q===null){rec.err='Quantity?';}
     else if(p===null){rec.err='Price?';}
@@ -914,8 +914,12 @@ function compute(){
       }else{net=amt;tax=net*r;rec.ok=true;}
       if(rec.ok){
         rec.net=net;rec.tax=tax;rec.gross=net+tax;
+        /* displayed line figures always reconcile: the side the user typed is
+           the anchor, the other side is the balancing figure */
+        if(l.b==='gross'){rec.dGross=r2(amt);rec.dNet=r2(net);rec.dTax=r2(rec.dGross-rec.dNet);}
+        else{rec.dNet=r2(net);rec.dTax=r2(tax);rec.dGross=r2(rec.dNet+rec.dTax);}
         var b=byCode[c2.id];
-        b.net+=net;b.lineNet+=r2(net);b.lineTax+=r2(tax);b.n++;
+        b.net+=net;b.lineNet+=rec.dNet;b.lineTax+=rec.dTax;b.n++;
       }
     }
     if(!rec.ok&&rec.err)bad++;
@@ -1012,7 +1016,8 @@ function codeOptions(sel){
   var h='',i;
   for(i=0;i<S.codes.length;i++){
     var c=S.codes[i],rp=codeRate(c);
-    var lab=c.c+' · '+(rp===null?'?':rateTxt(rp))+treatSuffix(c);
+    var showR=(c.t==='tax'||c.t==='reverse');
+    var lab=c.c+(showR?(' · '+(rp===null?'?':rateTxt(rp))):'')+treatSuffix(c);
     h+='<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(lab)+'</option>';
   }
   return h;
@@ -1100,9 +1105,9 @@ function render(){
       rows[i].className=(rec&&rec.err)?'bad-row':'';
     }else{
       var c=rec.code;
-      cn.textContent=money(r2(rec.net));
-      ct.textContent=(c&&c.t==='tax')?money(r2(rec.tax)):'—';
-      cg.textContent=money(r2(rec.gross));
+      cn.textContent=money(rec.dNet);
+      ct.textContent=(c&&c.t==='tax')?money(rec.dTax):'—';
+      cg.textContent=money(rec.dGross);
       rows[i].className='';
     }
   }
@@ -1231,9 +1236,9 @@ function renderDoc(){
       '<td>'+(l.b==='gross'?'Incl. tax':'Excl. tax')+'</td>'+
       '<td>'+esc(c?c.c:'—')+(c&&c.t!=='tax'?' <span class="trt">('+treatLabel(c.t)+')</span>':'')+'</td>'+
       '<td class="n">'+((c&&(c.t==='tax'||c.t==='reverse'))?rateTxt(rp):'—')+'</td>'+
-      '<td class="n">'+money(r2(rec.net))+'</td>'+
-      '<td class="n">'+((c&&c.t==='tax')?money(r2(rec.tax)):'—')+'</td>'+
-      '<td class="n">'+money(r2(rec.gross))+'</td></tr>';
+      '<td class="n">'+money(rec.dNet)+'</td>'+
+      '<td class="n">'+((c&&c.t==='tax')?money(rec.dTax):'—')+'</td>'+
+      '<td class="n">'+money(rec.dGross)+'</td></tr>';
   }
   if(!n)h+='<tr><td colspan="10">No completed lines.</td></tr>';
   h+='</tbody><tfoot><tr><td colspan="7">Totals</td><td class="n">'+money(R.netTotal)+
@@ -1339,7 +1344,7 @@ function buildCsv(){
     var c=rec.code,rp=codeRate(c);
     rows.push([n,l.d,l.q,moneyPlain(pv(l.p)),l.b==='gross'?'Incl. tax':'Excl. tax',c?c.c:'',
       c?treatLabel(c.t):'',(c&&(c.t==='tax'||c.t==='reverse'))?rp:'',
-      moneyPlain(r2(rec.net)),(c&&c.t==='tax')?moneyPlain(r2(rec.tax)):'0.00',moneyPlain(r2(rec.gross))]);
+      moneyPlain(rec.dNet),(c&&c.t==='tax')?moneyPlain(rec.dTax):'0.00',moneyPlain(rec.dGross)]);
   }
   rows.push([]);
   rows.push(['SUMMARY BY '+tn.toUpperCase()+' RATE']);

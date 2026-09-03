@@ -237,7 +237,7 @@ th.rowh{text-align:left;text-transform:none;white-space:normal;background:transp
 .pr-title{font:700 19px/1.2 var(--sans);letter-spacing:-.01em}
 .pr-meta{width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5pt}
 .pr-meta td{border:0;padding:2px 12px 2px 0;vertical-align:top}
-.pr-meta td.k{color:#555;width:118px;font-size:9.5pt;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.pr-meta td.k{color:#555;width:134px;font-size:9.5pt;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 .pr-sec{margin-top:7mm}
 .pr-sec h3{font-size:12.5pt;margin-bottom:4px}
 .pr-sub{font-size:9.5pt;color:#555;margin-bottom:5px}
@@ -245,6 +245,9 @@ th.rowh{text-align:left;text-transform:none;white-space:normal;background:transp
 .sigrow div{flex:1;border-top:1px solid #888;padding-top:3px;font-size:9pt;color:#555}
 @media print{
   .screenonly{display:none!important}
+  .prdoc td,.prdoc th{padding:5px 6px}
+  .prdoc td.n,.prdoc th.n{white-space:nowrap}
+  .prdoc tbody th,.prdoc tbody td:first-child{white-space:normal}
   .prdoc{display:block!important}
   .prhead{display:block!important;margin-bottom:2mm}
   .prdoc .tw{overflow:visible}
@@ -722,7 +725,7 @@ function computeMeter(m, p){
       costEx: costEx, tax: tax, costInc: costInc,
       neg: neg, rollover: rollover, sameDay: days === 0,
       zero: ok && days > 0 && billable === 0,
-      est: !!(a.r.est || b.r.est),
+      est: !!(a.r.est || b.r.est), fromEst: !!a.r.est, toEst: !!b.r.est,
       trail: null, variance: null, anomaly: false
     });
   }
@@ -1263,10 +1266,10 @@ function buildPrint(){
         (m.type === 'gas' ? ' · calorific value ' + esc(fmtQ(c.cv, 2)) + ' MJ/m³, correction factor ' + esc(fmtQ(c.corr, 5)) : '') + '.</p>';
       const prRows = [];
       const first = inc.length ? inc[0] : null;
-      if (first) prRows.push([esc(dstr(first.from)), esc(fmtQ(first.fromVal, 3)), '', '—', '—', '—', '—', 'Opening', '—']);
+      if (first) prRows.push([esc(dstr(first.from)), esc(fmtQ(first.fromVal, 3)), first.fromEst ? 'E' : 'A', '—', '—', '—', '—', 'Opening', '—']);
       inc.forEach(x => {
         prRows.push([
-          esc(dstr(x.to)), esc(fmtQ(x.toVal, 3)), x.est ? 'E' : 'A',
+          esc(dstr(x.to)), esc(fmtQ(x.toVal, 3)), x.toEst ? 'E' : 'A',
           x.dial == null ? '—' : esc(fmtQ(x.dial, 3)),
           x.billable == null ? '—' : esc(fmtQ(x.billable, billDp(c.bunit))),
           esc(fmt(x.days, 0)),
@@ -1277,12 +1280,12 @@ function buildPrint(){
         ]);
       });
       if (!inc.length) prRows.push(['—', '—', '', '—', '—', '—', '—', 'No periods in this statement period', '—']);
-      let mb = 0, md = 0, mi = 0, anyM = false;
-      inc.forEach(x => { if (x.billable != null){ mb += x.billable; md += x.days; anyM = true; } if (x.costInc != null) mi += x.costInc; });
+      let mb = 0, mdial = 0, md = 0, mi = 0, anyM = false;
+      inc.forEach(x => { if (x.billable != null){ mb += x.billable; mdial += x.dial; md += x.days; anyM = true; } if (x.costInc != null) mi += x.costInc; });
       d += prTable(
         [['Reading date', 0], ['Reading', 1], ['A/E', 0], ['Use (dial)', 1], ['Billable (' + c.bunit + ')', 1], ['Days', 1], ['Per day', 1], ['Check', 0], ['Cost inc tax', 1]],
         prRows,
-        [{ span: 3, t: 'Meter total' }, esc(anyM ? fmtQ(mb, 3) : '—'), esc(anyM ? fmtQ(mb, billDp(c.bunit)) : '—'),
+        [{ span: 3, t: 'Meter total' }, esc(anyM ? fmtQ(mdial, 3) + ' ' + m.unit : '—'), esc(anyM ? fmtQ(mb, billDp(c.bunit)) : '—'),
          esc(anyM ? fmt(md, 0) : '—'), esc(anyM && md > 0 ? fmtQ(mb / md, 3) : '—'), '', esc(anyM ? money(mi) : '—')]
       );
       if (p.charts) d += '<div class="chartwrap" style="margin-top:6px">' + chartSVG(inc, ST.chartMode, c, 660, 200) + '</div>';

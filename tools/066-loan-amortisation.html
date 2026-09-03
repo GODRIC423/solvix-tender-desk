@@ -215,6 +215,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .phead{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
 .phead .t{font:700 19px/1.2 var(--sans);letter-spacing:-.02em}
 .phead .s{font-size:12px;color:#333;margin-top:3px}
+.povr{font-size:10.5pt;line-height:1.5;margin-top:9px;padding:7px 9px;border:1px solid #bbb;background:#f6f6f6}
 .keyfacts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:10px 0 4px}
 .keyfacts div{font-size:11pt;border-bottom:1px dotted #bbb;padding-bottom:3px}
 .keyfacts .k{font:600 8.5pt/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:#555}
@@ -240,6 +241,11 @@ footer{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
   .card{margin-bottom:6mm}
   .note{border-left:3px solid #000;background:#f4f4f4!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   thead{display:table-header-group}
+  #chipStatus,#chipBasis,#chipOver{display:none!important}
+  #resultCol .card>.hd h2::after{content:" — summary of the illustration";font-weight:400;color:#555}
+  .stat.hero{border:2px solid #000}
+  .cmp td,.cmp th{border-bottom:1px solid #ccc}
+  .printonly .keyfacts{page-break-inside:avoid}
   .sched td,.sched th{padding:3px 5px}
   footer{margin-top:8mm}
 }
@@ -293,6 +299,7 @@ footer{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
       <div><div class="k">Balloon / final lump</div><span id="pBalloon">—</span></div>
       <div><div class="k">Contractual payment</div><span id="pPmt">—</span></div>
     </div>
+    <p class="povr" id="pOver">—</p>
   </div>
 
   <div class="samp noprint">
@@ -320,7 +327,7 @@ footer{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
     <!-- ═══ inputs ═══ -->
     <div class="stack">
 
-      <section class="card">
+      <section class="card noprint">
         <div class="hd"><h2>The loan</h2><span class="chip" id="chipBasis">Nominal rate</span></div>
         <div class="bd stack">
           <div class="fgrid">
@@ -403,7 +410,7 @@ footer{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
         </div>
       </section>
 
-      <section class="card">
+      <section class="card noprint">
         <div class="hd">
           <h2>Overpayments</h2>
           <span class="chip ok" id="chipOver" hidden>Modelled</span>
@@ -1071,6 +1078,23 @@ function renderPrintHeader(){
   $("pIo").textContent = R && R.ok ? (R.io > 0 ? R.io + " payments" : "None") : "—";
   $("pBalloon").textContent = R && R.ok ? (R.balloon > 0 ? money(R.balloon) : "None") : "—";
   $("pPmt").textContent = R && R.ok ? money(R.pmt) + " " + FREQ[f].each : "—";
+
+  var ov = [];
+  if (R && R.ok && R.hasExtra){
+    if (R.extra > 0) ov.push("Regular overpayment of " + money(R.extra) + " " + FREQ[f].each + " from payment " + R.extraFrom + ".");
+    var ks = Object.keys(R.lumpMap).sort(function(a, b){ return a - b; });
+    if (ks.length){
+      ov.push("Lump sums: " + ks.map(function(k){
+        return money(R.lumpMap[k]) + " at payment " + k + " (" + fmtDate(addPeriods(R.start, k - 1, f)) + ")";
+      }).join("; ") + ".");
+    }
+    ov.push("Modelled effect: cleared in " + R.over.periods + " payments instead of " + R.base.periods
+      + " (" + termText(R.savedPeriods, f) + " earlier), saving " + money(R.savedInterest) + " of interest.");
+    ov.unshift("Overpayments assumed —");
+  } else {
+    ov.push("No overpayments assumed — this is the contractual schedule.");
+  }
+  $("pOver").textContent = ov.join(" ");
 }
 
 /* ── lump-sum rows ─────────────────────────────────────────────────── */
