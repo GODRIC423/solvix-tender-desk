@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fuel Surcharge Calculator — Solvix Toolkit</title>
+<meta name="description" content="Work out a truckload fuel surcharge from the DOE/EIA on-highway diesel index, a base peg price and fuel economy. Per-mile and percentage-of-linehaul methods side by side, editable rate tables, and a printable surcharge schedule with the index source and effective date recorded for billing evidence.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cpath d='M11 25V9.5A2.5 2.5 0 0 1 13.5 7h3A2.5 2.5 0 0 1 19 9.5V25' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M8 25h14M11 14h8' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M22 12l2.6 2.6V21a1.9 1.9 0 0 0 3.8 0v-6' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific — Freight & Logistics ═════════════════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#6BA5E8;--accent-ink:#93BEF2;--accent-wash:#152538;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#6BA5E8;--accent-ink:#93BEF2;--accent-wash:#152538;--on-accent:#0B1017}
+
+.app>.lead{margin:14px 0 0}
+.split>*{min-width:0}
+.stack{min-width:0}
+.stack>*{min-width:0;max-width:100%}
+.card{min-width:0}
+.tw{max-width:100%}
+.split{margin-top:14px}
+.gap{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.stat.hero .v{font-size:33px;line-height:1.05}
+.stat.hero .k{color:var(--accent-ink)}
+.calcline{font:12.5px/1.5 var(--mono);color:var(--ink-2);background:var(--sunk);border:1px dashed var(--line-hard);
+  border-radius:4px;padding:8px 10px;word-break:break-word}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.kv.big .v{font-weight:700;font-size:15px}
+.bandwrap{max-height:264px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+.bandwrap th{position:sticky;top:0;z-index:1}
+tr.hit td{background:var(--accent-wash);font-weight:650}
+tr.hit td:first-child::before{content:"\25B8 ";color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.msg{font:600 12px/1 var(--sans);color:var(--ok)}
+.msg.bad{color:var(--bad)}
+.sampletag{margin-left:2px}
+td.num-tight{white-space:nowrap}
+.wide{grid-column:1/-1}
+.foot{margin-top:18px;font:12px/1.55 var(--sans);color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.sig{display:none}
+
+/* print document dressing */
+.dochead{border-bottom:2.5px solid #000;padding-bottom:6px;margin-bottom:9px}
+.dh-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.dh-co{font:700 17pt/1.15 var(--sans);letter-spacing:-.02em}
+.dh-t{font:600 11.5pt/1.3 var(--sans);text-transform:uppercase;letter-spacing:.14em;margin-top:3px}
+.dh-r{text-align:right;font:10pt/1.45 var(--mono)}
+.dh-meta{width:100%;margin-top:8px;font-size:9.6pt;border-collapse:collapse}
+.dh-meta td{border:0;padding:1.5px 0;vertical-align:top}
+.dh-meta td.l{color:#444;width:120px;white-space:nowrap;padding-right:8px}
+.dh-meta td.v2{font-family:var(--mono)}
+@media print{
+  .split{display:flex;flex-direction:column-reverse;gap:0}
+  .sticky{position:static}
+  .bandwrap{max-height:none;overflow:visible;border:0}
+  .actcol,.hidep{display:none!important}
+  .card{margin-bottom:6mm}
+  .stat.hero{border:1.5px solid #000}
+  .stat.hero .v{font-size:22pt}
+  .sig{display:block;margin-top:10mm;font-size:9.5pt;color:#333}
+  .sig .line{border-top:1px solid #666;width:62mm;margin-top:12mm;padding-top:3px}
+  tbody tr:hover{background:transparent}
+  tr.hit td{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .note{border:1px solid #666;border-left:3px solid #000;background:#fff!important}
+}
+@media(max-width:900px){#results{order:-1}}
+@media(max-width:520px){
+  .appbar h1{font-size:14px}
+  .stat.hero .v{font-size:29px}
+  .btn{padding:8px 10px;font-size:12.5px}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">FS</div>
+    <div style="min-width:0">
+      <h1>Fuel Surcharge Calculator</h1>
+      <div class="sub">DOE INDEX · PER-MILE &amp; PERCENTAGE</div>
+    </div>
+  </div>
+  <span id="msg" class="msg" role="status" aria-live="polite"></span>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrint">Print schedule</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Save JSON</button>
+    <button type="button" class="btn" id="btnImport">Import JSON</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileJson" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<main class="app">
+
+  <div class="printonly dochead">
+    <div class="dh-top">
+      <div>
+        <div class="dh-co" id="pCarrier">—</div>
+        <div class="dh-t">Fuel Surcharge Schedule</div>
+      </div>
+      <div class="dh-r">
+        <div id="pRef">—</div>
+        <div id="pGen">—</div>
+      </div>
+    </div>
+    <table class="dh-meta">
+      <tbody>
+        <tr><td class="l">Customer</td><td id="pCust">—</td><td class="l">Index source</td><td id="pIdx">—</td></tr>
+        <tr><td class="l">Effective</td><td class="v2" id="pEff">—</td><td class="l">Index date</td><td class="v2" id="pIdxDate">—</td></tr>
+        <tr><td class="l">Prepared by</td><td id="pBy">—</td><td class="l">Index price</td><td class="v2" id="pPrice">—</td></tr>
+        <tr><td class="l">Base peg</td><td class="v2" id="pPeg">—</td><td class="l">Fuel economy</td><td class="v2" id="pMpg">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn lead" id="disclaimer">
+    <strong>Read before you invoice.</strong> This calculator works only from the figures you type in. It is offline
+    by design and does <strong>not</strong> retrieve the index: enter the published price yourself and check it against
+    the official U.S. EIA/DOE weekly <em>On-Highway Diesel Fuel Price</em> release for the date shown. The surcharge
+    method, base peg, fuel economy and any percentage step table are <strong>contractual terms</strong> — bill only what
+    the rate confirmation or transport agreement provides for. It is not tax, legal or accounting advice; if a figure is
+    disputed, agree it with your customer or broker before invoicing.
+  </div>
+
+  <div class="split">
+
+    <!-- ═══ left: inputs ═══ -->
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd"><h2>Index &amp; surcharge basis</h2>
+          <span class="chip" id="sampleChip">Sample data loaded</span>
+        </div>
+        <div class="bd gap">
+          <div class="gap g2">
+            <div class="f">
+              <label for="idxSource">Index source</label>
+              <select id="idxSource">
+                <option>EIA/DOE — U.S. National Average, On-Highway Diesel</option>
+                <option>EIA/DOE — East Coast (PADD 1)</option>
+                <option>EIA/DOE — New England (PADD 1A)</option>
+                <option>EIA/DOE — Central Atlantic (PADD 1B)</option>
+                <option>EIA/DOE — Lower Atlantic (PADD 1C)</option>
+                <option>EIA/DOE — Midwest (PADD 2)</option>
+                <option>EIA/DOE — Gulf Coast (PADD 3)</option>
+                <option>EIA/DOE — Rocky Mountain (PADD 4)</option>
+                <option>EIA/DOE — West Coast (PADD 5)</option>
+                <option>EIA/DOE — West Coast less California</option>
+                <option>EIA/DOE — California</option>
+                <option>Other / contracted index</option>
+              </select>
+            </div>
+            <div class="f">
+              <label for="idxDate">Index date (week ending)</label>
+              <input type="date" id="idxDate">
+            </div>
+          </div>
+          <div class="gap g3">
+            <div class="f">
+              <label for="fPrice">Index price <span id="lblPrice">($/gal)</span></label>
+              <input type="number" id="fPrice" step="0.001" min="0" inputmode="decimal">
+              <span class="err" id="ePrice" hidden></span>
+            </div>
+            <div class="f">
+              <label for="fPeg">Base peg <span id="lblPeg">($/gal)</span></label>
+              <input type="number" id="fPeg" step="0.01" min="0" inputmode="decimal">
+              <span class="err" id="ePeg" hidden></span>
+            </div>
+            <div class="f">
+              <label for="fMpg">Fuel economy <span id="lblMpg">(mpg)</span></label>
+              <input type="number" id="fMpg" step="0.1" min="0" inputmode="decimal">
+              <span class="err" id="eMpg" hidden></span>
+            </div>
+          </div>
+          <div class="gap g3">
+            <div class="f">
+              <label for="fPrec">Round rate to</label>
+              <select id="fPrec">
+                <option value="2">2 dp (cent)</option>
+                <option value="3">3 dp (mill)</option>
+                <option value="4">4 dp</option>
+                <option value="5">5 dp</option>
+              </select>
+            </div>
+            <div class="f">
+              <label for="fCur">Currency</label>
+              <select id="fCur">
+                <option value="$">$ Dollar</option>
+                <option value="£">£ Pound</option>
+                <option value="€">€ Euro</option>
+                <option value="C$">C$ Can. dollar</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f">
+              <label for="fCurCustom">Custom symbol</label>
+              <input type="text" id="fCurCustom" maxlength="4" placeholder="e.g. R$">
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl" style="margin-right:2px">Units</span>
+            <div class="seg noprint" role="group" aria-label="Unit system">
+              <button type="button" id="unitUs" aria-pressed="true">US · gal / mile</button>
+              <button type="button" id="unitMet" aria-pressed="false">Metric · L / km</button>
+            </div>
+          </div>
+          <label class="check" for="fFloor">
+            <input type="checkbox" id="fFloor">
+            <span>No surcharge applies while the index is at or below the peg (industry standard — uncheck to allow a
+              negative, i.e. a fuel credit back to the customer).</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Loads on this schedule</h2>
+          <button type="button" class="btn sm noprint" id="addLoad">+ Add load</button>
+        </div>
+        <div class="tw">
+          <table id="loadTable">
+            <thead>
+              <tr>
+                <th scope="col">Load ref</th>
+                <th scope="col">Lane</th>
+                <th scope="col" class="n" id="thDist">Miles</th>
+                <th scope="col" class="n">Linehaul</th>
+                <th scope="col" class="n">Per-mile FSC</th>
+                <th scope="col" class="n">% method FSC</th>
+                <th scope="col" class="n">Difference</th>
+                <th scope="col" class="actcol noprint"><span class="lbl">Del</span></th>
+              </tr>
+            </thead>
+            <tbody id="loadBody"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">Totals — <span id="loadCount">0</span> load(s)</td>
+                <td class="n" id="tDist">—</td>
+                <td class="n" id="tLine">—</td>
+                <td class="n" id="tM1">—</td>
+                <td class="n" id="tM2">—</td>
+                <td class="n" id="tDv">—</td>
+                <td class="actcol noprint"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="ft"><span class="hint">Per-mile FSC = rounded rate &times; distance. % method FSC = linehaul &times; the
+          band percentage below. Both are rounded to 2 decimal places per load.</span></div>
+      </section>
+
+      <section class="card" id="bandsCard">
+        <div class="hd"><h2>Percentage step table</h2>
+          <button type="button" class="btn sm noprint" id="bandCsv">Table CSV</button>
+          <button type="button" class="btn sm noprint" id="addBand">+ Band</button>
+        </div>
+        <div class="bd gap">
+          <p class="hint">Percentage-of-linehaul method: the index price falls in a band, and that band's percentage is
+            applied to the linehaul. Step tables are carrier- and contract-specific — rebuild the table below, then edit
+            any row to match the table in your customer's agreement.</p>
+          <div class="gap g3 noprint">
+            <div class="f"><label for="gWidth">Band width <span class="gVol">($/gal)</span></label>
+              <input type="number" id="gWidth" step="0.01" min="0.01" inputmode="decimal"></div>
+            <div class="f"><label for="gStep">% added per band</label>
+              <input type="number" id="gStep" step="0.05" min="0" inputmode="decimal"></div>
+            <div class="f"><label for="gStart">Start %</label>
+              <input type="number" id="gStart" step="0.05" min="0" inputmode="decimal"></div>
+            <div class="f"><label for="gMax">Table tops out at <span class="gVol">($/gal)</span></label>
+              <input type="number" id="gMax" step="0.10" min="0" inputmode="decimal"></div>
+            <div class="f" style="justify-content:flex-end">
+              <button type="button" class="btn" id="gBuild">Rebuild table from peg</button>
+            </div>
+          </div>
+          <div class="bandwrap tw">
+            <table id="bandTable">
+              <thead><tr>
+                <th scope="col" class="n" id="thFrom">From ($/gal)</th>
+                <th scope="col" class="n">Up to</th>
+                <th scope="col" class="n">Surcharge %</th>
+                <th scope="col" class="actcol noprint"><span class="lbl">Del</span></th>
+              </tr></thead>
+              <tbody id="bandBody"></tbody>
+            </table>
+          </div>
+          <label class="check noprint" for="fPrintTable">
+            <input type="checkbox" id="fPrintTable">
+            <span>Include the full step table in the printed schedule (the applicable band always prints).</span>
+          </label>
+          <fieldset class="noprint">
+            <legend>Saved rate tables</legend>
+            <div class="gap g2">
+              <div class="f"><label for="presetSel">Stored on this device</label>
+                <select id="presetSel"><option value="">— none saved —</option></select></div>
+              <div class="f"><label for="presetName">Save current basis + table as</label>
+                <input type="text" id="presetName" placeholder="e.g. Harbor Foods 2026"></div>
+            </div>
+            <div class="row" style="margin-top:9px">
+              <button type="button" class="btn sm" id="presetSave">Save rate table</button>
+              <button type="button" class="btn sm" id="presetApply">Apply selected</button>
+              <button type="button" class="btn sm dgr" id="presetDel">Delete selected</button>
+            </div>
+            <p class="hint" style="margin-top:7px">A saved rate table keeps the peg, fuel economy, rounding, floor rule
+              and every band — so a customer's contracted basis is one click away.</p>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Document details</h2></div>
+        <div class="bd gap g2">
+          <div class="f"><label for="dCarrier">Carrier / your business</label><input type="text" id="dCarrier"></div>
+          <div class="f"><label for="dCust">Customer / shipper</label><input type="text" id="dCust"></div>
+          <div class="f"><label for="dRef">Schedule reference</label><input type="text" id="dRef"></div>
+          <div class="f"><label for="dBy">Prepared by</label><input type="text" id="dBy"></div>
+          <div class="f"><label for="dFrom">Effective from</label><input type="date" id="dFrom"></div>
+          <div class="f"><label for="dTo">Effective to</label><input type="date" id="dTo"></div>
+          <div class="f wide"><label for="dNotes">Notes printed on the schedule</label>
+            <textarea id="dNotes" rows="2"></textarea></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══ right: results ═══ -->
+    <div id="results">
+      <section class="card sticky">
+        <div class="hd"><h2>Surcharge result</h2><span class="chip" id="methodChip">Per-mile method</span></div>
+        <div class="bd gap">
+
+          <div class="stat hero">
+            <div class="k">Fuel surcharge per <span id="heroUnit">mile</span></div>
+            <div class="v" id="heroRate">—</div>
+            <div class="u" id="heroSub">—</div>
+          </div>
+
+          <div class="calcline" id="calcLine">—</div>
+
+          <div class="gap g2">
+            <div class="stat">
+              <div class="k">Total — per-mile method</div>
+              <div class="v" id="totM1">—</div>
+              <div class="u" id="subM1">—</div>
+            </div>
+            <div class="stat">
+              <div class="k">Total — % of linehaul</div>
+              <div class="v" id="totM2">—</div>
+              <div class="u" id="subM2">—</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="kv"><span class="k">Applicable band</span><span class="v" id="rBand">—</span></div>
+            <div class="kv"><span class="k">Band percentage</span><span class="v" id="rPct">—</span></div>
+            <div class="kv"><span class="k">Index above peg by</span><span class="v" id="rDiff">—</span></div>
+            <div class="kv"><span class="k">Total distance</span><span class="v" id="rDist">—</span></div>
+            <div class="kv"><span class="k">Total linehaul</span><span class="v" id="rLine">—</span></div>
+            <div class="kv"><span class="k">Per-mile FSC as % of linehaul</span><span class="v" id="rPctOf">—</span></div>
+            <div class="kv"><span class="k">Method difference (per-mile − %)</span><span class="v" id="rVar">—</span></div>
+            <div class="kv big"><span class="k">Linehaul + surcharge (billed)</span><span class="v" id="rGrand">—</span></div>
+          </div>
+
+          <div class="f noprint">
+            <label for="fBill">Bill using</label>
+            <select id="fBill">
+              <option value="mile">Per-mile method — (index − peg) ÷ economy</option>
+              <option value="pct">Percentage of linehaul — step table</option>
+            </select>
+          </div>
+
+          <p class="hint" id="evid">—</p>
+          <p class="hint" id="notesOut" hidden></p>
+        </div>
+        <div class="ft">
+          <strong style="margin-right:auto">Fuel surcharge to invoice</strong>
+          <span class="num" id="ftTotal" style="font-weight:700;font-size:19px">—</span>
+        </div>
+      </section>
+      <div class="sig">
+        <div>Calculated by <span id="sigBy">—</span> · basis and index recorded above for billing evidence.</div>
+        <div class="line">Accepted for customer</div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="foot">
+    Implements the standard U.S. per-mile fuel surcharge formula used with the EIA/DOE weekly On-Highway Diesel Fuel
+    Price survey: <strong>surcharge per mile = (index price − base peg price) ÷ fuel economy</strong>, extended by loaded
+    miles; and the alternative percentage-of-linehaul method, where the index price selects a band in the step table
+    above. Defaults: peg $1.25/gal, 6.0 mpg. Money is rounded to 2 decimal places per load; the per-distance rate is
+    rounded to the precision you choose before it is extended. Metric mode converts gallons at 3.785411784 L and miles at
+    1.609344 km. Nothing leaves this device — all data is stored in this browser only.
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.fuel-surcharge.v1', GAL=3.785411784, MI=1.609344;
+var $=function(s){return document.querySelector(s)};
+var uid=1;
+
+/* ── state ─────────────────────────────────────────────────────── */
+function sample(){
+  return {
+    v:1, sample:true, units:'us', cur:'$', curCustom:'', prec:4, floor:true, bill:'mile', printTable:false,
+    idxSource:'EIA/DOE — U.S. National Average, On-Highway Diesel',
+    idxDate:'2026-08-31', price:3.819, peg:1.25, mpg:6.0,
+    doc:{carrier:'Northline Freight Systems', cust:'Harbor Foods Distribution', ref:'FSC-2026-09',
+         by:'M. Okafor, Billing', from:'2026-09-01', to:'2026-09-07',
+         notes:'Surcharge reviewed weekly against the Monday EIA release; disputes to billing within 7 days.'},
+    gen:{width:0.10, step:0.75, start:0, max:5.50},
+    loads:[
+      {id:uid++, ref:'L-4471', lane:'Columbus OH → Nashville TN', miles:385, line:985},
+      {id:uid++, ref:'L-4472', lane:'Nashville TN → Dallas TX',   miles:665, line:1520},
+      {id:uid++, ref:'L-4483', lane:'Dallas TX → Denver CO',      miles:795, line:1760}
+    ],
+    bands:[], presets:{}
+  };
+}
+var S=sample();
+S.bands=buildBands(S.peg,S.gen);
+
+function buildBands(peg,g){
+  var w=+g.width, st=+g.step, s0=+g.start, mx=+g.max, out=[];
+  if(!(w>0)||!isFinite(peg)) return [{from:peg||0,pct:s0||0}];
+  var n=Math.floor(((mx-peg)/w))+1;
+  if(!isFinite(n)||n<1) n=1; if(n>400) n=400;
+  for(var i=0;i<n;i++) out.push({from:r(peg+i*w,4), pct:r(s0+i*st,4)});
+  return out;
+}
+
+/* ── maths helpers ─────────────────────────────────────────────── */
+function r(v,dp){ if(!isFinite(v)) return v; var f=Math.pow(10,dp); var x=Math.round((v*f+(v>=0?1e-9:-1e-9)))/f; return x===0?0:x; }
+function r2(v){ return r(v,2) }
+function fin(v){ return typeof v==='number' && isFinite(v) }
+function num(v){ var n=parseFloat(String(v).replace(/,/g,'')); return isFinite(n)?n:NaN }
+
+function cur(){ return S.cur==='custom' ? (S.curCustom||'¤') : S.cur }
+function money(v){
+  if(!fin(v)) return '—';
+  var x=r2(v), s=x<0?'-':'';
+  return s+cur()+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function rateTxt(v){ if(!fin(v)) return '—'; return (v<0?'-':'')+cur()+Math.abs(v).toFixed(S.prec) }
+function nf(v,dp){ if(!fin(v)) return '—'; return r(v,dp).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp}) }
+function pctTxt(v,dp){ if(!fin(v)) return '—'; return nf(v,dp==null?2:dp)+'%' }
+
+/* unit conversion: state is stored in US units (per gallon, miles, mpg) */
+var met=function(){ return S.units==='metric' };
+var D={
+  price:function(v){ return met()? v/GAL : v },  priceIn:function(v){ return met()? v*GAL : v },
+  econ :function(v){ return met()? v*MI/GAL : v}, econIn :function(v){ return met()? v*GAL/MI : v },
+  dist :function(v){ return met()? v*MI : v },   distIn :function(v){ return met()? v/MI : v }
+};
+var L={ vol:function(){return met()?'L':'gal'}, dist:function(){return met()?'km':'mi'},
+        distLong:function(){return met()?'kilometre':'mile'}, econ:function(){return met()?'km/L':'mpg'} };
+
+function bandFor(priceGal){
+  var b=S.bands.slice().sort(function(a,c){return a.from-c.from}), hit=null, i;
+  for(i=0;i<b.length;i++){ if(fin(b[i].from) && priceGal>=b[i].from-1e-9) hit=b[i]; }
+  if(!hit) return {pct:0, band:null, below:true};
+  var idx=b.indexOf(hit), next=b[idx+1];
+  return {pct:fin(hit.pct)?hit.pct:0, band:hit, next:next||null, below:false};
+}
+
+function calc(){
+  var price=D.price(S.price), peg=D.price(S.peg), econ=D.econ(S.mpg);
+  var ok = fin(price)&&fin(peg)&&fin(econ)&&econ>0;
+  var rawDiff = ok ? price-peg : NaN;
+  var diff = ok ? (S.floor && rawDiff<0 ? 0 : rawDiff) : NaN;
+  var rate = ok ? diff/econ : NaN;
+  var rateR = ok ? r(rate,S.prec) : NaN;
+  var bi = fin(S.price) ? bandFor(S.price) : {pct:NaN,band:null,below:false};
+  var rows=[], tD=0,tL=0,t1=0,t2=0, anyD=false, anyL=false;
+  for(var i=0;i<S.loads.length;i++){
+    var l=S.loads[i];
+    var dist = fin(l.miles)? D.dist(l.miles) : NaN;
+    var m1 = (fin(rateR)&&fin(dist)) ? r2(rateR*dist) : NaN;
+    var m2 = (fin(l.line)&&fin(bi.pct)) ? r2(l.line*bi.pct/100) : NaN;
+    var dv = (fin(m1)&&fin(m2)) ? r2(m1-m2) : NaN;
+    if(fin(dist)){ tD+=dist; anyD=true }
+    if(fin(l.line)){ tL+=l.line; anyL=true }
+    if(fin(m1)) t1+=m1;
+    if(fin(m2)) t2+=m2;
+    rows.push({l:l, dist:dist, m1:m1, m2:m2, dv:dv});
+  }
+  t1=r2(t1); t2=r2(t2);
+  var billed = S.bill==='pct' ? t2 : t1;
+  return {ok:ok, price:price, peg:peg, econ:econ, rawDiff:rawDiff, diff:diff, rate:rate, rateR:rateR,
+          bi:bi, rows:rows, tDist:anyD?tD:NaN, tLine:anyL?tL:NaN, t1:t1, t2:t2,
+          dv:r2(t1-t2), billed:billed, grand:anyL?r2(tL+billed):NaN};
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+var saveT=null;
+function save(){
+  try{
+    clearTimeout(saveT);
+    saveT=setTimeout(function(){
+      try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+    },120);
+  }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object') return false;
+    hydrate(o); return true;
+  }catch(e){ return false }
+}
+function hydrate(o){
+  var d=sample();
+  S={ v:1,
+      sample: !!o.sample,
+      units: o.units==='metric'?'metric':'us',
+      cur: typeof o.cur==='string'?o.cur:'$',
+      curCustom: typeof o.curCustom==='string'?o.curCustom:'',
+      prec: [2,3,4,5].indexOf(+o.prec)>=0 ? +o.prec : 4,
+      floor: o.floor!==false,
+      bill: o.bill==='pct'?'pct':'mile',
+      printTable: !!o.printTable,
+      idxSource: typeof o.idxSource==='string'?o.idxSource:d.idxSource,
+      idxDate: typeof o.idxDate==='string'?o.idxDate:'',
+      price: num(o.price), peg: num(o.peg), mpg: num(o.mpg),
+      doc: {}, gen:{}, loads:[], bands:[], presets:{} };
+  var dk=['carrier','cust','ref','by','from','to','notes'];
+  for(var i=0;i<dk.length;i++) S.doc[dk[i]] = (o.doc&&typeof o.doc[dk[i]]==='string')?o.doc[dk[i]]:'';
+  var gk=['width','step','start','max'];
+  for(i=0;i<gk.length;i++){ var gv=num(o.gen&&o.gen[gk[i]]); S.gen[gk[i]] = isFinite(gv)?gv:d.gen[gk[i]] }
+  if(Object.prototype.toString.call(o.loads)==='[object Array]'){
+    for(i=0;i<o.loads.length&&i<400;i++){ var L2=o.loads[i]||{};
+      S.loads.push({id:uid++, ref:String(L2.ref==null?'':L2.ref), lane:String(L2.lane==null?'':L2.lane),
+                    miles:num(L2.miles), line:num(L2.line)}); }
+  }
+  if(Object.prototype.toString.call(o.bands)==='[object Array]'){
+    for(i=0;i<o.bands.length&&i<400;i++){ var B=o.bands[i]||{};
+      S.bands.push({from:num(B.from), pct:num(B.pct)}); }
+  }
+  if(!S.bands.length) S.bands=buildBands(fin(S.peg)?S.peg:1.25, S.gen);
+  if(o.presets && typeof o.presets==='object'){
+    for(var k in o.presets){ if(Object.prototype.hasOwnProperty.call(o.presets,k)){
+      var p=o.presets[k]||{}; var bands=[];
+      if(Object.prototype.toString.call(p.bands)==='[object Array]')
+        for(i=0;i<p.bands.length&&i<400;i++) bands.push({from:num(p.bands[i].from),pct:num(p.bands[i].pct)});
+      S.presets[String(k).slice(0,60)]={peg:num(p.peg),mpg:num(p.mpg),prec:+p.prec||4,floor:p.floor!==false,
+        gen:{width:num(p.gen&&p.gen.width),step:num(p.gen&&p.gen.step),start:num(p.gen&&p.gen.start),max:num(p.gen&&p.gen.max)},
+        bands:bands};
+    }}
+  }
+}
+
+/* ── rendering ─────────────────────────────────────────────────── */
+function el(id){ return document.getElementById(id) }
+function setVal(id,v){ var e=el(id); if(e && document.activeElement!==e) e.value=v; }
+
+function renderInputs(){
+  setVal('idxSource', S.idxSource);
+  setVal('idxDate', S.idxDate);
+  setVal('fPrice', fin(S.price)? String(r(D.price(S.price), met()?4:3)) : '');
+  setVal('fPeg',   fin(S.peg)  ? String(r(D.price(S.peg),   met()?4:3)) : '');
+  setVal('fMpg',   fin(S.mpg)  ? String(r(D.econ(S.mpg),    met()?3:2)) : '');
+  setVal('fPrec', String(S.prec));
+  setVal('fCur', S.cur);
+  setVal('fCurCustom', S.curCustom);
+  el('fCurCustom').disabled = S.cur!=='custom';
+  el('fFloor').checked = S.floor;
+  el('fPrintTable').checked = S.printTable;
+  setVal('fBill', S.bill);
+  setVal('gWidth', fin(S.gen.width)? String(r(D.price(S.gen.width), met()?5:3)) : '');
+  setVal('gStep',  fin(S.gen.step) ? String(S.gen.step) : '');
+  setVal('gStart', fin(S.gen.start)? String(S.gen.start): '');
+  setVal('gMax',   fin(S.gen.max)  ? String(r(D.price(S.gen.max), met()?4:2)) : '');
+  setVal('dCarrier',S.doc.carrier); setVal('dCust',S.doc.cust); setVal('dRef',S.doc.ref);
+  setVal('dBy',S.doc.by); setVal('dFrom',S.doc.from); setVal('dTo',S.doc.to); setVal('dNotes',S.doc.notes);
+  el('unitUs').setAttribute('aria-pressed', met()?'false':'true');
+  el('unitMet').setAttribute('aria-pressed', met()?'true':'false');
+  el('lblPrice').textContent='('+cur()+'/'+L.vol()+')';
+  el('lblPeg').textContent='('+cur()+'/'+L.vol()+')';
+  el('lblMpg').textContent='('+L.econ()+')';
+  el('thDist').textContent = met()?'Kilometres':'Miles';
+  el('thFrom').textContent = 'From ('+cur()+'/'+L.vol()+')';
+  el('heroUnit').textContent = L.distLong();
+  var gv=document.querySelectorAll('.gVol');
+  for(var i=0;i<gv.length;i++) gv[i].textContent='('+cur()+'/'+L.vol()+')';
+  el('sampleChip').hidden = !S.sample;
+  renderPresets();
+}
+
+function loadRowHTML(l,i){
+  var n=i+1;
+  return '<tr data-id="'+l.id+'">'+
+    '<td><input type="text" data-f="ref" aria-label="Reference for load '+n+'" value="'+esc(l.ref)+'"></td>'+
+    '<td><input type="text" data-f="lane" aria-label="Lane for load '+n+'" value="'+esc(l.lane)+'"></td>'+
+    '<td class="n"><input type="number" step="1" min="0" inputmode="decimal" data-f="miles" aria-label="Distance for load '+n+'" value="'+(fin(l.miles)?r(D.dist(l.miles),1):'')+'"></td>'+
+    '<td class="n"><input type="number" step="0.01" min="0" inputmode="decimal" data-f="line" aria-label="Linehaul for load '+n+'" value="'+(fin(l.line)?l.line:'')+'"></td>'+
+    '<td class="n num-tight" data-c="m1">—</td>'+
+    '<td class="n num-tight" data-c="m2">—</td>'+
+    '<td class="n num-tight" data-c="dv">—</td>'+
+    '<td class="actcol noprint"><button type="button" class="btn ico sm" data-rm="'+l.id+'" aria-label="Remove load '+n+'">✕</button></td>'+
+    '</tr>';
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+function renderLoads(){
+  var b=el('loadBody'), h='', i;
+  if(!S.loads.length){
+    h='<tr><td colspan="8" class="empty">No loads yet — add one to build a surcharge schedule.</td></tr>';
+  } else for(i=0;i<S.loads.length;i++) h+=loadRowHTML(S.loads[i],i);
+  b.innerHTML=h;
+}
+
+function renderBands(){
+  var b=el('bandBody'), h='', i, bs=S.bands;
+  if(!bs.length){ b.innerHTML='<tr><td colspan="4" class="empty">No bands — rebuild the table.</td></tr>'; return }
+  for(i=0;i<bs.length;i++){
+    var to = (i+1<bs.length && fin(bs[i+1].from)) ? '&lt; '+cur()+nf(D.price(bs[i+1].from), met()?4:2) : 'and above';
+    h+='<tr data-i="'+i+'">'+
+       '<td class="n"><input type="number" step="0.01" min="0" inputmode="decimal" data-b="from" aria-label="Band '+(i+1)+' from price" value="'+(fin(bs[i].from)?r(D.price(bs[i].from),met()?4:3):'')+'"></td>'+
+       '<td class="n">'+to+'</td>'+
+       '<td class="n"><input type="number" step="0.05" min="0" inputmode="decimal" data-b="pct" aria-label="Band '+(i+1)+' percentage" value="'+(fin(bs[i].pct)?bs[i].pct:'')+'"></td>'+
+       '<td class="actcol noprint"><button type="button" class="btn ico sm" data-rb="'+i+'" aria-label="Remove band '+(i+1)+'">✕</button></td>'+
+       '</tr>';
+  }
+  b.innerHTML=h;
+}
+
+function fmtDate(s){
+  if(!s) return '—';
+  var p=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if(!p) return s;
+  var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return p[3]+' '+M[+p[2]-1]+' '+p[1];
+}
+
+function paint(){
+  var c=calc(), i;
+
+  /* hero + calc line */
+  el('heroRate').textContent = fin(c.rateR) ? rateTxt(c.rateR)+' /'+L.dist() : '—';
+  if(fin(c.rateR)){
+    var cents = c.rateR*100;
+    el('heroSub').textContent = nf(cents, 2)+' cents per '+L.distLong()+
+      (S.floor && fin(c.rawDiff) && c.rawDiff<0 ? ' · index below peg, floored at zero' : '');
+  } else el('heroSub').textContent = 'Enter an index price, peg and fuel economy above.';
+
+  el('calcLine').textContent = c.ok
+    ? '('+cur()+nf(c.price, met()?4:3)+' − '+cur()+nf(c.peg, met()?4:3)+') ÷ '+nf(c.econ, met()?3:2)+' '+L.econ()+
+      ' = '+rateTxt(c.rateR)+' per '+L.dist()
+    : 'Fuel economy must be greater than zero — check the basis fields.';
+
+  /* per-row cells */
+  var rows=el('loadBody').querySelectorAll('tr[data-id]');
+  for(i=0;i<rows.length;i++){
+    var rr=c.rows[i]; if(!rr) continue;
+    rows[i].querySelector('[data-c="m1"]').textContent = money(rr.m1);
+    rows[i].querySelector('[data-c="m2"]').textContent = money(rr.m2);
+    rows[i].querySelector('[data-c="dv"]').textContent = money(rr.dv);
+  }
+  el('loadCount').textContent = S.loads.length;
+  el('tDist').textContent = fin(c.tDist)? nf(c.tDist,1)+' '+L.dist() : '—';
+  el('tLine').textContent = money(c.tLine);
+  el('tM1').textContent = S.loads.length? money(c.t1):'—';
+  el('tM2').textContent = S.loads.length? money(c.t2):'—';
+  el('tDv').textContent = S.loads.length? money(c.dv):'—';
+
+  /* totals + detail */
+  el('totM1').textContent = S.loads.length? money(c.t1):'—';
+  el('totM2').textContent = S.loads.length? money(c.t2):'—';
+  el('subM1').textContent = fin(c.rateR)? rateTxt(c.rateR)+' × '+(fin(c.tDist)?nf(c.tDist,1):'—')+' '+L.dist() : '—';
+  el('subM2').textContent = fin(c.bi.pct)? pctTxt(c.bi.pct)+' × '+money(c.tLine)+' linehaul' : '—';
+
+  var band=c.bi.band, bandTxt='—';
+  if(!fin(S.price)) bandTxt='—';
+  else if(c.bi.below) bandTxt='below first band';
+  else if(band) bandTxt = cur()+nf(D.price(band.from), met()?4:2)+' – '+(c.bi.next? cur()+nf(D.price(c.bi.next.from), met()?4:2) : 'and above');
+  el('rBand').textContent = bandTxt;
+  el('rPct').textContent = pctTxt(c.bi.pct);
+  el('rDiff').textContent = fin(c.rawDiff)? rateTxt(r(c.rawDiff,4))+' /'+L.vol() : '—';
+  el('rDist').textContent = fin(c.tDist)? nf(c.tDist,1)+' '+L.dist() : '—';
+  el('rLine').textContent = money(c.tLine);
+  el('rPctOf').textContent = (fin(c.t1)&&fin(c.tLine)&&c.tLine>0)? pctTxt(c.t1/c.tLine*100) : '—';
+  el('rVar').textContent = S.loads.length? money(c.dv):'—';
+  el('rGrand').textContent = money(c.grand);
+  el('ftTotal').textContent = S.loads.length? money(c.billed):'—';
+  el('methodChip').textContent = S.bill==='pct' ? 'Billing: % of linehaul' : 'Billing: per-mile';
+  el('methodChip').className = 'chip ok';
+
+  /* band highlight */
+  var brows=el('bandBody').querySelectorAll('tr[data-i]');
+  var hitFrom = band? band.from : null;
+  for(i=0;i<brows.length;i++){
+    var idx=+brows[i].getAttribute('data-i');
+    var isHit = hitFrom!=null && S.bands[idx] && Math.abs(S.bands[idx].from-hitFrom)<1e-9 && S.bands[idx].pct===band.pct;
+    brows[i].className = isHit? 'hit':'';
+  }
+  var hitEl=el('bandBody').querySelector('tr.hit');
+  if(hitEl && !hitEl.__scrolled){ hitEl.__scrolled=true; }
+
+  /* evidence line + print header */
+  el('evid').textContent = 'Basis recorded for billing: '+S.idxSource+', index date '+fmtDate(S.idxDate)+
+    ', price '+cur()+nf(D.price(S.price), met()?4:3)+'/'+L.vol()+', peg '+cur()+nf(D.price(S.peg), met()?4:3)+'/'+L.vol()+
+    ', economy '+nf(D.econ(S.mpg), met()?3:2)+' '+L.econ()+
+    '. Effective '+fmtDate(S.doc.from)+' to '+fmtDate(S.doc.to)+'.';
+  el('notesOut').hidden = !S.doc.notes;
+  el('notesOut').textContent = S.doc.notes||'';
+
+  el('pCarrier').textContent = S.doc.carrier || 'Fuel Surcharge Schedule';
+  el('pRef').textContent = S.doc.ref ? 'Ref '+S.doc.ref : '';
+  el('pGen').textContent = 'Issued '+fmtDate(todayISO());
+  el('pCust').textContent = S.doc.cust||'—';
+  el('pIdx').textContent = S.idxSource||'—';
+  el('pEff').textContent = fmtDate(S.doc.from)+' – '+fmtDate(S.doc.to);
+  el('pIdxDate').textContent = fmtDate(S.idxDate);
+  el('pBy').textContent = S.doc.by||'—';
+  el('pPrice').textContent = fin(S.price)? cur()+nf(D.price(S.price), met()?4:3)+'/'+L.vol() : '—';
+  el('pPeg').textContent = fin(S.peg)? cur()+nf(D.price(S.peg), met()?4:3)+'/'+L.vol() : '—';
+  el('pMpg').textContent = fin(S.mpg)? nf(D.econ(S.mpg), met()?3:2)+' '+L.econ() : '—';
+  el('sigBy').textContent = S.doc.by||'—';
+  el('bandsCard').classList.toggle('hidep', !S.printTable);
+  return c;
+}
+
+function todayISO(){
+  var d=new Date(), p=function(n){return (n<10?'0':'')+n};
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+
+function renderAll(){ renderInputs(); renderLoads(); renderBands(); paint(); }
+
+/* ── validation ────────────────────────────────────────────────── */
+function setErr(inputId, errId, msg){
+  var inp=el(inputId), e=el(errId);
+  if(msg){ inp.classList.add('inv'); e.hidden=false; e.textContent=msg; inp.setAttribute('aria-invalid','true'); }
+  else { inp.classList.remove('inv'); e.hidden=true; e.textContent=''; inp.removeAttribute('aria-invalid'); }
+}
+function validate(){
+  setErr('fPrice','ePrice', fin(S.price)&&S.price>=0 ? '' : 'Enter the published index price.');
+  setErr('fPeg','ePeg',     fin(S.peg)&&S.peg>=0 ? '' : 'Enter the contracted base peg.');
+  setErr('fMpg','eMpg',     fin(S.mpg)&&S.mpg>0 ? '' : 'Fuel economy must be greater than zero.');
+}
+
+/* ── events ────────────────────────────────────────────────────── */
+function on(id,ev,fn){ var e=el(id); if(e) e.addEventListener(ev,fn) }
+function touched(){ if(S.sample){ S.sample=false; el('sampleChip').hidden=true } }
+function flash(t,bad){ var m=el('msg'); m.textContent=t; m.className='msg'+(bad?' bad':''); clearTimeout(flash.t);
+  flash.t=setTimeout(function(){ m.textContent='' },2600); }
+
+function bindNum(id, setter){
+  on(id,'input',function(){ touched(); setter(num(this.value)); paint(); save(); });
+  on(id,'blur',function(){ validate(); });
+}
+function bindText(id, setter){
+  on(id,'input',function(){ touched(); setter(this.value); paint(); save(); });
+}
+
+bindNum('fPrice', function(v){ S.price = isFinite(v)? D.priceIn(v) : NaN });
+bindNum('fPeg',   function(v){ S.peg   = isFinite(v)? D.priceIn(v) : NaN });
+bindNum('fMpg',   function(v){ S.mpg   = isFinite(v)? D.econIn(v)  : NaN });
+bindText('idxSource', function(v){ S.idxSource=v });
+bindText('idxDate', function(v){ S.idxDate=v });
+bindText('dCarrier', function(v){ S.doc.carrier=v });
+bindText('dCust', function(v){ S.doc.cust=v });
+bindText('dRef', function(v){ S.doc.ref=v });
+bindText('dBy', function(v){ S.doc.by=v });
+bindText('dFrom', function(v){ S.doc.from=v });
+bindText('dTo', function(v){ S.doc.to=v });
+bindText('dNotes', function(v){ S.doc.notes=v });
+on('fPrec','change',function(){ touched(); S.prec=+this.value; paint(); save(); });
+on('fBill','change',function(){ touched(); S.bill=this.value; paint(); save(); });
+on('fFloor','change',function(){ touched(); S.floor=this.checked; paint(); save(); });
+on('fPrintTable','change',function(){ S.printTable=this.checked; paint(); save(); });
+on('fCur','change',function(){ touched(); S.cur=this.value; el('fCurCustom').disabled=(S.cur!=='custom'); renderInputs(); renderBands(); paint(); save(); });
+on('fCurCustom','input',function(){ touched(); S.curCustom=this.value; renderInputs(); renderBands(); paint(); save(); });
+
+function setUnits(u){ if(S.units===u) return; S.units=u; renderInputs(); renderLoads(); renderBands(); paint(); save(); }
+on('unitUs','click',function(){ setUnits('us') });
+on('unitMet','click',function(){ setUnits('metric') });
+
+/* loads */
+on('addLoad','click',function(){
+  touched();
+  S.loads.push({id:uid++, ref:'', lane:'', miles:NaN, line:NaN});
+  renderLoads(); paint(); save();
+  var rows=el('loadBody').querySelectorAll('tr[data-id]');
+  if(rows.length) rows[rows.length-1].querySelector('input').focus();
+});
+el('loadBody').addEventListener('input',function(e){
+  var t=e.target, f=t.getAttribute&&t.getAttribute('data-f'); if(!f) return;
+  var id=+t.parentNode.parentNode.getAttribute('data-id'), l=null, i;
+  for(i=0;i<S.loads.length;i++) if(S.loads[i].id===id) l=S.loads[i];
+  if(!l) return;
+  touched();
+  if(f==='miles'){ var v=num(t.value); l.miles = isFinite(v)? D.distIn(v) : NaN; }
+  else if(f==='line'){ l.line = num(t.value); }
+  else l[f]=t.value;
+  paint(); save();
+});
+el('loadBody').addEventListener('click',function(e){
+  var b=e.target.closest? e.target.closest('[data-rm]') : null; if(!b) return;
+  var id=+b.getAttribute('data-rm'), i;
+  for(i=0;i<S.loads.length;i++) if(S.loads[i].id===id){ S.loads.splice(i,1); break }
+  touched(); renderLoads(); paint(); save();
+});
+
+/* bands */
+on('addBand','click',function(){
+  touched();
+  var last=S.bands.length? S.bands[S.bands.length-1] : {from:fin(S.peg)?S.peg:1.25, pct:0};
+  S.bands.push({from:r((fin(last.from)?last.from:0)+(fin(S.gen.width)?S.gen.width:0.1),4),
+                pct:r((fin(last.pct)?last.pct:0)+(fin(S.gen.step)?S.gen.step:0.5),4)});
+  renderBands(); paint(); save();
+});
+el('bandBody').addEventListener('input',function(e){
+  var t=e.target, f=t.getAttribute&&t.getAttribute('data-b'); if(!f) return;
+  var i=+t.parentNode.parentNode.getAttribute('data-i'); if(!S.bands[i]) return;
+  touched();
+  var v=num(t.value);
+  if(f==='from') S.bands[i].from = isFinite(v)? D.priceIn(v) : NaN;
+  else S.bands[i].pct = v;
+  paint(); save();
+});
+el('bandBody').addEventListener('change',function(e){
+  if(e.target.getAttribute && e.target.getAttribute('data-b')==='from'){
+    S.bands.sort(function(a,b){ return (fin(a.from)?a.from:0)-(fin(b.from)?b.from:0) });
+    renderBands(); paint(); save();
+  }
+});
+el('bandBody').addEventListener('click',function(e){
+  var b=e.target.closest? e.target.closest('[data-rb]') : null; if(!b) return;
+  S.bands.splice(+b.getAttribute('data-rb'),1);
+  touched(); renderBands(); paint(); save();
+});
+function bindGen(id,key,conv){
+  on(id,'input',function(){ touched(); var v=num(this.value); S.gen[key]= isFinite(v)? (conv? D.priceIn(v):v) : NaN; save(); });
+}
+bindGen('gWidth','width',true); bindGen('gStep','step',false);
+bindGen('gStart','start',false); bindGen('gMax','max',true);
+on('gBuild','click',function(){
+  touched();
+  var peg = fin(S.peg)? S.peg : 1.25;
+  var g = {width: fin(S.gen.width)&&S.gen.width>0? S.gen.width:0.10,
+           step: fin(S.gen.step)? S.gen.step:0.75,
+           start: fin(S.gen.start)? S.gen.start:0,
+           max: fin(S.gen.max)&&S.gen.max>peg? S.gen.max:peg+4.25};
+  S.gen=g; S.bands=buildBands(peg,g);
+  renderInputs(); renderBands(); paint(); save();
+  flash('Step table rebuilt — '+S.bands.length+' bands');
+});
+
+/* presets = saved rate tables */
+function renderPresets(){
+  var sel=el('presetSel'), keys=[], k;
+  for(k in S.presets) if(Object.prototype.hasOwnProperty.call(S.presets,k)) keys.push(k);
+  keys.sort();
+  var cur2=sel.value, h='<option value="">'+(keys.length?'— select a saved table —':'— none saved —')+'</option>';
+  for(var i=0;i<keys.length;i++) h+='<option value="'+esc(keys[i])+'">'+esc(keys[i])+'</option>';
+  sel.innerHTML=h;
+  if(cur2 && S.presets[cur2]) sel.value=cur2;
+}
+on('presetSave','click',function(){
+  var name=(el('presetName').value||'').trim().slice(0,60);
+  if(!name){ flash('Name the rate table first', true); el('presetName').focus(); return }
+  S.presets[name]={peg:S.peg, mpg:S.mpg, prec:S.prec, floor:S.floor,
+    gen:{width:S.gen.width,step:S.gen.step,start:S.gen.start,max:S.gen.max},
+    bands:S.bands.map(function(b){return {from:b.from,pct:b.pct}})};
+  renderPresets(); el('presetSel').value=name; el('presetName').value=''; save();
+  flash('Saved rate table "'+name+'"');
+});
+on('presetApply','click',function(){
+  var k=el('presetSel').value, p=S.presets[k];
+  if(!p){ flash('Select a saved table first', true); return }
+  touched();
+  S.peg=p.peg; S.mpg=p.mpg; S.prec=p.prec; S.floor=p.floor;
+  S.gen={width:p.gen.width,step:p.gen.step,start:p.gen.start,max:p.gen.max};
+  S.bands=p.bands.map(function(b){return {from:b.from,pct:b.pct}});
+  renderAll(); validate(); save(); flash('Applied "'+k+'"');
+});
+on('presetDel','click',function(){
+  var k=el('presetSel').value;
+  if(!k||!S.presets[k]){ flash('Select a saved table first', true); return }
+  delete S.presets[k]; renderPresets(); save(); flash('Deleted "'+k+'"');
+});
+
+/* ── exports ───────────────────────────────────────────────────── */
+function dl(name, text, mime){
+  try{
+    var blob=new Blob([text], {type:mime||'text/plain;charset=utf-8'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url) },900);
+    return true;
+  }catch(e){ flash('Download blocked by the browser', true); return false }
+}
+function cell(v){ v = v==null? '' : String(v);
+  return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function csvRows(rows){ return '﻿'+rows.map(function(r0){ return r0.map(cell).join(',') }).join('\r\n')+'\r\n' }
+function slug(s){ return (String(s||'fuel-surcharge').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'fuel-surcharge') }
+
+function scheduleCsv(){
+  var c=calc(), rows=[], du=L.dist(), vu=L.vol();
+  rows.push(['Fuel surcharge schedule']);
+  rows.push(['Carrier', S.doc.carrier]);
+  rows.push(['Customer', S.doc.cust]);
+  rows.push(['Reference', S.doc.ref]);
+  rows.push(['Prepared by', S.doc.by]);
+  rows.push(['Effective from', S.doc.from]);
+  rows.push(['Effective to', S.doc.to]);
+  rows.push(['Index source', S.idxSource]);
+  rows.push(['Index date (week ending)', S.idxDate]);
+  rows.push(['Index price ('+cur()+'/'+vu+')', fin(S.price)? r(D.price(S.price),4):'']);
+  rows.push(['Base peg ('+cur()+'/'+vu+')', fin(S.peg)? r(D.price(S.peg),4):'']);
+  rows.push(['Fuel economy ('+L.econ()+')', fin(S.mpg)? r(D.econ(S.mpg),3):'']);
+  rows.push(['Floor at peg', S.floor?'yes':'no']);
+  rows.push(['Surcharge rate ('+cur()+'/'+du+')', fin(c.rateR)? c.rateR.toFixed(S.prec):'']);
+  rows.push(['Applicable band %', fin(c.bi.pct)? c.bi.pct : '']);
+  rows.push(['Billed method', S.bill==='pct'?'Percentage of linehaul':'Per-'+du]);
+  rows.push(['Generated', todayISO()]);
+  rows.push([]);
+  rows.push(['Load ref','Lane','Distance ('+du+')','Linehaul ('+cur()+')','Per-'+du+' FSC ('+cur()+')',
+             'Percentage FSC ('+cur()+')','Difference ('+cur()+')']);
+  for(var i=0;i<c.rows.length;i++){
+    var x=c.rows[i];
+    rows.push([x.l.ref, x.l.lane, fin(x.dist)? r(x.dist,1):'', fin(x.l.line)? r2(x.l.line):'',
+               fin(x.m1)? x.m1.toFixed(2):'', fin(x.m2)? x.m2.toFixed(2):'', fin(x.dv)? x.dv.toFixed(2):'']);
+  }
+  rows.push(['TOTAL','', fin(c.tDist)? r(c.tDist,1):'', fin(c.tLine)? c.tLine.toFixed(2):'',
+             c.t1.toFixed(2), c.t2.toFixed(2), c.dv.toFixed(2)]);
+  rows.push([]);
+  rows.push(['Notice','Figures are calculated from values entered by the user. Verify the index against the official EIA/DOE weekly On-Highway Diesel Fuel Price release. Surcharge terms are contractual.']);
+  if(S.doc.notes) rows.push(['Notes', S.doc.notes]);
+  return csvRows(rows);
+}
+function bandCsvText(){
+  var rows=[['Band from ('+cur()+'/'+L.vol()+')','Up to','Surcharge %']], bs=S.bands.slice().sort(function(a,b){return a.from-b.from});
+  for(var i=0;i<bs.length;i++){
+    rows.push([fin(bs[i].from)? r(D.price(bs[i].from),4):'',
+               (i+1<bs.length&&fin(bs[i+1].from))? r(D.price(bs[i+1].from),4) : 'and above',
+               fin(bs[i].pct)? bs[i].pct : '']);
+  }
+  return csvRows(rows);
+}
+on('btnCsv','click',function(){ if(dl(slug(S.doc.ref||S.doc.carrier)+'-fuel-surcharge.csv', scheduleCsv(), 'text/csv;charset=utf-8')) flash('Schedule CSV downloaded'); });
+on('bandCsv','click',function(){ if(dl(slug(S.doc.carrier)+'-fsc-rate-table.csv', bandCsvText(), 'text/csv;charset=utf-8')) flash('Rate table CSV downloaded'); });
+on('btnJson','click',function(){
+  if(dl(slug(S.doc.ref||S.doc.carrier)+'-fuel-surcharge.json', JSON.stringify(S,null,2), 'application/json')) flash('JSON saved');
+});
+on('btnImport','click',function(){ el('fileJson').click() });
+on('fileJson','change',function(){
+  var f=this.files&&this.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      hydrate(o); renderAll(); validate(); save(); flash('Imported '+S.loads.length+' load(s)');
+    }catch(e){ flash('That file is not a valid saved schedule', true) }
+  };
+  rd.onerror=function(){ flash('Could not read that file', true) };
+  rd.readAsText(f);
+  this.value='';
+});
+on('btnPrint','click',function(){ window.print() });
+
+/* clear — two-step confirmation, no alert() */
+var armed=false, armT=null;
+on('btnClear','click',function(){
+  var b=this;
+  if(!armed){
+    armed=true; b.textContent='Confirm — erase everything?'; b.classList.add('pri');
+    armT=setTimeout(function(){ armed=false; b.textContent='Clear all data'; b.classList.remove('pri') },5000);
+    return;
+  }
+  clearTimeout(armT); armed=false; b.textContent='Clear all data'; b.classList.remove('pri');
+  var keep=S.presets;
+  try{ localStorage.removeItem(KEY) }catch(e){}
+  S=sample(); S.bands=buildBands(S.peg,S.gen); S.presets=keep;
+  S.sample=false;
+  S.doc={carrier:'',cust:'',ref:'',by:'',from:'',to:'',notes:''};
+  S.loads=[{id:uid++,ref:'',lane:'',miles:NaN,line:NaN}];
+  S.idxDate=''; S.price=NaN;
+  renderAll(); validate(); save(); flash('Cleared — saved rate tables kept');
+});
+
+/* ── boot ──────────────────────────────────────────────────────── */
+if(!load()){ S=sample(); S.bands=buildBands(S.peg,S.gen); }
+renderAll();
+validate();
+save();
+window.addEventListener('beforeprint', paint);
+})();
+</script>
+</body>
+</html>

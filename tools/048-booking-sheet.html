@@ -204,18 +204,19 @@ table input:focus,table select:focus{background:var(--raise)}
 .gridwrap{overflow:auto;-webkit-overflow-scrolling:touch;max-height:none}
 table.bk{border-collapse:collapse;table-layout:fixed;font-size:13px}
 table.bk tbody tr:hover{background:transparent}
-table.bk th{position:sticky;top:0;z-index:2;background:var(--sunk);padding:7px 8px;white-space:normal;
+table.bk thead th{position:sticky;top:0;z-index:2;background:var(--sunk);padding:7px 8px;white-space:normal;
   border-bottom:1px solid var(--line-hard);text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink)}
-table.bk th .rn{font:650 12.5px/1.25 var(--sans);color:var(--ink);display:block;overflow-wrap:anywhere}
-table.bk th .rr{font:400 10.5px/1.3 var(--mono);color:var(--muted);display:block;margin-top:2px}
+table.bk thead th .rn{font:650 12.5px/1.25 var(--sans);color:var(--ink);display:block;overflow-wrap:anywhere}
+table.bk thead th .rr{font:400 10.5px/1.3 var(--mono);color:var(--muted);display:block;margin-top:2px}
 table.bk th.tcol,table.bk td.tcol{width:64px}
 table.bk th.tcol{text-align:right}
-table.bk td{padding:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line);height:23px;vertical-align:top}
-table.bk td.tcol{border-right:1px solid var(--line-hard);text-align:right;padding:0 7px 0 2px;
+table.bk tbody td,table.bk tbody th{padding:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+  height:23px;vertical-align:top;background:transparent;position:static}
+table.bk tbody th.tcol,table.bk tbody td.tcol{border-right:1px solid var(--line-hard);text-align:right;padding:0 7px 0 2px;
   font:11.5px/23px var(--mono);color:var(--muted);white-space:nowrap;vertical-align:top}
-table.bk td.tcol.hh{color:var(--ink-2);font-weight:650}
+table.bk tbody th.tcol.hh{color:var(--ink-2);font-weight:650}
 table.bk tr.hh>td{border-top:1px solid var(--line-hard)}
-table.bk tr.nowrow>td.tcol{color:var(--bad);font-weight:700;box-shadow:inset 2px 0 0 0 var(--bad)}
+table.bk tr.nowrow>th.tcol{color:var(--bad);font-weight:700;box-shadow:inset 2px 0 0 0 var(--bad)}
 .slotbtn{display:block;width:100%;height:100%;min-height:23px;border:0;background:transparent;cursor:pointer;
   padding:0;font:600 12px/1 var(--mono);color:transparent}
 .slotbtn:hover{background:var(--accent-wash);color:var(--accent-ink)}
@@ -929,4 +930,223 @@ function buildGrid(C){
     }
   });
   return G;
+}
+
+/* ── render ────────────────────────────────────────────────────── */
+var C=null,G=null;
+
+function renderAll(){
+  C=compute(); G=buildGrid(C);
+  renderStats(); renderGrid(); renderBookings(); renderRes(); renderSvc();
+  renderSummary(); renderGaps(); renderSelects(); renderDoc(); renderNotes();
+  $('#sampleBanner').hidden=!S.sample;
+}
+
+function renderStats(){
+  var t=C.tot;
+  $('#sDateK').textContent=dateShort(S.date);
+  $('#sValue').textContent=money(t.value);
+  $('#sValueSub').textContent=t.count+' appointment'+(t.count===1?'':'s')+' · '+pct(t.util)+' of the day sold';
+  $('#sUtil').textContent=pct(t.util);
+  $('#sUtilSub').textContent=durTxt(t.booked)+' booked of '+durTxt(t.avail)+' available';
+  $('#sCount').textContent=String(t.count);
+  $('#sCountSub').textContent=(t.cancel?t.cancel+' cancelled · ':'')+
+    (t.noshow?t.noshow+' no-show · ':'')+C.perRes.filter(function(p){return p.r.on;}).length+' resources on';
+  $('#sFree').textContent=durTxt(t.free);
+  $('#sFreeSub').textContent=t.gaps?(t.gaps+' gap'+(t.gaps===1?'':'s')+' of '+C.gapMin+' min or more'):'No gap of '+C.gapMin+' min or more';
+  $('#sLost').textContent=money(t.lost);
+  $('#sLostSub').textContent=t.noshow?(t.noshow+' no-show'+(t.noshow===1?'':'s')+' held '+
+    durTxt(S.bk.filter(function(b){return b.status==='noshow';}).reduce(function(a,b){return a+b.dur;},0))):'None today';
+  $('#sLostBox').classList.toggle('flagbad',t.lost>0);
+  if(!C.valid){$('#sValue').textContent='—';$('#sUtil').textContent='—';$('#sFree').textContent='—';}
+}
+
+function renderGrid(){
+  var host=$('#gridHost');
+  if(!C.valid){host.innerHTML='<div class="empty">Set an opening time earlier than the closing time to draw the day book.</div>';
+    $('#gridChip').textContent='—';return;}
+  if(!G.cols.length){host.innerHTML='<div class="empty">No resource is on today. Switch one on below.</div>';
+    $('#gridChip').textContent='0 columns';return;}
+  var h=['<table class="bk" id="bkGrid" style="min-width:'+(70+G.cols.length*138)+'px">',
+    '<caption class="sr">Appointments for ',esc(dateLong(S.date)),'</caption><thead><tr>',
+    '<th class="tcol" scope="col">Time</th>'];
+  G.cols.forEach(function(p){
+    h.push('<th scope="col"><span class="rn">'+esc(resName(p.r))+'</span><span class="rr">'+
+      (p.r.role?esc(p.r.role)+' · ':'')+fmtT(p.ws)+'–'+fmtT(p.we)+'</span></th>');
+  });
+  h.push('</tr></thead><tbody>');
+  var nowMin=null,d=new Date();
+  if(S.date===todayISO())nowMin=d.getHours()*60+d.getMinutes();
+  G.rows.forEach(function(row){
+    var hh=(row.t%60===0);
+    var isNow=(nowMin!=null&&nowMin>=row.t&&nowMin<row.t+G.slot);
+    h.push('<tr class="'+(hh?'hh ':'')+(isNow?'nowrow':'')+'">');
+    h.push('<th class="tcol'+(hh?' hh':'')+'" scope="row">'+fmtT(row.t)+'</th>');
+    row.cells.forEach(function(cl){
+      if(cl.type==='skip')return;
+      if(cl.type==='free'){
+        h.push('<td class="'+(cl.off?'off':'')+'"><button type="button" class="slotbtn" data-slot="'+
+          cl.t+'" data-res="'+esc(G.cols[cl.col].r.id)+'" aria-label="Book '+fmtT(cl.t)+' with '+
+          esc(resName(G.cols[cl.col].r))+'"></button></td>');
+        return;
+      }
+      h.push('<td class="grp" rowspan="'+cl.span+'">');
+      cl.grp.items.forEach(function(b){
+        var st=ST[b.status],fl=C.flags[b.id]||[];
+        var oob=fl.some(function(f){return f.k==='bad'||f.t==='Outside hours';});
+        h.push('<button type="button" class="bkbtn '+st.cls+(oob?' oob':'')+(editId===b.id?' sel':'')+
+          '" data-bk="'+esc(b.id)+'" style="min-height:'+Math.max(21,cl.span*23-4)+'px">');
+        h.push('<span class="t">'+fmtT(b.start)+'–'+fmtT(bkEnd(b))+' · '+st.l+'</span>');
+        h.push('<span class="c">'+esc(b.name||'—')+'</span>');
+        h.push('<span class="s">'+esc(bkSvcName(b))+' · '+money(b.price)+'</span>');
+        if(cl.span>=3&&C.buffer>0)h.push('<span class="b">+'+C.buffer+' min buffer</span>');
+        h.push('</button>');
+      });
+      h.push('</td>');
+    });
+    h.push('</tr>');
+  });
+  h.push('</tbody></table>');
+  if(G.tooMany)h.push('<p class="hint">Only the first '+MAXROWS+' slots are drawn — use a longer slot size to see the whole day.</p>');
+  host.innerHTML=h.join('');
+  $('#gridChip').textContent=G.cols.length+' × '+G.n+' slots of '+S.slot+' min';
+}
+
+function renderBookings(){
+  var tb=$('#bkBody'),rows=[];
+  var list=S.bk.slice().sort(function(a,b){
+    var ra=S.res.map(function(r){return r.id;}).indexOf(a.res),
+        rb=S.res.map(function(r){return r.id;}).indexOf(b.res);
+    return a.start-b.start||ra-rb;
+  });
+  if(!list.length){
+    tb.innerHTML='<tr><td colspan="9"><div class="empty">No appointments yet. Click a slot in the day book, or fill the form above.</div></td></tr>';
+  }else{
+    list.forEach(function(b){
+      var r=resById(b.res),fl=C.flags[b.id]||[],st=ST[b.status];
+      var tags=fl.map(function(f){return '<span class="tag '+f.k+'">'+esc(f.t)+'</span>';}).join('');
+      rows.push('<tr class="'+(b.status==='cancelled'?'cx ':'')+(editId===b.id?'rowsel':'')+'" data-row="'+esc(b.id)+'">'+
+        '<td class="tm"><span class="d1">'+fmtT(b.start)+'–'+fmtT(bkEnd(b))+'</span>'+
+          '<span class="d2">'+durTxt(b.dur)+'</span></td>'+
+        '<td>'+esc(r?resName(r):'—')+(r&&!r.on?' <span class="tag warn">off</span>':'')+'</td>'+
+        '<td class="who"><span class="nm">'+esc(b.name||'—')+'</span>'+
+          (b.contact?'<span class="ct">'+esc(b.contact)+'</span>':'')+
+          (b.note?'<span class="ct">'+esc(b.note)+'</span>':'')+'</td>'+
+        '<td>'+esc(bkSvcName(b))+'</td>'+
+        '<td class="n">'+b.dur+'</td>'+
+        '<td class="n">'+money(b.price)+'</td>'+
+        '<td><select class="stsel" data-st="'+esc(b.id)+'" aria-label="Status for '+esc(b.name||'appointment')+'">'+
+          STORDER.map(function(k){return '<option value="'+k+'"'+(k===b.status?' selected':'')+'>'+ST[k].l+'</option>';}).join('')+
+          '</select></td>'+
+        '<td><div class="tags">'+(tags||'<span class="tag ok">OK</span>')+'</div></td>'+
+        '<td><div class="row" style="gap:4px;flex-wrap:nowrap">'+
+          '<button type="button" class="edbtn" data-edit="'+esc(b.id)+'">Edit</button>'+
+          '<button type="button" class="rmbtn" data-del="'+esc(b.id)+'" aria-label="Remove appointment for '+
+            esc(b.name||'client')+'">✕</button></div></td></tr>');
+    });
+    tb.innerHTML=rows.join('');
+  }
+  $('#bkChip').textContent=S.bk.length+' on the sheet';
+  var t=C.tot;
+  $('#bkFoot').textContent=t.count+' appointments hold '+durTxt(t.booked)+' and are worth '+money(t.value)+
+    (t.lost>0?'. '+money(t.lost)+' sat in no-shows':'')+
+    (t.clash?'. '+t.clash+' clash(es) found in the loaded data — fix them':'')+'.';
+}
+
+function renderRes(){
+  var tb=$('#resBody'),h=[];
+  S.res.forEach(function(r,i){
+    h.push('<tr data-r="'+esc(r.id)+'">'+
+      '<td class="n">'+(i+1)+'</td>'+
+      '<td><input type="text" data-f="name" value="'+esc(r.name)+'" aria-label="Resource '+(i+1)+' name"></td>'+
+      '<td><input type="text" data-f="role" value="'+esc(r.role)+'" aria-label="Resource '+(i+1)+' type" placeholder="Stylist, room, bay"></td>'+
+      '<td><input type="time" step="300" data-f="start" value="'+esc(r.start)+'" aria-label="Resource '+(i+1)+' start"></td>'+
+      '<td><input type="time" step="300" data-f="end" value="'+esc(r.end)+'" aria-label="Resource '+(i+1)+' end"></td>'+
+      '<td class="c"><input type="checkbox" data-f="on"'+(r.on?' checked':'')+' aria-label="Resource '+(i+1)+' on today" style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td><button type="button" class="rmbtn" data-rmres="'+esc(r.id)+'" aria-label="Remove '+esc(resName(r))+'">✕</button></td></tr>');
+  });
+  tb.innerHTML=h.join('')||'<tr><td colspan="7"><div class="empty">Add a staff member, room, chair or bay.</div></td></tr>';
+}
+
+function renderSvc(){
+  var tb=$('#svcBody'),h=[];
+  S.svc.forEach(function(v,i){
+    h.push('<tr data-s="'+esc(v.id)+'">'+
+      '<td><input type="text" data-f="name" value="'+esc(v.name)+'" aria-label="Service '+(i+1)+' name"></td>'+
+      '<td><input type="number" min="1" max="720" step="1" data-f="dur" value="'+v.dur+'" aria-label="Service '+(i+1)+' minutes"></td>'+
+      '<td><input type="number" min="0" step="0.01" data-f="price" value="'+v.price+'" aria-label="Service '+(i+1)+' price"></td>'+
+      '<td><button type="button" class="rmbtn" data-rmsvc="'+esc(v.id)+'" aria-label="Remove '+esc(v.name)+'">✕</button></td></tr>');
+  });
+  tb.innerHTML=h.join('')||'<tr><td colspan="4"><div class="empty">Add the services you sell and their prices.</div></td></tr>';
+}
+
+function renderSummary(){
+  var host=$('#utilList'),h=[];
+  C.perRes.forEach(function(p){
+    if(!p.r.on&&!p.items.length)return;
+    var u=p.util,w=(u==null)?0:clamp(u,0,100);
+    var cls=(u==null)?'':(u>=75?'hi':(u<40?'lo':''));
+    h.push('<div class="kv"><span class="nm">'+esc(resName(p.r))+(p.r.on?'':' <span class="tag warn">off</span>')+'</span>'+
+      '<span class="nums">'+pct(u)+' · '+money(p.value)+'</span>'+
+      '<span class="bar"><i class="'+cls+'" style="width:'+w.toFixed(1)+'%"></i></span>'+
+      '<span class="sub">'+durTxt(p.booked)+' booked of '+durTxt(p.avail)+' · '+p.count+' appt'+(p.count===1?'':'s')+
+      (p.free>0?' · '+durTxt(p.free)+' still sellable':'')+'</span></div>');
+  });
+  host.innerHTML=h.join('')||'<div class="empty">No resources yet.</div>';
+  var t=C.tot;
+  $('#sumChip').textContent=dateShort(S.date);
+  $('#tBooked').textContent=durTxt(t.booked);
+  $('#tAvail').textContent=durTxt(t.avail);
+  $('#tUtil').textContent=pct(t.util);
+  $('#tUtil').className='v '+(t.util==null?'':(t.util>=75?'ok':(t.util<40?'warn':'')));
+  $('#tFree').textContent=durTxt(t.free);
+  $('#tLost').textContent=t.noshow+' / '+t.cancel+(t.lost>0?' · '+money(t.lost):'');
+  $('#tLost').className='v '+(t.lost>0?'bad':'');
+  $('#tValue').textContent=money(t.value);
+}
+
+function renderGaps(){
+  var host=$('#gapList'),h=[];
+  C.perRes.forEach(function(p){
+    p.gaps.forEach(function(g){
+      var fits=g.fits||[];
+      h.push('<div class="gap"><div class="g1"><span>'+esc(resName(p.r))+'</span>'+
+        '<span>'+fmtT(g.start)+'–'+fmtT(g.end)+' · '+durTxt(g.len)+'</span></div>'+
+        '<div class="g2">'+(fits.length?
+          ('Fits '+fits.slice(0,3).map(function(v){return esc(v.name)+' ('+v.dur+' min)';}).join(', ')+
+           (fits.length>3?' +'+(fits.length-3)+' more':'')+' — best <em>'+money(fits[0].price)+'</em>')
+          :'Too short for any service on your list')+'</div>'+
+        '<button type="button" class="btn sm" data-fill="'+esc(p.r.id)+'" data-at="'+g.start+'">Book this gap</button></div>');
+    });
+  });
+  host.innerHTML=h.join('')||'<div class="empty">No gap of '+C.gapMin+' minutes or more. The day is full.</div>';
+  $('#gapChip').textContent=C.tot.gaps+' · '+durTxt(C.tot.free);
+}
+
+function renderNotes(){
+  var t=C.tot;
+  $('#dayHint').textContent=C.valid?
+    ('Day book runs '+fmtT(C.open)+' to '+fmtT(C.close)+' ('+durTxt(C.close-C.open)+') in '+S.slot+
+     '-minute slots, with '+C.buffer+' minutes clear between appointments on the same resource.')
+    :'Closing time must be later than opening time.';
+  $('#methodNote').textContent='Utilisation = booked service minutes ÷ available minutes (each resource’s own hours '+
+    'clipped to opening times), shown to 1 decimal place. Booked value counts appointments marked booked, confirmed, '+
+    'arrived or completed; no-shows are reported separately and cancellations are released. A gap is a free run with '+
+    'the '+C.buffer+'-minute buffer removed from each end, listed at '+C.gapMin+' minutes or more. Overlaps on the same '+
+    'resource are refused at the point of booking. Everything is saved in this browser only.';
+  $('#edHint').textContent=editId?'Editing an existing appointment — Save keeps its place in the day.':
+    'Clashes on the same resource are refused, including the '+C.buffer+'-minute buffer.';
+}
+
+function renderSelects(){
+  var rs=$('#iResSel'),cur=rs.value;
+  rs.innerHTML=S.res.map(function(r){return '<option value="'+esc(r.id)+'">'+esc(resName(r))+
+    (r.role?' — '+esc(r.role):'')+(r.on?'':' (off)')+'</option>';}).join('');
+  if(cur&&resById(cur))rs.value=cur; else if(S.res.length)rs.value=S.res[0].id;
+  var ss=$('#iSvcSel'),cs=ss.value;
+  ss.innerHTML=S.svc.map(function(v){return '<option value="'+esc(v.id)+'">'+esc(v.name)+' — '+v.dur+
+    ' min · '+money(v.price)+'</option>';}).join('')+'<option value="__custom">Custom / one-off…</option>';
+  if(cs&&(cs==='__custom'||svcById(cs)))ss.value=cs; else if(S.svc.length)ss.value=S.svc[0].id;
+  else ss.value='__custom';
+  $('#svcNameWrap').hidden=ss.value!=='__custom';
 }
