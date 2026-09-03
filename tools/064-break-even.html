@@ -468,6 +468,8 @@ footer.site{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 30p
             <div class="f" id="curCustomWrap" hidden><label for="iCurC">Custom symbol</label>
               <input id="iCurC" type="text" maxlength="4" data-p="meta.curCustom" style="text-align:left"></div>
           </div>
+          <div class="f"><label for="iNotes">Assumptions &amp; notes (printed on the document)</label>
+            <textarea id="iNotes" data-p="meta.notes" rows="3"></textarea></div>
         </div>
       </section>
 
@@ -904,9 +906,9 @@ function cvpHTML(C){
   var pcOf=function(n){return C.revenue>0?pct(n/C.revenue,1):'—';};
   var rows=[
     ['Sales revenue',money(C.revenue),C.revenue>0?'100.0%':'—',''],
-    ['Less variable costs','−'+money(C.varTot).replace('−',''),pcOf(C.varTot),''],
+    ['Less variable costs',money(-C.varTot),pcOf(C.varTot),''],
     ['Contribution',money(C.contribTot),pcOf(C.contribTot),'hi'],
-    ['Less fixed costs','−'+money(C.F).replace('−',''),pcOf(C.F),''],
+    ['Less fixed costs',money(-C.F),pcOf(C.F),''],
     [(C.profit<0?'Loss for the period':'Profit for the period'),money(C.profit),pcOf(C.profit),'tot']
   ];
   var h='<thead><tr><th>Contribution statement</th><th class="n">Amount</th><th class="n">% of sales</th></tr></thead><tbody>';
@@ -1264,3 +1266,255 @@ function paintDoc(C){
     '<span>Prepared '+dateLong(S.meta.date)+(S.meta.by?' by '+esc(S.meta.by):'')+'</span>'+
     '<span>Cost–volume–profit analysis · figures exclude VAT</span>';
 }
+
+/* ── CSV ─────────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v==null)?'':String(v);
+  s=s.replace(/−/g,'-');
+  if(/[",\r\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function csvText(rows){return rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';}
+function r2(n){return (n==null||!isFinite(n))?'':Math.round(n*100)/100;}
+function r4(n){return (n==null||!isFinite(n))?'':Math.round(n*10000)/10000;}
+function buildCSV(){
+  var C=calc(S), P=C.pword, rows=[];
+  rows.push(['Break-even analysis']);
+  rows.push(['Business',S.meta.biz]);
+  rows.push(['Address',(S.meta.addr||'').replace(/\n/g,' / ')]);
+  rows.push(['Scenario',S.meta.scenario]);
+  rows.push(['Reference',S.meta.ref]);
+  rows.push(['Prepared by',S.meta.by]);
+  rows.push(['Date',S.meta.date]);
+  rows.push(['Trading period','per '+P]);
+  rows.push(['Days in period',C.days]);
+  rows.push(['Currency',cur()]);
+  rows.push(['Basis',C.single?'Single product':'Weighted sales mix']);
+  rows.push([]);
+  rows.push(['FIXED COSTS']);
+  rows.push(['Description','Frequency','Amount as entered','Amount per '+P]);
+  C.fixRows.forEach(function(r,i){rows.push([r.desc||('Fixed cost '+(i+1)),FREQ[r.freq],r2(r.amt==null?0:r.amt),r2(r.per)]);});
+  rows.push(['Total fixed costs','','',r2(C.F)]);
+  rows.push([]);
+  rows.push(['PRODUCTS AND FORECAST']);
+  rows.push(['Product','Unit price','Variable cost per unit','Contribution per unit','CM ratio',
+    'Forecast units','Mix share','Revenue','Variable cost total','Contribution total']);
+  C.prods.forEach(function(p,i){
+    rows.push([p.name||('Line '+(i+1)),r2(p.price),r2(p.vcost),r2(p.contrib),r4(p.cmr),
+      r2(p.units),r4(p.mix),r2(p.rev),r2(p.varTot),r2(p.contribTot)]);
+  });
+  rows.push(['Total / weighted average',r2(C.pbar),r2(ok(C.pbar)&&ok(C.cbar)?C.pbar-C.cbar:null),r2(C.cbar),r4(C.cmr),
+    r2(C.totalUnits),C.totalUnits>0?1:'',r2(C.revenue),r2(C.varTot),r2(C.contribTot)]);
+  rows.push([]);
+  rows.push(['CONTRIBUTION STATEMENT AT FORECAST VOLUME']);
+  rows.push(['Sales revenue',r2(C.revenue)]);
+  rows.push(['Variable costs',r2(-C.varTot)]);
+  rows.push(['Contribution',r2(C.contribTot)]);
+  rows.push(['Fixed costs',r2(-C.F)]);
+  rows.push([C.profit<0?'Loss for the period':'Profit for the period',r2(C.profit)]);
+  rows.push([]);
+  rows.push(['BREAK-EVEN SUMMARY']);
+  rows.push(['Contribution per unit'+(C.single?'':' (weighted)'),r2(C.cbar)]);
+  rows.push(['Contribution margin ratio',r4(C.cmr)]);
+  rows.push(['Break-even units',C.be?C.be.units:'']);
+  rows.push(['Break-even revenue',C.be?r2(C.be.revenue):'']);
+  rows.push(['Margin of safety revenue',C.mosRev==null?'':r2(C.mosRev)]);
+  rows.push(['Margin of safety ratio',C.mosPct==null?'':r4(C.mosPct)]);
+  rows.push(['Margin of safety units',C.mosUnits==null?'':C.mosUnits]);
+  rows.push(['Target profit',r2(nz(S.target.profit))]);
+  rows.push(['Units for target profit',C.tgt?C.tgt.units:'']);
+  rows.push(['Revenue for target profit',C.tgt?r2(C.tgt.revenue):'']);
+  rows.push(['Degree of operating leverage',C.dol==null?'':r2(C.dol)]);
+  rows.push(['Break-even day of period',C.beDay==null?'':(C.beDay>C.days?'not reached':C.beDay)]);
+  rows.push([]);
+  rows.push(['BREAK-EVEN AND TARGET PROFIT BY LINE']);
+  rows.push(['Line','Mix share','Contribution per unit','Break-even units','Break-even revenue',
+    'Units for target profit','Revenue for target profit']);
+  C.prods.forEach(function(p,i){
+    var b=C.be?C.be.lines[i]:null,t=C.tgt?C.tgt.lines[i]:null;
+    rows.push([p.name||('Line '+(i+1)),r4(p.mix),r2(p.contrib),b?b.units:'',b?r2(b.revenue):'',t?t.units:'',t?r2(t.revenue):'']);
+  });
+  rows.push([]);
+  rows.push(['SENSITIVITY (one factor at a time, mix held constant)']);
+  rows.push(['Factor','Change','Contribution per unit','Break-even units','Break-even revenue',
+    'Change in break-even revenue','Profit at forecast','Margin of safety ratio']);
+  sensRows(C).forEach(function(g){
+    g.rows.forEach(function(r){
+      rows.push([g.t,(r.d>0?'+':'')+r.d+'%',r2(r.w.cbar),r.w.be?r.w.be.units:'',r.w.be?r2(r.w.be.revenue):'',
+        r.chg==null?'':r4(r.chg),r2(r.w.profit),r.w.mos==null?'':r4(r.w.mos)]);
+    });
+  });
+  if(S.scenarios.length){
+    rows.push([]);
+    rows.push(['SAVED SCENARIOS']);
+    rows.push(['Scenario','Saved','Fixed costs','Break-even revenue','Break-even units','CM ratio',
+      'Margin of safety ratio','Profit at forecast']);
+    S.scenarios.forEach(function(sc){
+      var c2=scenSummary(sc.snap);
+      rows.push([sc.name,sc.savedAt,r2(c2.F),c2.be?r2(c2.be.revenue):'',c2.be?c2.be.units:'',r4(c2.cmr),
+        c2.mosPct==null?'':r4(c2.mosPct),r2(c2.profit)]);
+    });
+  }
+  rows.push([]);
+  rows.push(['Notes',(S.meta.notes||'').replace(/\n/g,' ')]);
+  rows.push(['Disclaimer','Cost-volume-profit model assuming constant prices, unit variable costs, fixed costs and sales mix, and that all output is sold. Excludes VAT and other sales taxes. Not accounting, tax or investment advice.']);
+  return csvText(rows);
+}
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime+';charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove();},400);
+    return true;
+  }catch(e){toast('This browser blocked the download.',true);return false;}
+}
+
+/* ── events ──────────────────────────────────────────────── */
+var NUMP={'meta.days':1,'target.profit':1,'target.minMos':1};
+function bindMeta(){
+  document.querySelectorAll('[data-p]').forEach(function(el){
+    var handler=function(){
+      var path=el.getAttribute('data-p').split('.');
+      var v=el.value;
+      if(NUMP[el.getAttribute('data-p')]){v=numOrNull(v);}
+      S[path[0]][path[1]]=v;
+      if(path[1]==='cur'){ $('#curCustomWrap').hidden = S.meta.cur!=='custom'; }
+      if(path[1]==='period'){ S.meta.days=PDAYS[S.meta.period]; $('#iDays').value=S.meta.days; }
+      paint();
+    };
+    el.addEventListener('input',handler);
+    el.addEventListener('change',handler);
+  });
+}
+function rowHandler(list,body){
+  body.addEventListener('input',function(e){
+    var t=e.target, tr=t.closest('tr'); if(!tr)return;
+    var id=tr.getAttribute('data-id'), k=t.getAttribute('data-k'); if(!k)return;
+    var rec=null; for(var i=0;i<list().length;i++){if(list()[i].id===id)rec=list()[i];}
+    if(!rec)return;
+    if(t.type==='number')rec[k]=numOrNull(t.value); else rec[k]=t.value;
+    paint();
+  });
+  body.addEventListener('change',function(e){
+    var t=e.target; if(t.tagName!=='SELECT')return;
+    var tr=t.closest('tr'), id=tr.getAttribute('data-id'), k=t.getAttribute('data-k');
+    var arr=list(); for(var i=0;i<arr.length;i++){if(arr[i].id===id)arr[i][k]=t.value;}
+    paint();
+  });
+  body.addEventListener('click',function(e){
+    var b=e.target.closest('[data-rm]'); if(!b)return;
+    var tr=b.closest('tr'), id=tr.getAttribute('data-id'), arr=list();
+    if(arr.length<=1){toast('Keep at least one line — clear the fields instead.',true);return;}
+    for(var i=0;i<arr.length;i++){if(arr[i].id===id){arr.splice(i,1);break;}}
+    buildRows(); paint();
+  });
+}
+function init(){
+  var restored=load();
+  if(!restored)S=sample();
+  buildRows(); fillMeta();
+  $('#banner').hidden=!S.ui.banner;
+  bindMeta();
+  rowHandler(function(){return S.fixed;},$('#fixBody'));
+  rowHandler(function(){return S.prods;},$('#prodBody'));
+
+  $('#btnAddFix').addEventListener('click',function(){
+    S.fixed.push({id:uid(),desc:'',freq:'month',amt:null});
+    buildRows();paint();
+    var rows=document.querySelectorAll('#fixBody tr');
+    var last=rows[rows.length-1]; if(last)last.querySelector('input').focus();
+  });
+  $('#btnAddProd').addEventListener('click',function(){
+    S.prods.push({id:uid(),name:'',price:null,vcost:null,units:null});
+    buildRows();paint();
+    var rows=document.querySelectorAll('#prodBody tr');
+    var last=rows[rows.length-1]; if(last)last.querySelector('input').focus();
+  });
+  $('#btnDismiss').addEventListener('click',function(){S.ui.banner=false;$('#banner').hidden=true;save();});
+  $('#btnBlank').addEventListener('click',function(){
+    S=blank();S.scenarios=[];buildRows();fillMeta();$('#banner').hidden=true;paint();
+    toast('Empty scenario ready.');
+  });
+  $('#btnSample').addEventListener('click',function(){
+    var keep=S.scenarios;
+    S=sample();S.scenarios=keep;S.ui.banner=true;
+    buildRows();fillMeta();$('#banner').hidden=false;paint();
+    toast('Sample scenario loaded.');
+  });
+  $('#btnPrev').addEventListener('click',function(){
+    document.body.classList.toggle('preview');
+    var on=document.body.classList.contains('preview');
+    this.innerHTML=on?'Back to <span class="hidesm">the </span>sheet':'Preview<span class="hidesm"> document</span>';
+    window.scrollTo(0,0);
+  });
+  $('#btnPrint').addEventListener('click',function(){window.print();});
+  $('#btnCsv').addEventListener('click',function(){
+    dl(slug(S.meta.scenario||S.meta.biz)+'-break-even.csv','﻿'+buildCSV(),'text/csv');
+  });
+  $('#btnJson').addEventListener('click',function(){
+    dl(slug(S.meta.scenario||S.meta.biz)+'-break-even.json',JSON.stringify(S,null,2),'application/json');
+  });
+  $('#btnImport').addEventListener('click',function(){$('#fileIn').click();});
+  $('#fileIn').addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0]; if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var st=migrate(JSON.parse(String(rd.result)));
+        if(!st)throw 0;
+        S=st;buildRows();fillMeta();$('#banner').hidden=true;S.ui.banner=false;paint();
+        toast('Scenario imported.');
+      }catch(err){toast('That file could not be read as a saved break-even scenario.',true);}
+      $('#fileIn').value='';
+    };
+    rd.readAsText(f);
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear the sheet and every saved scenario in this browser? This cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blank();buildRows();fillMeta();$('#banner').hidden=true;paint();
+    toast('All data cleared.');
+  });
+  $('#btnSaveScen').addEventListener('click',function(){
+    var def=S.meta.scenario||('Scenario '+(S.scenarios.length+1));
+    var name=window.prompt('Name this scenario',def);
+    if(name==null)return;
+    name=String(name).trim()||def;
+    var now=new Date();
+    var stamp=todayISO()+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    S.scenarios.push({id:uid(),name:name,savedAt:stamp,snap:JSON.parse(JSON.stringify({
+      meta:S.meta,fixed:S.fixed,prods:S.prods,target:S.target}))});
+    paint();
+    toast('Saved “'+name+'”.');
+  });
+  $('#scenTab').addEventListener('click',function(e){
+    var l=e.target.closest('[data-load]'), d=e.target.closest('[data-del]');
+    if(l){
+      var id=l.getAttribute('data-load');
+      var sc=S.scenarios.filter(function(x){return x.id===id;})[0]; if(!sc)return;
+      if(!window.confirm('Load “'+sc.name+'”? The sheet on screen will be replaced.'))return;
+      var keep=S.scenarios;
+      var snap=JSON.parse(JSON.stringify(sc.snap));
+      S={v:1,meta:snap.meta,fixed:snap.fixed,prods:snap.prods,target:snap.target,scenarios:keep,ui:{banner:false}};
+      S=migrate(S); S.scenarios=keep;
+      buildRows();fillMeta();$('#banner').hidden=true;paint();
+      toast('Loaded “'+sc.name+'”.');
+    }else if(d){
+      var did=d.getAttribute('data-del');
+      var s2=S.scenarios.filter(function(x){return x.id===did;})[0]; if(!s2)return;
+      if(!window.confirm('Delete the saved scenario “'+s2.name+'”?'))return;
+      S.scenarios=S.scenarios.filter(function(x){return x.id!==did;});
+      paint(); toast('Scenario deleted.');
+    }
+  });
+  paint();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+})();
+</script>
+</body>
+</html>

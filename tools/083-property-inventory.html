@@ -180,6 +180,13 @@ table input:focus,table select:focus{background:var(--raise)}
 .vh{display:inline-block;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;vertical-align:middle}
 .tw{position:relative}
 .card,.grid>*,.stack>*{min-width:0}
+.pv{display:none}
+@media print{
+  .pv{display:block;font:9.5pt/1.32 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;color:#000;text-align:left}
+  td.n .pv,.n>.pv{text-align:right;font-family:var(--mono)}
+  .pv-hide{display:none!important}
+  #cardProp{display:none!important}
+}
 
 /* persistent totals strip under the appbar */
 .tbar{position:sticky;top:var(--barh);z-index:39;background:var(--accent-wash);
@@ -320,6 +327,8 @@ table.ded td{padding:6px}
       <div><b>Inventory clerk</b><span id="pClerk"></span></div>
       <div><b>Deposit held</b><span id="pDep"></span></div>
       <div><b>Deposit scheme</b><span id="pScheme"></span></div>
+      <div><b>Tenant comments due</b><span id="pComment"></span></div>
+      <div><b>Report prepared by</b><span id="pBy"></span></div>
     </div>
   </div>
 
@@ -946,7 +955,7 @@ function renderMeters(){
      '<td class="n" id="mcons-'+m.id+'">—</td>'+
      '<td class="noprint"><button type="button" class="btn ico sm dgr" data-act="delmeter" data-m="'+m.id+'" title="Remove meter" aria-label="Remove meter">✕</button></td>'+
      '</tr>'+
-     '<tr data-m="'+m.id+'"><td colspan="6" style="padding-top:0;border-bottom:1px solid var(--line)">'+
+     '<tr class="mnoterow" data-m="'+m.id+'"><td colspan="6" style="padding-top:0;border-bottom:1px solid var(--line)">'+
      '<input type="text" value="'+esc(m.note)+'" data-mk="note" data-m="'+m.id+'" aria-label="Meter note" placeholder="Note" style="font-size:12.5px"></td><td class="noprint"></td></tr>';
   });
   if(!state.meters.length)h='<tr><td colspan="7" class="empty">No meters recorded.</td></tr>';
@@ -1116,6 +1125,9 @@ function paintPrintHeader(res){
   $('pClerk').textContent=(p.clerk||'—');
   $('pDep').textContent=res.deposit?money(res.deposit):'—';
   $('pScheme').textContent=(p.scheme||'—')+(p.schemeRef?' · '+p.schemeRef:'');
+  var by=addDays(p.reportDate,p.commentDays);
+  $('pComment').textContent=by?(fdate(by)+' ('+(ints(p.commentDays)||0)+' days)'):'—';
+  $('pBy').textContent=(p.clerk||'—')+(p.clerkCo?', '+p.clerkCo:'');
 }
 
 /* ── fill form from state ───────────────────────────────────── */
@@ -1432,8 +1444,8 @@ function exportJson(){
 $('btnCsv').addEventListener('click',csv);
 $('btnCsv2').addEventListener('click',csv);
 $('btnJson').addEventListener('click',exportJson);
-$('btnPrint').addEventListener('click',function(){window.print()});
-$('btnPrint2').addEventListener('click',function(){window.print()});
+$('btnPrint').addEventListener('click',function(){doPrint()});
+$('btnPrint2').addEventListener('click',function(){doPrint()});
 $('btnImport').addEventListener('click',function(){$('fileJson').value='';$('fileJson').click()});
 $('fileJson').addEventListener('change',function(){
   var f=(this.files||[])[0]; if(!f)return;
@@ -1468,6 +1480,35 @@ function clearAll(){
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 $('btnClear').addEventListener('click',clearAll);
 $('btnClear2').addEventListener('click',clearAll);
+
+/* ── print mirrors: form controls do not reflow on paper ────── */
+var MIRROR='table.sched input[type=text], table.sched textarea, #meters input[type=text], '+
+  '#keys input[type=text], #deds select, .sigbox input[type=date], #p_reportDate, #p_start, #p_end';
+function clearMirrors(){
+  document.querySelectorAll('span.pv').forEach(function(n){n.remove()});
+  document.querySelectorAll('.pv-hide').forEach(function(n){n.classList.remove('pv-hide')});
+}
+function buildMirrors(){
+  clearMirrors();
+  document.querySelectorAll(MIRROR).forEach(function(el){
+    var v;
+    if(el.tagName==='SELECT')v=el.options[el.selectedIndex]?el.options[el.selectedIndex].text:'';
+    else if(el.type==='date')v=el.value?fdate(el.value):'';
+    else v=el.value;
+    var sp=document.createElement('span'); sp.className='pv'; sp.textContent=v||'';
+    el.classList.add('pv-hide');
+    if(el.parentNode)el.parentNode.insertBefore(sp,el.nextSibling);
+  });
+  // drop empty meter note rows from the printed document
+  document.querySelectorAll('#meters tr.mnoterow').forEach(function(tr){
+    var i=tr.querySelector('input[data-mk="note"]');
+    if(i&&!String(i.value).trim())tr.classList.add('pv-hide');
+  });
+}
+window.addEventListener('beforeprint',buildMirrors);
+window.addEventListener('afterprint',clearMirrors);
+function doPrint(){ buildMirrors(); try{window.print()}finally{setTimeout(clearMirrors,900)} }
+window.__inv_mirrors=buildMirrors;
 
 /* ── sticky offsets ─────────────────────────────────────────── */
 function measure(){

@@ -203,12 +203,12 @@ table input:focus,table select:focus{background:var(--raise)}
 #regTable th{padding:8px 6px}
 #regTable td.ref{white-space:nowrap}
 #regTable input,#regTable select,#regTable textarea{font-size:12.8px;padding:5px 5px}
-#regTable td.desc{min-width:196px}
-#regTable td.loc,#regTable td.trade{min-width:112px}
-#regTable td.dt{min-width:118px}
-#regTable td.st{min-width:122px}
-#regTable td.pr{min-width:90px}
-#regTable td.flagcell{min-width:104px}
+#regTable td.desc{min-width:168px}
+#regTable td.loc,#regTable td.trade{min-width:104px}
+#regTable td.dt{min-width:112px}
+#regTable td.st{min-width:118px}
+#regTable td.pr{min-width:84px}
+#regTable td.flagcell{min-width:92px}
 tr.sel td{background:var(--accent-wash)}
 tr.over td{box-shadow:inset 3px 0 0 var(--bad)}
 tr.done td .refbtn{color:var(--muted)}
@@ -501,7 +501,7 @@ footer{color:var(--muted);font-size:12px;line-height:1.55;margin-top:22px;paddin
                 <input type="file" id="d_photo" accept="image/*" aria-label="Attach a photo of this snag"></span>
               <button type="button" class="btn sm dgr" id="bPhotoDel">Remove photo</button>
             </div>
-            <div class="hint">Photos are resized to 720px and stored in this browser only — nothing is uploaded. They print on the defect sheets.</div>
+            <div class="hint">Photos are resized to 640px and stored in this browser only — nothing is uploaded. They print on the defect sheets.</div>
             <div class="err" id="e_photo" hidden></div>
           </div>
         </div>
@@ -621,7 +621,7 @@ function blankItem(){return{id:newId(),ref:'',loc:'',trade:'',desc:'',pri:'mediu
  photo:'',photoName:'',signBy:'',signOn:'',by:''};}
 function blankProject(name){return{id:newId(),name:name||'New project',meta:blankMeta(),items:[],co:{}};}
 
-let state=null, saveT=null, quotaWarned=false;
+let state=null, saveT=null, quotaWarned=false, painting=false;
 function proj(){
  if(!state.projects.length)state.projects.push(blankProject('New project'));
  let p=state.projects.find(x=>x.id===state.active);
@@ -855,10 +855,15 @@ function paintTable(C){
  const p=proj(), arr=viewItems();
  const body=$('#regBody');
  $('#regEmpty').hidden=p.items.length>0;
- body.innerHTML=arr.map(it=>rowHtml(it,C)).join('');
- if(p.items.length&&!arr.length)
-  body.innerHTML='<tr><td colspan="10"><div class="empty">No snags match the filters. '+
-   '<button type="button" class="btn sm" id="bReset">Show all</button></div></td></tr>';
+ /* replacing the rows can fire a trailing change event from the input being
+    removed; ignore those so a stale value cannot be written back to state */
+ painting=true;
+ try{
+  body.innerHTML=arr.map(it=>rowHtml(it,C)).join('');
+  if(p.items.length&&!arr.length)
+   body.innerHTML='<tr><td colspan="10"><div class="empty">No snags match the filters. '+
+    '<button type="button" class="btn sm" id="bReset">Show all</button></div></td></tr>';
+ }finally{painting=false;}
  $('#rgCount').textContent=arr.length===p.items.length
   ? p.items.length+' snag'+(p.items.length===1?'':'s')
   : arr.length+' of '+p.items.length+' shown';
@@ -1418,6 +1423,7 @@ function wire(){
  const body=$('#regBody');
  body.addEventListener('input',e=>{
   const f=e.target.dataset&&e.target.dataset.f; if(!f)return;
+  if(painting||!e.target.isConnected)return;
   const tr=e.target.closest('tr'); if(!tr)return;
   const it=proj().items.find(x=>x.id===tr.dataset.id); if(!it)return;
   it[f]=e.target.value; state.sample=false; save();
@@ -1427,6 +1433,7 @@ function wire(){
  });
  body.addEventListener('change',e=>{
   const f=e.target.dataset&&e.target.dataset.f; if(!f)return;
+  if(painting||!e.target.isConnected)return;
   const tr=e.target.closest('tr'); if(!tr)return;
   const it=proj().items.find(x=>x.id===tr.dataset.id); if(!it)return;
   it[f]=e.target.value;
@@ -1547,14 +1554,14 @@ function readPhoto(file,ok,fail){
   const img=new Image();
   img.onload=()=>{
    try{
-    const max=720; let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+    const max=640; let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
     if(!w||!h){ok(String(fr.result));return;}
     const sc=Math.min(1,max/Math.max(w,h));
     w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
     const c=document.createElement('canvas'); c.width=w; c.height=h;
     const x=c.getContext('2d');
     x.fillStyle='#ffffff'; x.fillRect(0,0,w,h); x.drawImage(img,0,0,w,h);
-    ok(c.toDataURL('image/jpeg',0.72));
+    ok(c.toDataURL('image/jpeg',0.7));
    }catch(err){ok(String(fr.result));}
   };
   img.onerror=()=>fail('That image could not be read.');

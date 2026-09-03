@@ -1,0 +1,1612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recipe Cost &amp; Batch Scaler — yield scaling, baker's percentages, cost per portion</title>
+<meta name="description" content="Scale any recipe to a new yield and recost it: quantities converted between g/kg/oz/lb and ml/L/tsp/tbsp/cups, baker's percentages against total flour weight with hydration and salt, as-purchased order quantities and whole packs to buy, cost per batch and per portion, gross profit and selling price, allergen flags rolled up to the dish, and method times that scale. Saves in your browser, prints a kitchen prep sheet, exports CSV and JSON.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Cpath d='M4.5 15.5h23a11.5 11.5 0 0 1-23 0z' fill='%23fff'/%3E%3Cpath d='M3 15.5h26' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M11 11.5c0-2.2 2-2.2 2-4.4M16 10.5c0-2.2 2-2.2 2-4.4M21 11.5c0-2.2 2-2.2 2-4.4' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' fill='none' opacity='.85'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Recipe Cost & Batch Scaler — Retail & Hospitality ═══════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}}
+:root[data-theme="dark"]{
+  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}
+
+@media(max-width:1040px){.split{grid-template-columns:minmax(0,1fr)}.sticky{position:static}
+  #resCard{order:-1}}
+.split>*,.stack>*,.grid>*{min-width:0}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));align-items:end}
+.fgrid.tight{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:560px){.span2{grid-column:span 1}.fgrid{grid-template-columns:1fr}}
+.card>.hd h2 .mono{font-size:12.5px;color:var(--muted);font-weight:400}
+
+/* stats */
+.statband{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+.statband .stat.hero{grid-column:1/-1}
+.stat.hero .v{font-size:clamp(27px,5.6vw,34px)}
+.stat .sub2{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:4px}
+.stat.good{background:var(--ok-wash);border-color:var(--ok)}.stat.good .v{color:var(--ok)}
+.stat.caution{background:var(--warn-wash);border-color:var(--warn)}.stat.caution .v{color:var(--warn)}
+.stat.over{background:var(--bad-wash);border-color:var(--bad)}.stat.over .v{color:var(--bad)}
+
+/* tables */
+.itbl{min-width:1080px}.stbl{min-width:940px}.mtbl{min-width:820px}
+.itbl td,.stbl td,.mtbl td{padding:5px 6px;vertical-align:middle}
+.itbl th,.stbl th,.mtbl th{padding:8px 6px}
+.itbl col.c-nm{width:206px}.itbl col.c-qt{width:84px}.itbl col.c-un{width:82px}
+.itbl col.c-rl{width:104px}.itbl col.c-yl{width:74px}.itbl col.c-ps{width:84px}
+.itbl col.c-pu{width:82px}.itbl col.c-pc{width:88px}.itbl col.c-uc{width:104px}
+.itbl col.c-al{width:132px}.itbl col.c-x{width:34px}
+.stbl col.c-nm{width:190px}.stbl col.c-bs{width:104px}.stbl col.c-sc{width:126px}
+.stbl col.c-bp{width:74px}.stbl col.c-ap{width:112px}.stbl col.c-pk{width:74px}
+.stbl col.c-uc{width:100px}.stbl col.c-ln{width:94px}.stbl col.c-sh{width:88px}.stbl col.c-al{width:104px}
+.mtbl col.c-no{width:34px}.mtbl col.c-tx{width:auto}.mtbl col.c-tm{width:78px}
+.mtbl col.c-rr{width:150px}.mtbl col.c-ho{width:72px}.mtbl col.c-st{width:92px}
+.mtbl col.c-cu{width:92px}.mtbl col.c-x{width:34px}
+table.nobp .bpc{display:none}
+.num-cell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.num-cell.strong{font-weight:700}
+.sub-cell{display:block;font:10.5px/1.3 var(--mono);color:var(--muted);white-space:nowrap}
+.nm-cell{font:600 13px/1.35 var(--sans);color:var(--ink)}
+.rmbtn{border:1px solid var(--line);background:var(--raise);color:var(--muted);border-radius:3px;
+  font:700 12px/1 var(--mono);padding:6px 8px;cursor:pointer}
+.rmbtn:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-wash)}
+td.rmc{text-align:right}
+tr.bad td{background:var(--bad-wash)}tr.bad:hover td{background:var(--bad-wash)}
+td .err{display:block;margin-top:2px;font-size:10.5px}
+.sharebar{display:block;height:7px;border-radius:4px;background:var(--sunk);overflow:hidden;min-width:46px}
+.sharebar i{display:block;height:100%;background:var(--accent)}
+tfoot td.n,tfoot td.num-cell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.hidecol{display:none}
+
+/* allergens */
+.albtn{border:1px dashed var(--line-hard);background:transparent;border-radius:3px;cursor:pointer;
+  font:700 10px/1.35 var(--mono);letter-spacing:.05em;color:var(--ink-2);padding:5px 6px;width:100%;
+  text-align:left;white-space:normal}
+.albtn:hover{border-color:var(--accent);color:var(--accent)}
+.albtn.none{color:var(--faint);font-weight:400;font-family:var(--sans);font-size:11px;letter-spacing:0}
+tr.alrow>td{background:var(--sunk)}
+.alpick{display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 2px}
+.alpick .check{font-size:12.5px;white-space:nowrap}
+.alpick .check input{margin-top:1px}
+.altag{display:inline-flex;align-items:center;gap:4px;font:700 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:5px 7px;border-radius:3px;background:var(--bad-wash);color:var(--bad);
+  border:1px solid var(--bad)}
+.altag.n{background:var(--ok-wash);color:var(--ok);border-color:var(--ok)}
+.alwrap{display:flex;flex-wrap:wrap;gap:6px}
+.alsrc{font:11.5px/1.5 var(--sans);color:var(--ink-2);margin-top:7px}
+.alsrc b{font-weight:650}
+
+/* baker's summary */
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dotted var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:0}
+.kv b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.kv.tot{border-top:2px solid var(--line-hard);border-bottom:0;margin-top:3px;padding-top:7px;font-weight:650}
+.tinylbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.flash{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
+  padding:9px 15px;border-radius:5px;font:600 13px/1 var(--sans);z-index:80;box-shadow:var(--sh);max-width:92vw}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer;
+  border-right:1px solid var(--line-hard)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* ══ printed prep sheet ═════════════════════════════════════════ */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:1.6pt solid #000;padding-bottom:5pt;margin-bottom:8pt}
+.doc .lh .bz{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .ad{font-size:8.6pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right;flex:none}
+.doc .lh h2{font-size:12pt;letter-spacing:.03em}
+.doc .lh .dt{font-family:var(--mono);font-size:9.2pt;margin-top:3pt;font-weight:700}
+.doc .lh .rf{font-family:var(--mono);font-size:8.2pt;color:#333;margin-top:2pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:8pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:21pt}
+.doc .meta b{display:block;font-size:6.6pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:10pt;font-family:var(--mono);font-weight:700}
+.doc .meta span.sm{font-size:8.4pt;font-family:var(--sans);font-weight:400}
+.doc .albox{border:1.5pt solid #000;padding:5pt 7pt;margin-bottom:8pt}
+.doc .albox b.t{display:block;font-size:8pt;letter-spacing:.09em;text-transform:uppercase;margin-bottom:3pt}
+.doc .albox .big{font-size:10.5pt;font-weight:700;line-height:1.35}
+.doc .albox .sm{font-size:8pt;line-height:1.42;margin-top:3pt;color:#222}
+.doc .dnote{border:1pt solid #000;padding:5pt 7pt;font-size:8.2pt;line-height:1.42;margin-top:8pt}
+.doc .dnote b{display:block;font-size:8pt;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2pt}
+.doc h3.sec{font-size:8.4pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 3pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt;font-weight:700}
+.doc table{width:100%;border-collapse:collapse;font-size:8.2pt;margin-bottom:3pt;table-layout:fixed}
+.doc th,.doc td{border:.75pt solid #999;padding:2.6pt 3.5pt;text-align:left;vertical-align:top;word-wrap:break-word}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:6.6pt;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tfoot td{background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc .two{display:grid;grid-template-columns:1fr 1fr;gap:10pt}
+.doc .kvp{display:flex;justify-content:space-between;gap:8pt;font-size:8.4pt;padding:1.6pt 0;border-bottom:.5pt dotted #bbb}
+.doc .kvp b{font-family:var(--mono)}
+.doc .kvp.tt{border-bottom:0;border-top:1pt solid #000;margin-top:2pt;padding-top:3pt;font-weight:700}
+.doc .basis{font-size:7.4pt;line-height:1.42;color:#222;margin-top:4pt}
+.doc .sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14pt;margin-top:12pt}
+.doc .sign div{border-top:.75pt solid #000;padding-top:2.5pt;font-size:7.4pt;letter-spacing:.06em;text-transform:uppercase;color:#333}
+.doc .sign div u{display:block;height:16pt;text-decoration:none}
+.doc .foot{margin-top:9pt;border-top:.75pt solid #999;padding-top:3pt;font-size:7pt;color:#444;
+  display:flex;justify-content:space-between;gap:10pt}
+@media print{ .pagestack,header.appbar,.flash{display:none!important}
+  .doc{display:block!important} .breakb{break-before:page} }
+</style>
+</head>
+<body>
+
+<div class="app pagestack" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">RS</div>
+    <div>
+      <h1>Recipe Cost &amp; Batch Scaler</h1>
+      <div class="sub">YIELD · BAKER'S % · COST PER PORTION · ALLERGENS</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print prep sheet</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app pagestack">
+
+<div class="split">
+
+  <!-- ═══ left: inputs ═══════════════════════════════════════════ -->
+  <div class="stack">
+
+    <section class="card">
+      <div class="hd">
+        <h2>Recipe</h2>
+        <span class="chip warn" id="sampleChip" hidden>Sample recipe — edit or clear</span>
+        <button type="button" class="btn sm" id="bSampleA">Sample: sourdough</button>
+        <button type="button" class="btn sm" id="bSampleB">Sample: ragù</button>
+      </div>
+      <div class="bd stack">
+        <div class="fgrid">
+          <div class="f span2"><label for="iRecipe">Recipe name</label>
+            <input id="iRecipe" type="text" placeholder="Country sourdough loaf"></div>
+          <div class="f"><label for="iRef">Spec reference</label>
+            <input id="iRef" type="text" placeholder="BR-014"></div>
+          <div class="f"><label for="iVer">Version</label>
+            <input id="iVer" type="text" placeholder="3.1"></div>
+        </div>
+        <div class="fgrid">
+          <div class="f span2"><label for="iBiz">Business / kitchen</label>
+            <input id="iBiz" type="text" placeholder="Marbury Street Bakehouse"></div>
+          <div class="f"><label for="iChef">Written by</label>
+            <input id="iChef" type="text" placeholder="A. Okonjo, Head Baker"></div>
+          <div class="f"><label for="iDate">Sheet date</label>
+            <input id="iDate" type="date"></div>
+        </div>
+        <div class="fgrid">
+          <div class="f span2"><label for="iSite">Site / section</label>
+            <input id="iSite" type="text" placeholder="Bakery — overnight shift"></div>
+          <div class="f"><label for="iYield">Base recipe yields</label>
+            <input id="iYield" type="number" min="0" step="any" inputmode="decimal">
+            <p class="err" id="eYield" hidden></p></div>
+          <div class="f"><label for="iPortion">Portion is called</label>
+            <input id="iPortion" type="text" placeholder="loaf"></div>
+        </div>
+        <div class="fgrid tight">
+          <div class="f span2"><label for="iPsize">Portion / piece description</label>
+            <input id="iPsize" type="text" placeholder="900 g baked, 24 cm banneton"></div>
+          <div class="f"><label for="iCur">Currency</label>
+            <select id="iCur">
+              <option value="£">£ Pound</option><option value="$">$ Dollar</option>
+              <option value="€">€ Euro</option><option value="custom">Custom…</option>
+            </select></div>
+          <div class="f" id="wCurC" hidden><label for="iCurC">Symbol</label>
+            <input id="iCurC" type="text" maxlength="4" placeholder="R"></div>
+          <div class="f"><label for="iDisp">Show quantities in</label>
+            <select id="iDisp">
+              <option value="auto">As entered (auto)</option>
+              <option value="metric">Metric — g / ml</option>
+              <option value="imperial">Imperial — oz / cups</option>
+            </select></div>
+        </div>
+        <div class="fgrid tight">
+          <div class="f"><label for="iVolStd">Spoon &amp; cup standard</label>
+            <select id="iVolStd">
+              <option value="us">US customary (cup 236.6 ml, tbsp 14.79 ml)</option>
+              <option value="metric">Metric / UK (cup 250 ml, tbsp 15 ml)</option>
+              <option value="au">Australian (cup 250 ml, tbsp 20 ml)</option>
+            </select></div>
+          <div class="f"><label for="iAlStd">Allergen standard</label>
+            <select id="iAlStd">
+              <option value="eu">UK / EU — 14 allergens (Reg. 1169/2011 Annex II)</option>
+              <option value="us">US — 9 major allergens (FALCPA + FASTER Act)</option>
+            </select></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Scale to</h2>
+        <span class="hint" id="scaleHint">—</span></div>
+      <div class="bd stack">
+        <div class="fgrid tight">
+          <div class="f span2"><label for="iMode">Scaling driver</label>
+            <select id="iMode">
+              <option value="portions">Target number of portions</option>
+              <option value="factor">Scale factor (× the base recipe)</option>
+              <option value="weight">Target total batch weight</option>
+              <option value="pieces">Dough pieces × unit weight</option>
+            </select></div>
+          <div class="f" id="wTP"><label for="iTP">Target portions</label>
+            <input id="iTP" type="number" min="0" step="any" inputmode="decimal">
+            <p class="err" id="eTP" hidden></p></div>
+          <div class="f" id="wTF" hidden><label for="iTF">Scale factor ×</label>
+            <input id="iTF" type="number" min="0" step="any" inputmode="decimal">
+            <p class="err" id="eTF" hidden></p></div>
+          <div class="f" id="wTW" hidden><label for="iTW">Target batch weight (g)</label>
+            <input id="iTW" type="number" min="0" step="any" inputmode="decimal">
+            <p class="err" id="eTW" hidden></p></div>
+          <div class="f" id="wPc" hidden><label for="iPc">Pieces</label>
+            <input id="iPc" type="number" min="0" step="1" inputmode="numeric"></div>
+          <div class="f" id="wPw" hidden><label for="iPw">Weight per piece (g)</label>
+            <input id="iPw" type="number" min="0" step="any" inputmode="decimal"></div>
+          <div class="f" id="wPl" hidden><label for="iPl">Scaling loss allowance %</label>
+            <input id="iPl" type="number" min="0" max="50" step="0.5" inputmode="decimal"></div>
+        </div>
+        <div class="row">
+          <span class="tinylbl">Baker's percentage mode</span>
+          <span class="seg" role="group" aria-label="Baker's percentage mode">
+            <button type="button" id="bBpOn" aria-pressed="false">On</button>
+            <button type="button" id="bBpOff" aria-pressed="true">Off</button>
+          </span>
+          <span class="hint">Every ingredient expressed against total flour weight.</span>
+        </div>
+        <p class="hint">Quantities are converted to a common base (grams, millilitres or units) before scaling,
+          so you can mix kg with cups and the arithmetic still holds. Order quantities and whole packs are
+          always rounded <strong>up</strong>.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Costing &amp; menu price</h2></div>
+      <div class="bd stack">
+        <div class="fgrid tight">
+          <div class="f"><label for="iExtra">Other cost per portion</label>
+            <input id="iExtra" type="number" min="0" step="0.01" inputmode="decimal">
+            <p class="hint">Packaging, garnish, sundries.</p></div>
+          <div class="f"><label for="iLab">Labour rate per hour</label>
+            <input id="iLab" type="number" min="0" step="0.01" inputmode="decimal">
+            <p class="hint">Shown separately — not in the food cost.</p></div>
+          <div class="f"><label for="iVat">VAT / sales tax %</label>
+            <input id="iVat" type="number" min="0" max="100" step="0.5" inputmode="decimal">
+            <p class="err" id="eVat" hidden></p></div>
+        </div>
+        <div class="fgrid tight">
+          <div class="f span2"><label for="iPriceMode">Price is set by</label>
+            <select id="iPriceMode">
+              <option value="gp">Target gross profit %</option>
+              <option value="price">A fixed menu price</option>
+            </select></div>
+          <div class="f" id="wGp"><label for="iGp">Target GP %</label>
+            <input id="iGp" type="number" min="0" max="99.9" step="0.5" inputmode="decimal">
+            <p class="err" id="eGp" hidden></p></div>
+          <div class="f" id="wPrice" hidden><label for="iPrice">Menu price</label>
+            <input id="iPrice" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="f" id="wIncl" hidden><label for="iIncl">Price entered</label>
+            <select id="iIncl">
+              <option value="inc">Including VAT / tax</option>
+              <option value="exc">Excluding VAT / tax</option>
+            </select></div>
+        </div>
+        <p class="hint">Gross profit is measured on the net (ex-tax) selling price, the standard hospitality
+          convention: <span class="mono">GP% = (net price − food cost) ÷ net price × 100</span>.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ right: live answer ═════════════════════════════════════ -->
+  <section class="card sticky" id="resCard" aria-label="Live batch result">
+    <div class="hd"><h2>Batch result</h2><span class="chip" id="fChip">—</span></div>
+    <div class="bd stack">
+      <div class="statband">
+        <div class="stat hero">
+          <div class="k" id="heroK">Cost per portion</div>
+          <div class="v" id="sCpp">—</div>
+          <div class="sub2" id="sCppSub">—</div>
+        </div>
+        <div class="stat"><div class="k">Batch food cost</div>
+          <div class="v" id="sBatch">—</div><div class="sub2" id="sBatchSub">—</div></div>
+        <div class="stat"><div class="k">Yield at this scale</div>
+          <div class="v" id="sYield">—</div><div class="sub2" id="sYieldSub">—</div></div>
+        <div class="stat"><div class="k">Batch weight</div>
+          <div class="v" id="sWt">—</div><div class="sub2" id="sWtSub">—</div></div>
+        <div class="stat" id="stGp"><div class="k">Gross profit</div>
+          <div class="v" id="sGp">—</div><div class="sub2" id="sGpSub">—</div></div>
+        <div class="stat"><div class="k">Selling price</div>
+          <div class="v" id="sPrice">—</div><div class="sub2" id="sPriceSub">—</div></div>
+        <div class="stat"><div class="k">Labour time</div>
+          <div class="v" id="sLab">—</div><div class="sub2" id="sLabSub">—</div></div>
+      </div>
+
+      <div class="note bad" id="alBox">
+        <strong>Allergens in this dish</strong>
+        <div class="alwrap" id="alChips" style="margin-top:7px"></div>
+        <div class="alsrc" id="alSrc"></div>
+      </div>
+
+      <div id="bpBox" hidden>
+        <div class="tinylbl" style="margin-bottom:5px">Baker's percentages (against total flour)</div>
+        <div class="kv"><span>Total flour weight</span><b id="kFlour">—</b></div>
+        <div class="kv"><span>Hydration</span><b id="kHyd">—</b></div>
+        <div class="kv"><span>Salt</span><b id="kSalt">—</b></div>
+        <div class="kv"><span>Pre-ferment / leaven</span><b id="kLev">—</b></div>
+        <div class="kv"><span>Fat</span><b id="kFat">—</b></div>
+        <div class="kv"><span>Sugar</span><b id="kSug">—</b></div>
+        <div class="kv tot"><span>Total formula %</span><b id="kTot">—</b></div>
+        <div class="kv"><span>Dough weight per piece</span><b id="kPiece">—</b></div>
+      </div>
+
+      <div class="note warn">
+        <strong>Check before you cook.</strong> This sheet scales quantities and costs by arithmetic only.
+        It does not judge whether a scaled batch fits your mixer, pan or oven, and scaled times are a
+        starting point — always cook and cool to a verified core temperature with a probe. Allergen output
+        is only what you have entered here: confirm every line against the current supplier specification
+        before you declare it to a customer.
+      </div>
+    </div>
+    <div class="ft">
+      <span class="tinylbl">Food cost %</span>
+      <span class="num-cell strong" id="fFoodPct">—</span>
+      <span style="margin-left:auto" class="tinylbl">Batch sales value</span>
+      <span class="num-cell strong" id="fRev">—</span>
+    </div>
+  </section>
+</div>
+
+<!-- ═══ ingredients ══════════════════════════════════════════════ -->
+<section class="card" style="margin-top:14px">
+  <div class="hd">
+    <h2>Ingredients <span class="mono" id="ingCount">—</span></h2>
+    <span class="hint">Yield % is the usable (edible) portion after trim &amp; waste — costs are charged at the edible-portion rate.</span>
+    <button type="button" class="btn sm" id="bAddIng">+ Add ingredient</button>
+  </div>
+  <div class="bd" style="padding:0">
+    <div class="tw">
+      <table class="itbl" id="ingTbl">
+        <colgroup><col class="c-nm"><col class="c-qt"><col class="c-un"><col class="c-rl"><col class="c-yl">
+          <col class="c-ps"><col class="c-pu"><col class="c-pc"><col class="c-uc"><col class="c-al"><col class="c-x"></colgroup>
+        <thead><tr>
+          <th scope="col">Ingredient</th><th scope="col" class="r">Base qty</th><th scope="col">Unit</th>
+          <th scope="col">Role</th><th scope="col" class="r">Yield %</th>
+          <th scope="col" class="r">Pack size</th><th scope="col">Pack unit</th><th scope="col" class="r">Pack cost</th>
+          <th scope="col" class="r">Cost / unit (EP)</th><th scope="col">Allergens</th><th scope="col"><span class="hidecol">Remove</span></th>
+        </tr></thead>
+        <tbody id="ingBody"></tbody>
+      </table>
+    </div>
+    <div id="ingEmpty" class="empty" hidden>No ingredients yet — add the first line.</div>
+  </div>
+</section>
+
+<!-- ═══ scaled prep list ═════════════════════════════════════════ -->
+<section class="card" style="margin-top:14px">
+  <div class="hd"><h2>Scaled batch — prep list</h2>
+    <span class="hint" id="prepHint">—</span></div>
+  <div class="bd" style="padding:0">
+    <div class="tw">
+      <table class="stbl" id="scTbl">
+        <colgroup><col class="c-nm"><col class="c-bs"><col class="c-sc"><col class="c-bp"><col class="c-ap">
+          <col class="c-pk"><col class="c-uc"><col class="c-ln"><col class="c-sh"><col class="c-al"></colgroup>
+        <thead><tr>
+          <th scope="col">Ingredient</th><th scope="col" class="r">Base</th><th scope="col" class="r">Scaled (weigh this)</th>
+          <th scope="col" class="r bpc">Baker's %</th><th scope="col" class="r">Order qty (AP)</th>
+          <th scope="col" class="r">Packs</th><th scope="col" class="r">Cost / unit</th>
+          <th scope="col" class="r">Line cost</th><th scope="col" class="r">Share</th><th scope="col">Allergens</th>
+        </tr></thead>
+        <tbody id="scBody"></tbody>
+        <tfoot id="scFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ method ═══════════════════════════════════════════════════ -->
+<section class="card" style="margin-top:14px">
+  <div class="hd"><h2>Method &amp; timings</h2>
+    <span class="hint">Fixed = unchanged by batch size. ×factor = hands-on work. Heat-through = one mass in one vessel, time × factor<sup>2/3</sup>.</span>
+    <button type="button" class="btn sm" id="bAddStep">+ Add step</button></div>
+  <div class="bd" style="padding:0">
+    <div class="tw">
+      <table class="mtbl" id="mTbl">
+        <colgroup><col class="c-no"><col class="c-tx"><col class="c-tm"><col class="c-rr"><col class="c-ho">
+          <col class="c-st"><col class="c-cu"><col class="c-x"></colgroup>
+        <thead><tr>
+          <th scope="col">#</th><th scope="col">Step</th><th scope="col" class="r">Base min</th>
+          <th scope="col">Scaling rule</th><th scope="col">Hands-on</th>
+          <th scope="col" class="r">Scaled</th><th scope="col" class="r">Elapsed</th><th scope="col"><span class="hidecol">Remove</span></th>
+        </tr></thead>
+        <tbody id="mBody"></tbody>
+        <tfoot id="mFoot"></tfoot>
+      </table>
+    </div>
+    <div id="mEmpty" class="empty" hidden>No method steps yet — add the first one.</div>
+  </div>
+</section>
+
+<footer class="app" style="padding-top:18px;padding-bottom:0">
+  <p class="hint">Baker's percentages are expressed against total flour weight (flour = 100%), the standard
+    bakery formula convention. Mass conversions use 1 oz = 28.349523125 g and 1 lb = 453.59237 g; volume
+    conversions follow the spoon &amp; cup standard you select. Ingredients entered by volume are counted
+    toward batch weight and baker's percentages at 1.00 g/ml — weigh them for exact formula work.
+    Ingredients counted by number are excluded from batch weight. Edible-portion cost = as-purchased cost ÷
+    yield %. Allergen lists follow Regulation (EU) No 1169/2011 Annex II (14 allergens, retained in UK law)
+    or the US FALCPA as amended by the FASTER Act 2021 (9 major allergens). Everything is stored only in this
+    browser. This tool is a costing and scaling aid, not food-safety, labelling or nutrition advice.</p>
+</footer>
+
+</main>
+<section class="doc printonly" id="doc"></section>
+
+<script>
+"use strict";
+/* ══ helpers ════════════════════════════════════════════════════ */
+var $=function(s,r){return (r||document).querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+var KEY="solvix.recipe-scaler.v1";
+var MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var seq=0;
+function uid(){seq++;return "r"+Date.now().toString(36)+seq.toString(36);}
+function num(v,d){if(v===""||v===null||v===undefined)return d===undefined?0:d;
+  var n=parseFloat(v);return isFinite(n)?n:(d===undefined?0:d);}
+function r2(x){if(typeof x!=="number"||!isFinite(x))return 0;
+  var v=Math.round((x+(x<0?-1e-9:1e-9))*100)/100;return v===0?0:v;}
+function esc(s){return String(s===null||s===undefined?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function ok(x){return typeof x==="number"&&isFinite(x);}
+function sym(){return S.cur==="custom"?(String(S.curC||"").trim()||"¤"):S.cur;}
+function grp(n,dp){var p=Math.abs(n).toFixed(dp===undefined?2:dp).split(".");
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,",")+(p[1]?"."+p[1]:"");}
+function money(x){if(!ok(x))return "—";var v=r2(x);return (v<0?"−":"")+sym()+grp(v);}
+function plain(x,dp){if(!ok(x))return "";return x.toFixed(dp===undefined?2:dp);}
+function pct(x,dp){if(!ok(x))return "—";var v=x;if(Object.is(v,-0))v=0;
+  return v.toFixed(dp===undefined?1:dp).replace(/^-/,"−")+"%";}
+function trimZ(s){return s.indexOf(".")<0?s:s.replace(/0+$/,"").replace(/\.$/,"");}
+function nf(x,dp){if(!ok(x))return "—";return trimZ(grp(x,dp))
+  .replace(/^(?=[\d,]*$)/,x<0?"−":"");}
+function fmtDate(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||""));
+  if(!m)return "—";var mo=+m[2];if(mo<1||mo>12)return "—";
+  return (+m[3])+" "+MONS[mo-1]+" "+m[1];}
+function todayYmd(){var d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+var flashT=null;
+function flash(msg){
+  var el=$("#flash");
+  if(!el){el=document.createElement("div");el.id="flash";el.className="flash";
+    el.setAttribute("role","status");el.setAttribute("aria-live","polite");document.body.appendChild(el);}
+  el.textContent=msg;el.hidden=false;
+  if(flashT)clearTimeout(flashT);
+  flashT=setTimeout(function(){el.hidden=true;},2600);
+}
+
+/* ══ units ══════════════════════════════════════════════════════ */
+function volF(){
+  if(S.volStd==="metric")return {tsp:5,tbsp:15,cup:250,floz:28.4130625};
+  if(S.volStd==="au")return {tsp:5,tbsp:20,cup:250,floz:28.4130625};
+  return {tsp:4.92892159375,tbsp:14.78676478125,cup:236.5882365,floz:29.5735295625};
+}
+var UORDER=["g","kg","oz","lb","ml","l","tsp","tbsp","cup","floz","ea","dz"];
+function unitDef(u){
+  var V=volF();
+  var M={g:["m",1,"g"],kg:["m",1000,"kg"],oz:["m",28.349523125,"oz"],lb:["m",453.59237,"lb"],
+    ml:["v",1,"ml"],l:["v",1000,"L"],tsp:["v",V.tsp,"tsp"],tbsp:["v",V.tbsp,"tbsp"],
+    cup:["v",V.cup,"cup"],floz:["v",V.floz,"fl oz"],ea:["c",1,"ea"],dz:["c",12,"dz"]};
+  var d=M[u]||M.g;return {dim:d[0],f:d[1],lbl:d[2]};
+}
+function unitOpts(sel){
+  var G=[["Weight",["g","kg","oz","lb"]],["Volume",["ml","l","tsp","tbsp","cup","floz"]],["Count",["ea","dz"]]];
+  var h="";
+  G.forEach(function(g){
+    h+='<optgroup label="'+g[0]+'">';
+    g[1].forEach(function(u){h+='<option value="'+u+'"'+(u===sel?" selected":"")+">"+esc(unitDef(u).lbl)+"</option>";});
+    h+="</optgroup>";
+  });
+  return h;
+}
+var FR=[[0,""],[0.125,"⅛"],[0.25,"¼"],[1/3,"⅓"],[0.375,"⅜"],[0.5,"½"],[0.625,"⅝"],[2/3,"⅔"],[0.75,"¾"],[0.875,"⅞"],[1,""]];
+function fracStr(x){
+  if(!ok(x)||x<0)return "—";
+  var w=Math.floor(x),fr=x-w,best=null,bd=1;
+  for(var i=0;i<FR.length;i++){var d=Math.abs(fr-FR[i][0]);if(d<bd){bd=d;best=FR[i];}}
+  if(bd>0.022)return trimZ(x.toFixed(2));
+  if(best[0]===1)w+=1;
+  if(w===0&&best[1]==="")return "0";
+  return (w>0?String(w):"")+(best[1]&&best[0]!==1?(w>0?" ":"")+best[1]:"");
+}
+/* base amount -> display string. dim m=grams, v=ml, c=each */
+function fmtAmt(base,dim,entUnit,up){
+  if(!ok(base))return "—";
+  var sys=S.disp;
+  if(sys==="auto"){
+    var eu=unitDef(entUnit);
+    sys=(entUnit==="oz"||entUnit==="lb"||entUnit==="cup"||entUnit==="tbsp"||entUnit==="tsp"||entUnit==="floz")?"imperial":"metric";
+    if(eu.dim!==dim)sys="metric";
+  }
+  var V=volF();
+  function ceilTo(v,step){return up?Math.ceil(v/step-1e-9)*step:v;}
+  if(dim==="c"){
+    var n=up?Math.ceil(base-1e-9):base;
+    return trimZ(grp(n,up?0:2))+" ea";
+  }
+  if(dim==="m"){
+    if(sys==="imperial"){
+      var oz=base/28.349523125;
+      if(oz>=16){var lb=oz/16;lb=ceilTo(lb,0.05);var wl=Math.floor(lb+1e-9),ro=(lb-wl)*16;
+        if(ro<0.05)return trimZ(grp(wl,0))+" lb";
+        return trimZ(grp(wl,0))+" lb "+trimZ(ro.toFixed(1))+" oz";}
+      oz=ceilTo(oz,0.1);return trimZ(oz.toFixed(oz<1?2:1))+" oz";
+    }
+    if(base>=1000){var kg=ceilTo(base/1000,0.01);return trimZ(grp(kg,3))+" kg";}
+    var g=ceilTo(base,base<10?0.1:1);return trimZ(grp(g,base<10?1:0))+" g";
+  }
+  if(sys==="imperial"){
+    if(base>=V.cup*0.25){var cu=ceilTo(base/V.cup,0.25);return fracStr(cu)+(cu===1?" cup":" cups");}
+    if(base>=V.tbsp*0.9){var tb=ceilTo(base/V.tbsp,0.25);return fracStr(tb)+" tbsp";}
+    var ts=ceilTo(base/V.tsp,0.25);return fracStr(ts)+" tsp";
+  }
+  if(base>=1000){var L=ceilTo(base/1000,0.01);return trimZ(grp(L,3))+" L";}
+  var ml=ceilTo(base,base<10?0.1:1);return trimZ(grp(ml,base<10?1:0))+" ml";
+}
+function baseLbl(dim){return dim==="m"?"g":(dim==="v"?"ml":"ea");}
+function exactStr(base,dim){
+  if(!ok(base))return "";
+  return trimZ(grp(base,dim==="c"?2:(base<10?2:1)))+" "+baseLbl(dim);
+}
+function unitCostStr(u,dim){
+  if(!ok(u))return "—";
+  var a=Math.abs(u),dp=a<0.001?6:(a<0.01?5:(a<1?4:2));
+  return sym()+trimZ(u.toFixed(dp))+"/"+baseLbl(dim);
+}
+function fmtMins(m){
+  if(!ok(m)||m<0)return "—";
+  var t=Math.round(m);
+  if(t<60)return t+" min";
+  var h=Math.floor(t/60),r=t-h*60;
+  return h+" h"+(r?" "+r+" m":"");
+}
+
+/* ══ allergens ══════════════════════════════════════════════════ */
+var ALL=[
+ {k:"gluten",c:"GLU",n:"Cereals containing gluten",eu:1,us:0},
+ {k:"wheat",c:"WHT",n:"Wheat",eu:0,us:1},
+ {k:"crust",c:"CRU",n:"Crustaceans",eu:1,us:1},
+ {k:"eggs",c:"EGG",n:"Eggs",eu:1,us:1},
+ {k:"fish",c:"FSH",n:"Fish",eu:1,us:1},
+ {k:"peanuts",c:"PNT",n:"Peanuts",eu:1,us:1},
+ {k:"soy",c:"SOY",n:"Soybeans",eu:1,us:1},
+ {k:"milk",c:"MLK",n:"Milk",eu:1,us:1},
+ {k:"nuts",c:"NUT",n:"Tree nuts",eu:1,us:1},
+ {k:"celery",c:"CEL",n:"Celery",eu:1,us:0},
+ {k:"mustard",c:"MUS",n:"Mustard",eu:1,us:0},
+ {k:"sesame",c:"SES",n:"Sesame seeds",eu:1,us:1},
+ {k:"sulphites",c:"SUL",n:"Sulphur dioxide / sulphites",eu:1,us:0},
+ {k:"lupin",c:"LUP",n:"Lupin",eu:1,us:0},
+ {k:"molluscs",c:"MOL",n:"Molluscs",eu:1,us:0}
+];
+function alDef(k){for(var i=0;i<ALL.length;i++)if(ALL[i].k===k)return ALL[i];return null;}
+function alActive(){return ALL.filter(function(a){return S.alStd==="us"?a.us:a.eu;});}
+function alInStd(k){var d=alDef(k);return !!d&&(S.alStd==="us"?d.us:d.eu);}
+var ROLES=[["flour","Flour"],["liquid","Liquid"],["salt","Salt"],["leaven","Leaven / pre-ferment"],
+  ["fat","Fat"],["sugar","Sugar"],["other","Other"]];
+function roleOpts(sel){var h="";ROLES.forEach(function(r){
+  h+='<option value="'+r[0]+'"'+(r[0]===sel?" selected":"")+">"+esc(r[1])+"</option>";});return h;}
+var RULES=[["none","Fixed — does not scale"],["lin","× factor (hands-on)"],["heat","Heat-through × f^⅔"]];
+function ruleOpts(sel){var h="";RULES.forEach(function(r){
+  h+='<option value="'+r[0]+'"'+(r[0]===sel?" selected":"")+">"+esc(r[1])+"</option>";});return h;}
+function ruleLbl(k){for(var i=0;i<RULES.length;i++)if(RULES[i][0]===k)return RULES[i][1];return RULES[0][1];}
+
+/* ══ state ══════════════════════════════════════════════════════ */
+function blankState(){
+  return {v:1,sample:false,recipe:"",ref:"",ver:"",biz:"",chef:"",site:"",date:todayYmd(),
+    cur:"£",curC:"",disp:"auto",volStd:"metric",alStd:"eu",
+    yieldBase:0,portion:"portion",psize:"",
+    mode:"portions",tp:0,tf:2,tw:0,pieces:0,pieceWt:0,loss:2,bp:false,
+    extra:0,lab:0,vat:20,priceMode:"gp",gp:70,price:0,incl:"inc",
+    ing:[],steps:[]};
+}
+function I(name,qty,unit,role,yl,ps,pu,pc,al){
+  return {id:uid(),name:name,qty:qty,unit:unit,role:role,yield:yl,ps:ps,pu:pu,pc:pc,al:al||[]};
+}
+function ST(text,mins,rule,hands){return {id:uid(),text:text,mins:mins,rule:rule,hands:!!hands};}
+
+function sampleSour(){
+  var s=blankState();
+  s.sample=true;s.recipe="Country sourdough loaf";s.ref="BR-014";s.ver="3.1";
+  s.biz="Marbury Street Bakehouse";s.chef="A. Okonjo, Head Baker";s.site="Bakery — overnight shift";
+  s.cur="£";s.volStd="metric";s.disp="auto";s.alStd="eu";
+  s.yieldBase=6;s.portion="loaf";s.psize="975 g dough, ~900 g baked, 24 cm banneton";
+  s.mode="portions";s.tp=24;s.tf=4;s.tw=23400;s.pieces=24;s.pieceWt=975;s.loss=2;s.bp=true;
+  s.extra=0.06;s.lab=14.5;s.vat=0;s.priceMode="gp";s.gp=80;s.price=4.2;s.incl="inc";
+  s.ing=[
+    I("Strong white bread flour",2400,"g","flour",100,16,"kg",18.4,["gluten","wheat"]),
+    I("Stoneground wholemeal flour",600,"g","flour",100,16,"kg",16.8,["gluten","wheat"]),
+    I("Water, filtered",2100,"ml","liquid",100,1000,"l",2.4,[]),
+    I("Levain (100% hydration)",600,"g","leaven",100,1,"kg",1.1,["gluten","wheat"]),
+    I("Fine sea salt",60,"g","salt",100,5,"kg",4.2,[]),
+    I("Semolina, for dusting",90,"g","other",60,5,"kg",9.5,["gluten","wheat"])
+  ];
+  s.steps=[
+    ST("Autolyse — mix flours and water, cover, rest",45,"none",false),
+    ST("Weigh and mix in levain and salt to medium development",12,"lin",true),
+    ST("Bulk ferment at 26 °C with three coil folds",240,"none",false),
+    ST("Divide and pre-shape",20,"lin",true),
+    ST("Bench rest, seam down",25,"none",false),
+    ST("Final shape, dust and basket",30,"lin",true),
+    ST("Retard at 4 °C",720,"none",false),
+    ST("Bake 250 °C falling to 230 °C, steam first 15 min",45,"none",false)
+  ];
+  return s;
+}
+function sampleRagu(){
+  var s=blankState();
+  s.sample=true;s.recipe="Beef shin ragù";s.ref="KIT-207";s.ver="2.0";
+  s.biz="The Pheasant, Kirkby";s.chef="D. Marchetti, Sous Chef";s.site="Main kitchen — larder";
+  s.cur="£";s.volStd="metric";s.disp="auto";s.alStd="eu";
+  s.yieldBase=20;s.portion="portion";s.psize="220 g sauce with 120 g pappardelle";
+  s.mode="portions";s.tp=60;s.tf=3;s.tw=36000;s.pieces=60;s.pieceWt=220;s.loss=2;s.bp=false;
+  s.extra=0.18;s.lab=14.5;s.vat=20;s.priceMode="gp";s.gp=72;s.price=16.5;s.incl="inc";
+  s.ing=[
+    I("Beef shin, boneless",4000,"g","other",82,5,"kg",42.5,[]),
+    I("Onions, peeled",900,"g","other",90,10,"kg",8.9,[]),
+    I("Carrots",600,"g","other",85,10,"kg",7.6,[]),
+    I("Celery",400,"g","other",80,5,"kg",6.4,["celery"]),
+    I("Garlic",90,"g","other",78,1,"kg",6.8,[]),
+    I("Plum tomatoes, tinned",3600,"g","other",100,2.55,"kg",2.35,[]),
+    I("Red wine",750,"ml","liquid",100,750,"ml",6.2,["sulphites"]),
+    I("Beef stock",1500,"ml","liquid",100,1,"l",2.1,["celery","gluten","wheat"]),
+    I("Tomato purée",180,"g","other",100,4.5,"kg",11.8,[]),
+    I("Olive oil",120,"ml","fat",100,5,"l",28,[]),
+    I("Plain flour, for dusting",120,"g","flour",100,16,"kg",12.4,["gluten","wheat"]),
+    I("Butter, unsalted",80,"g","fat",100,250,"g",2.05,["milk"])
+  ];
+  s.steps=[
+    ST("Trim, dice and season the shin",35,"lin",true),
+    ST("Seal in batches, deglaze the pan",30,"lin",true),
+    ST("Prepare and sweat the soffritto",25,"lin",true),
+    ST("Reduce the wine",15,"heat",false),
+    ST("Braise covered at 140 °C to fork-tender",210,"heat",false),
+    ST("Rest, shred and correct seasoning",25,"lin",true),
+    ST("Blast-chill to 5 °C and label",90,"heat",false)
+  ];
+  return s;
+}
+
+/* ══ load / save ════════════════════════════════════════════════ */
+var S=blankState();
+function sane(o){
+  if(!o||typeof o!=="object")return null;
+  var b=blankState(),s=b;
+  ["recipe","ref","ver","biz","chef","site","date","curC","psize","portion"].forEach(function(k){
+    if(typeof o[k]==="string")s[k]=o[k];});
+  if(typeof o.cur==="string")s.cur=o.cur;
+  if(["auto","metric","imperial"].indexOf(o.disp)>=0)s.disp=o.disp;
+  if(["us","metric","au"].indexOf(o.volStd)>=0)s.volStd=o.volStd;
+  if(["eu","us"].indexOf(o.alStd)>=0)s.alStd=o.alStd;
+  if(["portions","factor","weight","pieces"].indexOf(o.mode)>=0)s.mode=o.mode;
+  if(["gp","price"].indexOf(o.priceMode)>=0)s.priceMode=o.priceMode;
+  if(["inc","exc"].indexOf(o.incl)>=0)s.incl=o.incl;
+  ["yieldBase","tp","tf","tw","pieces","pieceWt","loss","extra","lab","vat","gp","price"].forEach(function(k){
+    s[k]=num(o[k],b[k]);});
+  s.bp=!!o.bp;s.sample=!!o.sample;
+  s.ing=[];
+  if(Object.prototype.toString.call(o.ing)==="[object Array]"){
+    o.ing.forEach(function(x){
+      if(!x||typeof x!=="object")return;
+      var al=[];
+      if(Object.prototype.toString.call(x.al)==="[object Array]")
+        x.al.forEach(function(k){if(alDef(k)&&al.indexOf(k)<0)al.push(k);});
+      s.ing.push({id:uid(),name:String(x.name||""),qty:num(x.qty,0),
+        unit:UORDER.indexOf(x.unit)>=0?x.unit:"g",
+        role:(function(){for(var i=0;i<ROLES.length;i++)if(ROLES[i][0]===x.role)return x.role;return "other";})(),
+        yield:num(x.yield,100),ps:num(x.ps,0),
+        pu:UORDER.indexOf(x.pu)>=0?x.pu:"g",pc:num(x.pc,0),al:al});
+    });
+  }
+  s.steps=[];
+  if(Object.prototype.toString.call(o.steps)==="[object Array]"){
+    o.steps.forEach(function(x){
+      if(!x||typeof x!=="object")return;
+      s.steps.push({id:uid(),text:String(x.text||""),mins:num(x.mins,0),
+        rule:["none","lin","heat"].indexOf(x.rule)>=0?x.rule:"none",hands:!!x.hands});
+    });
+  }
+  return s;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{var raw=localStorage.getItem(KEY);if(!raw)return false;
+    var st=sane(JSON.parse(raw));if(!st)return false;S=st;return true;}catch(e){return false;}
+}
+
+/* ══ compute ════════════════════════════════════════════════════ */
+function compute(){
+  var roleG={flour:0,liquid:0,salt:0,leaven:0,fat:0,sugar:0,other:0};
+  var baseWeight=0,anyCount=false,missingCost=0;
+  var pre=S.ing.map(function(it){
+    var ud=unitDef(it.unit),pd=unitDef(it.pu);
+    var qty=num(it.qty,0);if(qty<0)qty=0;
+    var base=qty*ud.f;
+    var yv=num(it.yield,100),yOk=(yv>0&&yv<=100),y=yOk?yv/100:1;
+    var ps=num(it.ps,0),pc=num(it.pc,0);
+    var packBase=ps*pd.f,dimOk=(ud.dim===pd.dim);
+    var apU=(dimOk&&packBase>0)?pc/packBase:null;
+    var epU=(apU===null)?null:apU/y;
+    var g=(ud.dim==="c")?null:base;
+    if(g===null&&base>0)anyCount=true;
+    if(g!==null){baseWeight+=g;var r=roleG[it.role]===undefined?"other":it.role;roleG[r]+=g;}
+    if(apU===null&&base>0)missingCost++;
+    return {ref:it,ud:ud,pd:pd,qty:qty,base:base,y:y,yOk:yOk,yv:yv,apU:apU,epU:epU,g:g,
+      dimOk:dimOk,packBase:packBase,pc:pc,ps:ps};
+  });
+  var flourG=roleG.flour;
+
+  /* scale factor */
+  var f=null,portions=null,drive="";
+  var yb=num(S.yieldBase,0);
+  if(S.mode==="portions"){
+    var tp=num(S.tp,0);
+    if(yb>0&&tp>0){f=tp/yb;portions=tp;}
+    drive=nf(tp,2)+" "+plural(S.portion,tp)+" from a base of "+nf(yb,2);
+  }else if(S.mode==="factor"){
+    var tf=num(S.tf,0);
+    if(tf>0){f=tf;portions=yb>0?yb*tf:null;}
+    drive="× "+nf(tf,3)+" the base recipe";
+  }else if(S.mode==="weight"){
+    var tw=num(S.tw,0);
+    if(tw>0&&baseWeight>0){f=tw/baseWeight;portions=yb>0?yb*f:null;}
+    drive=nf(tw,0)+" g total batch weight";
+  }else{
+    var pcs=num(S.pieces,0),pw=num(S.pieceWt,0),ls=num(S.loss,0);
+    if(ls<0)ls=0;
+    var target=pcs*pw*(1+ls/100);
+    if(target>0&&baseWeight>0){f=target/baseWeight;portions=pcs>0?pcs:null;}
+    drive=nf(pcs,0)+" × "+nf(pw,0)+" g pieces + "+nf(ls,1)+"% loss = "+nf(target,0)+" g dough";
+  }
+  if(!ok(f)||f<=0)f=null;
+
+  /* per-ingredient scaled */
+  var batchCost=0,haveCost=false,alSet={},alSrc={};
+  var rows=pre.map(function(p){
+    var scaled=(f===null)?null:p.base*f;
+    var apQty=(scaled===null)?null:scaled/p.y;
+    var cost=(scaled===null||p.epU===null)?null:scaled*p.epU;
+    var packs=(apQty===null||!(p.packBase>0)||!p.dimOk)?null:Math.ceil(apQty/p.packBase-1e-9);
+    if(ok(cost)){batchCost+=cost;haveCost=true;}
+    var bp=(flourG>0&&p.g!==null)?p.g/flourG*100:null;
+    if(p.base>0)p.ref.al.forEach(function(k){alSet[k]=1;
+      if(!alSrc[k])alSrc[k]=[];alSrc[k].push(p.ref.name||"(unnamed)");});
+    return {p:p,scaled:scaled,apQty:apQty,cost:cost,packs:packs,bp:bp};
+  });
+  if(!haveCost)batchCost=null;
+  rows.forEach(function(r){r.share=(ok(batchCost)&&batchCost>0&&ok(r.cost))?r.cost/batchCost*100:null;});
+
+  /* per portion, price */
+  var extra=num(S.extra,0);if(extra<0)extra=0;
+  var foodPP=(ok(batchCost)&&ok(portions)&&portions>0)?batchCost/portions:null;
+  var cpp=(foodPP===null)?null:foodPP+extra;
+  var vat=num(S.vat,0);if(vat<0||vat>100)vat=0;
+  var sellEx=null;
+  if(S.priceMode==="gp"){
+    var g2=num(S.gp,0);
+    if(cpp!==null&&g2<100&&g2>=0)sellEx=cpp/(1-g2/100);
+  }else{
+    var pr=num(S.price,0);
+    if(pr>0)sellEx=(S.incl==="inc")?pr/(1+vat/100):pr;
+  }
+  if(!ok(sellEx)||sellEx<=0)sellEx=null;
+  var sellInc=(sellEx===null)?null:sellEx*(1+vat/100);
+  var gpPct=(sellEx===null||cpp===null)?null:(sellEx-cpp)/sellEx*100;
+  var gpCash=(sellEx===null||cpp===null)?null:sellEx-cpp;
+  var foodPct=(gpPct===null)?null:100-gpPct;
+  var revenue=(sellEx===null||!ok(portions))?null:sellEx*portions;
+
+  /* method */
+  var elapsed=0,active=0,steps=S.steps.map(function(st){
+    var m=num(st.mins,0);if(m<0)m=0;
+    var mult=1;
+    if(f!==null){if(st.rule==="lin")mult=f;else if(st.rule==="heat")mult=Math.pow(f,2/3);}
+    var sc=(f===null)?null:m*mult;
+    if(ok(sc)){elapsed+=sc;if(st.hands)active+=sc;}
+    return {ref:st,base:m,sc:sc,mult:mult,cum:ok(sc)?elapsed:null};
+  });
+  var labRate=num(S.lab,0);if(labRate<0)labRate=0;
+  var labCost=(f===null)?null:active/60*labRate;
+
+  return {pre:pre,rows:rows,f:f,portions:portions,drive:drive,baseWeight:baseWeight,
+    scaledWeight:(f===null)?null:baseWeight*f,flourG:flourG,roleG:roleG,
+    batchCost:batchCost,foodPP:foodPP,cpp:cpp,extra:extra,vat:vat,sellEx:sellEx,sellInc:sellInc,
+    gpPct:gpPct,gpCash:gpCash,foodPct:foodPct,revenue:revenue,
+    steps:steps,elapsed:(f===null)?null:elapsed,active:(f===null)?null:active,labCost:labCost,
+    alSet:alSet,alSrc:alSrc,anyCount:anyCount,missingCost:missingCost,yb:yb,
+    totPct:(flourG>0)?baseWeight/flourG*100:null,
+    hyd:(flourG>0)?roleG.liquid/flourG*100:null,
+    saltP:(flourG>0)?roleG.salt/flourG*100:null,
+    levP:(flourG>0)?roleG.leaven/flourG*100:null,
+    fatP:(flourG>0)?roleG.fat/flourG*100:null,
+    sugP:(flourG>0)?roleG.sugar/flourG*100:null,
+    piece:(ok(portions)&&portions>0&&f!==null&&baseWeight>0)?baseWeight*f/portions:null};
+}
+function plural(w,n){
+  w=String(w||"portion").trim()||"portion";
+  if(n===1)return w;
+  if(/(s|x|z|ch|sh)$/i.test(w))return w+"es";
+  if(/[^aeiou]y$/i.test(w))return w.slice(0,-1)+"ies";
+  return w+"s";
+}
+
+/* ══ editable tables ════════════════════════════════════════════ */
+function alBtnLabel(it){
+  var ks=it.al.filter(function(k){return alInStd(k);});
+  var other=it.al.filter(function(k){return !alInStd(k);});
+  if(!ks.length&&!other.length)return {t:"none",cls:"albtn none"};
+  var codes=ks.map(function(k){return alDef(k).c;});
+  if(other.length)codes.push("+"+other.length);
+  return {t:codes.join(" "),cls:"albtn"};
+}
+function renderIng(){
+  var b=$("#ingBody");b.innerHTML="";
+  S.ing.forEach(function(it){
+    var tr=document.createElement("tr");tr.setAttribute("data-id",it.id);
+    var lab=alBtnLabel(it);
+    tr.innerHTML=
+      '<td><input class="i-name" type="text" aria-label="Ingredient name" value="'+esc(it.name)+'">'+
+        '<p class="err rerr" hidden></p></td>'+
+      '<td><input class="i-qty" type="number" min="0" step="any" inputmode="decimal" aria-label="Base quantity" value="'+esc(it.qty)+'"></td>'+
+      '<td><select class="i-unit" aria-label="Unit">'+unitOpts(it.unit)+'</select></td>'+
+      '<td><select class="i-role" aria-label="Role in formula">'+roleOpts(it.role)+'</select></td>'+
+      '<td><input class="i-yield" type="number" min="0.1" max="100" step="0.1" inputmode="decimal" aria-label="Yield percent" value="'+esc(it.yield)+'"></td>'+
+      '<td><input class="i-ps" type="number" min="0" step="any" inputmode="decimal" aria-label="Pack size" value="'+esc(it.ps)+'"></td>'+
+      '<td><select class="i-pu" aria-label="Pack unit">'+unitOpts(it.pu)+'</select></td>'+
+      '<td><input class="i-pc" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Pack cost" value="'+esc(it.pc)+'"></td>'+
+      '<td class="num-cell c-uc">—</td>'+
+      '<td><button type="button" class="'+lab.cls+'" aria-expanded="false">'+esc(lab.t)+'</button></td>'+
+      '<td class="rmc"><button type="button" class="rmbtn" aria-label="Remove ingredient">×</button></td>';
+    b.appendChild(tr);
+    var ar=document.createElement("tr");ar.className="alrow";ar.setAttribute("data-for",it.id);ar.hidden=true;
+    var h='<td colspan="11"><div class="tinylbl">Allergens declared for '+esc(it.name||"this ingredient")+'</div><div class="alpick">';
+    alActive().forEach(function(a){
+      h+='<label class="check"><input type="checkbox" class="alck" data-k="'+a.k+'"'+
+        (it.al.indexOf(a.k)>=0?" checked":"")+'> <span>'+esc(a.n)+' <span class="mono">'+a.c+'</span></span></label>';
+    });
+    var extra=it.al.filter(function(k){return !alInStd(k);});
+    h+='</div>'+(extra.length?'<p class="hint">Also recorded (outside the selected standard): '+
+      esc(extra.map(function(k){return alDef(k).n;}).join(", "))+'</p>':'')+'</td>';
+    ar.innerHTML=h;b.appendChild(ar);
+  });
+  $("#ingEmpty").hidden=S.ing.length>0;
+  $("#ingCount").textContent=S.ing.length?String(S.ing.length):"";
+  wireIng();
+}
+function wireIng(){
+  $$("#ingBody tr[data-id]").forEach(function(tr){
+    var id=tr.getAttribute("data-id");
+    function it(){for(var i=0;i<S.ing.length;i++)if(S.ing[i].id===id)return S.ing[i];return null;}
+    function bindI(sel,key,isNum){
+      var el=tr.querySelector(sel);if(!el)return;
+      el.addEventListener("input",function(){var o=it();if(!o)return;
+        o[key]=isNum?num(el.value,0):el.value;touch();});
+      el.addEventListener("change",function(){var o=it();if(!o)return;
+        o[key]=isNum?num(el.value,0):el.value;touch();});
+    }
+    bindI(".i-name","name",false);bindI(".i-qty","qty",true);bindI(".i-unit","unit",false);
+    bindI(".i-role","role",false);bindI(".i-yield","yield",true);bindI(".i-ps","ps",true);
+    bindI(".i-pu","pu",false);bindI(".i-pc","pc",true);
+    var yl=tr.querySelector(".i-yield");
+    yl.addEventListener("blur",function(){
+      var o=it();if(!o)return;var v=num(yl.value,0);
+      if(String(yl.value).trim()===""){o.yield=100;yl.value=100;touch();}
+      else if(v<=0||v>100){yl.value=String(Math.min(100,Math.max(0.1,v||100)));o.yield=num(yl.value,100);touch();}
+    });
+    var btn=tr.querySelector(".albtn"),ar=$('#ingBody tr.alrow[data-for="'+id+'"]');
+    btn.addEventListener("click",function(){
+      var open=ar.hidden;ar.hidden=!open;btn.setAttribute("aria-expanded",open?"true":"false");
+    });
+    if(ar)$$(".alck",ar).forEach(function(ck){
+      ck.addEventListener("change",function(){
+        var o=it();if(!o)return;var k=ck.getAttribute("data-k"),i=o.al.indexOf(k);
+        if(ck.checked){if(i<0)o.al.push(k);}else if(i>=0)o.al.splice(i,1);
+        var lab=alBtnLabel(o);btn.className=lab.cls;btn.textContent=lab.t;touch();
+      });
+    });
+    tr.querySelector(".rmbtn").addEventListener("click",function(){
+      for(var i=0;i<S.ing.length;i++)if(S.ing[i].id===id){S.ing.splice(i,1);break;}
+      renderIng();touch();flash("Ingredient removed.");
+    });
+  });
+}
+function renderSteps(){
+  var b=$("#mBody");b.innerHTML="";
+  S.steps.forEach(function(st,i){
+    var tr=document.createElement("tr");tr.setAttribute("data-id",st.id);
+    tr.innerHTML=
+      '<td class="num-cell">'+(i+1)+'</td>'+
+      '<td><input class="s-text" type="text" aria-label="Step '+(i+1)+' description" value="'+esc(st.text)+'"></td>'+
+      '<td><input class="s-min" type="number" min="0" step="any" inputmode="decimal" aria-label="Base minutes" value="'+esc(st.mins)+'"></td>'+
+      '<td><select class="s-rule" aria-label="Scaling rule">'+ruleOpts(st.rule)+'</select></td>'+
+      '<td><label class="check"><input type="checkbox" class="s-hand"'+(st.hands?" checked":"")+
+        ' aria-label="Hands-on step"> <span class="hint">active</span></label></td>'+
+      '<td class="num-cell c-sc">—</td><td class="num-cell c-cu">—</td>'+
+      '<td class="rmc"><button type="button" class="rmbtn" aria-label="Remove step">×</button></td>';
+    b.appendChild(tr);
+  });
+  $("#mEmpty").hidden=S.steps.length>0;
+  $$("#mBody tr[data-id]").forEach(function(tr){
+    var id=tr.getAttribute("data-id");
+    function st(){for(var i=0;i<S.steps.length;i++)if(S.steps[i].id===id)return S.steps[i];return null;}
+    function bindS(sel,key,kind){
+      var el=tr.querySelector(sel);if(!el)return;
+      var h=function(){var o=st();if(!o)return;
+        o[key]=kind==="n"?num(el.value,0):(kind==="b"?el.checked:el.value);touch();};
+      el.addEventListener("input",h);el.addEventListener("change",h);
+    }
+    bindS(".s-text","text","s");bindS(".s-min","mins","n");bindS(".s-rule","rule","s");bindS(".s-hand","hands","b");
+    tr.querySelector(".rmbtn").addEventListener("click",function(){
+      for(var i=0;i<S.steps.length;i++)if(S.steps[i].id===id){S.steps.splice(i,1);break;}
+      renderSteps();touch();flash("Step removed.");
+    });
+  });
+}
+
+/* ══ live output ════════════════════════════════════════════════ */
+function renderOut(){
+  var c=compute();
+  var pl=plural(S.portion,ok(c.portions)?c.portions:2);
+
+  /* ingredient computed cells + row validity */
+  $$("#ingBody tr[data-id]").forEach(function(tr,i){
+    var idx=-1,id=tr.getAttribute("data-id");
+    for(var k=0;k<S.ing.length;k++)if(S.ing[k].id===id)idx=k;
+    if(idx<0)return;
+    var p=c.pre[idx],cell=tr.querySelector(".c-uc"),er=tr.querySelector(".rerr");
+    cell.textContent=(p.apU===null)?"—":unitCostStr(p.epU,p.ud.dim);
+    var msg="";
+    if(!p.dimOk&&p.ps>0)msg="Pack unit must measure the same thing as the recipe unit.";
+    else if(p.base>0&&p.apU===null)msg="Add a pack size and pack cost to cost this line.";
+    else if(!p.yOk)msg="Yield % must be above 0 and no more than 100.";
+    if(msg){er.textContent=msg;er.hidden=false;tr.classList.add("bad");}
+    else{er.hidden=true;tr.classList.remove("bad");}
+  });
+
+  /* scaled prep table */
+  var tb=$("#scBody"),tf=$("#scFoot");tb.innerHTML="";tf.innerHTML="";
+  $("#scTbl").classList.toggle("nobp",!S.bp);
+  if(!c.rows.length){
+    tb.innerHTML='<tr><td colspan="10"><div class="empty">Add ingredients to see the scaled batch.</div></td></tr>';
+  }else{
+    c.rows.forEach(function(r){
+      var p=r.p,tr=document.createElement("tr");
+      var codes=p.ref.al.map(function(k){var d=alDef(k);return d?d.c:"";}).filter(Boolean).join(" ");
+      tr.innerHTML=
+        '<td class="nm-cell">'+esc(p.ref.name||"—")+'</td>'+
+        '<td class="num-cell">'+fmtAmt(p.base,p.ud.dim,p.ref.unit,false)+'</td>'+
+        '<td class="num-cell strong">'+fmtAmt(r.scaled,p.ud.dim,p.ref.unit,false)+
+          '<span class="sub-cell">'+esc(exactStr(r.scaled,p.ud.dim))+'</span></td>'+
+        '<td class="num-cell bpc">'+(r.bp===null?"—":pct(r.bp,1))+'</td>'+
+        '<td class="num-cell">'+fmtAmt(r.apQty,p.ud.dim,p.ref.unit,true)+
+          '<span class="sub-cell">yield '+nf(p.yv,1)+'%</span></td>'+
+        '<td class="num-cell">'+(r.packs===null?"—":nf(r.packs,0))+'</td>'+
+        '<td class="num-cell">'+(p.epU===null?"—":unitCostStr(p.epU,p.ud.dim))+'</td>'+
+        '<td class="num-cell strong">'+money(r.cost)+'</td>'+
+        '<td class="num-cell">'+(r.share===null?"—":pct(r.share,1))+
+          '<span class="sharebar"><i style="width:'+(r.share===null?0:Math.max(0,Math.min(100,r.share)))+'%"></i></span></td>'+
+        '<td class="mono" style="font-size:11px">'+esc(codes||"—")+'</td>';
+      tb.appendChild(tr);
+    });
+    tf.innerHTML='<tr><td colspan="3">Batch total ('+esc(nf(c.portions,2))+' '+esc(pl)+')</td>'+
+      '<td class="num-cell bpc">'+(c.totPct===null?"—":pct(c.totPct,1))+'</td>'+
+      '<td class="num-cell">'+(c.scaledWeight===null?"—":fmtAmt(c.scaledWeight,"m","g",false))+'</td>'+
+      '<td colspan="2"></td><td class="num-cell">'+money(c.batchCost)+'</td><td colspan="2"></td></tr>';
+  }
+  $("#prepHint").textContent=(c.f===null)?"Set a target to scale the recipe."
+    :("Scale factor × "+nf(c.f,4)+" — order quantities and pack counts are rounded up.");
+
+  /* method */
+  $$("#mBody tr[data-id]").forEach(function(tr){
+    var id=tr.getAttribute("data-id"),idx=-1;
+    for(var k=0;k<S.steps.length;k++)if(S.steps[k].id===id)idx=k;
+    if(idx<0)return;
+    var s=c.steps[idx];
+    tr.querySelector(".c-sc").textContent=(s.sc===null)?"—":fmtMins(s.sc);
+    tr.querySelector(".c-cu").textContent=(s.cum===null)?"—":fmtMins(s.cum);
+  });
+  $("#mFoot").innerHTML=S.steps.length?('<tr><td colspan="2">Totals</td>'+
+    '<td class="num-cell">'+fmtMins(S.steps.reduce(function(a,s){return a+num(s.mins,0);},0))+'</td>'+
+    '<td colspan="2">Hands-on '+(c.active===null?"—":fmtMins(c.active))+
+      ' · labour '+money(c.labCost)+'</td>'+
+    '<td class="num-cell">'+(c.elapsed===null?"—":fmtMins(c.elapsed))+'</td><td colspan="2"></td></tr>'):"";
+
+  /* stats */
+  $("#heroK").textContent="Cost per "+esc(plural(S.portion,1));
+  $("#sCpp").textContent=money(c.cpp);
+  $("#sCppSub").textContent=(c.cpp===null)?"Enter a yield, a target and ingredient pack costs"
+    :("food "+money(c.foodPP)+(c.extra>0?" + other "+money(c.extra):"")+" · at "+nf(c.portions,2)+" "+pl);
+  $("#sBatch").textContent=money(c.batchCost);
+  $("#sBatchSub").textContent=c.missingCost?(c.missingCost+" line"+(c.missingCost>1?"s":"")+" not costed yet")
+    :(S.ing.length+" ingredient"+(S.ing.length===1?"":"s"));
+  $("#sYield").textContent=(c.portions===null)?"—":nf(c.portions,2);
+  $("#sYieldSub").textContent=(c.f===null)?"—":(pl+" · × "+nf(c.f,4)+" base");
+  $("#sWt").textContent=(c.scaledWeight===null)?"—":fmtAmt(c.scaledWeight,"m","g",false);
+  $("#sWtSub").textContent=(c.baseWeight>0?"base "+fmtAmt(c.baseWeight,"m","g",false):"—")+
+    (c.anyCount?" · counted items excluded":"");
+  $("#sGp").textContent=(c.gpPct===null)?"—":pct(c.gpPct,1);
+  $("#sGpSub").textContent=(c.gpCash===null)?"—":(money(c.gpCash)+" per "+plural(S.portion,1)+" (net)");
+  var st=$("#stGp");st.className="stat"+(c.gpPct===null?"":(c.gpPct>=65?" good":(c.gpPct>=50?" caution":" over")));
+  $("#sPrice").textContent=money(c.sellInc);
+  $("#sPriceSub").textContent=(c.sellEx===null)?"—":("net "+money(c.sellEx)+" · VAT "+nf(c.vat,1)+"%");
+  $("#sLab").textContent=(c.active===null)?"—":fmtMins(c.active);
+  $("#sLabSub").textContent=(c.elapsed===null)?"—":("hands-on · "+fmtMins(c.elapsed)+" elapsed · "+money(c.labCost));
+  $("#fFoodPct").textContent=(c.foodPct===null)?"—":pct(c.foodPct,1);
+  $("#fRev").textContent=money(c.revenue);
+  $("#fChip").textContent=(c.f===null)?"no scale set":("× "+nf(c.f,4));
+
+  /* allergens */
+  var keys=Object.keys(c.alSet);
+  var box=$("#alBox"),chips=$("#alChips"),src=$("#alSrc");
+  var act=keys.filter(function(k){return alInStd(k);});
+  var oth=keys.filter(function(k){return !alInStd(k);});
+  if(!keys.length){
+    box.className="note";chips.innerHTML='<span class="altag n">No allergens recorded</span>';
+    src.innerHTML="Nothing has been ticked on any ingredient. That is not the same as allergen-free — "+
+      "check every supplier specification before you say so.";
+  }else{
+    box.className="note bad";
+    chips.innerHTML=act.map(function(k){var d=alDef(k);
+      return '<span class="altag">'+esc(d.c)+' '+esc(d.n)+'</span>';}).join("")||
+      '<span class="altag n">None in the selected standard</span>';
+    src.innerHTML=act.map(function(k){
+      return '<b>'+esc(alDef(k).n)+':</b> '+esc(c.alSrc[k].join(", "));}).join("<br>")+
+      (oth.length?'<br><b>Also recorded:</b> '+esc(oth.map(function(k){
+        return alDef(k).n+" ("+c.alSrc[k].join(", ")+")";}).join("; ")):"");
+  }
+
+  /* baker's */
+  $("#bpBox").hidden=!S.bp;
+  if(S.bp){
+    $("#kFlour").textContent=(c.flourG>0)?(fmtAmt(c.flourG,"m","g",false)+" base / "+
+      (c.f===null?"—":fmtAmt(c.flourG*c.f,"m","g",false))+" scaled"):"— set a Flour role";
+    $("#kHyd").textContent=(c.hyd===null)?"—":pct(c.hyd,1);
+    $("#kSalt").textContent=(c.saltP===null)?"—":pct(c.saltP,2);
+    $("#kLev").textContent=(c.levP===null)?"—":pct(c.levP,1);
+    $("#kFat").textContent=(c.fatP===null)?"—":pct(c.fatP,1);
+    $("#kSug").textContent=(c.sugP===null)?"—":pct(c.sugP,1);
+    $("#kTot").textContent=(c.totPct===null)?"—":pct(c.totPct,1);
+    $("#kPiece").textContent=(c.piece===null)?"—":fmtAmt(c.piece,"m","g",false);
+  }
+  $("#scaleHint").textContent=c.drive||"—";
+  $("#sampleChip").hidden=!S.sample;
+  renderDoc(c);
+  return c;
+}
+
+/* ══ printed prep sheet ═════════════════════════════════════════ */
+function stdName(){return S.alStd==="us"
+  ?"US FALCPA, as amended by the FASTER Act 2021 — 9 major allergens"
+  :"Regulation (EU) No 1169/2011 Annex II — 14 allergens (retained in UK law)";}
+function volName(){return S.volStd==="us"?"US customary (cup 236.59 ml · tbsp 14.79 ml · tsp 4.93 ml)"
+  :(S.volStd==="au"?"Australian metric (cup 250 ml · tbsp 20 ml · tsp 5 ml)"
+  :"Metric / UK (cup 250 ml · tbsp 15 ml · tsp 5 ml)");}
+function renderDoc(c){
+  var pl=plural(S.portion,ok(c.portions)?c.portions:2),p1=plural(S.portion,1);
+  var keys=Object.keys(c.alSet),act=keys.filter(alInStd),oth=keys.filter(function(k){return !alInStd(k);});
+  var h="";
+  h+='<div class="lh"><div><div class="bz">'+esc(S.biz||"—")+'</div>'+
+     '<div class="ad">'+esc(S.site||"")+(S.chef?"\n"+esc(S.chef):"")+'</div></div>'+
+     '<div class="ttl"><h2>KITCHEN PREP SHEET</h2>'+
+     '<div class="dt">'+esc(S.recipe||"Untitled recipe")+'</div>'+
+     '<div class="rf">Spec '+esc(S.ref||"—")+' · v'+esc(S.ver||"1")+' · '+esc(fmtDate(S.date))+'</div></div></div>';
+
+  h+='<div class="meta">'+
+    '<div><b>Scaled yield</b><span>'+esc(nf(c.portions,2))+'</span><span class="sm"> '+esc(pl)+'</span></div>'+
+    '<div><b>Base yield</b><span>'+esc(nf(c.yb,2))+'</span><span class="sm"> '+esc(plural(S.portion,c.yb))+'</span></div>'+
+    '<div><b>Scale factor</b><span>× '+esc(c.f===null?"—":nf(c.f,4))+'</span></div>'+
+    '<div><b>Batch weight</b><span>'+esc(c.scaledWeight===null?"—":fmtAmt(c.scaledWeight,"m","g",false))+'</span></div>'+
+    '<div><b>Cost per '+esc(p1)+'</b><span>'+esc(money(c.cpp))+'</span></div>'+
+    '<div><b>Batch food cost</b><span>'+esc(money(c.batchCost))+'</span></div>'+
+    '<div><b>Gross profit</b><span>'+esc(c.gpPct===null?"—":pct(c.gpPct,1))+'</span><span class="sm"> net price '+esc(money(c.sellEx))+'</span></div>'+
+    '<div><b>Portion spec</b><span class="sm">'+esc(S.psize||"—")+'</span></div>'+
+    '</div>';
+
+  h+='<div class="albox"><b class="t">Allergen declaration — '+esc(stdName())+'</b>'+
+     '<div class="big">'+(act.length?esc(act.map(function(k){return alDef(k).n;}).join(" · ")):"None recorded on any ingredient")+'</div>'+
+     (act.length?'<div class="sm">'+act.map(function(k){
+        return "<b>"+esc(alDef(k).n)+":</b> "+esc(c.alSrc[k].join(", "));}).join("<br>")+'</div>':"")+
+     (oth.length?'<div class="sm"><b>Also recorded:</b> '+esc(oth.map(function(k){
+        return alDef(k).n+" ("+c.alSrc[k].join(", ")+")";}).join("; "))+'</div>':"")+
+     '<div class="sm">Declared from the ingredient lines on this sheet only. Cross-contact in this kitchen is '+
+     'not assessed here. Verify against the current supplier specification before advising any customer.</div></div>';
+
+  h+='<h3 class="sec">Ingredients — weigh in the scaled column</h3>';
+  h+='<table><colgroup><col style="width:23%"><col style="width:11%"><col style="width:13%">'+
+     (S.bp?'<col style="width:8%">':'')+'<col style="width:12%"><col style="width:6%">'+
+     '<col style="width:11%"><col style="width:9%"><col style="width:9%"></colgroup>'+
+     '<thead><tr><th>Ingredient</th><th class="n">Base</th><th class="n">Scaled</th>'+
+     (S.bp?'<th class="n">Baker\'s %</th>':'')+
+     '<th class="n">Order (AP)</th><th class="n">Packs</th><th class="n">Cost / unit (EP)</th>'+
+     '<th class="n">Line cost</th><th class="c">Allergens</th></tr></thead><tbody>';
+  c.rows.forEach(function(r){
+    var p=r.p;
+    h+='<tr><td>'+esc(p.ref.name||"—")+'</td>'+
+      '<td class="n">'+esc(fmtAmt(p.base,p.ud.dim,p.ref.unit,false))+'</td>'+
+      '<td class="n"><b>'+esc(fmtAmt(r.scaled,p.ud.dim,p.ref.unit,false))+'</b><br>'+esc(exactStr(r.scaled,p.ud.dim))+'</td>'+
+      (S.bp?'<td class="n">'+esc(r.bp===null?"—":pct(r.bp,1))+'</td>':'')+
+      '<td class="n">'+esc(fmtAmt(r.apQty,p.ud.dim,p.ref.unit,true))+'<br>yield '+esc(nf(p.yv,1))+'%</td>'+
+      '<td class="n">'+esc(r.packs===null?"—":nf(r.packs,0))+'</td>'+
+      '<td class="n">'+esc(p.epU===null?"—":unitCostStr(p.epU,p.ud.dim))+'</td>'+
+      '<td class="n">'+esc(money(r.cost))+'</td>'+
+      '<td class="c">'+esc(p.ref.al.map(function(k){var d=alDef(k);return d?d.c:"";}).filter(Boolean).join(" ")||"—")+'</td></tr>';
+  });
+  if(!c.rows.length)h+='<tr><td colspan="'+(S.bp?9:8)+'">No ingredients entered.</td></tr>';
+  h+='</tbody><tfoot><tr><td>Batch total</td><td class="n"></td>'+
+     '<td class="n">'+esc(c.scaledWeight===null?"—":fmtAmt(c.scaledWeight,"m","g",false))+'</td>'+
+     (S.bp?'<td class="n">'+esc(c.totPct===null?"—":pct(c.totPct,1))+'</td>':'')+
+     '<td class="n"></td><td class="n"></td><td class="n"></td>'+
+     '<td class="n">'+esc(money(c.batchCost))+'</td><td></td></tr></tfoot></table>';
+
+  if(S.bp){
+    h+='<h3 class="sec">Formula summary (baker\'s percentages, flour = 100%)</h3><div class="two"><div>'+
+      '<div class="kvp"><span>Total flour weight (scaled)</span><b>'+esc(c.f===null||c.flourG<=0?"—":fmtAmt(c.flourG*c.f,"m","g",false))+'</b></div>'+
+      '<div class="kvp"><span>Hydration</span><b>'+esc(c.hyd===null?"—":pct(c.hyd,1))+'</b></div>'+
+      '<div class="kvp"><span>Salt</span><b>'+esc(c.saltP===null?"—":pct(c.saltP,2))+'</b></div>'+
+      '</div><div>'+
+      '<div class="kvp"><span>Pre-ferment / leaven</span><b>'+esc(c.levP===null?"—":pct(c.levP,1))+'</b></div>'+
+      '<div class="kvp"><span>Total formula</span><b>'+esc(c.totPct===null?"—":pct(c.totPct,1))+'</b></div>'+
+      '<div class="kvp"><span>Dough per piece</span><b>'+esc(c.piece===null?"—":fmtAmt(c.piece,"m","g",false))+'</b></div>'+
+      '</div></div>';
+  }
+
+  h+='<h3 class="sec">Method — times scaled for this batch</h3>';
+  h+='<table><colgroup><col style="width:5%"><col style="width:53%"><col style="width:10%">'+
+     '<col style="width:14%"><col style="width:9%"><col style="width:9%"></colgroup>'+
+     '<thead><tr><th>#</th><th>Step</th><th class="n">Base</th><th>Scaling rule</th>'+
+     '<th class="n">Scaled</th><th class="n">Elapsed</th></tr></thead><tbody>';
+  c.steps.forEach(function(s,i){
+    h+='<tr><td class="c">'+(i+1)+'</td><td>'+esc(s.ref.text||"—")+(s.ref.hands?' <b>[hands-on]</b>':'')+'</td>'+
+      '<td class="n">'+esc(fmtMins(s.base))+'</td><td>'+esc(ruleLbl(s.ref.rule))+'</td>'+
+      '<td class="n"><b>'+esc(s.sc===null?"—":fmtMins(s.sc))+'</b></td>'+
+      '<td class="n">'+esc(s.cum===null?"—":fmtMins(s.cum))+'</td></tr>';
+  });
+  if(!c.steps.length)h+='<tr><td colspan="6">No method steps entered.</td></tr>';
+  h+='</tbody><tfoot><tr><td colspan="2">Hands-on '+esc(c.active===null?"—":fmtMins(c.active))+
+     ' · labour at '+esc(money(num(S.lab,0)))+'/h = '+esc(money(c.labCost))+'</td>'+
+     '<td class="n"></td><td></td><td class="n"></td><td class="n">'+esc(c.elapsed===null?"—":fmtMins(c.elapsed))+'</td></tr></tfoot></table>';
+
+  h+='<h3 class="sec">Costing</h3><div class="two"><div>'+
+    '<div class="kvp"><span>Batch food cost</span><b>'+esc(money(c.batchCost))+'</b></div>'+
+    '<div class="kvp"><span>Food cost per '+esc(p1)+'</span><b>'+esc(money(c.foodPP))+'</b></div>'+
+    '<div class="kvp"><span>Other cost per '+esc(p1)+'</span><b>'+esc(money(c.extra))+'</b></div>'+
+    '<div class="kvp tt"><span>Cost per '+esc(p1)+'</span><b>'+esc(money(c.cpp))+'</b></div>'+
+    '</div><div>'+
+    '<div class="kvp"><span>Selling price, net of tax</span><b>'+esc(money(c.sellEx))+'</b></div>'+
+    '<div class="kvp"><span>Selling price incl. '+esc(nf(c.vat,1))+'% tax</span><b>'+esc(money(c.sellInc))+'</b></div>'+
+    '<div class="kvp"><span>Food cost %</span><b>'+esc(c.foodPct===null?"—":pct(c.foodPct,1))+'</b></div>'+
+    '<div class="kvp tt"><span>Gross profit</span><b>'+esc(c.gpPct===null?"—":pct(c.gpPct,1))+' · '+esc(money(c.gpCash))+'</b></div>'+
+    '</div></div>';
+  h+='<div class="basis">Basis: '+esc(c.drive||"—")+'. Edible-portion cost = as-purchased pack cost ÷ pack size ÷ yield %. '+
+     'Order quantities and pack counts are rounded up. Volume standard: '+esc(volName())+'. '+
+     'Ingredients entered by volume are counted toward batch weight and baker\'s percentages at 1.00 g/ml; '+
+     'ingredients counted by number are excluded from batch weight.</div>';
+
+  h+='<div class="dnote"><b>Read before you cook</b>'+
+     'This sheet scales quantities, costs and times by arithmetic only. It does not know your mixer, pan or '+
+     'oven capacity, and a scaled time is a starting point, not a cooking instruction — cook, hold, cool and '+
+     'reheat to the core temperatures required by your food safety management system and verify every batch '+
+     'with a calibrated probe. The allergen declaration above reproduces only what was entered on this sheet; '+
+     'it is not a substitute for the current supplier specification and does not assess cross-contact in your '+
+     'kitchen. Costs exclude labour, energy, overheads and wastage unless you have entered them. '+
+     'This is a costing and production aid, not food safety, labelling, nutrition or tax advice — '+
+     'consult your EHO, food safety adviser or accountant.</div>';
+
+  h+='<div class="sign"><div><u></u>Prepared by</div><div><u></u>Checked by</div><div><u></u>Date</div></div>';
+  h+='<div class="foot"><span>'+esc(S.biz||"")+(S.recipe?" · "+esc(S.recipe):"")+
+     ' · spec '+esc(S.ref||"—")+' v'+esc(S.ver||"1")+'</span>'+
+     '<span>Recipe Cost &amp; Batch Scaler · '+esc(fmtDate(S.date))+'</span></div>';
+  $("#doc").innerHTML=h;
+}
+
+/* ══ exports ════════════════════════════════════════════════════ */
+function dl(name,text,mime){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b),a=document.createElement("a");
+    a.href=u;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();
+    setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a);URL.revokeObjectURL(u);},500);
+  }catch(e){flash("Download was blocked by the browser.");}
+}
+function cq(v){var s=(v===null||v===undefined)?"":String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function csvRow(a){return a.map(cq).join(",");}
+function slug(s){return String(s||"recipe").toLowerCase().replace(/[^a-z0-9]+/g,"-")
+  .replace(/^-|-$/g,"").slice(0,48)||"recipe";}
+function buildCsv(){
+  var c=compute(),L=[],pl=plural(S.portion,ok(c.portions)?c.portions:2);
+  L.push(csvRow(["Kitchen prep sheet — recipe cost & batch scaler"]));
+  L.push(csvRow(["Business",S.biz]));L.push(csvRow(["Site / section",S.site]));
+  L.push(csvRow(["Recipe",S.recipe]));L.push(csvRow(["Spec reference",S.ref]));
+  L.push(csvRow(["Version",S.ver]));L.push(csvRow(["Written by",S.chef]));
+  L.push(csvRow(["Sheet date",S.date]));L.push(csvRow(["Portion spec",S.psize]));
+  L.push(csvRow(["Base yield",plain(num(S.yieldBase,0),2),plural(S.portion,num(S.yieldBase,0))]));
+  L.push(csvRow(["Scaled yield",c.portions===null?"":plain(c.portions,2),pl]));
+  L.push(csvRow(["Scale factor",c.f===null?"":plain(c.f,6)]));
+  L.push(csvRow(["Scaling basis",c.drive]));
+  L.push(csvRow(["Currency",sym()]));
+  L.push(csvRow(["Volume standard",volName()]));
+  L.push(csvRow(["Allergen standard",stdName()]));
+  L.push("");
+  L.push(csvRow(["INGREDIENTS"]));
+  L.push(csvRow(["Ingredient","Base qty","Unit","Role","Yield %","Scaled qty (base unit)","Base unit",
+    "Scaled (display)","Baker's %","Order qty AP (rounded up)","Pack size","Pack unit","Pack cost",
+    "Packs to buy","Cost per unit EP","Line cost","% of batch cost","Allergens"]));
+  c.rows.forEach(function(r){
+    var p=r.p;
+    L.push(csvRow([p.ref.name,plain(p.qty,3),p.ud.lbl,p.ref.role,plain(p.yv,1),
+      r.scaled===null?"":plain(r.scaled,3),baseLbl(p.ud.dim),
+      fmtAmt(r.scaled,p.ud.dim,p.ref.unit,false),r.bp===null?"":plain(r.bp,2),
+      r.apQty===null?"":plain(Math.ceil(r.apQty*1000-1e-6)/1000,3),
+      plain(p.ps,3),p.pd.lbl,plain(p.pc,2),r.packs===null?"":String(r.packs),
+      p.epU===null?"":p.epU.toFixed(6),r.cost===null?"":plain(r.cost,2),
+      r.share===null?"":plain(r.share,2),
+      p.ref.al.map(function(k){var d=alDef(k);return d?d.n:k;}).join("; ")]));
+  });
+  L.push(csvRow(["BATCH TOTAL","","","","","","","","","","","","","","",
+    c.batchCost===null?"":plain(c.batchCost,2),"",""]));
+  L.push("");
+  L.push(csvRow(["FORMULA SUMMARY (baker's percentages, flour = 100%)"]));
+  L.push(csvRow(["Total flour weight base (g)",plain(c.flourG,1)]));
+  L.push(csvRow(["Total flour weight scaled (g)",c.f===null?"":plain(c.flourG*c.f,1)]));
+  L.push(csvRow(["Hydration %",c.hyd===null?"":plain(c.hyd,2)]));
+  L.push(csvRow(["Salt %",c.saltP===null?"":plain(c.saltP,2)]));
+  L.push(csvRow(["Leaven %",c.levP===null?"":plain(c.levP,2)]));
+  L.push(csvRow(["Fat %",c.fatP===null?"":plain(c.fatP,2)]));
+  L.push(csvRow(["Sugar %",c.sugP===null?"":plain(c.sugP,2)]));
+  L.push(csvRow(["Total formula %",c.totPct===null?"":plain(c.totPct,2)]));
+  L.push(csvRow(["Batch weight base (g)",plain(c.baseWeight,1)]));
+  L.push(csvRow(["Batch weight scaled (g)",c.scaledWeight===null?"":plain(c.scaledWeight,1)]));
+  L.push(csvRow(["Dough per piece (g)",c.piece===null?"":plain(c.piece,1)]));
+  L.push("");
+  L.push(csvRow(["METHOD"]));
+  L.push(csvRow(["#","Step","Base minutes","Scaling rule","Hands-on","Scaled minutes","Elapsed minutes"]));
+  c.steps.forEach(function(s,i){
+    L.push(csvRow([String(i+1),s.ref.text,plain(s.base,1),ruleLbl(s.ref.rule),s.ref.hands?"yes":"",
+      s.sc===null?"":plain(s.sc,1),s.cum===null?"":plain(s.cum,1)]));
+  });
+  L.push(csvRow(["TOTAL","","","","",c.active===null?"":plain(c.active,1),
+    c.elapsed===null?"":plain(c.elapsed,1)]));
+  L.push("");
+  L.push(csvRow(["COSTING"]));
+  L.push(csvRow(["Batch food cost",c.batchCost===null?"":plain(c.batchCost,2)]));
+  L.push(csvRow(["Food cost per "+plural(S.portion,1),c.foodPP===null?"":plain(c.foodPP,2)]));
+  L.push(csvRow(["Other cost per "+plural(S.portion,1),plain(c.extra,2)]));
+  L.push(csvRow(["Cost per "+plural(S.portion,1),c.cpp===null?"":plain(c.cpp,2)]));
+  L.push(csvRow(["Selling price net",c.sellEx===null?"":plain(c.sellEx,2)]));
+  L.push(csvRow(["Selling price incl tax",c.sellInc===null?"":plain(c.sellInc,2)]));
+  L.push(csvRow(["Tax %",plain(c.vat,2)]));
+  L.push(csvRow(["Gross profit %",c.gpPct===null?"":plain(c.gpPct,2)]));
+  L.push(csvRow(["Gross profit per "+plural(S.portion,1),c.gpCash===null?"":plain(c.gpCash,2)]));
+  L.push(csvRow(["Food cost %",c.foodPct===null?"":plain(c.foodPct,2)]));
+  L.push(csvRow(["Batch sales value",c.revenue===null?"":plain(c.revenue,2)]));
+  L.push(csvRow(["Labour hands-on minutes",c.active===null?"":plain(c.active,1)]));
+  L.push(csvRow(["Labour cost",c.labCost===null?"":plain(c.labCost,2)]));
+  L.push("");
+  L.push(csvRow(["ALLERGEN DECLARATION",stdName()]));
+  L.push(csvRow(["Allergen","Code","In selected standard","Ingredients"]));
+  var keys=Object.keys(c.alSet);
+  if(!keys.length)L.push(csvRow(["None recorded","","",""]));
+  keys.forEach(function(k){var d=alDef(k);
+    L.push(csvRow([d.n,d.c,alInStd(k)?"yes":"no",c.alSrc[k].join("; ")]));});
+  L.push("");
+  L.push(csvRow(["Scaled times are a starting point only. Cook, cool and reheat to verified core temperatures. "+
+    "Allergen data is what was entered here — confirm against supplier specifications."]));
+  return L.join("\r\n");
+}
+function exportCsv(){
+  dl(slug(S.recipe)+"-prep-sheet.csv","﻿"+buildCsv(),"text/csv;charset=utf-8;");
+  flash("CSV exported.");
+}
+function exportJson(){
+  dl(slug(S.recipe)+"-recipe.json",
+    JSON.stringify({tool:"solvix.recipe-scaler",version:1,saved:new Date().toISOString(),state:S},null,2),
+    "application/json");
+  flash("JSON exported.");
+}
+function importJson(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    var o;try{o=JSON.parse(String(fr.result));}catch(e){flash("That file is not valid JSON.");return;}
+    var st=sane(o&&o.state?o.state:o);
+    if(!st||(!st.ing.length&&!st.steps.length&&!st.recipe)){flash("No recipe found in that file.");return;}
+    S=st;save();renderAll();flash("Imported "+S.ing.length+" ingredients.");
+  };
+  fr.onerror=function(){flash("Could not read that file.");};
+  fr.readAsText(file);
+}
+
+/* ══ form sync + wiring ═════════════════════════════════════════ */
+function syncForm(){
+  $("#iRecipe").value=S.recipe;$("#iRef").value=S.ref;$("#iVer").value=S.ver;
+  $("#iBiz").value=S.biz;$("#iChef").value=S.chef;$("#iDate").value=S.date;
+  $("#iSite").value=S.site;$("#iYield").value=S.yieldBase;$("#iPortion").value=S.portion;
+  $("#iPsize").value=S.psize;
+  $("#iCur").value=(["£","$","€"].indexOf(S.cur)>=0)?S.cur:"custom";
+  $("#iCurC").value=S.curC;$("#wCurC").hidden=$("#iCur").value!=="custom";
+  $("#iDisp").value=S.disp;$("#iVolStd").value=S.volStd;$("#iAlStd").value=S.alStd;
+  $("#iMode").value=S.mode;$("#iTP").value=S.tp;$("#iTF").value=S.tf;$("#iTW").value=S.tw;
+  $("#iPc").value=S.pieces;$("#iPw").value=S.pieceWt;$("#iPl").value=S.loss;
+  $("#iExtra").value=S.extra;$("#iLab").value=S.lab;$("#iVat").value=S.vat;
+  $("#iPriceMode").value=S.priceMode;$("#iGp").value=S.gp;$("#iPrice").value=S.price;$("#iIncl").value=S.incl;
+  $("#bBpOn").setAttribute("aria-pressed",S.bp?"true":"false");
+  $("#bBpOff").setAttribute("aria-pressed",S.bp?"false":"true");
+  modeVis();priceVis();
+}
+function modeVis(){
+  $("#wTP").hidden=S.mode!=="portions";
+  $("#wTF").hidden=S.mode!=="factor";
+  $("#wTW").hidden=S.mode!=="weight";
+  $("#wPc").hidden=$("#wPw").hidden=$("#wPl").hidden=S.mode!=="pieces";
+}
+function priceVis(){
+  $("#wGp").hidden=S.priceMode!=="gp";
+  $("#wPrice").hidden=$("#wIncl").hidden=S.priceMode!=="price";
+}
+function touch(){save();renderOut();}
+function renderAll(){syncForm();renderIng();renderSteps();renderOut();}
+
+function bindT(id,key){var el=$(id);
+  var h=function(){S[key]=el.value;touch();};
+  el.addEventListener("input",h);el.addEventListener("change",h);}
+function bindN(id,key,errId,min,max,label){
+  var el=$(id),er=errId?$(errId):null;
+  el.addEventListener("input",function(){S[key]=num(el.value,0);touch();});
+  el.addEventListener("change",function(){S[key]=num(el.value,0);touch();});
+  el.addEventListener("blur",function(){
+    var raw=String(el.value).trim(),msg="",v=parseFloat(raw);
+    if(raw===""){v=min>0?min:0;el.value=v;}
+    else if(!isFinite(v)){msg=label+" must be a number.";v=min>0?min:0;el.value=v;}
+    else if(v<min){msg=label+" cannot be below "+min+".";v=min;el.value=v;}
+    else if(max!==null&&v>max){msg=label+" cannot be above "+max+".";v=max;el.value=v;}
+    S[key]=v;
+    if(er){er.textContent=msg;er.hidden=!msg;}
+    el.classList.toggle("inv",!!msg);touch();
+  });
+}
+function init(){
+  var had=load();
+  if(!had){S=sampleSour();save();}
+  renderAll();
+
+  bindT("#iRecipe","recipe");bindT("#iRef","ref");bindT("#iVer","ver");bindT("#iBiz","biz");
+  bindT("#iChef","chef");bindT("#iDate","date");bindT("#iSite","site");
+  bindT("#iPortion","portion");bindT("#iPsize","psize");bindT("#iCurC","curC");
+  bindN("#iYield","yieldBase","#eYield",0,1000000,"Base yield");
+  bindN("#iTP","tp","#eTP",0,1000000,"Target portions");
+  bindN("#iTF","tf","#eTF",0,10000,"Scale factor");
+  bindN("#iTW","tw","#eTW",0,100000000,"Target batch weight");
+  bindN("#iPc","pieces",null,0,1000000,"Pieces");
+  bindN("#iPw","pieceWt",null,0,1000000,"Piece weight");
+  bindN("#iPl","loss",null,0,50,"Loss allowance");
+  bindN("#iExtra","extra",null,0,1000000,"Other cost");
+  bindN("#iLab","lab",null,0,100000,"Labour rate");
+  bindN("#iVat","vat","#eVat",0,100,"Tax rate");
+  bindN("#iGp","gp","#eGp",0,99.9,"Target GP");
+  bindN("#iPrice","price",null,0,1000000,"Menu price");
+
+  $("#iCur").addEventListener("change",function(){
+    S.cur=$("#iCur").value;$("#wCurC").hidden=S.cur!=="custom";touch();});
+  ["#iDisp","#iVolStd","#iAlStd","#iIncl"].forEach(function(sel){
+    var key={"#iDisp":"disp","#iVolStd":"volStd","#iAlStd":"alStd","#iIncl":"incl"}[sel];
+    $(sel).addEventListener("change",function(){S[key]=$(sel).value;
+      if(key==="alStd")renderIng();touch();});});
+  $("#iMode").addEventListener("change",function(){S.mode=$("#iMode").value;modeVis();touch();});
+  $("#iPriceMode").addEventListener("change",function(){S.priceMode=$("#iPriceMode").value;priceVis();touch();});
+  $("#bBpOn").addEventListener("click",function(){S.bp=true;syncForm();touch();});
+  $("#bBpOff").addEventListener("click",function(){S.bp=false;syncForm();touch();});
+
+  $("#bAddIng").addEventListener("click",function(){
+    S.ing.push(I("",0,"g","other",100,0,"g",0,[]));renderIng();touch();
+    var rows=$$("#ingBody tr[data-id]");
+    if(rows.length){var el=rows[rows.length-1].querySelector(".i-name");
+      if(el){el.focus();el.scrollIntoView({block:"center"});}}
+  });
+  $("#bAddStep").addEventListener("click",function(){
+    S.steps.push(ST("",0,"none",false));renderSteps();touch();
+    var rows=$$("#mBody tr[data-id]");
+    if(rows.length){var el=rows[rows.length-1].querySelector(".s-text");
+      if(el){el.focus();el.scrollIntoView({block:"center"});}}
+  });
+  $("#bSampleA").addEventListener("click",function(){
+    S=sampleSour();save();renderAll();flash("Sourdough sample loaded.");});
+  $("#bSampleB").addEventListener("click",function(){
+    S=sampleRagu();save();renderAll();flash("Ragù sample loaded.");});
+  $("#bPrint").addEventListener("click",function(){renderOut();window.print();});
+  $("#bCsv").addEventListener("click",exportCsv);
+  $("#bJson").addEventListener("click",exportJson);
+  $("#bImport").addEventListener("click",function(){$("#fImport").click();});
+  $("#fImport").addEventListener("change",function(e){
+    var f=e.target.files&&e.target.files[0];if(f)importJson(f);e.target.value="";});
+  $("#bClear").addEventListener("click",function(){
+    if(!window.confirm("Clear this recipe and every saved value from this browser? This cannot be undone."))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();S.ing=[I("",0,"g","other",100,0,"g",0,[])];S.steps=[ST("",0,"none",false)];
+    save();renderAll();flash("All data cleared.");});
+  window.addEventListener("beforeprint",function(){renderOut();});
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+</script>
+</body>
+</html>
