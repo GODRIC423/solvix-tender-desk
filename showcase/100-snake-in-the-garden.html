@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake in the Garden — a crayon game</title>
+<meta name="description" content="A snake game drawn in wax crayon: wobbly fences, scribbled apples, keyboard or swipe, and a high score kept in the drawer.">
+<meta name="theme-color" content="#FFF9EC">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FFF9EC'/%3E%3Cpath d='M5 22c5 2 6-6 11-4s6 3 10-4' fill='none' stroke='%234CAF50' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='25' cy='9' r='4' fill='%23E53935'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schoolbell&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FFF9EC;
+    --green:#4CAF50;
+    --green-dk:#37833b;
+    --red:#E53935;
+    --sky:#90CAF9;
+    --ink:#333333;
+    --ink-soft:#4a463f;
+    --line:#33333322;
+    --wax: "Schoolbell", "Comic Sans MS", "Bradley Hand", cursive;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--wax);
+    background-color:var(--paper);
+    color:var(--ink);
+    font-size:19px;
+    line-height:1.55;
+    overflow-x:hidden;
+    background-image:
+      radial-gradient(circle at 12% 8%, #ffffff 0%, transparent 46%),
+      radial-gradient(circle at 88% 92%, #fdf1d6 0%, transparent 52%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23f)' opacity='0.16'/%3E%3C/svg%3E");
+  }
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  :focus-visible{outline:3px dashed var(--red);outline-offset:4px;border-radius:6px}
+
+  .sheet{max-width:1180px;margin:0 auto;padding:26px 20px 0;position:relative}
+
+  /* ---------- masthead ---------- */
+  .masthead{position:relative;padding:8px 0 4px;text-align:center}
+  .sun{position:absolute;right:2%;top:-6px;width:112px;height:112px;opacity:.95}
+  .cloud{position:absolute;left:-6px;top:26px;width:150px;height:70px;opacity:.9}
+  h1{
+    margin:0;
+    font-weight:400;
+    font-size:clamp(2.5rem, 8.4vw, 6.1rem);
+    line-height:.98;
+    letter-spacing:.005em;
+  }
+  h1 .w{display:inline-block;white-space:nowrap}
+  h1 .l{display:inline-block;transform:rotate(var(--r,0deg)) translateY(var(--y,0px));text-shadow:1.5px 2px 0 #33333318}
+  h1 .g{color:var(--green-dk)} h1 .r{color:var(--red)} h1 .s{color:#4d94d8} h1 .k{color:var(--ink)}
+  .kicker{
+    display:inline-block;margin:0 0 6px;font-size:1.02rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-soft);transform:rotate(-1.4deg)
+  }
+  .dek{
+    max-width:44ch;margin:12px auto 0;font-size:1.16rem;color:var(--ink-soft);transform:rotate(.5deg)
+  }
+  .rule{display:block;width:min(560px,86%);height:14px;margin:16px auto 0}
+
+  /* ---------- layout ---------- */
+  main{display:block}
+  .play{
+    display:grid;grid-template-columns:minmax(0,1.28fr) minmax(0,.86fr);
+    gap:clamp(20px,3.4vw,50px);align-items:start;margin:26px 0 10px;
+  }
+
+  .board{position:relative}
+  .scoreline{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:14px;
+    margin:0 4px 10px;
+  }
+  .score-block{line-height:1}
+  .score-label{display:block;font-size:.92rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+  .score-num{display:block;font-size:2.5rem;line-height:1;transform:rotate(-2deg)}
+  .score-num.apples{color:var(--red)}
+  .score-num.best{color:var(--green-dk)}
+  .score-num.len{color:#4d94d8}
+  .score-block.mid{text-align:center}
+  .score-block.end{text-align:right}
+  .score-block.end .score-num{transform:rotate(2deg)}
+
+  .holder{position:relative;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block;width:100%;border-radius:4px;cursor:crosshair}
+
+  .overlay{
+    position:absolute;inset:0;display:grid;place-items:end center;padding:16px 16px 5%;
+  }
+  .overlay[hidden]{display:none}
+  .note{
+    background:#fffdf6;padding:20px 26px 24px;max-width:330px;text-align:center;
+    border:2px solid var(--ink);border-radius:255px 14px 225px 15px/14px 225px 16px 235px;
+    box-shadow:3px 5px 0 #3333331a;transform:rotate(-1.2deg)
+  }
+  .note h3{margin:0 0 6px;font-size:1.72rem;font-weight:400;color:var(--green-dk)}
+  .note p{margin:0 0 14px;font-size:1.02rem;color:var(--ink-soft)}
+  .note .big{color:var(--red);font-size:2.6rem;line-height:1;display:block;margin:2px 0 4px}
+
+  .btn{
+    font-family:var(--wax);font-size:1.14rem;background:var(--paper);color:var(--ink);
+    border:2.5px solid var(--ink);padding:8px 20px 9px;cursor:pointer;
+    border-radius:225px 15px 255px 14px/15px 235px 14px 225px;
+    box-shadow:2px 3px 0 #33333326;transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover{transform:translate(-1px,-1px) rotate(-1deg);box-shadow:3px 5px 0 #33333330}
+  .btn:active{transform:translate(2px,3px);box-shadow:0 0 0 #0000}
+  .btn.go{background:#eaf6ea;color:var(--green-dk);border-color:var(--green-dk)}
+
+  /* ---------- d-pad ---------- */
+  .pad{display:none;margin:16px auto 0;width:212px}
+  .pad-row{display:flex;justify-content:center;gap:8px;margin-top:8px}
+  .pad button{
+    width:64px;height:56px;font-size:1.5rem;line-height:1;display:grid;place-items:center;
+    font-family:var(--wax);background:#fffdf6;color:var(--green-dk);border:2.5px solid var(--green-dk);
+    border-radius:225px 16px 255px 14px/16px 235px 14px 225px;box-shadow:2px 3px 0 #4CAF5033;cursor:pointer
+  }
+  .pad button:active{transform:translate(2px,3px);box-shadow:none}
+
+  /* ---------- side card ---------- */
+  .howto{position:relative;margin-top:6px}
+  .card{
+    background:#fffdf7;padding:26px 26px 24px;position:relative;
+    border:2.5px solid var(--ink);
+    border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+    box-shadow:4px 6px 0 #3333331c;
+  }
+  .card.tilt-a{transform:rotate(1.1deg)}
+  .card.tilt-b{transform:rotate(-1deg)}
+  .tape{
+    position:absolute;width:104px;height:30px;background:#90CAF9aa;top:-16px;left:50%;margin-left:-52px;
+    transform:rotate(-3.4deg);border-left:1px dashed #ffffff88;border-right:1px dashed #ffffff88;
+  }
+  .card h2{margin:2px 0 12px;font-size:1.95rem;font-weight:400;color:var(--green-dk);transform:rotate(-.8deg)}
+  .card h3{margin:20px 0 6px;font-size:1.3rem;font-weight:400;color:var(--red)}
+  .card p{margin:0 0 12px;color:var(--ink-soft)}
+  .keys{display:flex;gap:12px;align-items:center;margin:6px 0 14px;flex-wrap:wrap}
+  .keycap{
+    width:44px;height:40px;display:grid;place-items:center;font-size:1.1rem;
+    border:2.5px solid var(--ink);border-radius:225px 14px 255px 15px/14px 235px 15px 225px;background:var(--paper)
+  }
+  .keys span.or{color:var(--ink-soft);font-size:.98rem}
+  ol.rules{margin:0;padding-left:1.35em;color:var(--ink-soft)}
+  ol.rules li{margin:0 0 9px}
+  ol.rules b{color:var(--ink);font-weight:400}
+  .swatch{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-right:.25em;vertical-align:baseline}
+  .sw-red{background:var(--red)} .sw-green{background:var(--green)} .sw-ink{background:var(--ink)}
+
+  .erase{margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .erase small{color:var(--ink-soft);font-size:.95rem}
+
+  /* ---------- field notes ---------- */
+  .notes{margin:56px 0 0}
+  .notes-head{display:flex;align-items:center;gap:16px;margin:0 0 22px}
+  .notes-head h2{margin:0;font-size:clamp(1.8rem,3.6vw,2.7rem);font-weight:400;transform:rotate(-1deg)}
+  .notes-head .squiggle{flex:1;height:12px;min-width:40px}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px}
+  .grid .card p:last-child{margin-bottom:0}
+  .num{
+    position:absolute;top:-20px;right:-10px;width:46px;height:46px;display:grid;place-items:center;
+    background:var(--paper);border:2.5px solid var(--red);color:var(--red);font-size:1.3rem;
+    border-radius:60% 40% 55% 45%/50% 55% 45% 50%;transform:rotate(6deg)
+  }
+
+  footer{
+    margin:60px 0 0;padding:26px 0 40px;text-align:center;color:var(--ink-soft);font-size:1rem;
+    border-top:2px dashed #33333333
+  }
+  footer .sig{font-size:1.35rem;color:var(--green-dk);display:block;transform:rotate(-2deg);margin-bottom:4px}
+
+  .live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  @media (max-width:940px){
+    .play{grid-template-columns:1fr;gap:28px}
+    .grid{grid-template-columns:1fr}
+    .pad{display:block}
+    .sun{width:78px;height:78px;right:-6px;top:-6px}
+    .cloud{width:100px;top:2px;left:-16px;opacity:.75}
+    .masthead{padding-top:62px}
+    .kicker{font-size:.9rem;letter-spacing:.13em}
+  }
+  @media (max-width:560px){
+    body{font-size:18px}
+    .sheet{padding:16px 15px 0}
+    .score-num{font-size:2.05rem}
+    .card{padding:22px 20px 20px}
+    .dek{font-size:1.05rem}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .btn:hover{transform:none}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead">
+    <svg class="sun" viewBox="0 0 120 120" aria-hidden="true">
+      <g fill="none" stroke="#E53935" stroke-width="4.5" stroke-linecap="round">
+        <path d="M60 24c-19 1-33 15-33 34 1 20 16 34 35 33 19-1 32-16 31-35-1-18-15-32-33-32z" opacity=".95"/>
+        <path d="M62 27c-18 0-31 15-31 33 0 19 15 33 33 32" opacity=".55"/>
+        <path d="M60 12v-9M60 117v-9M12 60H3M117 60h-9M26 26l-6-6M100 100l-6-6M26 94l-6 6M100 20l-6 6" stroke="#4d94d8"/>
+      </g>
+    </svg>
+    <svg class="cloud" viewBox="0 0 160 76" aria-hidden="true">
+      <path d="M22 58c-11 0-16-7-14-15 2-7 9-9 13-8 1-11 11-18 22-16 5-13 24-16 32-5 12-5 24 3 23 15 10 0 15 6 14 14-1 9-9 15-19 15z"
+            fill="none" stroke="#90CAF9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M34 62c14 3 30 3 44 0" fill="none" stroke="#90CAF9" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+    </svg>
+
+    <p class="kicker">Sheet no. 100 &mdash; wax on cartridge paper</p>
+    <h1 aria-label="Snake in the Garden">
+      <span class="w"><span class="l g" style="--r:-5deg;--y:2px">S</span><span class="l g" style="--r:3deg;--y:-3px">n</span><span class="l g" style="--r:-2deg;--y:1px">a</span><span class="l g" style="--r:5deg;--y:-2px">k</span><span class="l g" style="--r:-3deg;--y:3px">e</span></span>
+      <span class="w"><span class="l k" style="--r:4deg;--y:-2px">i</span><span class="l k" style="--r:-4deg;--y:2px">n</span></span>
+      <span class="w"><span class="l s" style="--r:2deg;--y:-3px">t</span><span class="l s" style="--r:-5deg;--y:1px">h</span><span class="l s" style="--r:3deg;--y:2px">e</span></span>
+      <span class="w"><span class="l r" style="--r:-4deg;--y:-2px">G</span><span class="l r" style="--r:5deg;--y:3px">a</span><span class="l r" style="--r:-2deg;--y:-1px">r</span><span class="l r" style="--r:4deg;--y:2px">d</span><span class="l r" style="--r:-5deg;--y:-3px">e</span><span class="l r" style="--r:2deg;--y:1px">n</span></span>
+    </h1>
+    <svg class="rule" viewBox="0 0 560 14" aria-hidden="true" preserveAspectRatio="none">
+      <path d="M4 9c40-7 62 5 104-1s58-8 96-1 62 6 100 0 58-7 96 0 60 6 156-2" fill="none" stroke="#4CAF50" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+    </svg>
+    <p class="dek">There is a snake in my garden and she is always hungry. Feed her the apples. Do not let her touch the fence, and do not let her bite her own tail, because that is rude.</p>
+  </header>
+
+  <main>
+    <section class="play" aria-labelledby="play-h">
+      <h2 id="play-h" class="sr-only">Play the garden</h2>
+
+      <div class="board">
+        <div class="scoreline">
+          <div class="score-block">
+            <span class="score-label">Apples</span>
+            <span class="score-num apples" id="s-apples">0</span>
+          </div>
+          <div class="score-block mid">
+            <span class="score-label">Snake is</span>
+            <span class="score-num len" id="s-len">3</span>
+          </div>
+          <div class="score-block end">
+            <span class="score-label">Best ever</span>
+            <span class="score-num best" id="s-best">0</span>
+          </div>
+        </div>
+
+        <div class="holder" id="holder">
+          <canvas id="garden" role="img" aria-label="A crayon drawing of a garden with a wobbly fence, a green snake and a red apple."></canvas>
+          <div class="overlay" id="overlay">
+            <div class="note" id="note">
+              <h3 id="note-title">Ready?</h3>
+              <p id="note-body">Press the arrow keys, or swipe across the paper, to make her go.</p>
+              <button class="btn go" id="note-btn" type="button">Start drawing</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pad" aria-label="Direction pad">
+          <div class="pad-row"><button type="button" data-dir="up" aria-label="Go up">&#9650;</button></div>
+          <div class="pad-row">
+            <button type="button" data-dir="left" aria-label="Go left">&#9664;</button>
+            <button type="button" data-dir="down" aria-label="Go down">&#9660;</button>
+            <button type="button" data-dir="right" aria-label="Go right">&#9654;</button>
+          </div>
+        </div>
+        <p class="live" id="live" role="status" aria-live="polite"></p>
+      </div>
+
+      <aside class="card tilt-a howto">
+        <span class="tape" aria-hidden="true"></span>
+        <h2>How to play</h2>
+        <p>She only moves forwards. You are only allowed to choose which way forwards is.</p>
+        <div class="keys" aria-hidden="true">
+          <span class="keycap">&#8592;</span>
+          <span class="keycap">&#8593;</span>
+          <span class="keycap">&#8595;</span>
+          <span class="keycap">&#8594;</span>
+          <span class="or">or W A S D, or swipe</span>
+        </div>
+        <p><b>Space</b> starts the game and pauses it again. <b>Enter</b> begins a fresh sheet after she bumps into something.</p>
+
+        <h3>Rules of the garden</h3>
+        <ol class="rules">
+          <li><span class="swatch sw-red" aria-hidden="true"></span><b>Apples</b> are for eating. Each one makes her one square longer and a little bit faster.</li>
+          <li><span class="swatch sw-ink" aria-hidden="true"></span><b>The fence</b> is for keeping the rabbits out, not for headbutting. Touching it ends the drawing.</li>
+          <li><span class="swatch sw-green" aria-hidden="true"></span><b>Her own tail</b> counts as the fence. She forgets this constantly.</li>
+          <li>The grass is only grass. You may drive straight over it and nothing will happen.</li>
+        </ol>
+
+        <div class="erase">
+          <button class="btn" id="erase" type="button">Rub out best score</button>
+          <small>Kept in this browser only.</small>
+        </div>
+      </aside>
+    </section>
+
+    <section class="notes" aria-labelledby="notes-h">
+      <div class="notes-head">
+        <svg width="34" height="30" viewBox="0 0 34 30" aria-hidden="true" style="flex:none;transform:rotate(-8deg)">
+            <ellipse cx="17" cy="17" rx="11" ry="10" fill="none" stroke="#E53935" stroke-width="3"/>
+            <path d="M17 7v20" stroke="#333" stroke-width="2.4" fill="none"/>
+            <circle cx="11" cy="14" r="1.9" fill="#333"/><circle cx="23" cy="15" r="1.9" fill="#333"/>
+            <circle cx="12" cy="21" r="1.7" fill="#333"/><circle cx="22" cy="21" r="1.7" fill="#333"/>
+            <path d="M13 6c-2-3-5-4-8-3M21 6c2-3 5-4 8-3" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </svg>
+          <h2 id="notes-h">Field notes</h2>
+        <svg class="squiggle" viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M2 7c30-6 44 4 74-1s44-6 72 0 46 5 76-1 44-4 174 2" fill="none" stroke="#E53935" stroke-width="3.5" stroke-linecap="round" opacity=".7"/>
+        </svg>
+      </div>
+
+      <div class="grid">
+        <article class="card tilt-b">
+          <span class="num" aria-hidden="true">1</span>
+          <h2>The real snake</h2>
+          <p>The snake who actually lives at the bottom of our garden is a grass snake. She is olive coloured with a yellow collar and she is not the slightest bit interested in apples.</p>
+          <p>What she eats is frogs, newts and the occasional slow worm, and she swallows them whole and head first because she has no way of cutting anything up. In October she goes down under the compost heap and does not come out again until the ground is warm, which is usually about the same week the first bees turn up.</p>
+        </article>
+
+        <article class="card tilt-a">
+          <span class="num" aria-hidden="true">2</span>
+          <h2>The apple tree</h2>
+          <p>Ours is a Bramley and it leans badly to the south because of the wind coming over the allotments. Bramleys are cooking apples, so if you bite one raw your whole face folds up.</p>
+          <p>The windfalls are the important ones. They go soft and brown in the grass and every wasp for half a mile knows about it within a day. We are supposed to collect them in a bucket every evening. We do this roughly twice a summer. The rest of the crop goes to the birds, the wasps and, once, a very determined badger.</p>
+        </article>
+
+        <article class="card tilt-b">
+          <span class="num" aria-hidden="true">3</span>
+          <h2>How it was drawn</h2>
+          <p>Nothing on this sheet is a straight line. Every stroke in the garden is drawn three or four times over, each pass nudged a pixel or two off course, so the wax looks like it caught on the tooth of the paper.</p>
+          <p>Then the whole picture is redrawn nine or ten times a second with fresh wobble, which animators call boiling. If you have asked your computer for less motion, the wobble is frozen and the drawing simply sits still, which is also fine.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="sig">drawn by hand &mdash; 100 of 100</span>
+    <p style="margin:0">Green crayon, red crayon, blue crayon, black crayon. One sheet of paper. <a href="#play-h" style="color:var(--red)">Back to the garden</a>.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var cv = document.getElementById("garden");
+  var ctx = cv.getContext("2d");
+  var holder = document.getElementById("holder");
+  var overlay = document.getElementById("overlay");
+  var noteTitle = document.getElementById("note-title");
+  var noteBody = document.getElementById("note-body");
+  var noteBtn = document.getElementById("note-btn");
+  var live = document.getElementById("live");
+  var elApples = document.getElementById("s-apples");
+  var elLen = document.getElementById("s-len");
+  var elBest = document.getElementById("s-best");
+
+  var GRID = 15;
+  var W = 520, H = 520, PAD = 30, cell = 30;
+
+  // ---- deterministic-when-reduced random ---------------------------------
+  var seed = 1234567;
+  function rnd(){
+    if (!REDUCED) return Math.random();
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
+
+  // ---- crayon primitives -------------------------------------------------
+  function jitter(pts, amp, step){
+    var out = [], i, k, n, t, x1, y1, x2, y2, d;
+    for (i = 0; i < pts.length - 1; i++){
+      x1 = pts[i][0]; y1 = pts[i][1]; x2 = pts[i+1][0]; y2 = pts[i+1][1];
+      d = Math.hypot(x2 - x1, y2 - y1);
+      n = Math.max(1, Math.round(d / step));
+      for (k = 0; k < n; k++){
+        t = k / n;
+        out.push([x1 + (x2-x1)*t + (rnd()-0.5)*amp, y1 + (y2-y1)*t + (rnd()-0.5)*amp]);
+      }
+    }
+    var last = pts[pts.length-1];
+    out.push([last[0] + (rnd()-0.5)*amp, last[1] + (rnd()-0.5)*amp]);
+    return out;
+  }
+
+  function crayon(pts, color, width, passes, amp, alpha, close){
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = color;
+    var p, j, i;
+    for (p = 0; p < passes; p++){
+      j = jitter(pts, amp, Math.max(7, width * 0.9));
+      ctx.globalAlpha = alpha * (0.62 + 0.38 * rnd());
+      ctx.lineWidth = width * (0.82 + 0.3 * rnd());
+      ctx.beginPath();
+      ctx.moveTo(j[0][0], j[0][1]);
+      for (i = 1; i < j.length; i++) ctx.lineTo(j[i][0], j[i][1]);
+      if (close) ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function ring(cx, cy, r, n){
+    var pts = [], i, a;
+    for (i = 0; i <= n; i++){
+      a = (i / n) * Math.PI * 2;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    return pts;
+  }
+
+  function scribbleDisc(cx, cy, r, color, alpha){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
+    ctx.strokeStyle = color; ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(2.4, r * 0.42);
+    var step = ctx.lineWidth * 0.72, y;
+    for (y = -r*1.5; y < r*1.5; y += step){
+      ctx.globalAlpha = alpha * (0.5 + 0.5 * rnd());
+      ctx.beginPath();
+      ctx.moveTo(cx - r*1.5 + (rnd()-0.5)*3, cy + y + (rnd()-0.5)*2.4);
+      ctx.lineTo(cx + r*1.5 + (rnd()-0.5)*3, cy + y + r*0.55 + (rnd()-0.5)*2.4);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // ---- static scenery seeds ---------------------------------------------
+  var tufts = [], flowers = [], i;
+  for (i = 0; i < 44; i++) tufts.push([Math.random(), Math.random(), 0.72 + Math.random()*0.7, Math.random() < 0.32 ? "#37833b" : "#4CAF50"]);
+  for (i = 0; i < 5; i++) flowers.push([0.08 + Math.random()*0.84, 0.08 + Math.random()*0.84]);
+
+  // ---- game state --------------------------------------------------------
+  var STATE = "idle";
+  var snake = [], dir = {x:1,y:0}, queue = [], apple = {x:10,y:7};
+  var score = 0, best = 0, stepMs = 150, acc = 0, lastT = 0, boilT = 0;
+
+  try { best = parseInt(localStorage.getItem("gardenSnakeBest") || "0", 10) || 0; } catch(e){ best = 0; }
+
+  function reset(){
+    var mid = Math.floor(GRID/2);
+    snake = [{x:mid-1,y:mid},{x:mid-2,y:mid},{x:mid-3,y:mid}];
+    dir = {x:1,y:0}; queue = []; score = 0; stepMs = 150; acc = 0;
+    placeApple();
+    updateHud();
+  }
+
+  function placeApple(){
+    var free = [], x, y, k, ok;
+    for (x = 0; x < GRID; x++) for (y = 0; y < GRID; y++){
+      ok = true;
+      for (k = 0; k < snake.length; k++) if (snake[k].x === x && snake[k].y === y){ ok = false; break; }
+      if (ok) free.push({x:x,y:y});
+    }
+    apple = free.length ? free[Math.floor(Math.random()*free.length)] : {x:0,y:0};
+  }
+
+  function updateHud(){
+    elApples.textContent = String(score);
+    elLen.textContent = String(snake.length);
+    elBest.textContent = String(best);
+  }
+
+  function say(msg){ live.textContent = msg; }
+
+  function showNote(title, body, btn){
+    noteTitle.textContent = title;
+    noteBody.textContent = body;
+    noteBtn.textContent = btn;
+    overlay.hidden = false;
+  }
+
+  function start(){
+    reset();
+    STATE = "playing";
+    overlay.hidden = true;
+    acc = 0; lastT = performance.now();
+    say("Off she goes.");
+  }
+
+  function pause(){
+    if (STATE !== "playing") return;
+    STATE = "paused";
+    showNote("Having a rest", "She has stopped in the grass. Nothing will move until you say so.", "Carry on");
+    noteBtn.focus();
+  }
+
+  function resume(){
+    if (STATE !== "paused") return;
+    STATE = "playing"; overlay.hidden = true; lastT = performance.now(); acc = 0;
+  }
+
+  function gameOver(reason){
+    STATE = "over";
+    if (score > best){
+      best = score;
+      try { localStorage.setItem("gardenSnakeBest", String(best)); } catch(e){}
+    }
+    updateHud();
+    showNote("Oh dear", reason + " She ate " + score + (score === 1 ? " apple." : " apples.") + " Best ever is " + best + ".", "Draw it again");
+    noteBtn.focus();
+    say("Game over. " + score + " apples. Best " + best + ".");
+  }
+
+  function turn(nx, ny){
+    var lastDir = queue.length ? queue[queue.length-1] : dir;
+    if (lastDir.x === -nx && lastDir.y === -ny) return;
+    if (lastDir.x === nx && lastDir.y === ny) return;
+    if (queue.length < 3) queue.push({x:nx, y:ny});
+  }
+
+  function step(){
+    if (queue.length) dir = queue.shift();
+    var head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y}, k;
+
+    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID){
+      gameOver("She went straight into the fence."); return;
+    }
+    for (k = 0; k < snake.length - 1; k++){
+      if (snake[k].x === head.x && snake[k].y === head.y){
+        gameOver("She bit her own tail again."); return;
+      }
+    }
+    snake.unshift(head);
+    if (head.x === apple.x && head.y === apple.y){
+      score++;
+      stepMs = Math.max(78, 150 - score * 4);
+      placeApple();
+      say("Apple. " + score + ".");
+    } else {
+      snake.pop();
+    }
+    updateHud();
+  }
+
+  // ---- drawing -----------------------------------------------------------
+  function cx(i){ return PAD + (i + 0.5) * cell; }
+
+  function draw(){
+    if (REDUCED) seed = 1234567;
+    ctx.clearRect(0, 0, W, H);
+
+    // paper inside the fence: a pale wash of green
+    ctx.fillStyle = "#f2f8ec";
+    ctx.fillRect(PAD*0.5, PAD*0.5, W - PAD, H - PAD);
+
+    var inner = PAD * 0.55, outer = W - PAD * 0.55;
+
+    // grass tufts
+    var g, gx, gy, gs;
+    for (g = 0; g < tufts.length; g++){
+      gx = inner + tufts[g][0] * (outer - inner);
+      gy = inner + PAD * 0.5 + tufts[g][1] * (outer - inner - PAD * 0.5);
+      gs = cell * 0.32 * tufts[g][2];
+      var gc = tufts[g][3];
+      crayon([[gx - gs*0.7, gy + gs], [gx - gs*0.2, gy - gs*0.6]], gc, 2.8, 1, 1.6, 0.62);
+      crayon([[gx, gy + gs], [gx + gs*0.1, gy - gs]], gc, 2.8, 1, 1.6, 0.7);
+      crayon([[gx + gs*0.7, gy + gs], [gx + gs*0.3, gy - gs*0.5]], gc, 2.8, 1, 1.6, 0.56);
+    }
+    // a few blue flowers
+    for (g = 0; g < flowers.length; g++){
+      gx = inner + flowers[g][0] * (outer - inner);
+      gy = inner + PAD + flowers[g][1] * (outer - inner - PAD);
+      crayon(ring(gx, gy, cell*0.15, 7), "#90CAF9", 3.2, 2, 1.5, 0.8, true);
+      crayon([[gx, gy + cell*0.14],[gx + cell*0.05, gy + cell*0.4]], "#4CAF50", 2.4, 1, 1.4, 0.5);
+    }
+
+    // the fence
+    var f = PAD * 0.62, fo = W - PAD * 0.62;
+    crayon([[f,f],[fo,f],[fo,fo],[f,fo],[f,f]], "#333333", 5.5, 3, 2.4, 0.55);
+    crayon([[f+7,f+7],[fo-7,f+7],[fo-7,fo-7],[f+7,fo-7],[f+7,f+7]], "#333333", 3, 2, 2.6, 0.3);
+    // pickets
+    var n = 9, t, px;
+    for (t = 1; t < n; t++){
+      px = f + (fo - f) * (t / n);
+      crayon([[px, f - 5], [px, f + 16]], "#333333", 3.4, 2, 2, 0.4);
+      crayon([[px, fo - 16], [px, fo + 5]], "#333333", 3.4, 2, 2, 0.4);
+      crayon([[f - 5, px], [f + 16, px]], "#333333", 3.4, 2, 2, 0.4);
+      crayon([[fo - 16, px], [fo + 5, px]], "#333333", 3.4, 2, 2, 0.4);
+    }
+
+    // apple
+    var ax = cx(apple.x), ay = cx(apple.y), ar = cell * 0.34;
+    scribbleDisc(ax, ay, ar, "#E53935", 0.72);
+    crayon(ring(ax, ay, ar, 11), "#E53935", 3.2, 2, 1.8, 0.85, true);
+    crayon([[ax + 1, ay - ar], [ax + 2, ay - ar - cell*0.22]], "#333333", 2.6, 2, 1.4, 0.7);
+    crayon([[ax + 2, ay - ar - cell*0.16], [ax + cell*0.22, ay - ar - cell*0.3]], "#4CAF50", 3, 2, 1.4, 0.75);
+
+    // snake
+    if (snake.length){
+      var pts = [], k2;
+      for (k2 = snake.length - 1; k2 >= 0; k2--) pts.push([cx(snake[k2].x), cx(snake[k2].y)]);
+      var bw = cell * 0.62;
+      crayon(pts, "#37833b", bw * 1.06, 2, 1.6, 0.42);
+      crayon(pts, "#4CAF50", bw, 3, 1.9, 0.5);
+      // belly highlight
+      crayon(pts, "#8fd48f", bw * 0.34, 1, 2.2, 0.4);
+      // scale ticks
+      var s2;
+      for (s2 = 1; s2 < snake.length; s2 += 2){
+        var sxp = cx(snake[s2].x), syp = cx(snake[s2].y);
+        crayon([[sxp - bw*0.28, syp - bw*0.28],[sxp + bw*0.28, syp + bw*0.2]], "#37833b", 2, 1, 1.6, 0.35);
+      }
+      // head
+      var hx = cx(snake[0].x), hy = cx(snake[0].y);
+      crayon(ring(hx, hy, bw*0.56, 10), "#4CAF50", 5, 2, 1.6, 0.6, true);
+      var ex = -dir.y, ey = dir.x, off = bw * 0.26;
+      ctx.fillStyle = "#333333";
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(hx + ex*off + dir.x*off*0.6, hy + ey*off + dir.y*off*0.6, bw*0.11, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx - ex*off + dir.x*off*0.6, hy - ey*off + dir.y*off*0.6, bw*0.11, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // tongue
+      var tl = cell * 0.44;
+      crayon([[hx + dir.x*bw*0.5, hy + dir.y*bw*0.5],[hx + dir.x*tl, hy + dir.y*tl]], "#E53935", 2.4, 2, 1.2, 0.8);
+      crayon([[hx + dir.x*tl, hy + dir.y*tl],[hx + dir.x*tl*1.3 + ex*4, hy + dir.y*tl*1.3 + ey*4]], "#E53935", 2, 1, 1, 0.8);
+      crayon([[hx + dir.x*tl, hy + dir.y*tl],[hx + dir.x*tl*1.3 - ex*4, hy + dir.y*tl*1.3 - ey*4]], "#E53935", 2, 1, 1, 0.8);
+    }
+  }
+
+  // ---- loop --------------------------------------------------------------
+  var raf = 0;
+  function frame(t){
+    raf = requestAnimationFrame(frame);
+    if (document.hidden) { lastT = t; return; }
+    var dt = Math.min(200, t - lastT); lastT = t;
+    var needsDraw = false;
+
+    if (STATE === "playing"){
+      acc += dt;
+      while (acc >= stepMs && STATE === "playing"){ acc -= stepMs; step(); needsDraw = true; }
+    }
+    boilT += dt;
+    if (boilT >= 108 && !REDUCED){ boilT = 0; needsDraw = true; }
+    if (needsDraw) draw();
+  }
+
+  document.addEventListener("visibilitychange", function(){
+    if (!document.hidden) lastT = performance.now();
+    else if (STATE === "playing") pause();
+  });
+
+  // ---- sizing ------------------------------------------------------------
+  function resize(){
+    var box = holder.getBoundingClientRect();
+    var size = Math.max(240, Math.round(box.width));
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(size * dpr);
+    cv.height = Math.round(size * dpr);
+    cv.style.height = size + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = size; H = size;
+    PAD = Math.max(20, size * 0.062);
+    cell = (W - PAD * 2) / GRID;
+    draw();
+  }
+  if (window.ResizeObserver){
+    new ResizeObserver(resize).observe(holder);
+  } else {
+    window.addEventListener("resize", resize);
+  }
+
+  // ---- input -------------------------------------------------------------
+  var KEYS = {
+    ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0],
+    w:[0,-1], s:[0,1], a:[-1,0], d:[1,0], W:[0,-1], S:[0,1], A:[-1,0], D:[1,0]
+  };
+  document.addEventListener("keydown", function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = KEYS[e.key];
+    if (k){
+      if (STATE === "idle" || STATE === "over"){ start(); }
+      else if (STATE === "paused"){ resume(); }
+      turn(k[0], k[1]);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === " " || e.code === "Space"){
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "BUTTON" || tag === "A") return;
+      e.preventDefault();
+      if (STATE === "playing") pause();
+      else if (STATE === "paused") resume();
+      else start();
+      return;
+    }
+    if (e.key === "Enter" && (STATE === "over" || STATE === "idle")){
+      if ((e.target && e.target.tagName) === "BUTTON") return;
+      start();
+    }
+  });
+
+  noteBtn.addEventListener("click", function(){
+    if (STATE === "paused") resume(); else start();
+    holder.focus && holder.focus();
+  });
+
+  document.getElementById("erase").addEventListener("click", function(){
+    best = 0;
+    try { localStorage.removeItem("gardenSnakeBest"); } catch(e){}
+    updateHud();
+    say("Best score rubbed out.");
+  });
+
+  var pad = document.querySelector(".pad");
+  pad.addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if (!b) return;
+    var m = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]}[b.getAttribute("data-dir")];
+    if (STATE === "idle" || STATE === "over") start();
+    else if (STATE === "paused") resume();
+    turn(m[0], m[1]);
+  });
+
+  // swipe
+  var sx = 0, sy = 0, tracking = false;
+  holder.addEventListener("pointerdown", function(e){
+    sx = e.clientX; sy = e.clientY; tracking = true;
+  });
+  holder.addEventListener("pointerup", function(e){
+    if (!tracking) return;
+    tracking = false;
+    var dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.hypot(dx, dy) < 24){
+      if (overlay.hidden === false && e.target.tagName === "BUTTON") return;
+      if (STATE === "playing") pause();
+      else if (STATE === "paused") resume();
+      else start();
+      return;
+    }
+    if (STATE === "idle" || STATE === "over") start();
+    else if (STATE === "paused") resume();
+    if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+    else turn(0, dy > 0 ? 1 : -1);
+  });
+  holder.addEventListener("pointercancel", function(){ tracking = false; });
+
+  // ---- go ----------------------------------------------------------------
+  reset();
+  resize();
+  showNote("Ready?", "Press the arrow keys, or swipe across the paper, to make her go.", "Start drawing");
+  raf = requestAnimationFrame(function(t){ lastT = t; frame(t); });
+})();
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CEEFAX P100 — Headlines</title>
-<meta name="description" content="A working teletext service in the browser: index, headlines, mosaic weather map and TV listings on a fixed 40×25 character grid, with a live clock and page numbers that spin every eight seconds.">
+<meta name="description" content="A working teletext receiver in the browser: index, headlines, mosaic weather map and TV listings on a fixed 40×25 character grid, with a live clock, a dial-a-page keypad and page numbers that spin every eight seconds.">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='2' y='3' width='4' height='4' fill='%23f00'/%3E%3Crect x='6' y='3' width='4' height='4' fill='%23ff0'/%3E%3Crect x='10' y='3' width='4' height='4' fill='%230f0'/%3E%3Crect x='2' y='7' width='4' height='4' fill='%230ff'/%3E%3Crect x='6' y='7' width='4' height='4' fill='%2300f'/%3E%3Crect x='10' y='7' width='4' height='4' fill='%23f0f'/%3E%3Crect x='2' y='11' width='12' height='2' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,33 +13,62 @@
 <style>
 :root{
   --k:#000;--r:#f00;--g:#0f0;--y:#ff0;--c:#0ff;--m:#f0f;--b:#00f;--w:#fff;
-  --dim:#7a7a7a;--dimmer:#2a2a2a;
-  --cw:16px;               /* character cell width, set by JS to an integer */
-  --ch:calc(var(--cw) * 1.85);   /* set by JS to an integer too */
-  --fs:calc(var(--cw) * 2.5); /* VT323 advance width is exactly 0.4em */
+  --dim:#8b8b8b;--dimmer:#3a3a3a;--off:#1d1d1d;
+  --cab:#161616;--cab2:#0b0b0b;--edge:#2e2e2e;--key:#242424;
+  --cw:16px;                     /* character cell width, set by JS to an integer */
+  --ch:30px;                     /* cell height, integer too */
+  --fsr:2.5;                     /* VT323 advance width is exactly 0.4em; measured at runtime */
+  --fs:calc(var(--cw) * var(--fsr));
+  --pad:6px;--bez:5px;--ring:3px;--ring2:4px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--k);color:var(--w)}
+html,body{margin:0;background:#060606;color:var(--w)}
 body{
   font-family:'VT323',ui-monospace,'Courier New',monospace;
   -webkit-font-smoothing:none;font-smooth:never;text-rendering:optimizeSpeed;
-  min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:20px;padding:12px 8px 16px;overflow-x:hidden
-}
-@media (min-width:1000px){
-  body{flex-direction:row;align-items:center;gap:48px;padding:12px 24px}
+  min-height:100dvh;display:flex;justify-content:center;align-items:flex-start;
+  padding:var(--pad);overflow-x:hidden
 }
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.set{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:100%}
 
-/* ---- the 40 x 25 grid ---- */
-.tv{width:calc(var(--cw) * 40);flex:none}
-.screen{width:100%;background:var(--k);position:relative}
+@media (min-width:1100px){
+  :root{--pad:20px;--bez:18px;--ring:5px;--ring2:6px}
+  body{align-items:center}
+  .set{flex-direction:row;align-items:center;justify-content:center;gap:28px;width:auto}
+  .rack{order:-1}
+}
+
+/* ---------------------------------------------------------- the cabinet */
+.tv{flex:none;max-width:100%}
+.cabinet{
+  background:var(--cab);padding:var(--bez);
+  border:1px solid var(--edge);
+  box-shadow:inset 0 0 0 2px #202020, inset 0 2px 0 2px #2a2a2a, 0 0 0 var(--ring) var(--cab2), 0 0 0 var(--ring2) #232323;
+}
+.tube{position:relative;width:calc(var(--cw) * 40);background:var(--k);overflow:hidden;
+  box-shadow:inset 0 0 0 2px #000, 0 0 0 2px #050505}
+.scan{position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.30) 0 1px,rgba(0,0,0,0) 1px 3px)}
+.sweep{position:absolute;left:0;right:0;height:14%;top:0;pointer-events:none;z-index:3;
+  background:rgba(255,255,255,.045);animation:sweep 7.5s linear infinite}
+@keyframes sweep{from{transform:translateY(-120%)}to{transform:translateY(760%)}}
+
+.plate{display:flex;align-items:center;gap:10px;margin-top:var(--bez);
+  font-size:clamp(15px,calc(var(--cw) * .95),20px);letter-spacing:.14em;color:var(--dim);line-height:1}
+.plate .mk{color:var(--w);letter-spacing:.22em}
+.plate .sp{flex:1;height:2px;background:#1f1f1f;min-width:8px}
+.led{width:9px;height:9px;flex:none;background:#3a0000;box-shadow:inset 0 0 0 1px #000}
+.led.on{background:var(--r)}
+.led.tx{background:#003a00}
+.led.tx.lit{background:var(--g)}
+
+/* ---------------------------------------------------------- the 40 x 25 grid */
 .row{display:flex;height:var(--ch);width:100%}
 .row.dh{height:calc(var(--ch) * 2)}
 .c{
   flex:none;width:var(--cw);height:var(--ch);
-  font-size:var(--fs);line-height:var(--ch);white-space:pre;overflow:visible;
-  text-align:center
+  font-size:var(--fs);line-height:var(--ch);white-space:pre;overflow:visible;text-align:center
 }
 .row.dh .c{transform:scaleY(2);transform-origin:0 0}
 .c.m{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
@@ -50,7 +79,7 @@ body{
 .body.rx .row{animation:rx 1ms steps(1) both}
 
 /* fastext row: real buttons */
-.fx{display:flex;height:var(--ch);width:100%}
+.fx{display:flex;height:var(--ch);width:100%;position:relative;z-index:4}
 .fx button{
   flex:none;display:flex;appearance:none;border:0;margin:0;padding:0;background:var(--k);cursor:pointer;
   font:inherit;font-size:var(--fs);line-height:var(--ch);height:var(--ch);width:calc(var(--cw) * 10);
@@ -61,54 +90,131 @@ body{
 .fx button:hover span,.fx button:focus-visible span{background:var(--lk);color:var(--k)}
 .fx button:focus-visible{outline:2px solid var(--w);outline-offset:-2px}
 
-/* ---- remote control ---- */
-.remote{
-  width:calc(var(--cw) * 40);max-width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
-  justify-items:stretch;align-items:center;flex:none
+/* ---------------------------------------------------------- receiver rack */
+.rack{
+  width:calc(var(--cw) * 40);max-width:100%;flex:none;
+  font-size:clamp(17px,calc(var(--cw) * 1.15),22px);line-height:1.3;
+  background:#0b0b0b;border:1px solid #1c1c1c;padding:12px 14px
 }
-@media (min-width:1000px){ .remote{width:240px;gap:10px} }
-.remote button{
-  appearance:none;border:2px solid var(--dimmer);background:var(--k);color:var(--dim);cursor:pointer;
-  font:inherit;font-size:clamp(20px,calc(var(--cw) * 1.5),34px);line-height:1;padding:.3em 0;width:100%
+@media (min-width:1100px){ .rack{width:212px;align-self:center;padding:16px 14px} }
+.rk{margin:0 0 4px;font-size:1em;font-weight:400;letter-spacing:.18em;color:var(--y)}
+.rk+*{margin-top:0}
+.rack hr{border:0;border-top:2px solid #1c1c1c;margin:12px 0}
+.cl{list-style:none;margin:0;padding:0}
+.cl button{
+  display:flex;gap:8px;width:100%;appearance:none;border:0;background:none;cursor:pointer;
+  font:inherit;color:var(--c);padding:1px 4px;text-align:left
 }
-.remote button:hover{border-color:var(--dim);color:var(--w)}
-.remote button:focus-visible{outline:2px solid var(--y);outline-offset:2px}
-.remote button[aria-pressed="true"]{border-color:var(--r);color:var(--r);border-style:solid}
-.remote .hold{grid-column:1 / -1}
-.remote .lbl{grid-column:1 / -1;margin:2px 0 0;text-align:center;color:var(--dim);font-size:clamp(16px,var(--cw),18px);line-height:1.25}
-.remote .lbl kbd{color:var(--w);font:inherit}
-.remote .brand{grid-column:1 / -1;margin:0;text-align:center;color:var(--dim);font-size:clamp(18px,calc(var(--cw) * 1.3),26px);line-height:1;letter-spacing:.1em}
-.remote .brand b{color:var(--w);font-weight:400}
-.hi{color:var(--w)}
+.cl button b{font-weight:400;color:var(--w);flex:none}
+.cl button:hover{background:#161616}
+.cl button:focus-visible{outline:2px solid var(--y);outline-offset:-2px}
+.cl li.cur button{background:var(--y);color:#000}
+.cl li.cur button b{color:#000}
+.cl li.cur button::after{content:'\25C0';margin-left:auto;color:#000}
+.bar{display:flex;gap:2px;height:12px;margin:5px 0 3px}
+.bar i{flex:1;background:var(--off)}
+.bar i.on{background:var(--g)}
+.bar.held i.on{background:var(--r)}
+.sig{display:flex;gap:3px;align-items:flex-end;height:14px}
+.sig i{width:6px;background:var(--off);height:100%}
+.sig i.on{background:var(--c)}
+.kv{display:flex;justify-content:space-between;gap:10px;color:var(--dim)}
+.kv b{font-weight:400;color:var(--w)}
+.now{color:var(--g)}
+.note{margin:10px 0 0;color:var(--dim);line-height:1.25}
+
+/* ---------------------------------------------------------- the handset */
+.remote{width:calc(var(--cw) * 40);max-width:100%;flex:none}
+@media (min-width:1100px){ .remote{width:212px;align-self:center} }
+.handset{background:#161616;border:1px solid var(--edge);padding:12px;
+  box-shadow:inset 0 0 0 2px #202020, inset 0 2px 0 2px #2a2a2a, 0 0 0 var(--ring) var(--cab2), 0 0 0 var(--ring2) #232323}
+.brand{margin:0 0 10px;text-align:center;color:var(--dim);line-height:1;letter-spacing:.2em;
+  font-size:clamp(17px,calc(var(--cw) * 1.15),22px)}
+.brand b{color:var(--w);font-weight:400}
+.ck{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.k{
+  appearance:none;border:1px solid #333;background:var(--key);color:var(--w);cursor:pointer;
+  font:inherit;font-size:clamp(19px,calc(var(--cw) * 1.35),30px);line-height:1;padding:.34em 0;
+  width:100%;box-shadow:0 2px 0 0 #000;text-align:center
+}
+.k:hover{background:#333}
+.k:active{transform:translateY(2px);box-shadow:none}
+.k:focus-visible{outline:2px solid var(--y);outline-offset:2px}
+.ck .k{display:flex;align-items:center;gap:7px;padding:.3em .45em;font-size:clamp(16px,var(--cw),20px);text-align:left}
+.ck .k i{width:11px;height:14px;flex:none;background:var(--lk)}
+.k.hold{grid-column:1 / -1;margin-top:6px;letter-spacing:.2em;font-size:clamp(17px,calc(var(--cw) * 1.1),22px)}
+.k.hold[aria-pressed="true"]{background:var(--r);border-color:var(--r);color:#000}
+.lbl{margin:10px 0 0;text-align:center;color:var(--dim);line-height:1.3;
+  font-size:clamp(15px,calc(var(--cw) * .98),19px)}
+.lbl kbd{color:var(--w);font:inherit;background:#242424;padding:0 5px;border:1px solid #333}
 
 @media (prefers-reduced-motion:reduce){
   .body.rx .row{animation:none}
+  .sweep{display:none}
+  .k:active{transform:none}
 }
 </style>
 </head>
 <body>
-<h1 class="sr-only">CEEFAX P100 — Headlines. A teletext service.</h1>
+<h1 class="sr-only">CEEFAX page 100 — a teletext receiver</h1>
 
-<main class="tv" aria-label="Teletext screen">
-  <div class="screen">
-    <div class="row" id="hdr" aria-hidden="true"></div>
-    <div class="body rx" id="body" aria-hidden="true"></div>
-    <nav class="fx" id="fx" aria-label="Fastext links"></nav>
-  </div>
-  <section class="sr-only" id="sr" aria-live="polite" aria-atomic="true"></section>
-</main>
+<div class="set">
 
-<nav class="remote" aria-label="Remote control">
-  <p class="brand"><b>TELETEXT</b> REMOTE</p>
-  <button type="button" data-d="1">1</button><button type="button" data-d="2">2</button><button type="button" data-d="3">3</button>
-  <button type="button" data-d="4">4</button><button type="button" data-d="5">5</button><button type="button" data-d="6">6</button>
-  <button type="button" data-d="7">7</button><button type="button" data-d="8">8</button><button type="button" data-d="9">9</button>
-  <button type="button" data-act="prev" aria-label="Previous page">&#9664;</button>
-  <button type="button" data-d="0">0</button>
-  <button type="button" data-act="next" aria-label="Next page">&#9654;</button>
-  <button type="button" class="hold" data-act="hold" id="holdBtn" aria-pressed="false">HOLD</button>
-  <p class="lbl">Type a page number<br><kbd>H</kbd> hold &middot; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> step<br>In service: <span class="hi">100 101 199 400 600</span></p>
-</nav>
+  <main class="tv" aria-label="Teletext screen">
+    <div class="cabinet">
+      <div class="tube">
+        <div class="row" id="hdr" aria-hidden="true"></div>
+        <div class="body rx" id="body" aria-hidden="true"></div>
+        <nav class="fx" id="fx" aria-label="Fastext colour links"></nav>
+        <div class="scan" aria-hidden="true"></div>
+        <div class="sweep" aria-hidden="true"></div>
+      </div>
+      <p class="plate"><span class="mk">MULLARD</span><i class="sp"></i><span>TELETEXT</span>
+        <i class="led tx" id="txLed" aria-hidden="true"></i><i class="led on" aria-hidden="true"></i></p>
+    </div>
+    <section class="sr-only" id="sr" aria-live="polite" aria-atomic="true"></section>
+  </main>
+
+  <aside class="rack" aria-label="Receiver status">
+    <h2 class="rk">CAROUSEL</h2>
+    <ol class="cl" id="carousel"></ol>
+    <hr>
+    <h2 class="rk">NEXT PAGE</h2>
+    <div class="bar" id="dwell" aria-hidden="true"></div>
+    <p class="kv" style="margin:0"><span class="now" id="nowLbl">Transmitting 100</span><b id="dwellNum">8s</b></p>
+    <hr>
+    <h2 class="rk">RECEIVER</h2>
+    <div class="sig" id="sig" aria-hidden="true"></div>
+    <p class="kv" style="margin:6px 0 0"><span>VBI lines</span><b>17 18 333</b></p>
+    <p class="kv" style="margin:0"><span>Data rate</span><b>6.9375M</b></p>
+    <p class="kv" style="margin:0"><span>Magazine</span><b>1 of 8</b></p>
+    <p class="note">Every page is broadcast in a loop. The set cannot ask for a page — it waits for the number you dial to come round again.</p>
+  </aside>
+
+  <nav class="remote" aria-label="Remote control">
+    <div class="handset">
+      <p class="brand"><b>CEEFAX</b> REMOTE</p>
+      <div class="ck">
+        <button type="button" class="k" style="--lk:#f00" data-go="101" aria-label="Red key: News, page 101"><i></i>News</button>
+        <button type="button" class="k" style="--lk:#0f0" data-go="400" aria-label="Green key: Weather, page 400"><i></i>Weather</button>
+        <button type="button" class="k" style="--lk:#ff0" data-go="600" aria-label="Yellow key: TV tonight, page 600"><i></i>TV</button>
+        <button type="button" class="k" style="--lk:#0ff" data-go="100" aria-label="Cyan key: Index, page 100"><i></i>Index</button>
+      </div>
+      <div class="pad">
+        <button type="button" class="k" data-d="1">1</button><button type="button" class="k" data-d="2">2</button><button type="button" class="k" data-d="3">3</button>
+        <button type="button" class="k" data-d="4">4</button><button type="button" class="k" data-d="5">5</button><button type="button" class="k" data-d="6">6</button>
+        <button type="button" class="k" data-d="7">7</button><button type="button" class="k" data-d="8">8</button><button type="button" class="k" data-d="9">9</button>
+        <button type="button" class="k" data-act="prev" aria-label="Previous page">&#9664;</button>
+        <button type="button" class="k" data-d="0">0</button>
+        <button type="button" class="k" data-act="next" aria-label="Next page">&#9654;</button>
+        <button type="button" class="k hold" data-act="hold" id="holdBtn" aria-pressed="false">HOLD</button>
+      </div>
+      <p class="lbl">Dial any three digits<br><kbd>H</kbd> hold &middot; <kbd>&larr;</kbd><kbd>&rarr;</kbd> step</p>
+    </div>
+  </nav>
+
+</div>
 
 <script>
 (() => {
@@ -216,7 +322,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
   p.line(17, '{w}A tribute to the BBC teletext service');
   p.line(18, '{w}that ran from 1974 to 2012. Pages turn');
   p.line(19, '{w}on their own every eight seconds.');
-  p.line(21, '{g}In service tonight: 100 101 400 600 199');
+  p.line(21, '{g}In service: 100 101 102 400 600 199');
   p.line(22, '{m}Other numbers ring engaged. Type any');
   p.line(23, '{m}three digits, or use the colour keys.');
   p.fastext(FX);
@@ -226,7 +332,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 // P101 — headlines
 {
   const p = new Page(101, 'Headlines');
-  p.line(1,  '{D}{Bb}{y} HEADLINES                     {w}101 ');
+  p.line(1,  '{D}{Bb}{y} HEADLINES                          {w}101 ');
   const HL = [
     [3,  'Severn tidal barrage gets planning', 'consent after a nine-year inquiry', '102'],
     [6,  'Rail fares frozen for a second year', 'as ministers admit passenger slump', '103'],
@@ -246,7 +352,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 // P400 — weather map
 {
   const p = new Page(400, 'Weather');
-  p.line(1, '{D}{Bb}{y} WEATHER  {w}Tomorrow\'s highs         {w}400 ');
+  p.line(1, '{D}{Bb}{y} WEATHER  {w}Tomorrow\'s highs          {w}400 ');
   p.fill(3, 15, 0, 12, 'b');
   const uk = [
     '..........####........',
@@ -320,7 +426,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 // P600 — TV listings
 {
   const p = new Page(600, 'TV tonight');
-  p.line(1,  '{D}{Bm}{w} TV TONIGHT  ' + LONGDAY.padEnd(21) + '{y}600 ');
+  p.line(1,  '{D}{Bm}{w} TV TONIGHT  ' + LONGDAY.padEnd(23) + '{y}600 ');
   p.line(3,  '{g}CHANNEL ONE');
   p.line(4,  '{c}18.00 {w}The Six O\'Clock Bulletin');
   p.line(5,  '{c}18.30 {w}Regional News and Weather');
@@ -346,7 +452,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 // P199 — about
 {
   const p = new Page(199, 'About this page');
-  p.line(1,  '{D}{Br}{w} ABOUT THIS PAGE                {y}199 ');
+  p.line(1,  '{D}{Br}{w} ABOUT THIS PAGE                    {y}199 ');
   p.line(3,  '{w}Ceefax was the first teletext service');
   p.line(4,  '{w}in the world, carried in spare lines of');
   p.line(5,  '{w}the television picture from 1974 until');
@@ -362,6 +468,7 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
   p.line(17, '{w}0-9  page number    {w}H  hold / release');
   p.line(18, '{w}left and right arrows  previous / next');
   p.line(19, '{w}Coloured keys below jump to the pages.');
+  p.line(20, '{w}Numbers off the carousel ring engaged.');
   p.line(21, '{g}Type: VT323 by Peter Hull');
   p.line(22, '{g}Colour: the eight teletext primaries');
   p.fastext(FX);
@@ -371,13 +478,13 @@ const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 // engaged page for numbers not in service
 function engaged(n){
   const p = new Page(n, 'Page not in service');
-  p.line(1,  '{D}{Br}{w} PAGE NOT IN SERVICE            {y}' + n + ' ');
+  p.line(1,  '{D}{Br}{w} PAGE NOT IN SERVICE                {y}' + n + ' ');
   p.line(4,  '{w}Page ' + n + ' is not being transmitted');
   p.line(5,  '{w}this evening.');
   p.line(7,  '{c}Pages in service:');
   p.line(8,  '{y}100 {w}Index       {y}101 {w}Headlines');
-  p.line(9,  '{y}400 {w}Weather     {y}600 {w}TV tonight');
-  p.line(10, '{y}199 {w}About this page');
+  p.line(9,  '{y}102 {w}Barrage     {y}400 {w}Weather');
+  p.line(10, '{y}600 {w}TV tonight  {y}199 {w}About');
   p.line(12, '{g}The carousel resumes in a moment.');
   p.line(15, '{Br}     {By}     {Bg}     {Bc}     {Bb}     {Bm}     {Bw}     {Bk}');
   p.line(16, '{Bk}     {Bw}     {Bm}     {Bb}     {Bc}     {Bg}     {By}     {Br}     ');
@@ -389,12 +496,39 @@ function engaged(n){
   return p;
 }
 
+
+// P102 — the story behind the first headline
+{
+  const p = new Page(102, 'Severn barrage');
+  p.line(1,  '{D}{Bb}{y} SEVERN BARRAGE                     {w}102 ');
+  p.line(3,  '{w}Planning consent for a tidal barrage');
+  p.line(4,  '{w}across the Severn estuary was granted');
+  p.line(5,  '{w}this afternoon, ending an inquiry that');
+  p.line(6,  '{w}has run since the spring of 2017.');
+  p.line(8,  '{c}The scheme');
+  p.line(9,  '{w}A 16km wall of caissons from Lavernock');
+  p.line(10, '{w}Point to Brean Down, carrying 214');
+  p.line(11, '{w}turbines and a two-lane road. First');
+  p.line(12, '{w}power is expected in the winter of 2034.');
+  p.line(14, '{y}Output      {w}5.2 GW at spring tides');
+  p.line(15, '{y}Cost        {w}GBP 24.6bn over 11 years');
+  p.line(16, '{y}Mudflats    {w}12,800 hectares altered');
+  p.line(18, '{g}"It is the largest single low-carbon');
+  p.line(19, '{g}decision this country has ever taken,"');
+  p.line(20, '{g}the Secretary of State told MPs.');
+  p.line(22, '{m}Objectors have 42 days to seek review.');
+  p.line(23, '{c}Business 200   Weather 400   Index 100');
+  p.fastext(FX);
+  pages[102] = p;
+}
+
 /* ------------------------------------------------------------------ rendering */
 const hdr = document.getElementById('hdr');
 const bodyEl = document.getElementById('body');
 const fxEl = document.getElementById('fx');
 const srEl = document.getElementById('sr');
 const holdBtn = document.getElementById('holdBtn');
+const txLed = document.getElementById('txLed');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
 function cellEl(cell){
@@ -434,6 +568,9 @@ function renderBody(page){
   const ul = document.createElement('ul');
   for (const t of page.plain()){ const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
   srEl.replaceChildren(h2, ul);
+
+  txLed.classList.add('lit');
+  clearTimeout(txLed._t); txLed._t = setTimeout(() => txLed.classList.remove('lit'), 420);
 }
 
 // header: P### ....CEEFAX ###  Wed 03 Sep 21:14/30
@@ -452,13 +589,49 @@ function tick(){
 }
 
 /* ------------------------------------------------------------------ carousel + spin */
-const ORDER = [100, 101, 400, 600, 199];
+const ORDER = [100, 101, 102, 400, 600, 199];
 const DWELL = 8000;
 let current = 100, shown = 100, hold = false, timer = 0, spinning = false, typed = '';
 let spinReq = 0;
 
+/* ---- receiver rack: carousel list, dwell bar, signal ---- */
+const clEl = document.getElementById('carousel');
+const dwellEl = document.getElementById('dwell');
+const dwellNum = document.getElementById('dwellNum');
+const nowLbl = document.getElementById('nowLbl');
+const blocks = [], clItems = {};
+for (const n of ORDER){
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.go = n;
+  const num = document.createElement('b'); num.textContent = n;
+  b.append(num, document.createTextNode(pages[n].title));
+  li.appendChild(b); clEl.appendChild(li); clItems[n] = li;
+}
+for (let i=0; i<20; i++){ const b = document.createElement('i'); dwellEl.appendChild(b); blocks.push(b); }
+{
+  const sig = document.getElementById('sig');
+  for (let i=0; i<9; i++){ const b = document.createElement('i'); b.style.height = (44 + i*7) + '%'; if (i < 8) b.className = 'on'; sig.appendChild(b); }
+}
+clEl.addEventListener('click', e => { const b = e.target.closest('button'); if (b) go(+b.dataset.go); });
+
+let dwellStart = performance.now(), dwellRaf = 0, lastN = -1;
+function dwellFrame(now){
+  dwellRaf = 0;
+  if (document.hidden) return;
+  const n = hold ? 20 : Math.max(0, Math.round((1 - Math.min(1, (now - dwellStart) / DWELL)) * 20));
+  if (n !== lastN){
+    lastN = n;
+    for (let i=0; i<20; i++) blocks[i].classList.toggle('on', i < n);
+    dwellNum.textContent = hold ? 'HELD' : Math.ceil(n * DWELL / 20000) + 's';
+  }
+  dwellRaf = requestAnimationFrame(dwellFrame);
+}
+function startDwell(){ if (!dwellRaf && !document.hidden) dwellRaf = requestAnimationFrame(dwellFrame); }
+
 function schedule(){
   clearTimeout(timer);
+  dwellStart = performance.now(); lastN = -1; startDwell();
   if (hold || document.hidden) return;
   timer = setTimeout(() => { const i = ORDER.indexOf(current); go(ORDER[(i+1) % ORDER.length], true); }, DWELL);
 }
@@ -467,7 +640,15 @@ function land(n){
   current = n; shown = n;
   setHdr(15, String(n), hold ? 'r' : 'w');
   if (hold) setHdr(15, 'HLD', 'r');
-  renderBody(pages[n] || engaged(n));
+  const page = pages[n] || engaged(n);
+  renderBody(page);
+  for (const k of ORDER){
+    const on = k === n;
+    clItems[k].classList.toggle('cur', on);
+    const b = clItems[k].firstChild;
+    if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+  }
+  nowLbl.textContent = (ORDER.indexOf(n) < 0 ? 'Dialled ' : 'Transmitting ') + n;
   schedule();
 }
 
@@ -505,6 +686,8 @@ function setHold(v){
   hold = v;
   holdBtn.setAttribute('aria-pressed', String(v));
   holdBtn.textContent = v ? 'HELD' : 'HOLD';
+  dwellEl.classList.toggle('held', v);
+  lastN = -1; startDwell();
   if (v){ clearTimeout(timer); if (!spinning) setHdr(15, 'HLD', 'r'); }
   else { if (!spinning) setHdr(15, String(current), 'w'); schedule(); }
 }
@@ -528,31 +711,50 @@ document.addEventListener('keydown', e => {
 });
 document.querySelector('.remote').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.d !== undefined) digit(b.dataset.d);
+  if (b.dataset.go !== undefined) go(+b.dataset.go);
+  else if (b.dataset.d !== undefined) digit(b.dataset.d);
   else if (b.dataset.act === 'prev') step(-1);
   else if (b.dataset.act === 'next') step(1);
   else if (b.dataset.act === 'hold') setHold(!hold);
 });
 
 /* ------------------------------------------------------------------ sizing: integer cell widths keep the pixels crisp */
+// Measure the advance width of whatever font actually rendered, so one glyph fills
+// exactly one cell even if VT323 never arrives and a system monospace stands in.
+function calibrate(){
+  const s = document.createElement('span');
+  s.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;font:100px/1 'VT323',ui-monospace,'Courier New',monospace";
+  s.textContent = 'M'.repeat(50);
+  document.body.appendChild(s);
+  const adv = s.getBoundingClientRect().width / 50 / 100;   // em per px of font-size
+  s.remove();
+  if (adv > 0.05) document.documentElement.style.setProperty('--fsr', (1 / adv).toFixed(3));
+}
+
 function size(){
   const vw = document.documentElement.clientWidth, vh = window.innerHeight;
-  const side = vw >= 1000;
-  const byW = (vw - (side ? 48 + 48 + 240 : 16)) / 40;
-  const byH = (vh - (side ? 24 : 300)) / 46.25;   // 25 rows of 1.85cw
-  const cw = Math.max(8, Math.floor(Math.min(byW, byH)));
+  const side = vw >= 1100;
+  const pad = side ? 20 : 6, bez = side ? 18 : 5, ring = side ? 6 : 4;
+  // desktop: pad | rack 212 | 28 | cabinet | 28 | remote 212 | pad
+  const chrome = side ? (pad*2 + 212 + 212 + 56 + bez*2 + 14) : (pad*2 + bez*2 + ring*2 - 6);
+  const byW = (vw - chrome) / 40;
+  // stacked: the set is the hero and the rack scrolls in below, so reserve only a peek
+  const byH = (vh - pad*2 - bez*2 - 52 - (side ? 10 : 90)) / 46.25;   // 25 rows of 1.85cw + name plate
+  const cw = Math.max(8, Math.min(30, Math.floor(Math.min(byW, byH))));
   const ch = Math.ceil(cw * 1.85);
   document.documentElement.style.setProperty('--cw', cw + 'px');
   document.documentElement.style.setProperty('--ch', ch + 'px');
 }
+calibrate();
 size();
 addEventListener('resize', size);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { calibrate(); size(); });
 
 /* ------------------------------------------------------------------ clock + visibility */
 let clock = 0;
 function startClock(){ clearInterval(clock); tick(); clock = setInterval(tick, 1000); }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden){ clearInterval(clock); clearTimeout(timer); }
+  if (document.hidden){ clearInterval(clock); clearTimeout(timer); cancelAnimationFrame(dwellRaf); dwellRaf = 0; }
   else { startClock(); schedule(); }
 });
 startClock();

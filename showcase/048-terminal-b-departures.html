@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal B — Departures</title>
+<meta name="description" content="A working Solari split-flap departures board for Terminal B: sixteen flights, forty-one flaps per module, statuses that turn over on their own, and the clack that goes with them.">
+<meta name="theme-color" content="#0C0C0C">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230C0C0C'/%3E%3Crect x='8' y='10' width='48' height='20' rx='2' fill='%231E1E1E'/%3E%3Crect x='8' y='34' width='48' height='20' rx='2' fill='%231E1E1E'/%3E%3Crect x='8' y='30' width='48' height='4' fill='%230C0C0C'/%3E%3Crect x='8' y='34' width='48' height='9' fill='%23FFB300'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0C0C0C;
+  --flap:#1E1E1E;
+  --flap-lo:#171717;
+  --white:#F5F5F5;
+  --amber:#FFB300;
+  --amber-lo:#8A6205;
+  --red:#E53935;
+  --red-t:#EF5350;
+  --dim:#9E9E9E;
+  --line:#2B2B2B;
+  --cw:clamp(13px, 1.72vw, 27px);
+  --ch:calc(var(--cw) * 1.56);
+  --gap:3px;
+  --colgap:calc(var(--cw) * .62);
+  --step:28ms;            /* half of one flap step (JS STEP = 56ms) */
+  --font:"Barlow Condensed","Oswald","Arial Narrow",Arial,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--ink);-webkit-text-size-adjust:100%}
+body{
+  background:var(--ink);
+  color:var(--white);
+  font-family:var(--font);
+  font-size:17px;line-height:1.45;
+  overflow-x:hidden;
+  background-image:
+    radial-gradient(120% 70% at 50% -10%, #191919 0%, rgba(12,12,12,0) 62%),
+    repeating-linear-gradient(180deg, rgba(255,255,255,.018) 0 1px, rgba(0,0,0,0) 1px 4px);
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:-999px;top:8px;z-index:20;background:var(--amber);color:#0C0C0C;padding:8px 14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-decoration:none}
+.skip:focus{left:12px}
+.wrap{max-width:1360px;margin:0 auto;padding:0 clamp(14px,3vw,42px)}
+
+/* ============ FLAP MODULE ============ */
+.f{
+  position:relative;display:block;flex:0 0 auto;
+  width:var(--cw);height:var(--ch);
+  margin-right:var(--gap);
+  background:#0A0A0A;border-radius:2px;
+  perspective:190px;
+  contain:layout paint style;
+  color:var(--fg,var(--white));
+}
+.f b{
+  position:absolute;left:0;right:0;overflow:hidden;
+  background:linear-gradient(180deg,#232323 0%,var(--flap) 55%,var(--flap-lo) 100%);
+  font-weight:600;font-style:normal;
+}
+.f .u,.f .fu{top:0;bottom:calc(50% + 1px);border-radius:2px 2px 0 0;
+  background:linear-gradient(180deg,#343434 0%,#232323 100%)}
+.f .d,.f .fd{top:calc(50% + 1px);bottom:0;border-radius:0 0 2px 2px;
+  background:linear-gradient(180deg,#282828 0%,#161616 100%)}
+.f .fd{background:linear-gradient(180deg,#3C3C3C 0%,#1A1A1A 100%)}
+.f b::before{
+  content:attr(data-c);
+  position:absolute;left:0;width:100%;
+  height:var(--ch);line-height:var(--ch);
+  font-size:calc(var(--cw) * 1.19);
+  text-align:center;
+  color:inherit;
+}
+.f .u::before,.f .fu::before{top:0}
+.f .d::before,.f .fd::before{top:calc(var(--ch) / -2 - 1px)}
+.f .fu{z-index:3;transform-origin:50% 100%;visibility:hidden}
+.f .fd{z-index:4;transform-origin:50% 0%;visibility:hidden}
+.f .fu,.f .fd{backface-visibility:hidden}
+@keyframes fuA{from{transform:rotateX(0)}to{transform:rotateX(-90deg)}}
+@keyframes fdA{from{transform:rotateX(88deg)}to{transform:rotateX(0)}}
+@keyframes fuB{from{transform:rotateX(0)}to{transform:rotateX(-90deg)}}
+@keyframes fdB{from{transform:rotateX(88deg)}to{transform:rotateX(0)}}
+.ga .fu{visibility:visible;animation:fuA var(--step) cubic-bezier(.45,.05,.85,.5) both}
+.ga .fd{visibility:visible;animation:fdA var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
+.gb .fu{visibility:visible;animation:fuB var(--step) cubic-bezier(.45,.05,.85,.5) both}
+.gb .fd{visibility:visible;animation:fdB var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
+
+.grp{display:flex;align-items:center;--fg:var(--white)}
+.grp.amber{--fg:var(--amber)}
+.grp.red{--fg:var(--red-t)}
+.grp.dim{--fg:#7C7C7C}
+
+/* ============ ENAMEL SIGN ============ */
+.sign{
+  display:flex;align-items:stretch;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);
+  font-size:13px;letter-spacing:.19em;text-transform:uppercase;
+}
+.sign .b{display:flex;align-items:center;gap:.55em;padding:11px 0;color:var(--dim)}
+.sign .b+.b{margin-left:auto;padding-left:18px}
+.sign strong{color:var(--white);font-weight:600;letter-spacing:.22em}
+.sign .pill{background:var(--amber);color:#0C0C0C;font-weight:700;padding:2px 9px 1px;letter-spacing:.2em}
+.sign .dotlive{width:7px;height:7px;background:var(--amber);border-radius:50%;animation:blip 2s steps(2,end) infinite}
+@keyframes blip{0%,50%{opacity:1}51%,100%{opacity:.18}}
+
+/* ============ HERO ============ */
+.hero{padding:clamp(22px,3.4vw,42px) 0 clamp(16px,2vw,26px)}
+.eyebrow{font-size:13px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber);font-weight:600}
+.hero h1{margin:14px 0 0;line-height:1}
+.word{--cw:clamp(23px,5.1vw,66px);--ch:calc(var(--cw)*1.56);display:flex;flex-wrap:wrap;--fg:var(--amber)}
+.word .f{margin-right:clamp(2px,.35vw,5px)}
+.lede{margin-top:20px;max-width:44ch;color:var(--dim);font-size:clamp(16px,1.25vw,19px);line-height:1.5}
+.lede em{color:var(--white);font-style:normal;font-weight:500}
+.heroGrid{display:grid;gap:clamp(22px,3vw,48px);align-items:end}
+@media(min-width:940px){.heroGrid{grid-template-columns:minmax(0,1fr) auto}}
+.clockbox{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+@media(min-width:940px){.clockbox{align-items:flex-end}}
+.clock{--cw:clamp(21px,2.6vw,36px);--ch:calc(var(--cw)*1.56);display:flex;--fg:var(--white)}
+.clock .sep{--fg:var(--amber)}
+.facts{display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.facts div{border-top:1px solid var(--line);padding-top:6px;min-width:78px}
+.facts dt{color:#6F6F6F;font-size:11px;letter-spacing:.18em}
+.facts dd{color:var(--white);font-weight:600;font-size:15px;letter-spacing:.1em}
+
+/* ============ CONTROLS ============ */
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:clamp(20px,2.6vw,34px);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}
+.key{
+  position:relative;
+  border:1px solid #3A3A3A;background:linear-gradient(180deg,#1F1F1F,#141414);
+  color:var(--white);padding:9px 16px 8px;
+  font-size:13px;font-weight:600;letter-spacing:.17em;text-transform:uppercase;
+  box-shadow:0 2px 0 #000,inset 0 1px 0 rgba(255,255,255,.07);
+  transition:none;
+}
+.key:hover{border-color:var(--amber);color:var(--amber)}
+.key:active,.key.down{transform:translateY(2px);box-shadow:0 0 0 #000,inset 0 2px 5px rgba(0,0,0,.8)}
+.key[aria-pressed="true"]{background:linear-gradient(180deg,#FFC233,var(--amber));color:#0C0C0C;border-color:var(--amber)}
+.key .led{display:inline-block;width:7px;height:7px;margin-right:8px;vertical-align:1px;background:#3E3E3E;border-radius:50%;box-shadow:inset 0 0 2px #000}
+.key[aria-pressed="true"] .led{background:#0C0C0C}
+.ctl-note{margin-left:auto;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:#6F6F6F}
+.ctl-note b{color:var(--amber);font-weight:600}
+
+/* ============ BOARD ============ */
+.boardsec{padding:clamp(18px,2.4vw,30px) 0 clamp(30px,4vw,60px)}
+.frame{
+  position:relative;
+  background:linear-gradient(180deg,#151515,#0B0B0B);
+  border:1px solid #242424;
+  border-top:2px solid var(--amber-lo);
+  padding:clamp(10px,1.4vw,18px);
+  box-shadow:0 0 0 1px #000,0 30px 60px -30px #000;
+}
+.frame::before,.frame::after{content:"";position:absolute;width:5px;height:5px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#4A4A4A,#0D0D0D);top:8px}
+.frame::before{left:8px}.frame::after{right:8px}
+.boardwrap{overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin;scrollbar-color:#3A3A3A #0E0E0E;-webkit-overflow-scrolling:touch}
+.boardwrap::-webkit-scrollbar{height:9px}
+.boardwrap::-webkit-scrollbar-track{background:#0E0E0E}
+.boardwrap::-webkit-scrollbar-thumb{background:#3A3A3A}
+.boardwrap::-webkit-scrollbar-thumb:hover{background:var(--amber)}
+table.board{border-collapse:separate;border-spacing:0;margin:0 auto}
+.board th{
+  font-size:clamp(10px,.82vw,12.5px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--amber);text-align:left;padding:0 var(--colgap) 9px 0;white-space:nowrap;
+  border-bottom:1px solid #2E2416;
+}
+.board th.c-mark{padding-right:calc(var(--colgap)*.55)}
+.board th,.board td{position:relative}
+.board td{padding:0 var(--colgap) 0 0;vertical-align:middle}
+.board td.c-mark{padding-right:calc(var(--colgap)*.55)}
+.board tbody tr{cursor:pointer}
+.board tbody td{padding-top:calc(var(--cw)*.16);padding-bottom:calc(var(--cw)*.16)}
+.board tbody tr>td:first-child .grp{position:relative}
+.board tbody tr:hover .f{background:#141414}
+.board tbody tr:hover .f .u,.board tbody tr:hover .f .fu{background:linear-gradient(180deg,#343434 0%,#242424 100%)}
+.board tbody tr:hover .f .d{background:linear-gradient(180deg,#202020 0%,#151515 100%)}
+.board tbody tr.on .mkbar{background:var(--amber)}
+.mkbar{position:absolute;left:calc(var(--cw)*-.42);top:6%;bottom:6%;width:3px;background:#242424}
+.markbtn{display:block;padding:0;line-height:0}
+.markbtn:focus-visible{outline-offset:2px}
+.rowsep{height:1px;background:#191919}
+.board tbody tr.on .f .u{background:linear-gradient(180deg,#333026 0%,#22201A 100%)}
+
+.frameftr{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline;
+  margin-top:clamp(10px,1.4vw,16px);padding-top:11px;border-top:1px solid #1E1E1E;
+  font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#6F6F6F}
+.frameftr b{color:var(--dim);font-weight:500}
+.frameftr .amber{color:var(--amber)}
+.hint{margin-top:12px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#6F6F6F}
+@media(min-width:1180px){.hint{display:none}}
+
+/* ============ NOTES ============ */
+.notes{border-top:1px solid var(--line);padding:clamp(34px,4.5vw,66px) 0 0}
+.notes h2{font-size:13px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber);font-weight:600;margin-bottom:26px}
+.cols{display:grid;gap:clamp(26px,3vw,46px);grid-template-columns:1fr}
+@media(min-width:720px){.cols{grid-template-columns:1fr 1fr}}
+@media(min-width:1080px){.cols{grid-template-columns:repeat(4,1fr)}}
+.col h3{font-size:clamp(21px,1.7vw,26px);font-weight:600;letter-spacing:.01em;margin-bottom:10px;line-height:1.15}
+.col h3 span{color:var(--amber-lo);font-weight:500;display:block;font-size:12px;letter-spacing:.24em;text-transform:uppercase;margin-bottom:8px}
+.col p{color:var(--dim);font-size:16.5px;line-height:1.55;margin-bottom:11px}
+.col p b{color:var(--white);font-weight:600}
+.legend{list-style:none;font-size:15.5px;color:var(--dim);line-height:1.45}
+.legend li{display:grid;grid-template-columns:9.2em 1fr;gap:10px;padding:7px 0;border-top:1px solid #1C1C1C}
+.legend li:first-child{border-top:0;padding-top:0}
+.legend code{font-family:inherit;font-weight:600;letter-spacing:.11em;color:var(--white);font-size:14px}
+.legend .a{color:var(--amber)}.legend .r{color:var(--red-t)}
+.log{list-style:none;font-size:15px;color:var(--dim)}
+.log li{display:flex;gap:12px;padding:8px 0;border-top:1px solid #1C1C1C}
+.log li:first-child{border-top:0}
+.log time{color:var(--amber-lo);font-weight:600;letter-spacing:.09em;flex:0 0 auto;font-size:13.5px;padding-top:1px}
+
+footer{margin-top:clamp(38px,5vw,72px);border-top:1px solid var(--line);
+  padding:20px 0 46px;display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#5E5E5E}
+footer .r{margin-left:auto}
+footer a{color:#8A8A8A;text-decoration:none;border-bottom:1px solid #333}
+footer a:hover{color:var(--amber);border-color:var(--amber)}
+
+@media (prefers-reduced-motion: reduce){
+  .ga .fu,.ga .fd,.gb .fu,.gb .fd{animation:none!important;visibility:hidden!important}
+  .sign .dotlive{animation:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#board">Skip to the departures board</a>
+
+<div class="wrap">
+  <div class="sign">
+    <div class="b"><span class="pill">Terminal B</span> Concourse 3 &middot; Gates B01–B44</div>
+    <div class="b"><span class="dotlive" aria-hidden="true"></span> Board live &middot; Solari di Udine Mk IV</div>
+  </div>
+
+  <header class="hero">
+    <div class="heroGrid">
+      <div>
+        <p class="eyebrow">Public information display 07</p>
+        <h1>
+          <span class="sr">Departures</span>
+          <span class="word" id="word" aria-hidden="true"></span>
+        </h1>
+        <p class="lede">Six hundred and twenty-four flap modules, hung in a single aluminium spine above the security exit. <em>Nothing here fades.</em> Every letter arrives by falling.</p>
+      </div>
+      <div class="clockbox">
+        <div class="clock" id="clock" aria-hidden="true"></div>
+        <dl class="facts">
+          <div><dt>Board</dt><dd id="f-board">B / DEP</dd></div>
+          <div><dt>Showing</dt><dd id="f-show">16 / 28</dd></div>
+          <div><dt>Modules</dt><dd id="f-mod">624</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="key" id="btn-roll" type="button">Roll board</button>
+      <button class="key" id="btn-flip" type="button">Re-flip all</button>
+      <button class="key" id="btn-sound" type="button" aria-pressed="false"><span class="led" aria-hidden="true"></span>Clack</button>
+      <p class="ctl-note">Tracking <b id="trackn">0</b> flights &middot; tap a row to mark it</p>
+    </div>
+  </header>
+</div>
+
+<main>
+  <section class="boardsec wrap" id="board" aria-labelledby="board-h">
+    <h2 class="sr" id="board-h">Departures board</h2>
+    <div class="frame">
+      <div class="boardwrap" tabindex="0" role="group" aria-label="Departures board, scrollable horizontally">
+        <table class="board">
+          <caption class="sr">Sixteen scheduled departures from Terminal B, with flight number, destination, gate and status. Statuses update automatically.</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="c-mark"><span class="sr">Tracked</span></th>
+              <th scope="col">Time</th>
+              <th scope="col">Flight</th>
+              <th scope="col">Destination</th>
+              <th scope="col">Gate</th>
+              <th scope="col">Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="frameftr">
+        <span>Last flap <b id="lastflap">—</b></span>
+        <span>Queue <b id="queuen">12</b> inbound</span>
+        <span>Flap cycle <b>41 characters</b></span>
+        <span class="amber" id="mstat">Board settled</span>
+      </div>
+    </div>
+    <p class="hint">Drag or swipe the board sideways to read the remarks column.</p>
+  </section>
+
+  <section class="notes wrap" aria-labelledby="notes-h">
+    <h2 id="notes-h">Notes from the concourse</h2>
+    <div class="cols">
+      <article class="col">
+        <h3><span>01 — Mechanism</span>Forty-one flaps, one drum</h3>
+        <p>Each character you see is a self-contained module: a stack of forty-one hinged plastic flaps on a horizontal drum, each flap carrying the bottom half of one letter and the top half of the next. A stepper motor turns the drum one detent at a time and an optical index tells the controller where the alphabet currently sits.</p>
+        <p>The board cannot jump. To show a <b>Z</b> when it is resting on a <b>C</b>, it must fall through all the letters in between — which is why a whole board changing at once sounds like rain on a metal roof, and why nobody who has heard it wants a screen instead.</p>
+      </article>
+      <article class="col">
+        <h3><span>02 — Rhythm</span>Fifty-six milliseconds</h3>
+        <p>One flap falls in fifty-six milliseconds. The modules are wired in columns rather than rows, so a full board refresh starts at the left edge and travels right, arriving as a wave rather than a bang. The stagger is not decorative: driving six hundred motors simultaneously would brown out the cabinet.</p>
+        <p>Turn on <b>Clack</b> above and the board gets its voice back. It is off by default, because at four in the morning this hall is the quietest room in the country and we would like to keep it that way.</p>
+      </article>
+      <article class="col">
+        <h3><span>03 — Reading it</span>Status legend</h3>
+        <ul class="legend">
+          <li><code>ON TIME</code><span>Aircraft on stand, no reported delay.</span></li>
+          <li><code>CHECK-IN</code><span>Desks open in the landside hall.</span></li>
+          <li><code class="a">BOARDING</code><span>Gate open. Allow twelve minutes on foot.</span></li>
+          <li><code class="a">FINAL CALL</code><span>Doors close in ten minutes.</span></li>
+          <li><code class="a">GATE CLOSED</code><span>No further acceptance at the gate.</span></li>
+          <li><code class="r">DELAYED</code><span>New time flapped into the time column.</span></li>
+          <li><code class="r">CANCELLED</code><span>See the transfer desk opposite B14.</span></li>
+          <li><code>DEPARTED</code><span>Off blocks; rolls off the board next cycle.</span></li>
+        </ul>
+      </article>
+      <article class="col">
+        <h3><span>04 — Log</span>Maintenance</h3>
+        <ul class="log">
+          <li><time datetime="2026-08-11">11 AUG</time><span>Module 4-17 (destination, row four) rebuilt: two flaps were catching on the letter <b>M</b>.</span></li>
+          <li><time datetime="2026-08-26">26 AUG</time><span>Cabinet fans cleaned. Board noise back down to 48 dB at three metres.</span></li>
+          <li><time datetime="2026-08-30">30 AUG</time><span>Spare drum set delivered from Udine. Six modules held in the workshop under B14.</span></li>
+          <li><time datetime="2026-09-02">02 SEP</time><span>Index sensor on the gate column realigned after a full-board reflow test.</span></li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>Terminal B — Departures</span>
+  <span>Flap board operated by Concourse Services</span>
+  <span class="r"><a href="#board">Back to the board</a></span>
+</footer>
+
+<p class="sr" id="live" aria-live="polite"></p>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- flap alphabet ---------- */
+var SEQ = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/\u25CF";
+var L = SEQ.length;
+var IDX = {};
+for (var i = 0; i < L; i++) IDX[SEQ.charAt(i)] = i;
+
+var STEP = 56;                       /* ms per flap; CSS --step is half of this */
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- module factory ---------- */
+var CELL = '<b class="u" data-c=" "></b><b class="d" data-c=" "></b><b class="fu" data-c=" "></b><b class="fd" data-c=" "></b>';
+
+function build(host, n){
+  var html = "";
+  for (var i = 0; i < n; i++) html += '<i class="f">' + CELL + "</i>";
+  host.insertAdjacentHTML("beforeend", html);
+  var nodes = host.querySelectorAll(".f");
+  var out = [];
+  for (var j = nodes.length - n; j < nodes.length; j++){
+    var el = nodes[j];
+    out.push({
+      el: el, u: el.children[0], d: el.children[1], fu: el.children[2], fd: el.children[3],
+      cur: " ", tgt: " ", next: 0, alt: false, inA: false, seq: SEQ
+    });
+  }
+  return out;
+}
+
+/* ---------- scheduler ---------- */
+var act = [];
+var raf = 0, wasHidden = false, lastClack = -1e9;
+
+function setTarget(c, ch, delay, back){
+  var sq = c.seq, sl = sq.length;
+  ch = String(ch).toUpperCase();
+  if (sq.indexOf(ch) < 0) ch = sq.charAt(0);
+  if (reduced){
+    c.cur = c.tgt = ch; c.u.dataset.c = ch; c.d.dataset.c = ch;
+    c.el.classList.remove("ga", "gb");
+    return;
+  }
+  if (back > 0){
+    var s = sq.charAt(((sq.indexOf(ch) - back) % sl + sl) % sl);
+    c.cur = s; c.u.dataset.c = s; c.d.dataset.c = s;
+    c.el.classList.remove("ga", "gb");
+  }
+  if (c.cur === ch && c.tgt === ch) return;
+  c.tgt = ch;
+  c.next = performance.now() + (delay || 0);
+  if (!c.inA){ c.inA = true; act.push(c); }
+}
+
+function setGroup(cells, str, o){
+  o = o || {};
+  var per = o.per || 0, d0 = o.d0 || 0, back = o.back || 0;
+  for (var i = 0; i < cells.length; i++){
+    setTarget(cells[i], str.charAt(i) || " ", d0 + i * per, back);
+  }
+}
+
+function step(c, now){
+  var sq = c.seq;
+  var ni = (sq.indexOf(c.cur) + 1) % sq.length;
+  var nc = sq.charAt(ni);
+  c.u.dataset.c = nc;
+  c.d.dataset.c = c.cur;
+  c.fu.dataset.c = c.cur;
+  c.fd.dataset.c = nc;
+  c.alt = !c.alt;
+  c.el.classList.remove(c.alt ? "gb" : "ga");
+  c.el.classList.add(c.alt ? "ga" : "gb");
+  c.cur = nc;
+  c.next = now + STEP;
+}
+
+function frame(now){
+  raf = requestAnimationFrame(frame);
+  if (document.hidden){ wasHidden = true; return; }
+  if (wasHidden){
+    wasHidden = false;
+    for (var k = 0; k < act.length; k++) act[k].next = now + (k % 40) * 5;
+  }
+  var moved = 0, quiet = 0;
+  for (var i = act.length - 1; i >= 0; i--){
+    var c = act[i];
+    if (now < c.next) continue;
+    if (c.cur === c.tgt){
+      c.d.dataset.c = c.cur;
+      c.u.dataset.c = c.cur;
+      c.el.classList.remove("ga", "gb");
+      c.inA = false;
+      act.splice(i, 1);
+      continue;
+    }
+    step(c, now);
+    if (c.q) quiet++; else moved++;
+  }
+  if (moved || quiet){
+    clack(now);
+  }
+  if (moved){
+    settleTimer = now + 400;
+    if (!busy){ busy = true; mstat.textContent = "Flapping"; }
+  } else if (busy && now > settleTimer){
+    busy = false;
+    mstat.textContent = "Board settled";
+    lastflap.textContent = clockText();
+  }
+}
+
+var busy = false, settleTimer = 0;
+
+/* ---------- audio: the clack ---------- */
+var actx = null, noise = null, sound = false;
+function initAudio(){
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  actx = new AC();
+  var n = Math.floor(actx.sampleRate * 0.035);
+  noise = actx.createBuffer(1, n, actx.sampleRate);
+  var d = noise.getChannelData(0);
+  for (var i = 0; i < n; i++){
+    var t = i / n;
+    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 7);
+  }
+  return true;
+}
+function clack(now){
+  if (!sound || !actx || now - lastClack < 26) return;
+  lastClack = now;
+  var s = actx.createBufferSource(); s.buffer = noise;
+  var f = actx.createBiquadFilter();
+  f.type = "bandpass"; f.frequency.value = 1500 + Math.random() * 1100; f.Q.value = 1.2;
+  var g = actx.createGain(); g.gain.value = 0.030 + Math.random() * 0.020;
+  s.connect(f); f.connect(g); g.connect(actx.destination);
+  s.start();
+}
+
+/* ---------- data ---------- */
+var STATUS = {
+  ONTIME:  { t: "ON TIME",     c: "" },
+  CHECKIN: { t: "CHECK-IN",    c: "" },
+  BOARD:   { t: "BOARDING",    c: "amber" },
+  FINAL:   { t: "FINAL CALL",  c: "amber" },
+  CLOSED:  { t: "GATE CLOSED", c: "amber" },
+  DEP:     { t: "DEPARTED",    c: "dim" },
+  DELAY:   { t: "DELAYED",     c: "red" },
+  CANCEL:  { t: "CANCELLED",   c: "red" }
+};
+var ORDER = ["ONTIME", "CHECKIN", "BOARD", "FINAL", "CLOSED", "DEP"];
+
+function fl(time, code, num, dest, gate, st){
+  return { time: time, sched: time, code: code, num: num, dest: dest, gate: gate, st: st, mark: false };
+}
+var FLIGHTS = [
+  fl("06:40", "SVX", "118", "REYKJAVIK",   "B04", "CLOSED"),
+  fl("06:55", "NRT", "402", "GOTHENBURG",  "B11", "BOARD"),
+  fl("07:10", "FJD", "217", "TROMSO",      "B07", "FINAL"),
+  fl("07:25", "AZL", "906", "CASABLANCA",  "B22", "BOARD"),
+  fl("07:40", "KPT", "331", "TBILISI",     "B15", "CHECKIN"),
+  fl("07:55", "TSL", "640", "LJUBLJANA",   "B09", "CHECKIN"),
+  fl("08:05", "HVN", "512", "MONTEVIDEO",  "B31", "DELAY"),
+  fl("08:20", "QRO", "188", "MARRAKECH",   "B18", "ONTIME"),
+  fl("08:35", "SVX", "774", "ULAANBAATAR", "B26", "ONTIME"),
+  fl("08:50", "NRT", "055", "HELSINKI",    "B12", "ONTIME"),
+  fl("09:05", "AZL", "243", "VALPARAISO",  "B29", "ONTIME"),
+  fl("09:15", "FJD", "380", "BERGEN",      "B06", "ONTIME"),
+  fl("09:30", "TSL", "921", "ZANZIBAR",    "B33", "CANCEL"),
+  fl("09:45", "KPT", "467", "PORT LOUIS",  "B24", "ONTIME"),
+  fl("10:00", "HVN", "139", "RECIFE",      "B30", "ONTIME"),
+  fl("10:15", "QRO", "802", "PALERMO",     "B19", "ONTIME")
+];
+var QUEUE = [
+  fl("10:30", "SVX", "256", "DAKAR",      "B05", "ONTIME"),
+  fl("10:45", "NRT", "611", "TALLINN",    "B14", "ONTIME"),
+  fl("11:00", "FJD", "129", "KIRKENES",   "B08", "ONTIME"),
+  fl("11:10", "AZL", "470", "LUANDA",     "B27", "ONTIME"),
+  fl("11:25", "TSL", "083", "KUCHING",    "B34", "ONTIME"),
+  fl("11:40", "KPT", "725", "ASTANA",     "B16", "ONTIME"),
+  fl("11:55", "HVN", "364", "CATANIA",    "B21", "ONTIME"),
+  fl("12:05", "QRO", "590", "BILBAO",     "B17", "ONTIME"),
+  fl("12:20", "SVX", "848", "CHENGDU",    "B25", "ONTIME"),
+  fl("12:35", "NRT", "202", "SPLIT",      "B10", "ONTIME"),
+  fl("12:50", "AZL", "715", "LIMERICK",   "B23", "ONTIME"),
+  fl("13:05", "FJD", "496", "KIGALI",     "B32", "ONTIME")
+];
+
+var W = { time: 5, flight: 7, dest: 11, gate: 3, rem: 11 };
+
+function pad(s, n){
+  s = String(s).toUpperCase();
+  if (s.length > n) s = s.slice(0, n);
+  while (s.length < n) s += " ";
+  return s;
+}
+
+/* ---------- build board ---------- */
+var rowsEl = document.getElementById("rows");
+var rows = [];
+var mstat = document.getElementById("mstat");
+var lastflap = document.getElementById("lastflap");
+var live = document.getElementById("live");
+
+function makeRow(index){
+  var tr = document.createElement("tr");
+  tr.setAttribute("data-i", index);
+
+  var tdM = document.createElement("td"); tdM.className = "c-mark";
+  var btn = document.createElement("button");
+  btn.type = "button"; btn.className = "markbtn"; btn.setAttribute("aria-pressed", "false");
+  var bar = document.createElement("span"); bar.className = "mkbar"; bar.setAttribute("aria-hidden", "true");
+  var gM = document.createElement("span"); gM.className = "grp amber"; gM.setAttribute("aria-hidden", "true");
+  gM.appendChild(bar);
+  btn.appendChild(gM);
+  tdM.appendChild(btn); tr.appendChild(tdM);
+
+  function col(cls, n){
+    var td = document.createElement("td");
+    var sr = document.createElement("span"); sr.className = "sr";
+    var g = document.createElement("span"); g.className = "grp " + cls; g.setAttribute("aria-hidden", "true");
+    td.appendChild(sr); td.appendChild(g);
+    tr.appendChild(td);
+    return { td: td, sr: sr, g: g, cells: build(g, n) };
+  }
+
+  var r = {
+    tr: tr, btn: btn, gM: gM,
+    mark: markCells(gM),
+    time: col("", W.time),
+    flight: col("", W.flight),
+    dest: col("", W.dest),
+    gate: col("amber", W.gate),
+    rem: col("", W.rem)
+  };
+  rowsEl.appendChild(tr);
+
+  var sep = document.createElement("tr");
+  sep.setAttribute("aria-hidden", "true");
+  var sepTd = document.createElement("td");
+  sepTd.colSpan = 6;
+  var line = document.createElement("div"); line.className = "rowsep";
+  sepTd.appendChild(line); sep.appendChild(sepTd); rowsEl.appendChild(sep);
+
+  btn.addEventListener("click", function(e){ e.stopPropagation(); toggleMark(index); });
+  tr.addEventListener("click", function(){ toggleMark(index); });
+  return r;
+}
+
+function markCells(gM){
+  var m = build(gM, 1);
+  m[0].seq = " \u25CF";
+  return m;
+}
+
+function paintRow(i, o){
+  var r = rows[i], f = FLIGHTS[i];
+  var s = STATUS[f.st];
+  var d0 = o.d0 || 0, per = o.per || 0, back = o.back || 0;
+  var k = 0;
+  function put(part, str, cls){
+    if (cls !== undefined){
+      part.g.className = "grp" + (cls ? " " + cls : "");
+    }
+    setGroup(part.cells, str, { d0: d0 + k * per, per: per, back: back });
+    k += part.cells.length;
+    part.sr.textContent = str.replace(/\s+/g, " ").trim();
+  }
+  var delayed = (f.st === "DELAY");
+  put(r.time, pad(f.time, W.time), delayed ? "red" : "");
+  put(r.flight, pad(f.code + " " + f.num, W.flight), "");
+  put(r.dest, pad(f.dest, W.dest), "");
+  put(r.gate, pad(f.st === "CANCEL" ? "—" : f.gate, W.gate), "amber");
+  put(r.rem, pad(s.t, W.rem), s.c);
+
+  r.time.td.setAttribute("aria-label", "Departs " + f.time);
+  r.flight.td.setAttribute("aria-label", "Flight " + f.code + " " + f.num);
+  r.gate.td.setAttribute("aria-label", "Gate " + f.gate);
+  r.rem.td.setAttribute("aria-label", "Status " + s.t);
+  r.btn.setAttribute("aria-label", (f.mark ? "Stop tracking " : "Track ") + f.code + " " + f.num + " to " + f.dest);
+}
+
+function toggleMark(i){
+  var f = FLIGHTS[i], r = rows[i];
+  f.mark = !f.mark;
+  r.tr.classList.toggle("on", f.mark);
+  r.btn.setAttribute("aria-pressed", f.mark ? "true" : "false");
+  r.btn.setAttribute("aria-label", (f.mark ? "Stop tracking " : "Track ") + f.code + " " + f.num + " to " + f.dest);
+  setTarget(r.mark[0], f.mark ? "\u25CF" : " ", 0, 0);
+  var n = 0;
+  for (var j = 0; j < FLIGHTS.length; j++) if (FLIGHTS[j].mark) n++;
+  document.getElementById("trackn").textContent = n;
+  live.textContent = (f.mark ? "Tracking " : "No longer tracking ") + f.code + " " + f.num + " to " + f.dest + ".";
+}
+
+for (var ri = 0; ri < FLIGHTS.length; ri++) rows.push(makeRow(ri));
+
+/* ---------- header word + clock ---------- */
+var word = build(document.getElementById("word"), 10);
+var clockCells = [];
+(function(){
+  var host = document.getElementById("clock");
+  for (var i = 0; i < 8; i++){
+    var sp = document.createElement("span");
+    sp.className = "grp" + (i === 2 || i === 5 ? " sep" : "");
+    host.appendChild(sp);
+    var cc = build(sp, 1)[0];
+    cc.seq = (i === 2 || i === 5) ? ":" : "0123456789";
+    cc.q = true;
+    clockCells.push(cc);
+  }
+})();
+
+function two(n){ return (n < 10 ? "0" : "") + n; }
+var clockOffset = 0;
+function clockText(){
+  var d = new Date(Date.now() + clockOffset);
+  return two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+}
+var lastClockStr = "";
+function tickClock(){
+  var s = clockText();
+  if (s === lastClockStr) return;
+  lastClockStr = s;
+  for (var i = 0; i < 8; i++) setTarget(clockCells[i], s.charAt(i), 0, 0);
+}
+
+/* ---------- boot cascade ---------- */
+function flipAll(fresh){
+  var rowStep = 17, charStep = 5;
+  for (var i = 0; i < FLIGHTS.length; i++){
+    paintRow(i, {
+      d0: 120 + i * rowStep,
+      per: charStep,
+      back: fresh ? (2 + Math.floor(Math.random() * 5)) : 0
+    });
+  }
+  if (fresh){
+    for (var j = 0; j < FLIGHTS.length; j++){
+      setTarget(rows[j].mark[0], FLIGHTS[j].mark ? "\u25CF" : " ", 120 + j * rowStep, 0);
+    }
+  }
+}
+
+setGroup(word, "DEPARTURES", { d0: 30, per: 28, back: 5 });
+flipAll(true);
+tickClock();
+setInterval(tickClock, 250);
+
+/* ---------- automatic status turnover ---------- */
+function newTime(t, addMin){
+  var p = t.split(":");
+  var m = (parseInt(p[0], 10) * 60 + parseInt(p[1], 10) + addMin) % 1440;
+  return two(Math.floor(m / 60)) + ":" + two(m % 60);
+}
+
+function advance(){
+  if (document.hidden) return;
+  var pool = [];
+  for (var i = 0; i < FLIGHTS.length; i++){
+    var f = FLIGHTS[i];
+    if (f.st === "CANCEL" || f.st === "DEP") continue;
+    pool.push(i);
+  }
+  if (!pool.length) return;
+  var i2 = pool[Math.floor(Math.random() * pool.length)];
+  var f2 = FLIGHTS[i2];
+  if (f2.st === "DELAY"){
+    f2.st = "CHECKIN";
+  } else if (Math.random() < 0.18 && (f2.st === "ONTIME" || f2.st === "CHECKIN")){
+    f2.st = "DELAY";
+    f2.time = newTime(f2.sched, 25 + Math.floor(Math.random() * 8) * 5);
+  } else {
+    var p = ORDER.indexOf(f2.st);
+    f2.st = ORDER[Math.min(p + 1, ORDER.length - 1)];
+  }
+  paintRow(i2, { d0: 0, per: 9, back: 0 });
+  live.textContent = f2.code + " " + f2.num + " to " + f2.dest + " — " + STATUS[f2.st].t + ", gate " + f2.gate + ".";
+}
+setInterval(advance, reduced ? 12000 : 6500);
+
+/* ---------- roll the board ---------- */
+function roll(){
+  var out = 0;
+  while (out < 4 && QUEUE.length){
+    var gone = FLIGHTS.shift();
+    gone.mark = false;
+    QUEUE.push(gone);
+    FLIGHTS.push(QUEUE.shift());
+    out++;
+  }
+  for (var i = 0; i < FLIGHTS.length; i++){
+    rows[i].tr.classList.toggle("on", FLIGHTS[i].mark);
+    rows[i].btn.setAttribute("aria-pressed", FLIGHTS[i].mark ? "true" : "false");
+    setTarget(rows[i].mark[0], FLIGHTS[i].mark ? "\u25CF" : " ", i * 26, 0);
+  }
+  var n = 0;
+  for (var j = 0; j < FLIGHTS.length; j++) if (FLIGHTS[j].mark) n++;
+  document.getElementById("trackn").textContent = n;
+  document.getElementById("queuen").textContent = QUEUE.length;
+  flipAll(false);
+  clockOffset += 4 * 15 * 60 * 1000;
+  live.textContent = "Board rolled. Next departure " + FLIGHTS[0].time + " to " + FLIGHTS[0].dest + ".";
+}
+
+function press(btn, fn){
+  btn.addEventListener("click", function(){
+    btn.classList.add("down");
+    setTimeout(function(){ btn.classList.remove("down"); }, 110);
+    fn();
+  });
+}
+press(document.getElementById("btn-roll"), roll);
+press(document.getElementById("btn-flip"), function(){
+  setGroup(word, "DEPARTURES", { d0: 0, per: 30, back: 8 });
+  flipAll(true);
+});
+
+var sbtn = document.getElementById("btn-sound");
+sbtn.addEventListener("click", function(){
+  if (!actx){ if (!initAudio()){ sbtn.disabled = true; return; } }
+  if (actx.state === "suspended") actx.resume();
+  sound = !sound;
+  sbtn.setAttribute("aria-pressed", sound ? "true" : "false");
+  if (sound) clack(performance.now());
+});
+
+document.addEventListener("visibilitychange", function(){
+  if (document.hidden && sound && actx) actx.suspend();
+  else if (!document.hidden && sound && actx) actx.resume();
+});
+
+raf = requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
