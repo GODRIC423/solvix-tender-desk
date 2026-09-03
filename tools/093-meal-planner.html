@@ -173,12 +173,15 @@ table input:focus,table select:focus{background:var(--raise)}
 :root[data-theme="dark"]{--accent:#D07AAC;--accent-ink:#E49CC4;--accent-wash:#2C1626;--on-accent:#180A13}
 
 .app{padding-bottom:44px}
+[hidden]{display:none!important}
 .split>*,.stack>*{min-width:0}
-@media screen and (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+@media screen and (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}
+  .split>div:last-child{order:-1}.sticky{position:static}}
 @media screen and (max-width:560px){.grid.cols-3,.grid.cols-2{grid-template-columns:1fr}}
 .mt10{margin-top:10px}.mt14{margin-top:14px}
 .gap{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .f.sm{max-width:132px}
+.setupgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(186px,1fr))}
 .hero-wrap{display:grid;gap:8px}
 .stat.hero .v{font-size:31px}
 .substats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -255,7 +258,8 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
 .phead{border-bottom:2px solid #000;padding-bottom:7px;margin-bottom:9px}
 .phead .t{font:700 19px/1.2 var(--sans)}
 .phead .m{font:12px/1.5 var(--sans);color:#333;margin-top:3px}
-.pmeta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 14px;margin:8px 0 4px;font-size:11pt}
+.pmeta{grid-template-columns:repeat(4,1fr);gap:6px 14px;margin:8px 0 4px;font-size:11pt}
+@media print{.pmeta{display:grid}}
 .pmeta .k{font:600 9px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#555}
 .recdoc{break-inside:avoid;margin-bottom:6mm}
 .recdoc h3{font-size:12.5pt;margin-bottom:2px}
@@ -334,7 +338,7 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
     <section class="card noprint" id="cSetup">
       <div class="hd"><h2>Household &amp; week</h2><span class="chip" id="chipPortions">&mdash;</span></div>
       <div class="bd">
-        <div class="grid cols-3">
+        <div class="setupgrid">
           <div class="f"><label for="iHouse">Household / plan name</label>
             <input id="iHouse" type="text" autocomplete="off"></div>
           <div class="f"><label for="iStart">Week starting</label>
@@ -346,8 +350,6 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
               <option value="7">7 days</option><option value="10">10 days</option>
               <option value="14">14 days</option>
             </select></div>
-        </div>
-        <div class="grid cols-3 mt10">
           <div class="f"><label for="iAdults">Adults</label>
             <input id="iAdults" type="number" min="0" max="40" step="1" inputmode="numeric">
             <span class="err" id="eAdults" hidden></span></div>
@@ -357,8 +359,6 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
           <div class="f"><label for="iKidPct">Child portion (% of adult)</label>
             <input id="iKidPct" type="number" min="10" max="100" step="5" inputmode="numeric">
             <span class="err" id="eKidPct" hidden></span></div>
-        </div>
-        <div class="grid cols-3 mt10">
           <div class="f"><label for="iCur">Currency</label>
             <select id="iCur">
               <option value="&pound;">&pound; Pound</option>
@@ -764,8 +764,12 @@ function priceBasis(dim){
 }
 function baseDivisor(dim){return (dim==='mass'||dim==='vol')?1000:1;}
 
+function plural(l,n){
+  if(Math.abs(n-1)<1e-9)return l;
+  return /(ch|sh|s|x|z)$/.test(l)?l+'es':l+'s';
+}
 function qtyDisp(base,dim){
-  if(dim.indexOf('ct:')===0){var u=dim.slice(3);return {v:base,u:(UNITS[u]?UNITS[u].l:u)};}
+  if(dim.indexOf('ct:')===0){var u=dim.slice(3);return {v:base,u:(UNITS[u]?UNITS[u].l:u),ct:true};}
   if(dim==='mass'){
     if(imperial()){var o=base/OZ;return o<16?{v:o,u:'oz'}:{v:o/16,u:'lb'};}
     return base<1000?{v:base,u:'g'}:{v:base/1000,u:'kg'};
@@ -779,7 +783,8 @@ function qtyStr(base,dim,whole){
   if(q.u==='kg'||q.u==='L'||q.u==='lb'||q.u==='qt')dp=2;
   else if(q.u==='g'||q.u==='ml')dp=(q.v<10?1:0);
   else dp=whole?0:1;
-  return trimNum(q.v,dp)+' '+q.u;
+  var n=trimNum(q.v,dp);
+  return n+' '+(q.ct?plural(q.u,parseFloat(n)):q.u);
 }
 function buyStep(base,dim){
   if(dim.indexOf('ct:')===0)return 1;
@@ -959,7 +964,7 @@ function renderRecEditor(){
       '<td><select data-f="unit" aria-label="Unit">'+unitOpts(ing.unit)+'</select></td>'+
       '<td><input type="text" data-f="name" value="'+esc(ing.name)+'" aria-label="Ingredient name" autocomplete="off"></td>'+
       '<td><select data-f="aisle" aria-label="Aisle">'+aisleOpts(ing.aisle)+'</select></td>'+
-      '<td><input type="number" class="ta-r" data-f="price" min="0" step="0.01" inputmode="decimal" value="'+esc(trimNum(nz(ing.price)*pf,2))+'" aria-label="Price '+esc(priceBasis(dim))+'" title="'+esc(sym()+' '+priceBasis(dim))+'"></td>'+
+      '<td><input type="number" class="ta-r" data-f="price" min="0" step="0.01" inputmode="decimal" value="'+esc((nz(ing.price)*pf).toFixed(2))+'" aria-label="Price '+esc(priceBasis(dim))+'" title="'+esc(sym()+' '+priceBasis(dim))+'"></td>'+
       '<td style="text-align:center"><input type="checkbox" data-f="staple" '+(ing.staple?'checked':'')+' aria-label="Cupboard staple" style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
       '<td><button type="button" class="btn ico rm" data-rm="'+esc(ing.id)+'" aria-label="Remove '+esc(ing.name||'ingredient')+'">✕</button></td>'+
       '</tr>';

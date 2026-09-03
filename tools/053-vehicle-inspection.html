@@ -250,6 +250,7 @@ table input:focus,table select:focus{background:var(--raise)}
   .cktbl tr.itm>th,.cktbl tr.itm>td{display:block;border:0;padding:3px 2px;text-align:left;width:auto}
   .cktbl tr.itm.rdef{background:var(--bad-wash);border-radius:3px;padding-left:8px;padding-right:8px}
   .cktbl tr.rdef th,.cktbl tr.rdef td{background:transparent}
+  .cktbl tr.itm>td.dx.nodx{display:none}
   .cktbl tr.itm>td.rmc{text-align:left;width:auto}
   .cktbl tr.itm>td.rmc:empty{display:none}
   .dxwrap select{width:100%}
@@ -1071,7 +1072,8 @@ function itemRow(rep, id, name, custom){
   return '<tr class="' + cls + '" data-row="' + esc(id) + '">' +
     '<th scope="row">' + esc(name) + '</th>' +
     '<td>' + statusCell(id, s) + '</td>' +
-    '<td class="dx" data-dxcell="' + esc(id) + '">' + detailCell(rep, id) + '</td>' +
+    '<td class="dx' + (s === "def" ? "" : " nodx") + '" data-dxcell="' + esc(id) + '">' +
+      detailCell(rep, id) + '</td>' +
     '<td class="rmc">' + (custom ?
       '<button type="button" class="rmbtn" data-rmitem="' + esc(id) +
         '" title="Remove this item" aria-label="Remove ' + esc(name) + '">\u2715</button>' : "") +
@@ -1081,11 +1083,12 @@ function refreshRow(id){
   var rep = R();
   var tr = document.querySelector('[data-row="' + CSSid(id) + '"]');
   var cell = document.querySelector('[data-dxcell="' + CSSid(id) + '"]');
-  if(cell) cell.innerHTML = detailCell(rep, id);
-  if(tr){
-    var s = rep.st[id] || "";
-    tr.className = "itm" + (s === "def" ? " rdef" : s === "na" ? " rna" : "");
+  var s = rep.st[id] || "";
+  if(cell){
+    cell.innerHTML = detailCell(rep, id);
+    cell.className = "dx" + (s === "def" ? "" : " nodx");
   }
+  if(tr) tr.className = "itm" + (s === "def" ? " rdef" : s === "na" ? " rna" : "");
 }
 function CSSid(s){ return String(s).replace(/["\\]/g, "\\$&"); }
 
@@ -1292,12 +1295,17 @@ function recompute(){
 
   // odometer hint
   var p = prevReport(), hint = "";
-  if(p && p.odo !== null && isFinite(p.odo) && rep.odo !== null && isFinite(rep.odo)){
+  if(p && p.odo !== null && isFinite(p.odo)){
     var prevHere = toUnit(p.odo, p._unit || "mi", S.unit);
-    var diff = rep.odo - prevHere;
-    hint = "Previous report " + esc(p.ref || "\u2014") + " (" + fmtDate(p.date) + ") read " +
-      fmtInt(prevHere) + " " + S.unit + " \u2014 " +
-      (diff >= 0 ? fmtInt(diff) + " " + S.unit + " since then." : "this reading is lower.");
+    hint = "Previous report " + (p.ref || "\u2014") + " (" + fmtDate(p.date) + ") read " +
+      fmtInt(prevHere) + " " + S.unit + " \u2014 ";
+    if(rep.odo !== null && isFinite(rep.odo)){
+      var diff = rep.odo - prevHere;
+      hint += diff >= 0 ? fmtInt(diff) + " " + S.unit + " since then."
+                        : "this reading is lower than that.";
+    } else {
+      hint += "enter this reading to see the distance covered.";
+    }
   } else {
     hint = "No earlier report on file to compare the odometer against.";
   }
