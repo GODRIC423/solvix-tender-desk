@@ -179,7 +179,8 @@ table input:focus,table select:focus{background:var(--raise)}
 .stack.gap{gap:14px}
 .hd .sm-note{font:11.5px/1.4 var(--sans);color:var(--muted)}
 .f .err{margin-top:1px}
-.topnotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin-bottom:14px}
+.topnotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin-bottom:14px;align-items:start}
+@media(min-width:1100px){.split{grid-template-columns:minmax(0,1.32fr) minmax(310px,.78fr)}}
 .topnotes .note{margin:0}
 
 /* results panel */
@@ -204,17 +205,21 @@ table input:focus,table select:focus{background:var(--raise)}
 .bd-list td.zero{color:var(--faint)}
 
 /* stop timeline table */
-#stopsT{min-width:1160px}
+#stopsT{min-width:1080px}
+#stopsT select{min-width:112px}
+#stopsT td:nth-child(3) input{min-width:150px}
 #stopsT th{padding:8px 7px}
 #stopsT td{padding:4px 5px}
 #stopsT input,#stopsT select{padding:6px 5px}
 #stopsT input[type="datetime-local"]{font-family:var(--mono);font-size:12.5px;text-align:left;min-width:172px}
-#stopsT .amtcell,#stopsT .delcell{position:sticky;background:var(--surface);z-index:2}
-#stopsT .amtcell{right:38px;box-shadow:-7px 0 7px -7px rgba(21,25,30,.3)}
+#stopsT .amtcell,#stopsT .delcell,#stopsT .billedcell{position:sticky;background:var(--surface);z-index:2}
+#stopsT .billedcell{right:136px;width:68px;min-width:68px;box-shadow:-7px 0 7px -7px rgba(21,25,30,.3)}
+#stopsT .amtcell{right:38px;width:98px;min-width:98px}
 #stopsT .delcell{right:0;width:38px;min-width:38px;padding:4px 3px;text-align:center}
 #stopsT .delcell .btn{padding:5px 7px}
-#stopsT thead .amtcell,#stopsT thead .delcell,#stopsT tfoot .amtcell,#stopsT tfoot .delcell{background:var(--sunk);z-index:3}
-#stopsT tbody tr:hover .amtcell,#stopsT tbody tr:hover .delcell{background:var(--accent-wash)}
+#stopsT thead .amtcell,#stopsT thead .delcell,#stopsT thead .billedcell,
+#stopsT tfoot .amtcell,#stopsT tfoot .delcell,#stopsT tfoot .billedcell{background:var(--sunk);z-index:3}
+#stopsT tbody tr:hover .amtcell,#stopsT tbody tr:hover .delcell,#stopsT tbody tr:hover .billedcell{background:var(--accent-wash)}
 td.amtcell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
 .calc{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-2)}
 .calc .sm{display:block;font-size:11px;color:var(--muted)}
@@ -443,7 +448,7 @@ td.amtcell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
               <th scope="col" class="n">On site</th>
               <th scope="col" class="n">Free h</th>
               <th scope="col" class="n">Over free</th>
-              <th scope="col" class="n">Billed h</th>
+              <th scope="col" class="n billedcell">Billed h</th>
               <th scope="col">Evidence ref</th>
               <th scope="col" class="n amtcell">Detention</th>
               <th scope="col" class="delcell"><span class="lbl">Del</span></th>
@@ -454,7 +459,7 @@ td.amtcell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
               <td class="n" id="tfOnsite">—</td>
               <td></td>
               <td class="n" id="tfOver">—</td>
-              <td class="n" id="tfBilled">—</td>
+              <td class="n billedcell" id="tfBilled">—</td>
               <td></td>
               <td class="n amtcell" id="tfDet">—</td>
               <td class="delcell"></td>
@@ -767,7 +772,8 @@ function calc(){
       }
     });
   }
-  var detention=0;rows.forEach(function(o){detention=r2(detention+o.amount);});
+  var detention=0,detGross=0;
+  rows.forEach(function(o){detention=r2(detention+o.amount);detGross=r2(detGross+o.gross);});
   var layNights=Math.max(0,num(S.layNights)),layRate=Math.max(0,num(S.layRate));
   var layover=r2(layNights*layRate);
   var tonuQty=Math.max(0,num(S.tonuQty)),tonuRate=Math.max(0,num(S.tonuRate));
@@ -784,7 +790,7 @@ function calc(){
   var total=r2(subtotal+tax);
   var entered=anyTimes||layover>0||tonu>0||accTot>0;
   return{rows:rows,onsiteTot:onsiteTot,overTot:overTot,billedTot:r2(billedTot),detention:detention,
-    capDays:capDays,capCut:capCut,cap:cap,rate:rate,defFree:defFree,
+    capDays:capDays,capCut:capCut,cap:cap,rate:rate,defFree:defFree,detGross:detGross,
     layNights:layNights,layRate:layRate,layover:layover,tonuQty:tonuQty,tonuRate:tonuRate,tonu:tonu,
     lines:lines,accTot:accTot,subtotal:subtotal,taxRate:taxRate,tax:tax,total:total,
     entered:entered,billedStops:rows.filter(function(o){return o.amount>0;}).length};
@@ -809,7 +815,7 @@ function stopRows(){
       '<td class="freecell"><input type="number" data-r="free" data-id="'+id+'" value="'+esc(st.free)+'" step="0.25" min="0" '+
         'inputmode="decimal" placeholder="'+nf(Math.max(0,num(S.freeHours)),2)+'" aria-label="Free hours at stop '+(i+1)+'"></td>'+
       '<td class="calc c-over">—</td>'+
-      '<td class="calc c-billed">—</td>'+
+      '<td class="calc c-billed billedcell">—</td>'+
       '<td><input data-r="ref" data-id="'+id+'" value="'+esc(st.ref)+'" placeholder="BOL / gate / ELD ref" aria-label="Evidence reference for stop '+(i+1)+'"></td>'+
       '<td class="amtcell c-amt">—</td>'+
       '<td class="delcell"><button type="button" class="btn ico sm" data-del="'+id+'" aria-label="Delete stop '+(i+1)+'">✕</button></td>'+
@@ -967,10 +973,11 @@ function buildDoc(c,due){
   var detBasis=nf(c.billedTot,2)+' billable h across '+c.billedStops+' stop'+(c.billedStops===1?'':'s')+
     ' · '+nf(c.defFree,2)+' h free per stop · '+ruleText()+(c.cap>0?' · daily maximum '+money(c.cap):'');
   h+='<tr><td>Detention</td><td>'+esc(detBasis)+'</td><td class="n">'+nf(c.billedTot,2)+' h</td>'+
-     '<td class="n">'+money(c.rate)+'/h</td><td class="n">'+money(c.detention)+'</td></tr>';
-  if(c.capCut>0)h+='<tr><td>— daily maximum adjustment</td><td>'+
-     esc(c.capDays.map(function(d){return fdate(d.day)+' capped at '+money(d.billed);}).join('; '))+
-     '</td><td class="n"></td><td class="n"></td><td class="n">included above (−'+money(c.capCut)+')</td></tr>';
+     '<td class="n">'+money(c.rate)+'/h</td><td class="n">'+money(c.capCut>0?c.detGross:c.detention)+'</td></tr>';
+  if(c.capCut>0)h+='<tr><td>Daily maximum adjustment</td><td>'+
+     esc(c.capDays.map(function(d){return fdate(d.day)+': '+money(d.gross)+' of detention reduced to the '+
+       money(d.billed)+' daily maximum';}).join('; '))+
+     '</td><td class="n"></td><td class="n"></td><td class="n">-'+money(c.capCut)+'</td></tr>';
   if(c.layover>0)h+='<tr><td>Layover</td><td>'+esc(S.layNote||'Flat charge per night held')+'</td>'+
      '<td class="n">'+nf(c.layNights,0)+' night'+(c.layNights===1?'':'s')+'</td><td class="n">'+money(c.layRate)+
      '</td><td class="n">'+money(c.layover)+'</td></tr>';
@@ -1046,10 +1053,12 @@ function toCSV(){
   R.push([]);
   R.push(['INVOICE LINES']);
   R.push(['Charge','Basis','Qty','Unit','Rate','Amount ('+sym()+')']);
-  R.push(['Detention','Billable hours beyond free time; '+ruleText(),nf(c.billedTot,2),'hour',nf(c.rate,2),nf(c.detention,2)]);
+  R.push(['Detention','Billable hours beyond free time; '+ruleText(),nf(c.billedTot,2),'hour',nf(c.rate,2),
+    nf(c.capCut>0?c.detGross:c.detention,2)]);
   if(c.capCut>0)R.push(['Daily maximum adjustment',
-    c.capDays.map(function(d){return d.day+' '+nf(d.gross,2)+' capped to '+nf(d.billed,2);}).join('; '),'','','',
-    '-'+nf(c.capCut,2)+' (already applied)']);
+    c.capDays.map(function(d){return d.day+': '+nf(d.gross,2)+' reduced to daily maximum '+nf(d.billed,2);}).join('; '),
+    '','','','-'+nf(c.capCut,2)]);
+  if(c.capCut>0)R.push(['Detention billed','After daily maximum','','','',nf(c.detention,2)]);
   if(c.layover>0)R.push(['Layover',S.layNote,nf(c.layNights,0),'night',nf(c.layRate,2),nf(c.layover,2)]);
   if(c.tonu>0)R.push(['TONU',S.tonuNote,nf(c.tonuQty,0),'event',nf(c.tonuRate,2),nf(c.tonu,2)]);
   c.lines.forEach(function(l){

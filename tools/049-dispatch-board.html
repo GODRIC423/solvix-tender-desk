@@ -268,3 +268,366 @@ td .err,td .hint{white-space:normal}
 }
 </style>
 </head>
+<body>
+<header class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">JD</div>
+    <div style="min-width:0">
+      <h1>Job Dispatch Board</h1>
+      <div class="sub">SOLVIX · SCHEDULING &amp; WORKFORCE</div>
+    </div>
+  </div>
+  <div class="row" style="gap:7px">
+    <button type="button" class="btn pri" id="btnPrint">Print run sheets</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <div class="menu" id="menuWrap">
+      <button type="button" class="btn" id="btnMenu" aria-haspopup="true" aria-expanded="false">Data ▾</button>
+      <div class="mm" role="menu" aria-label="Data actions">
+        <button type="button" class="btn sm" id="btnJson" role="menuitem">Export JSON backup</button>
+        <button type="button" class="btn sm" id="btnImport" role="menuitem">Import JSON backup…</button>
+        <button type="button" class="btn sm" id="btnSample" role="menuitem">Reload sample day</button>
+        <button type="button" class="btn sm" id="btnTheme" role="menuitem">Theme: Auto</button>
+        <button type="button" class="btn sm dgr" id="btnClear" role="menuitem">Clear all data</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="fileJson" accept="application/json,.json" style="display:none">
+</header>
+
+<main class="app">
+
+  <!-- ══ printed document header (stands alone) ══ -->
+  <section class="printonly doc" id="doc" aria-hidden="true"></section>
+
+  <div class="split noprint" style="margin-top:14px">
+
+    <!-- ── working area ── -->
+    <div class="stack" style="gap:14px">
+
+      <section class="card">
+        <div class="hd">
+          <h2>Dispatch day</h2>
+          <span class="sample" id="sampleTag">Sample data — edit or clear</span>
+        </div>
+        <div class="bd">
+          <div class="grid-in">
+            <div class="f">
+              <label for="depot">Depot / business</label>
+              <input id="depot" type="text" autocomplete="organization">
+            </div>
+            <div class="f">
+              <label for="dday">Date</label>
+              <input id="dday" type="date">
+            </div>
+            <div class="f">
+              <label for="dispatcher">Dispatcher</label>
+              <input id="dispatcher" type="text">
+            </div>
+            <div class="f">
+              <label for="dphone">Control room phone</label>
+              <input id="dphone" type="text" inputmode="tel">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Board</h2>
+          <span class="hint" id="boardHint">Drag a job to a column, or use its Assign menu.</span>
+        </div>
+        <div class="bd">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn sm pri" id="btnAddJob">+ Add job</button>
+          <button type="button" class="btn sm" id="btnAutoBal">Auto-assign unassigned</button>
+          <span class="hint" id="boardFoot">—</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Crew &amp; shifts</h2>
+          <span class="hint">Available minutes = shift length − break.</span></div>
+        <div class="tw">
+          <table class="tbl-crew">
+            <caption class="hint" style="text-align:left;padding:8px 16px 0">Operatives on shift today, their vehicle and working window.</caption>
+            <thead><tr>
+              <th scope="col">Operative</th><th scope="col">Role</th><th scope="col">Vehicle</th>
+              <th scope="col">Shift start</th><th scope="col">Shift end</th><th scope="col" class="n">Break (min)</th>
+              <th scope="col" class="n">Available</th><th scope="col"><span class="sr">Remove</span></th>
+            </tr></thead>
+            <tbody id="crewBody"></tbody>
+          </table>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn sm" id="btnAddOp">+ Add operative</button>
+          <span class="hint" id="crewFoot">—</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Job list</h2>
+          <span class="hint">Every field on the board, editable. Scroll sideways for more columns.</span></div>
+        <div class="tw">
+          <table class="tbl-jobs">
+            <thead><tr>
+              <th scope="col">Ref</th><th scope="col">Customer</th><th scope="col">Address</th>
+              <th scope="col">Phone</th><th scope="col">Window</th>
+              <th scope="col" class="n">Dur</th><th scope="col" class="n">Trav</th>
+              <th scope="col">Priority</th><th scope="col">Assigned to</th><th scope="col">Status</th>
+              <th scope="col">Fail reason</th><th scope="col">Notes</th>
+              <th scope="col"><span class="sr">Remove</span></th>
+            </tr></thead>
+            <tbody id="jobBody"></tbody>
+          </table>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn sm" id="btnAddJob2">+ Add job</button>
+          <span class="hint" id="jobFoot">—</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>End-of-day report</h2><span class="hint" id="eodStamp">—</span></div>
+        <div class="bd">
+          <div class="eod" id="eod"></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── live results ── -->
+    <div>
+      <section class="card sticky">
+        <div class="hd"><h2>Day status</h2><span class="chip" id="liveChip">Live</span></div>
+        <div class="bd stack" style="gap:11px">
+          <div class="stat hero">
+            <div class="k">Crew load committed</div>
+            <div class="v" id="heroPct">—</div>
+            <div class="u" id="heroSub">—</div>
+          </div>
+          <div id="overNote"></div>
+          <div class="grid cols-3" style="gap:8px">
+            <div class="stat"><div class="k">Unassigned</div><div class="v" id="sUnassigned">—</div><div class="u" id="sUnassignedU">jobs</div></div>
+            <div class="stat"><div class="k">Complete</div><div class="v" id="sDone">—</div><div class="u" id="sDoneU">of — jobs</div></div>
+            <div class="stat"><div class="k">Failed</div><div class="v" id="sFail">—</div><div class="u">to re-book</div></div>
+            <div class="stat"><div class="k">Carry over</div><div class="v" id="sCarry">—</div><div class="u">not finished</div></div>
+            <div class="stat"><div class="k">Spare capacity</div><div class="v" id="sSpare">—</div><div class="u">min across crew</div></div>
+            <div class="stat"><div class="k">Window risk</div><div class="v" id="sLate">—</div><div class="u">jobs at risk</div></div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:6px">Load per operative</div>
+            <div class="opload" id="opload"></div>
+          </div>
+          <div class="note warn">
+            <strong>Planning estimate only.</strong> Projected arrival times are worked from the shift
+            start plus the travel and on-site minutes you enter. They take no account of traffic,
+            vehicle breakdowns, parking or job overruns. Committed-minute totals are <em>not</em> a
+            check on drivers' hours, working-time limits or rest-break law — confirm those against
+            the rules that apply to your operation and your own contracts of employment.
+          </div>
+        </div>
+        <div class="ft">
+          <span class="hint" id="savedTag">Saved to this browser</span>
+        </div>
+      </section>
+      <div class="stack" style="gap:10px;margin-top:12px">
+        <div class="f">
+          <label for="printScope">Print scope</label>
+          <select id="printScope">
+            <option value="all">All run sheets + end-of-day report</option>
+            <option value="report">End-of-day report only</option>
+          </select>
+        </div>
+        <p class="hint">Each operative's run sheet starts on a new page, with blank arrive / leave /
+          signature boxes so it can be worked on paper and handed back in.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="hint noprint" style="max-width:1180px;margin:22px auto 0;border-top:1px solid var(--line);padding-top:11px">
+    Available minutes = (shift end − shift start) − break. Committed minutes = Σ (on-site duration +
+    travel) for every job assigned to that operative, whatever its status. Utilisation = committed ÷
+    available. Projected arrival runs jobs in board order from the shift start, waiting where you
+    arrive before the window opens, and inserting the unpaid break before the first job that would
+    start after the shift midpoint. A job is flagged at risk when projected arrival is later than the
+    end of its time window. All times are local clock times, 24-hour. Data is held only in this
+    browser — nothing is sent anywhere.
+  </footer>
+</main>
+<script>
+(function(){
+"use strict";
+var KEY='solvix.dispatch-board.v1';
+var THEMEKEY='solvix.dispatch-board.theme';
+
+/* ── helpers ─────────────────────────────────────────────── */
+var $=function(id){return document.getElementById(id);};
+function el(t,c,txt){var e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;}
+function num(v){var n=parseFloat(v); return isFinite(n)?n:0;}
+function isNum(v){return v!==''&&v!=null&&isFinite(parseFloat(v));}
+function t2m(s){ if(typeof s!=='string') return null; var m=/^(\d{1,2}):(\d{2})$/.exec(s.trim()); if(!m) return null;
+  var h=+m[1],mi=+m[2]; if(h>23||mi>59) return null; return h*60+mi; }
+function m2t(m){ if(m==null||!isFinite(m)) return '—'; var v=((Math.round(m)%1440)+1440)%1440;
+  return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0'); }
+function fInt(n){ if(n==null||!isFinite(n)) return '—'; var r=Math.round(n); if(Object.is(r,-0))r=0; return r.toLocaleString('en-GB'); }
+function fPct(n,dp){ if(n==null||!isFinite(n)) return '—'; return (Math.round(n*Math.pow(10,dp||1))/Math.pow(10,dp||1)).toFixed(dp||1)+'%'; }
+function fDur(m){ if(m==null||!isFinite(m)) return '—'; var s=m<0?'−':''; m=Math.abs(Math.round(m));
+  var h=Math.floor(m/60), r=m%60; return s+(h?h+' h '+String(r).padStart(2,'0'):r+' min'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function nowHM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function longDate(iso){ if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return iso||'—';
+  var p=iso.split('-'), d=new Date(+p[0],+p[1]-1,+p[2]);
+  if(isNaN(d.getTime())) return iso;
+  var dn=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+  var mn=['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()];
+  return dn+' '+d.getDate()+' '+mn+' '+d.getFullYear(); }
+var uidN=0;
+function uid(p){ uidN++; return p+'-'+Date.now().toString(36)+'-'+uidN.toString(36); }
+
+var STATUS=[{k:'booked',l:'Booked',c:''},{k:'dispatched',l:'Dispatched',c:'acc'},
+            {k:'onsite',l:'On site',c:'warn'},{k:'complete',l:'Complete',c:'ok'},{k:'failed',l:'Failed',c:'bad'}];
+var SMAP={}; STATUS.forEach(function(s){SMAP[s.k]=s;});
+var NEXT={booked:'dispatched',dispatched:'onsite',onsite:'complete'};
+var PRIOS=[{k:'urgent',l:'Urgent'},{k:'high',l:'High'},{k:'normal',l:'Normal'},{k:'low',l:'Low'}];
+var PMAP={}; PRIOS.forEach(function(p){PMAP[p.k]=p;});
+
+/* ── sample day ──────────────────────────────────────────── */
+function sample(){
+  function op(name,role,veh,st,en,brk){ return {id:uid('op'),name:name,role:role,veh:veh,start:st,end:en,brk:brk}; }
+  function job(ref,cust,addr,ph,ws,we,dur,trav,prio,opIdx,status,stamps,fail,notes){
+    return {id:uid('j'),ref:ref,cust:cust,addr:addr,phone:ph,ws:ws,we:we,dur:dur,trav:trav,
+      prio:prio,opId:opIdx,status:status,stamps:stamps||{},fail:fail||'',notes:notes||''};
+  }
+  var A=op('Dan Whitby','Gas engineer','Van 4 · KX21 PLM','08:00','16:30',30);
+  var B=op('Priya Nair','Senior engineer','Van 7 · LR70 BVC','08:30','17:00',30);
+  var C=op('Marek Kowal','Driver / fitter','Truck 2 · HG19 ZTS','07:00','15:30',45);
+  return {
+    v:1, sample:true,
+    depot:'Harbour Lane Depot', day:todayISO(), dispatcher:'R. Okafor', phone:'01792 555 118',
+    ops:[A,B,C],
+    jobs:[
+      job('J-1041','Wexford Care Home','12 Maple Row, Bridgend','01656 442119','08:00','12:00',90,15,'normal',A.id,'complete',
+          {booked:'07:30',dispatched:'08:00',onsite:'08:20',complete:'09:50'},'','Annual boiler service, plant room key at reception.'),
+      job('J-1042','H. Bellamy','48 Cotton Street, Flat 3','07700 900311','09:00','13:00',60,20,'high',A.id,'complete',
+          {booked:'07:31',dispatched:'08:02',onsite:'10:10',complete:'11:05'},'','Radiator leak in back bedroom.'),
+      job('J-1045','Northgate Lettings','7 Bryn Terrace','01656 771042','12:00','16:00',45,15,'normal',A.id,'onsite',
+          {booked:'07:33',dispatched:'08:04',onsite:'12:04'},'','Landlord gas safety certificate — tenant home after 12.'),
+      job('J-1049','T. Ozturk','2 Sandfields Close','07700 900744','13:00','16:30',60,20,'low',A.id,'booked',
+          {booked:'07:34'},'','Smart thermostat swap, customer supplying unit.'),
+      job('J-1043','Cwm Foods Ltd','Unit 5 Enterprise Park','01792 448800','08:30','12:00',180,25,'urgent',B.id,'complete',
+          {booked:'07:20',dispatched:'08:30',onsite:'08:58',complete:'12:05'},'','Commercial boiler strip and reseal. Site induction required.'),
+      job('J-1046','Riverside Apartments','Block C, 14 Quay Road','01792 448211','12:00','16:00',150,20,'high',B.id,'failed',
+          {booked:'07:22',dispatched:'08:31',onsite:'12:20',failed:'12:35'},'No access — key holder not on site, concierge had no permit.',
+          'Cylinder replacement. Re-book with 48 h notice to residents.'),
+      job('J-1048','M. Idris','31 Pen-y-Fai Lane','07700 900552','09:00','17:00',90,30,'urgent',B.id,'dispatched',
+          {booked:'09:05',dispatched:'14:48'},'','No heat, vulnerable customer — priority call taken at 09:05.'),
+      job('J-1044','Depot parts run','Ashwell Trade Counter','01656 300140','07:00','10:00',60,40,'normal',C.id,'complete',
+          {booked:'06:45',dispatched:'07:00',onsite:'07:42',complete:'08:40'},'','Collect two cylinders and flue kit for J-1046.'),
+      job('J-1047','Bryn Court Management','Rear yard, Bryn Court','01656 771900','08:00','12:00',45,35,'normal',C.id,'booked',
+          {booked:'06:47'},'','Skip exchange — gate code 4471.'),
+      job('J-1050','L. Fenwick','9 Ael-y-Bryn','07700 900188','13:00','17:00',75,20,'urgent','','booked',
+          {booked:'11:40'},'','Boiler lockout F28, new call this morning. Needs a slot today.'),
+      job('J-1051','Glanmor Surgery','Glanmor Health Centre','01792 449060','14:00','17:00',60,15,'high','','booked',
+          {booked:'11:52'},'','Water heater not reaching temperature. Practice closes 17:00 sharp.')
+    ]
+  };
+}
+
+var S=sample();
+
+/* ── persistence ─────────────────────────────────────────── */
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); setSaved('Saved to this browser'); }
+  catch(e){ setSaved('Could not save — storage blocked'); } }
+function setSaved(t){ var n=$('savedTag'); if(n) n.textContent=t; }
+function load(){
+  try{ var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||!Array.isArray(o.ops)||!Array.isArray(o.jobs)) return false;
+    S=normalise(o); return true;
+  }catch(e){ return false; }
+}
+function normalise(o){
+  var out={v:1, sample:!!o.sample, depot:o.depot||'', day:o.day||todayISO(),
+           dispatcher:o.dispatcher||'', phone:o.phone||'', ops:[], jobs:[]};
+  (o.ops||[]).forEach(function(p){
+    out.ops.push({id:p.id||uid('op'), name:p.name||'', role:p.role||'', veh:p.veh||'',
+      start:p.start||'08:00', end:p.end||'17:00', brk:isNum(p.brk)?num(p.brk):30});
+  });
+  var ids={}; out.ops.forEach(function(p){ids[p.id]=1;});
+  (o.jobs||[]).forEach(function(j){
+    var st=SMAP[j.status]?j.status:'booked';
+    out.jobs.push({id:j.id||uid('j'), ref:j.ref||'', cust:j.cust||'', addr:j.addr||'', phone:j.phone||'',
+      ws:j.ws||'', we:j.we||'', dur:isNum(j.dur)?num(j.dur):0, trav:isNum(j.trav)?num(j.trav):0,
+      prio:PMAP[j.prio]?j.prio:'normal', opId:(j.opId&&ids[j.opId])?j.opId:'',
+      status:st, stamps:(j.stamps&&typeof j.stamps==='object')?j.stamps:{}, fail:j.fail||'', notes:j.notes||''});
+  });
+  return out;
+}
+
+/* ── computation ─────────────────────────────────────────── */
+function compute(){
+  var rows=S.ops.map(function(o){
+    var st=t2m(o.start), en=t2m(o.end), span=null, avail=null;
+    if(st!=null&&en!=null){ span=en-st; if(span<=0) span+=1440; avail=Math.max(0, span-Math.max(0,num(o.brk))); }
+    return {op:o, startMin:st, span:span, avail:avail, jobs:[], committed:0};
+  });
+  var byId={}; rows.forEach(function(r){ byId[r.op.id]=r; });
+  var pool=[];
+  S.jobs.forEach(function(j){ j._eta={}; var r=byId[j.opId]; if(r) r.jobs.push(j); else pool.push(j); });
+
+  rows.forEach(function(r){
+    r.committed=r.jobs.reduce(function(a,j){ return a+Math.max(0,num(j.dur))+Math.max(0,num(j.trav)); },0);
+    r.util = (r.avail!=null && r.avail>0) ? (r.committed/r.avail*100) : null;
+    r.over = (r.avail!=null) && r.committed>r.avail;
+    r.overBy = (r.avail!=null) ? Math.max(0, r.committed-r.avail) : 0;
+    r.spare = (r.avail!=null) ? Math.max(0, r.avail-r.committed) : 0;
+    var clock=r.startMin, brk=Math.max(0,num(r.op.brk)), taken=(brk<=0),
+        mid=(r.startMin!=null&&r.span!=null)?(r.startMin+r.span/2):null;
+    r.risk=0;
+    r.jobs.forEach(function(j){
+      var e={};
+      if(clock==null){ j._eta=e; return; }
+      if(!taken && mid!=null && clock>=mid){ clock+=brk; taken=true; e.brk=true; }
+      clock+=Math.max(0,num(j.trav));
+      var ws=t2m(j.ws), we=t2m(j.we);
+      e.arrive=clock;
+      if(ws!=null && clock<ws){ e.wait=ws-clock; clock=ws; e.arrive=clock; }
+      e.risk = (we!=null && ws!=null && e.arrive>we);
+      if(e.risk) r.risk++;
+      clock+=Math.max(0,num(j.dur));
+      e.leave=clock;
+      j._eta=e;
+    });
+    if(!taken && clock!=null) clock+=brk;
+    r.finish=clock;
+    r.endMin=(r.startMin!=null&&r.span!=null)?(r.startMin+r.span):null;
+    r.past=(r.finish!=null&&r.endMin!=null&&r.finish>r.endMin)?(r.finish-r.endMin):0;
+  });
+
+  var totAvail=0, haveAvail=false;
+  rows.forEach(function(r){ if(r.avail!=null){ totAvail+=r.avail; haveAvail=true; } });
+  var totCommitted=rows.reduce(function(a,r){return a+r.committed;},0);
+  var poolMin=pool.reduce(function(a,j){return a+Math.max(0,num(j.dur))+Math.max(0,num(j.trav));},0);
+  var done=0, failed=0, carry=0;
+  S.jobs.forEach(function(j){ if(j.status==='complete') done++; else if(j.status==='failed') failed++; else carry++; });
+  return {
+    rows:rows, pool:pool,
+    totAvail:haveAvail?totAvail:null, totCommitted:totCommitted, poolMin:poolMin,
+    util:(haveAvail&&totAvail>0)?(totCommitted/totAvail*100):null,
+    spare:haveAvail?Math.max(0,totAvail-totCommitted):null,
+    overOps:rows.filter(function(r){return r.over;}).length,
+    risk:rows.reduce(function(a,r){return a+r.risk;},0),
+    done:done, failed:failed, carry:carry, total:S.jobs.length
+  };
+}
+
+/* actual on-site minutes from the stamps */
+function actualMin(j){
+  var a=t2m(j.stamps&&j.stamps.onsite);
+  var b=t2m((j.stamps&&j.stamps.complete)||(j.stamps&&j.stamps.failed));
+  if(a==null||b==null) return null;
+  var d=b-a; if(d<0) d+=1440; return d;
+}
