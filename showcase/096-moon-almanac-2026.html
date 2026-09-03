@@ -687,7 +687,6 @@ function buildTexture(){
 
   /* craters: albedo rings + a height field for relief near the terminator */
   var pre=a.getImageData(0,0,TEX,TEX).data;
-  h.filter="blur(1.1px)";
   var n2=0;
   for(var c=0;c<3400&&n2<380;c++){
     var x2=rand(),y2=rand(),ddx=x2-0.5,ddy=y2-0.5,rr2=ddx*ddx+ddy*ddy;
@@ -710,7 +709,7 @@ function buildTexture(){
     ga.addColorStop(1,"rgba(252,249,240,0)");
     a.fillStyle=ga;a.beginPath();a.arc(x2*TEX,y2*TEX,rad*1.16,0,6.2832);a.fill();
   }
-  h.filter="none";
+  h.filter="blur(1.1px)";h.drawImage(hc,0,0);h.filter="none";
 
   /* bright ejecta haloes: Copernicus, Kepler, Aristarchus, Tycho */
   var bright=[[0.395,0.455,26],[0.318,0.447,17],[0.245,0.400,15],[0.455,0.772,34]];
@@ -722,16 +721,17 @@ function buildTexture(){
     gb.addColorStop(1,"rgba(253,250,242,0)");
     a.fillStyle=gb;a.beginPath();a.arc(bx,by,brad,0,6.2832);a.fill();
   }
-  /* Tycho rays — soft, blurred, low contrast */
-  a.save();a.filter="blur(7px)";a.translate(0.455*TEX,0.772*TEX);
+  /* Tycho rays — drawn once offscreen, composited with a single blur */
+  var rc=document.createElement("canvas");rc.width=rc.height=TEX;var r2c=rc.getContext("2d");
+  r2c.translate(0.455*TEX,0.772*TEX);
   for(var t2=0;t2<34;t2++){
-    a.rotate(6.2832/34+rand()*0.04);
+    r2c.rotate(6.2832/34+rand()*0.04);
     var len=(0.07+rand()*0.32)*TEX;
-    var gr=a.createLinearGradient(0,0,len,0);
+    var gr=r2c.createLinearGradient(0,0,len,0);
     gr.addColorStop(0,"rgba(252,249,240,0.10)");gr.addColorStop(0.5,"rgba(252,249,240,0.055)");gr.addColorStop(1,"rgba(252,249,240,0)");
-    a.fillStyle=gr;a.beginPath();a.moveTo(0,-1);a.lineTo(len,-2.6-rand()*3);a.lineTo(len,2.6+rand()*3);a.lineTo(0,1);a.closePath();a.fill();
+    r2c.fillStyle=gr;r2c.beginPath();r2c.moveTo(0,-1);r2c.lineTo(len,-2.6-rand()*3);r2c.lineTo(len,2.6+rand()*3);r2c.lineTo(0,1);r2c.closePath();r2c.fill();
   }
-  a.restore();a.filter="none";
+  a.save();a.filter="blur(7px)";a.drawImage(rc,0,0);a.restore();a.filter="none";
   a.filter="blur(0.6px)";a.drawImage(ac,0,0);a.filter="none";
 
   var av=a.getImageData(0,0,TEX,TEX).data;
@@ -814,6 +814,7 @@ function queueRender(elong){
     if(Math.abs(pending-currentElong)<0.02){pending=null;return;}
     currentElong=pending;pending=null;
     renderMoon(panelCv,currentElong);
+    if(!ALB)currentElong=-999;
   });
 }
 
@@ -969,7 +970,6 @@ function bind(){
 })();
 
 /* ---------- 7. boot ---------- */
-buildTexture();
 build();
 bind();
 
@@ -979,7 +979,6 @@ if(isNow){heroDate=now;}
 else{heroDate=new Date(Date.UTC(2026,0,3,10,4));
   document.getElementById("tonightLede").textContent="Frontispiece — the Wolf Moon";}
 var heroState=moonState(jdOf(heroDate.getTime()));
-renderMoon(heroCv,heroState.elong);
 heroCv.setAttribute("aria-label","The moon on "+heroDate.getUTCDate()+" "+MONTHS[heroDate.getUTCMonth()]+" 2026: "+
   phaseName(heroState.elong)+", "+Math.round(heroState.k*100)+" percent illuminated");
 (function heroFoot(){
@@ -1004,6 +1003,16 @@ heroCv.setAttribute("aria-label","The moon on "+heroDate.getUTCDate()+" "+MONTHS
     setPanel(dt,moonState(jdOf(dt.getTime())));
   }
 })();
+
+/* build the lunar texture after the first paint, then draw both moons */
+function paintMoons(){
+  buildTexture();
+  renderMoon(heroCv,heroState.elong);
+  var e=currentElong;currentElong=-999;
+  if(e>-900)renderMoon(panelCv,e),currentElong=e;
+}
+if("requestIdleCallback" in window){requestIdleCallback(paintMoons,{timeout:400});}
+else{requestAnimationFrame(function(){setTimeout(paintMoons,0);});}
 
 /* light the dial tick for the month in view */
 (function dial(){
