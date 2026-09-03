@@ -788,3 +788,145 @@ function normalise(o){
   s.sample=!!o.sample;
   return s;
 }
+
+/* ── lookups ───────────────────────────────────────────────────── */
+function resById(id){for(var i=0;i<S.res.length;i++)if(S.res[i].id===id)return S.res[i];return null;}
+function svcById(id){for(var i=0;i<S.svc.length;i++)if(S.svc[i].id===id)return S.svc[i];return null;}
+function resName(r){return (r&&r.name&&r.name.trim())?r.name.trim():'Unnamed resource';}
+function bkSvcName(b){var n=(b.svcName||'').trim();if(n)return n;var s=svcById(b.svc);return s?s.name:'Appointment';}
+function bkEnd(b){return b.start+b.dur;}
+
+/* ── the calculation ───────────────────────────────────────────────
+   Utilisation  = booked service minutes ÷ available minutes × 100
+   Available    = the resource's own hours clipped to opening times
+   Booked value = Σ price of appointments that are booked, confirmed,
+                  arrived or completed (no-shows and cancellations out)
+   Bookable gap = free run between blocks, minus the buffer at each end
+   ──────────────────────────────────────────────────────────────── */
+function compute(){
+  var C={};
+  var o=hm2min(S.open), c=hm2min(S.close);
+  C.open=o; C.close=c;
+  C.valid=(o!=null&&c!=null&&c>o);
+  var buf=clamp(intv(S.buffer,0),0,120);
+  C.buffer=buf;
+  var gmin=clamp(intv(S.gapMin,15),1,480);
+  C.gapMin=gmin;
+  C.flags={};
+  C.perRes=[];
+  var actSvc=S.svc.filter(function(v){return v.dur>0;});
+  C.minSvc=actSvc.length?Math.min.apply(null,actSvc.map(function(v){return v.dur;})):0;
+
+  var totAvail=0,totBooked=0,totValue=0,totLost=0,totCount=0,totFree=0,totGaps=0,
+      nCancel=0,nNoShow=0,nClash=0,nOut=0,nOrphan=0;
+
+  S.res.forEach(function(r){
+    var rs=hm2min(r.start), re=hm2min(r.end);
+    if(rs==null)rs=o; if(re==null)re=c;
+    var ws=C.valid?Math.max(rs,o):null, we=C.valid?Math.min(re,c):null;
+    var avail=(C.valid&&we>ws)?(we-ws):0;
+    var items=S.bk.filter(function(b){return b.res===r.id;})
+                  .sort(function(a,b){return a.start-b.start||a.dur-b.dur;});
+    var blocking=items.filter(function(b){return ST[b.status].blocks;});
+    var booked=0,value=0,lost=0,cnt=0;
+    blocking.forEach(function(b){booked+=b.dur;cnt++;
+      if(ST[b.status].value)value+=b.price; else lost+=b.price;});
+    items.forEach(function(b){
+      var f=[];
+      if(!r.on)f.push({t:'Resource off',k:'warn'});
+      if(ST[b.status].blocks){
+        if(avail>0&&(b.start<ws||bkEnd(b)>we))f.push({t:'Outside hours',k:'warn'});
+        if(C.valid&&bkEnd(b)>c)f.push({t:'Past close',k:'warn'});
+        if(C.valid&&b.start<o)f.push({t:'Before open',k:'warn'});
+      }
+      C.flags[b.id]=f;
+    });
+    /* overlap check on stored data (imported files can carry clashes) */
+    for(var i=0;i<blocking.length;i++)for(var j=i+1;j<blocking.length;j++){
+      var A=blocking[i],B=blocking[j];
+      if(A.start<bkEnd(B)+buf&&B.start<bkEnd(A)+buf){
+        C.flags[A.id].push({t:'Clash',k:'bad'});C.flags[B.id].push({t:'Clash',k:'bad'});nClash++;
+      }
+    }
+    /* gaps: free runs inside the window, each end pushed out by the buffer */
+    var gaps=[],free=0;
+    if(r.on&&avail>0){
+      var cur=ws;
+      blocking.forEach(function(b){
+        var gs=cur, ge=Math.min(b.start-buf,we);
+        if(ge-gs>0)gaps.push({start:gs,end:ge,len:ge-gs});
+        cur=Math.max(cur,bkEnd(b)+buf);
+      });
+      if(we-cur>0)gaps.push({start:cur,end:we,len:we-cur});
+      gaps=gaps.filter(function(g){return g.len>=gmin;});
+      gaps.forEach(function(g){
+        free+=g.len;
+        g.fits=actSvc.filter(function(v){return v.dur<=g.len;})
+                     .sort(function(a,b){return b.price-a.price||a.dur-b.dur;});
+      });
+    }
+    var util=(r.on&&avail>0)?(booked/avail*100):null;
+    var row={r:r,ws:ws,we:we,avail:r.on?avail:0,booked:booked,util:util,value:value,lost:lost,
+             count:cnt,items:items,blocking:blocking,gaps:gaps,free:free};
+    C.perRes.push(row);
+    if(r.on){
+      totAvail+=avail; totBooked+=booked; totCount+=cnt;
+      totFree+=free; totGaps+=gaps.length;
+    }
+    totValue+=value; totLost+=lost;
+  });
+
+  S.bk.forEach(function(b){
+    if(!resById(b.res)){nOrphan++;(C.flags[b.id]=C.flags[b.id]||[]).push({t:'No resource',k:'bad'});}
+    if(b.status==='cancelled')nCancel++;
+    if(b.status==='noshow')nNoShow++;
+  });
+  C.perRes.forEach(function(p){
+    p.items.forEach(function(b){ if((C.flags[b.id]||[]).some(function(f){return f.t==='Outside hours';}))nOut++; });
+  });
+
+  C.tot={avail:totAvail,booked:totBooked,value:totValue,lost:totLost,count:totCount,
+         free:totFree,gaps:totGaps,cancel:nCancel,noshow:nNoShow,clash:nClash,out:nOut,orphan:nOrphan,
+         util:totAvail>0?(totBooked/totAvail*100):null,
+         idle:Math.max(0,totAvail-totBooked)};
+  return C;
+}
+
+/* ── grid model: rows of slots, bookings merged into spanning cells ── */
+function buildGrid(C){
+  var G={rows:[],cols:[],ok:false};
+  if(!C.valid)return G;
+  var slot=S.slot, n=Math.ceil((C.close-C.open)/slot);
+  if(n<1)return G;
+  if(n>MAXROWS){G.tooMany=n;n=MAXROWS;}
+  G.n=n; G.slot=slot;
+  G.cols=C.perRes.filter(function(p){return p.r.on;});
+  G.ok=true;
+  var i;
+  for(i=0;i<n;i++)G.rows.push({t:C.open+i*slot,cells:[]});
+  G.cols.forEach(function(p,ci){
+    var cover=new Array(n); /* index -> group */
+    var groups=[];
+    p.blocking.slice().sort(function(a,b){return a.start-b.start;}).forEach(function(b){
+      var s=Math.floor((Math.max(b.start,C.open)-C.open)/slot);
+      var e=Math.ceil((Math.min(bkEnd(b),C.close)-C.open)/slot)-1;
+      if(bkEnd(b)<=C.open||b.start>=C.close)return;      /* not visible in the day view */
+      s=clamp(s,0,n-1); e=clamp(e,s,n-1);
+      var g=groups.length?groups[groups.length-1]:null;
+      if(g&&s<=g.e){g.e=Math.max(g.e,e);g.items.push(b);}
+      else groups.push({s:s,e:e,items:[b]});
+    });
+    groups.forEach(function(g){for(var k=g.s;k<=g.e;k++)cover[k]=g;});
+    for(var i2=0;i2<n;i2++){
+      var g=cover[i2];
+      if(g&&g.s===i2)G.rows[i2].cells.push({type:'grp',grp:g,span:g.e-g.s+1,col:ci});
+      else if(g)G.rows[i2].cells.push({type:'skip',col:ci});
+      else{
+        var t=G.rows[i2].t;
+        var off=!(p.avail>0&&t>=p.ws&&t<p.we);
+        G.rows[i2].cells.push({type:'free',col:ci,off:off,t:t});
+      }
+    }
+  });
+  return G;
+}

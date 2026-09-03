@@ -192,7 +192,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .samp{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .samp .btn{margin-left:auto}
 .seg{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;width:100%}
-.seg label{flex:1 1 auto;min-width:74px}
+.seg label{flex:1 1 auto;min-width:62px}
 .seg input{position:absolute;opacity:0;width:1px;height:1px}
 .seg span{display:block;text-align:center;padding:8px 6px;font:600 12.5px/1.2 var(--sans);
   background:var(--raise);color:var(--ink-2);cursor:pointer;border-left:1px solid var(--line)}
@@ -202,6 +202,8 @@ table input:focus,table select:focus{background:var(--raise)}
 
 /* line + register tables */
 #tLines td,#tLines th,#tReg td,#tReg th{padding:6px 6px}
+#tHist td,#tHist th{padding:5px 6px;font-size:12.5px}
+#tHist .chip{font-size:9px;padding:2px 4px}
 .w-amt{width:104px}.w-ref{width:120px}
 .desc-c{min-width:150px;width:46%}
 .desc-c input,.ref-c input{text-align:left;font-family:var(--sans)}
@@ -359,6 +361,8 @@ html:not([data-psize="thermal"]) #docA4{display:block}
   <button type="button" class="btn dgr" id="bClear">Clear all data</button>
 </header>
 
+  <div class="mbar" id="bar" aria-hidden="true"><span class="k">Balance after</span><span class="v" id="barV">—</span></div>
+
   <div class="topnotes noprint">
     <div class="note" id="sampleBanner">
       <div class="samp">
@@ -373,8 +377,6 @@ html:not([data-psize="thermal"]) #docA4{display:block}
       payment has actually cleared, and check with your accountant or tax authority what records you are required to keep.
     </div>
   </div>
-
-  <div class="mbar" id="bar" aria-hidden="true"><span class="k">Balance after</span><span class="v" id="barV">—</span></div>
 
   <div class="split wrap">
     <div>
@@ -709,6 +711,15 @@ html:not([data-psize="thermal"]) #docA4{display:block}
             <div class="ln tot"><span class="k">Balance now outstanding</span><span class="v" id="lBal">—</span></div>
           </div>
           <div class="note" id="statusNote">—</div>
+          <div class="blk" id="histBlk" hidden>
+            <span class="lbl" id="histLbl">Payment history</span>
+            <div class="tw"><table id="tHist">
+              <caption class="vh">Every receipt recorded against this invoice, with the running balance</caption>
+              <thead><tr><th scope="col">Receipt</th><th scope="col">Date</th>
+                <th scope="col" class="n">Amount</th><th scope="col" class="n">Balance</th></tr></thead>
+              <tbody id="histBody"></tbody>
+            </table></div>
+          </div>
           <div class="blk" id="cashBlk" hidden>
             <span class="lbl">Cash</span>
             <div class="ln"><span class="k">Tendered</span><span class="v" id="lTend">—</span></div>
@@ -1057,7 +1068,7 @@ function renderReg(){
         '<td>'+esc(e.payer||'—')+'</td>'+
         '<td class="mono">'+esc(e.invoice||'—')+'</td>'+
         '<td>'+esc(methodName(e.method))+'</td>'+
-        '<td class="n"'+(amt<0?' style="color:var(--bad)"':'')+'>'+esc((amt<0?'−':'')+(e.cur||sym())+Math.abs(amt).toFixed(2))+'</td>'+
+        '<td class="n"'+(amt<0?' style="color:var(--bad)"':'')+'>'+esc((amt<0?'−':'')+(e.cur||sym())+grp(Math.abs(amt).toFixed(2)))+'</td>'+
         '<td class="r" style="white-space:nowrap">'+
           '<button type="button" class="btn ico sm ld" data-i="'+i+'" aria-label="Load receipt '+esc(e.no)+'" title="Load">&#8599;</button> '+
           '<button type="button" class="btn ico sm dl" data-i="'+i+'" aria-label="Delete receipt '+esc(e.no)+'" title="Delete">&times;</button>'+
@@ -1255,7 +1266,27 @@ function refresh(){
   $('#barV').textContent=C.hasInv?(C.status==='over'?'+'+money(C.over):money(C.balance)):money(C.amount);
   $('#bar').querySelector('.k').textContent=C.hasInv?(C.status==='over'?'Overpaid by':'Balance after'):'This receipt';
 
+  renderHist(C);
   renderDoc(C);
+}
+
+function renderHist(C){
+  var wrap=$('#histBlk');
+  if(!C.hasInv){wrap.hidden=true;return}
+  var rows=historyRows(C);
+  if(rows.length<2){wrap.hidden=true;return}
+  wrap.hidden=false;
+  $('#histLbl').textContent='Payment history — '+C.invNo;
+  var h='',i;
+  for(i=0;i<rows.length;i++){
+    var R=rows[i];
+    h+='<tr'+(R.cur?' style="font-weight:650"':'')+'>'+
+       '<td class="mono">'+esc(R.no)+(R.cur?' <span class="chip">now</span>':'')+'</td>'+
+       '<td>'+esc(dmy(R.date))+'</td>'+
+       '<td class="n">'+esc(money(R.amt))+'</td>'+
+       '<td class="n">'+esc(money(R.bal))+'</td></tr>';
+  }
+  $('#histBody').innerHTML=h;
 }
 
 /* ── the document ────────────────────────────────────────────────── */
