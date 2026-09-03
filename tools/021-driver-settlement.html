@@ -172,6 +172,7 @@ table input:focus,table select:focus{background:var(--raise)}
   --accent:#5A9BE8;--accent-ink:#8CBCF2;--accent-wash:#152538;--on-accent:#0B1017}}
 :root[data-theme="dark"]{--accent:#5A9BE8;--accent-ink:#8CBCF2;--accent-wash:#152538;--on-accent:#0B1017}
 
+[hidden]{display:none!important}
 body{padding-bottom:0}
 .app>.appbar{margin-bottom:14px}
 .split>*{min-width:0}
@@ -181,6 +182,10 @@ body{padding-bottom:0}
 .f .err{margin-top:1px}
 
 /* hero */
+#res .grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+#res .stat{padding:9px 11px}
+#res .stat .v{font-size:19px}
+#res .stat.hero{padding:12px 14px}
 .stat.hero .v{font-size:34px}
 .stat.hero .sub{font:11.5px/1.4 var(--sans);color:var(--ink-2);margin-top:5px}
 #res .grid{gap:10px}
@@ -196,10 +201,19 @@ body{padding-bottom:0}
 .bd-list tr:hover{background:transparent}
 
 /* loads table */
-#loadsT{min-width:1020px}
+#loadsT{min-width:1060px}
 #loadsT th{padding:8px 7px}
 #loadsT td{padding:4px 5px}
 #loadsT input,#loadsT select{padding:6px 5px}
+#loadsT .paycell,#loadsT .delcell{position:sticky;background:var(--surface);z-index:2}
+#loadsT .paycell{right:38px;box-shadow:-7px 0 7px -7px rgba(21,25,30,.3)}
+#loadsT .delcell{right:0;width:38px;min-width:38px;padding:4px 3px;text-align:center}
+#loadsT .delcell .btn{padding:5px 7px}
+#loadsT thead .paycell,#loadsT thead .delcell,#loadsT tfoot .paycell,#loadsT tfoot .delcell{background:var(--sunk);z-index:3}
+#loadsT tbody tr:hover .paycell,#loadsT tbody tr:hover .delcell{background:var(--accent-wash)}
+.basiscell{display:flex;align-items:center;gap:3px}
+.basiscell .bu{font:11px/1 var(--mono);color:var(--muted);flex:none}
+.basiscell .dash{color:var(--faint);font-family:var(--mono);padding-left:6px}
 .ratecell{display:flex;align-items:center;gap:3px}
 .ratecell .ru{font:11px/1 var(--mono);color:var(--muted);flex:none;min-width:30px}
 .rowerr td{padding:0 6px 7px;border-bottom:1px solid var(--line)}
@@ -364,14 +378,13 @@ td.paycell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
               <th scope="col">Pay method</th>
               <th scope="col" class="n" id="thLoaded">Loaded mi</th>
               <th scope="col" class="n" id="thEmpty">Empty mi</th>
-              <th scope="col" class="n">Hours</th>
-              <th scope="col" class="n">Linehaul</th>
+              <th scope="col" class="n" id="thBasis">Hours / linehaul</th>
               <th scope="col" class="n">Rate</th>
               <th scope="col" class="n">Stops</th>
               <th scope="col" class="n">Det. hr</th>
               <th scope="col" class="n">Tarps</th>
-              <th scope="col" class="n">Load pay</th>
-              <th scope="col"><span class="lbl">Del</span></th>
+              <th scope="col" class="n paycell">Load pay</th>
+              <th scope="col" class="delcell"><span class="lbl">Del</span></th>
             </tr></thead>
             <tbody id="loadsB"></tbody>
             <tfoot><tr>
@@ -379,10 +392,9 @@ td.paycell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
               <td class="n" id="tfLoaded">—</td>
               <td class="n" id="tfEmpty">—</td>
               <td class="n" id="tfHrs">—</td>
-              <td class="n" id="tfLh">—</td>
-              <td colspan="3"></td>
-              <td class="n" id="tfPay">—</td>
-              <td></td>
+              <td colspan="4"></td>
+              <td class="n paycell" id="tfPay">—</td>
+              <td class="delcell"></td>
             </tr></tfoot>
           </table>
         </div>
@@ -470,6 +482,10 @@ td.paycell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
           <div class="f"><label for="notes">Statement notes (printed)</label>
             <input id="notes" data-h="notes" autocomplete="off"></div>
         </div>
+        <div class="bd" style="border-top:1px solid var(--line)">
+          <h3 style="margin-bottom:9px">Year to date — through this settlement</h3>
+          <div class="grid cols-3" id="ytdOut"></div>
+        </div>
         <div class="ft"><span class="hint">“Post settlement to YTD” rolls this week into the prior-YTD figures, files the statement in saved records and opens the next week.</span></div>
       </section>
 
@@ -521,8 +537,6 @@ td.paycell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular
           <h3 id="hRates">Rate per mile</h3>
           <table class="bd-list"><tbody id="rateBody"></tbody></table>
 
-          <h3>Year to date — through this settlement</h3>
-          <table class="bd-list"><tbody id="ytdBody"></tbody></table>
         </div>
         <div class="ft">
           <span class="hint">Escrow balance after this week: <strong class="mono" id="oEscrow">—</strong></span>
@@ -767,14 +781,16 @@ function loadRowHTML(l,i){
     '<td style="min-width:126px"><select data-f="method" aria-label="Load '+n+' pay method">'+opts+'</select></td>'+
     '<td style="min-width:74px"><input type="number" step="any" min="0" inputmode="decimal" data-f="ml" value="'+esc(l.ml)+'" aria-label="Load '+n+' loaded distance"></td>'+
     '<td style="min-width:74px"><input type="number" step="any" min="0" inputmode="decimal" data-f="me" value="'+esc(l.me)+'" aria-label="Load '+n+' empty distance"></td>'+
-    '<td style="min-width:66px"><input type="number" step="any" min="0" inputmode="decimal" data-f="hrs" value="'+esc(l.hrs)+'" aria-label="Load '+n+' hours"></td>'+
-    '<td style="min-width:84px"><input type="number" step="any" min="0" inputmode="decimal" data-f="lh" value="'+esc(l.lh)+'" aria-label="Load '+n+' linehaul revenue"></td>'+
+    '<td style="min-width:96px"><span class="basiscell">'+
+      '<input type="number" step="any" min="0" inputmode="decimal" data-f="hrs" value="'+esc(l.hrs)+'" aria-label="Load '+n+' hours worked">'+
+      '<input type="number" step="any" min="0" inputmode="decimal" data-f="lh" value="'+esc(l.lh)+'" aria-label="Load '+n+' linehaul revenue">'+
+      '<span class="bu" data-bu></span><span class="dash" data-dash>n/a</span></span></td>'+
     '<td style="min-width:96px"><span class="ratecell"><input type="number" step="any" min="0" inputmode="decimal" data-f="rate" value="'+esc(l.rate)+'" aria-label="Load '+n+' pay rate"><span class="ru" data-ru>'+esc(rateUnit(l.method))+'</span></span></td>'+
     '<td style="min-width:60px"><input type="number" step="1" min="0" inputmode="numeric" data-f="stops" value="'+esc(l.stops)+'" aria-label="Load '+n+' paid stops"></td>'+
     '<td style="min-width:64px"><input type="number" step="any" min="0" inputmode="decimal" data-f="det" value="'+esc(l.det)+'" aria-label="Load '+n+' detention hours"></td>'+
     '<td style="min-width:58px"><input type="number" step="1" min="0" inputmode="numeric" data-f="tarp" value="'+esc(l.tarp)+'" aria-label="Load '+n+' tarps"></td>'+
     '<td class="paycell" data-pay>—</td>'+
-    '<td><button type="button" class="btn ico sm dgr" data-act="del" aria-label="Delete load '+n+'">✕</button></td>'+
+    '<td class="delcell"><button type="button" class="btn ico sm dgr" data-act="del" aria-label="Delete load '+n+'">✕</button></td>'+
   '</tr>';
 }
 function renderLoads(){
@@ -786,10 +802,14 @@ function renderLoads(){
 function applyMethod(tr){
   var l=findLoad(tr.getAttribute('data-id')); if(!l)return;
   var m=l.method;
-  var en={ml:true,me:true,hrs:m==='hourly',lh:m==='pct',rate:true};
-  ['hrs','lh'].forEach(function(f){
-    var el=tr.querySelector('[data-f="'+f+'"]'); if(el)el.disabled=!en[f];
-  });
+  var hrs=tr.querySelector('[data-f="hrs"]'), lh=tr.querySelector('[data-f="lh"]');
+  var bu=tr.querySelector('[data-bu]'), dash=tr.querySelector('[data-dash]');
+  if(hrs&&lh&&bu&&dash){
+    hrs.hidden=(m!=='hourly'); hrs.disabled=(m!=='hourly');
+    lh.hidden=(m!=='pct');     lh.disabled=(m!=='pct');
+    bu.textContent=(m==='hourly')?'hr':(m==='pct'?''+sym():'');
+    dash.hidden=(m==='hourly'||m==='pct');
+  }
   var ru=tr.querySelector('[data-ru]'); if(ru)ru.textContent=rateUnit(m);
 }
 function miniRow(kind,x,i){
@@ -894,8 +914,7 @@ function recalc(){
   $('#loadCount').textContent=String(S.loads.length);
   $('#tfLoaded').textContent=has?nf(c.ml,0):'—';
   $('#tfEmpty').textContent=has?nf(c.me,0):'—';
-  $('#tfHrs').textContent=has?nf(c.hrs,2):'—';
-  $('#tfLh').textContent=has?money(c.lh):'—';
+  $('#tfHrs').textContent=has?(nf(c.hrs,2)+' hr'+(c.lh?' / '+money(c.lh):'')):'—';
   $('#tfPay').textContent=has?money(c.loadTot):'—';
   $('#tfAddl').textContent=S.addl.length?money(c.addl):'—';
   $('#tfDeds').textContent=(S.deds.length||c.advFee)?money(c.ded):'—';
@@ -924,17 +943,17 @@ function recalc(){
   if(c.tarpTot)rows.push(li('Tarp pay',money(c.tarpTot),'sub'));
   if(c.addl)rows.push(li('Additional pay / bonuses',money(c.addl),'sub'));
   rows.push(li('Gross pay',money(c.gross),'sum'));
+  var byType={};
   S.deds.forEach(function(d){
-    if(num(d.amt)===0&&!d.label)return;
-    rows.push(li((d.label||'Deduction')+' <span class="hint">'+esc(d.type)+'</span>','−'+money(r2(num(d.amt))),'sub neg'));
+    var a=r2(num(d.amt)); if(!a)return;
+    byType[d.type]=r2((byType[d.type]||0)+a);
   });
-  if(c.advFee)rows.push(li('Cash advance fees','−'+money(c.advFee),'sub neg'));
+  if(c.advFee)byType['Fee']=r2((byType['Fee']||0)+c.advFee);
+  DTYPES.forEach(function(t){
+    if(byType[t])rows.push(li(t,'−'+money(byType[t]),'sub neg'));
+  });
   rows.push(li('Total deductions','−'+money(c.ded),'sum neg'));
-  S.reims.forEach(function(x){
-    if(num(x.amt)===0&&!x.label)return;
-    rows.push(li(x.label||'Reimbursement','+'+money(r2(num(x.amt))),'sub'));
-  });
-  rows.push(li('Total reimbursements','+'+money(c.reim),'sum'));
+  if(c.reim)rows.push(li('Reimbursements ('+S.reims.length+' item'+(S.reims.length===1?'':'s')+')','+'+money(c.reim),'sub'));
   rows.push(li('<strong>Net pay</strong>','<strong>'+money(c.net)+'</strong>','sum'));
   $('#bdBody').innerHTML=rows.join('');
 
@@ -949,18 +968,19 @@ function recalc(){
   ].join('');
 
   // ytd
-  $('#ytdBody').innerHTML=[
-    li('Gross pay',money(c.ytd.gross)),
-    li('Deductions','−'+money(c.ytd.ded),'neg'),
-    li('Reimbursements','+'+money(c.ytd.reim)),
-    li('Net pay YTD',money(c.ytd.net),'sum'),
-    li('Total '+Ulong(),nf(c.ytd.miles,0)),
-    li('Escrow balance held',money(c.ytd.escrow))
+  $('#ytdOut').innerHTML=[
+    st('YTD gross pay',money(c.ytd.gross)),
+    st('YTD deductions',money(c.ytd.ded)),
+    st('YTD reimbursements',money(c.ytd.reim)),
+    st('YTD net pay',money(c.ytd.net),true),
+    st('YTD total '+Ulong(),nf(c.ytd.miles,0)),
+    st('Escrow balance held',money(c.ytd.escrow))
   ].join('');
 
   renderDoc(c);
   return c;
 }
+function st(k,v,hero){return '<div class="stat'+(hero?' hero':'')+'"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>';}
 function li(k,v,cls){return '<tr class="'+(cls||'')+'"><td>'+k+'</td><td class="n">'+v+'</td></tr>';}
 
 /* ── printed document ────────────────────────────────────── */
