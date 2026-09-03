@@ -178,6 +178,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .chip.sm{font-size:9.5px;padding:3px 5px}
 .mt{margin-top:14px}
 .pillbar{display:flex;gap:6px;flex-wrap:wrap}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* board */
 .board{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(232px,1fr))}
@@ -1188,3 +1189,191 @@ function buildDoc(){
   h+='</section>';
   d.innerHTML=h;
 }
+
+/* ── exports ─────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v==null?'':String(v));
+  return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+  }catch(e){ setSaved('Download blocked by this browser'); }
+}
+function exportCsv(){
+  var C=compute();
+  var head=['Date','Depot','Dispatcher','Ref','Customer','Address','Phone','Window opens','Window closes',
+    'On-site minutes','Travel minutes','Committed minutes','Priority','Assigned to','Role','Vehicle',
+    'Shift start','Shift end','Break minutes','Available minutes','Stop no.','Projected arrival','Projected departure',
+    'Window risk','Status','Booked at','Dispatched at','On site at','Completed at','Failed at','Fail reason',
+    'Actual on-site minutes','Variance vs plan','Outcome','Notes'];
+  var lines=[head.map(csvCell).join(',')];
+  function row(j,r,idx){
+    var e=j._eta||{}, a=actualMin(j), p=Math.max(0,num(j.dur));
+    var outcome = j.status==='complete'?'Completed':(j.status==='failed'?'Failed':'Carry over');
+    lines.push([
+      S.day,S.depot,S.dispatcher,j.ref,j.cust,j.addr,j.phone,j.ws,j.we,
+      p, Math.max(0,num(j.trav)), p+Math.max(0,num(j.trav)),
+      (PMAP[j.prio]||PMAP.normal).l,
+      r?(r.op.name||''):'Unassigned', r?r.op.role:'', r?r.op.veh:'',
+      r?r.op.start:'', r?r.op.end:'', r?Math.max(0,num(r.op.brk)):'', r?(r.avail==null?'':r.avail):'',
+      idx==null?'':idx, e.arrive==null?'':m2t(e.arrive), e.leave==null?'':m2t(e.leave),
+      e.risk?'YES':'no',
+      (SMAP[j.status]||SMAP.booked).l,
+      (j.stamps&&j.stamps.booked)||'',(j.stamps&&j.stamps.dispatched)||'',(j.stamps&&j.stamps.onsite)||'',
+      (j.stamps&&j.stamps.complete)||'',(j.stamps&&j.stamps.failed)||'',j.fail,
+      a==null?'':a, a==null?'':(a-p), outcome, j.notes
+    ].map(csvCell).join(','));
+  }
+  C.rows.forEach(function(r){ r.jobs.forEach(function(j,i){ row(j,r,i+1); }); });
+  C.pool.forEach(function(j){ row(j,null,null); });
+  download('dispatch-board-'+(S.day||todayISO())+'.csv','text/csv;charset=utf-8',
+    '﻿'+lines.join('\r\n')+'\r\n');
+}
+function exportJson(){
+  var out=JSON.parse(JSON.stringify({v:1,sample:S.sample,depot:S.depot,day:S.day,dispatcher:S.dispatcher,
+    phone:S.phone,ops:S.ops,jobs:S.jobs}));
+  out.jobs.forEach(function(j){ delete j._eta; });
+  out.exportedAt=new Date().toISOString();
+  out.tool='solvix.dispatch-board.v1';
+  download('dispatch-board-'+(S.day||todayISO())+'.json','application/json',JSON.stringify(out,null,2));
+}
+function importJson(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||!Array.isArray(o.ops)||!Array.isArray(o.jobs)) throw new Error('shape');
+      S=normalise(o); S.sample=!!o.sample;
+      save(); bindDay(); renderAll(); setSaved('Backup restored — '+S.jobs.length+' jobs');
+    }catch(e){ setSaved('That file is not a Dispatch Board backup'); }
+  };
+  fr.onerror=function(){ setSaved('Could not read that file'); };
+  fr.readAsText(file);
+}
+
+/* ── actions ─────────────────────────────────────────────── */
+function touch(){ S.sample=false; $('sampleTag').style.display='none'; save(); }
+function addJob(){
+  var j={id:uid('j'),ref:nextRef(),cust:'',addr:'',phone:'',ws:'09:00',we:'17:00',dur:60,trav:15,
+    prio:'normal',opId:'',status:'booked',stamps:{booked:nowHM()},fail:'',notes:''};
+  S.jobs.push(j); touch(); renderAll(); focusRow(j.id,'cust');
+}
+function nextRef(){
+  var max=0;
+  S.jobs.forEach(function(j){ var m=/(\d+)\s*$/.exec(String(j.ref||'')); if(m) max=Math.max(max,+m[1]); });
+  return 'J-'+(max?max+1:1001);
+}
+function addOp(){
+  var o={id:uid('op'),name:'',role:'Engineer',veh:'',start:'08:00',end:'17:00',brk:30};
+  S.ops.push(o); touch(); renderAll();
+  var tr=$('crewBody').querySelector('tr[data-op="'+o.id+'"]');
+  if(tr){ var i=tr.querySelector('input'); if(i) i.focus(); }
+}
+function autoAssign(){
+  var C=compute();
+  if(!C.rows.length||!C.pool.length) return;
+  var load=C.rows.map(function(r){ return {id:r.op.id, committed:r.committed, avail:(r.avail==null?0:r.avail)}; });
+  var order=C.pool.slice().sort(function(a,b){
+    var rank={urgent:0,high:1,normal:2,low:3};
+    var d=(rank[a.prio]==null?2:rank[a.prio])-(rank[b.prio]==null?2:rank[b.prio]);
+    if(d) return d;
+    return (t2m(a.ws)==null?9999:t2m(a.ws))-(t2m(b.ws)==null?9999:t2m(b.ws));
+  });
+  order.forEach(function(j){
+    var mins=Math.max(0,num(j.dur))+Math.max(0,num(j.trav));
+    var best=null;
+    load.forEach(function(l){ var spare=l.avail-l.committed; if(!best||spare>(best.avail-best.committed)) best=l; });
+    if(best){ j.opId=best.id; best.committed+=mins; }
+  });
+  touch(); renderAll();
+}
+function clearAll(){
+  if(!confirm('Clear the whole board — crew, jobs and day details — from this browser?\n\nThis cannot be undone. Export a JSON backup first if you need it.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S={v:1,sample:false,depot:'',day:todayISO(),dispatcher:'',phone:'',ops:[],jobs:[]};
+  save(); bindDay(); renderAll(); setSaved('Cleared');
+}
+
+/* ── wiring ──────────────────────────────────────────────── */
+function bindDay(){
+  $('depot').value=S.depot||''; $('dday').value=S.day||''; 
+  $('dispatcher').value=S.dispatcher||''; $('dphone').value=S.phone||'';
+}
+function fieldBind(id,key){
+  var n=$(id);
+  n.addEventListener('input',function(){ S[key]=n.value; touch(); renderResults(); buildDoc(); });
+}
+function renderPrintScope(){
+  var sel=$('printScope'), cur=sel.value;
+  var h='<option value="all">All run sheets + end-of-day report</option>';
+  S.ops.forEach(function(o){ h+='<option value="'+esc(o.id)+'">Run sheet — '+esc(o.name||'(unnamed)')+'</option>'; });
+  h+='<option value="report">End-of-day report only</option>';
+  sel.innerHTML=h;
+  sel.value=[].some.call(sel.options,function(o){return o.value===cur;})?cur:'all';
+}
+function renderAll(){
+  renderPrintScope(); renderBoard(); renderCrew(); renderJobs(); renderResults(); renderEod(); buildDoc();
+}
+function applyTheme(t){
+  if(t==='light'||t==='dark') document.documentElement.setAttribute('data-theme',t);
+  else document.documentElement.removeAttribute('data-theme');
+  $('btnTheme').textContent='Theme: '+(t==='light'?'Light':t==='dark'?'Dark':'Auto');
+  try{ localStorage.setItem(THEMEKEY,t); }catch(e){}
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  var restored=load();
+  bindDay();
+  fieldBind('depot','depot'); fieldBind('dday','day');
+  fieldBind('dispatcher','dispatcher'); fieldBind('dphone','phone');
+  renderAll();
+  if(restored) setSaved('Restored from this browser');
+
+  $('btnAddJob').addEventListener('click',addJob);
+  $('btnAddJob2').addEventListener('click',addJob);
+  $('btnAddOp').addEventListener('click',addOp);
+  $('btnAutoBal').addEventListener('click',autoAssign);
+  $('btnClear').addEventListener('click',function(){ closeMenu(); clearAll(); });
+  $('btnCsv').addEventListener('click',exportCsv);
+  $('btnJson').addEventListener('click',function(){ closeMenu(); exportJson(); });
+  $('btnImport').addEventListener('click',function(){ closeMenu(); $('fileJson').click(); });
+  $('fileJson').addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0]; if(f) importJson(f); e.target.value='';
+  });
+  $('btnSample').addEventListener('click',function(){
+    closeMenu();
+    if(!confirm('Replace the current board with the sample day?')) return;
+    S=sample(); save(); bindDay(); renderAll(); setSaved('Sample day loaded');
+  });
+  $('printScope').addEventListener('change',buildDoc);
+  $('btnPrint').addEventListener('click',function(){ buildDoc(); window.print(); });
+  window.addEventListener('beforeprint',buildDoc);
+
+  var themes=['auto','light','dark'];
+  var cur='auto'; try{ cur=localStorage.getItem(THEMEKEY)||'auto'; }catch(e){}
+  applyTheme(cur);
+  $('btnTheme').addEventListener('click',function(){
+    var i=themes.indexOf(cur); cur=themes[(i+1)%themes.length]; applyTheme(cur);
+  });
+
+  var mw=$('menuWrap');
+  $('btnMenu').addEventListener('click',function(e){
+    e.stopPropagation();
+    mw.classList.toggle('open');
+    $('btnMenu').setAttribute('aria-expanded',mw.classList.contains('open')?'true':'false');
+  });
+  document.addEventListener('click',function(e){ if(!mw.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenu(); });
+  function closeMenuInner(){ mw.classList.remove('open'); $('btnMenu').setAttribute('aria-expanded','false'); }
+  window.__closeMenu=closeMenuInner;
+});
+function closeMenu(){ if(window.__closeMenu) window.__closeMenu(); }
+})();
+</script>
+</body>
+</html>
