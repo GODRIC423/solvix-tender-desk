@@ -53,7 +53,11 @@
   .ui :is(button,a,input,.panel,.chips,.readout){pointer-events:auto}
 
   header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
-  .masthead{display:flex;flex-direction:column;gap:.35rem}
+  .masthead{display:flex;flex-direction:column;gap:.35rem;position:relative}
+  .masthead::before{
+    content:"";position:absolute;inset:-14% -22% -18% -24%;z-index:-1;pointer-events:none;
+    background:radial-gradient(ellipse at 40% 45%,rgba(255,246,236,.92) 0%,rgba(255,246,236,.7) 45%,rgba(255,246,236,0) 78%);
+  }
   .eyebrow{
     display:inline-flex;align-items:center;gap:.6rem;font-size:.78rem;font-weight:600;
     letter-spacing:.14em;text-transform:uppercase;color:var(--teal-deep);
@@ -191,6 +195,7 @@
     .actions{justify-content:flex-start;order:-1}
     .actions .btn{font-size:.8rem;padding:.55rem .8rem}
     .lede{font-size:.9rem;max-width:34ch}
+    h1{font-size:3.6rem;max-width:7ch}
     .bar{flex-direction:column;align-items:stretch}
     .panel{min-width:0}
     .hint{font-size:.78rem}
@@ -446,8 +451,12 @@
         vec2 jitter=vec2(hash(cell+1.7+u_time),hash(cell+9.1+u_time));
         vec2 centre=(cell+0.3+0.4*jitter)/g;
         float d=length((uv-centre)*vec2(u_aspect,1.0));
-        float r=0.012+0.018*hash(cell+3.3+u_time);
-        float v=(h<0.42)?smoothstep(r,r*0.4,d):0.0;
+        float r=0.008+0.026*hash(cell+3.3+u_time)*hash(cell+5.9+u_time);
+        float v=(h<0.46)?smoothstep(r,r*0.4,d):0.0;
+        /* a second, finer scatter of specks */
+        vec2 g2=g*2.3;vec2 c2=floor(uv*g2);float h2=hash(c2+2.2+u_time);
+        vec2 p2=(c2+0.5)/g2;float d2=length((uv-p2)*vec2(u_aspect,1.0));
+        if(h2<0.18)v=max(v,smoothstep(0.006,0.002,d2));
         float dc=length((uv-0.5)*vec2(u_aspect,1.0));
         v=max(v,smoothstep(0.05,0.02,dc));
         gl_FragColor=enc(vec2(1.0,v));return;
@@ -503,7 +512,7 @@
       /* emboss from gradient: light from top-left */
       float light=(vx-vy)*6.0;
       col+=light*smoothstep(0.02,0.2,v)*0.35;
-      col-=vec3(0.06)*smoothstep(0.02,0.06,v)*(1.0-smoothstep(0.06,0.14,v));
+      col-=vec3(0.035)*smoothstep(0.02,0.06,v)*(1.0-smoothstep(0.06,0.14,v));
       gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);
     }
   `;
@@ -602,7 +611,7 @@
     cur=next;
   }
   function seed(){
-    simUniforms(1,0);step(1,0);generation=0;genEl.textContent='0';
+    simUniforms(1,0);step(1,0);generation=0;genEl.textContent='0';warm=45;
   }
   function drops(){
     const asp=W/H;
@@ -644,15 +653,16 @@
 
   /* ---------------- loop ---------------- */
   const STEPS=reduced?2:10;
-  let raf=0,last=0;
+  let raf=0,last=0,warm=0;
   function frame(t){
     raf=0;
     if(document.hidden)return;
     if(hovering&&!pointerDown&&t-hoverTimer>60)brush.s=0;
     if(running){
       simUniforms(0,1.0);
-      for(let i=0;i<STEPS;i++){step(0,1.0);if(dropsLife){dropsLife=0;dropsArr.fill(0);gl.uniform4fv(simP.u.u_drops,dropsArr);}}
-      generation+=STEPS;
+      const n=warm>0?STEPS*(reduced?4:6):STEPS;if(warm>0)warm--;
+      for(let i=0;i<n;i++){step(0,1.0);if(dropsLife){dropsLife=0;dropsArr.fill(0);gl.uniform4fv(simP.u.u_drops,dropsArr);}}
+      generation+=n;
       if(t-last>120){genEl.textContent=generation.toLocaleString();last=t;}
     }else if(dropsLife){simUniforms(0,0);step(0,0);dropsLife=0;dropsArr.fill(0);}
     draw();

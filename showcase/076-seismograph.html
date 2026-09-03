@@ -122,10 +122,10 @@ button{font:inherit;color:inherit}
 }
 .hint kbd{font:inherit;border:1px solid var(--grid-2);border-bottom-width:2px;padding:0 5px;border-radius:2px;background:#fff}
 .readout{
-  position:absolute;right:clamp(14px,2.5vw,36px);top:14px;text-align:right;pointer-events:none;
+  position:absolute;right:clamp(44px,4vw,64px);top:14px;text-align:right;pointer-events:none;
   color:var(--ink);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
 }
-.readout b{display:block;font-size:clamp(28px,3.4vw,44px);letter-spacing:-.03em;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.readout b{display:block;text-transform:none;font-size:clamp(28px,3.4vw,44px);letter-spacing:-.03em;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
 .readout i{font-style:normal;display:block;color:var(--muted);margin-top:4px;letter-spacing:.1em}
 .flash{position:absolute;inset:0;pointer-events:none;background:var(--ink);opacity:0;mix-blend-mode:multiply}
 .flash.on{animation:flash .5s ease-out}
@@ -159,6 +159,8 @@ section{padding-top:clamp(40px,6vw,88px)}
 }
 .log-head{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--grid-2);padding-top:0}
 .log li{animation:rowin .5s ease-out both}
+.log li.log-empty{display:block;animation:none}
+.log li.log-empty:not(:only-child){display:none}
 .log li.big{background:linear-gradient(90deg,rgba(200,30,30,.06),transparent 60%)}
 @keyframes rowin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .log .id{color:var(--muted);font-size:12px}
@@ -173,7 +175,6 @@ section{padding-top:clamp(40px,6vw,88px)}
 .log svg{width:100%;height:34px;display:block}
 .log svg polyline{fill:none;stroke:var(--ink);stroke-width:1.2;vector-effect:non-scaling-stroke}
 .log-empty{padding:34px 6px;color:var(--muted);text-align:center;border-bottom:1px solid var(--grid)}
-.log-empty:not(:only-child){display:none}
 
 /* reading */
 .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(20px,3vw,44px)}
@@ -229,7 +230,8 @@ footer{margin-top:clamp(48px,7vw,100px)}
 }
 @media (max-width:480px){
   .rail-in{padding:0 14px}
-  .head h1{font-size:15vw}
+  .head h1{font-size:13.2vw}
+  .readout{right:40px}
   .foot-rail .rail-in{grid-template-columns:1fr}
 }
 </style>
@@ -263,16 +265,17 @@ footer{margin-top:clamp(48px,7vw,100px)}
       <canvas id="cv" aria-hidden="true"></canvas>
       <div class="flash" id="flash"></div>
       <div class="pen" aria-hidden="true">
-        <svg viewBox="0 0 180 600" preserveAspectRatio="none" id="pensvg">
+        <svg viewBox="0 0 180 600" preserveAspectRatio="xMaxYMid slice" id="pensvg">
           <defs>
             <linearGradient id="brassg" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" stop-color="#7E5B39"/><stop offset=".45" stop-color="#D9BE98"/><stop offset="1" stop-color="#A67C52"/>
             </linearGradient>
           </defs>
           <!-- mast -->
-          <rect x="150" y="0" width="14" height="600" fill="url(#brassg)"/>
+          <rect id="mast" x="150" y="0" width="14" height="600" fill="url(#brassg)"/>
           <rect x="140" y="0" width="34" height="8" fill="#6E4E2C"/>
-          <rect x="140" y="592" width="34" height="8" fill="#6E4E2C"/>
+          <rect id="mastCap" x="140" y="592" width="34" height="8" fill="#6E4E2C"/>
+          <g id="pivotG">
           <!-- arm, rotates about pivot at (157,300) -->
           <g id="arm" transform="rotate(0 157 300)">
             <rect x="157" y="296" width="0" height="8" fill="#A67C52"/>
@@ -285,6 +288,7 @@ footer{margin-top:clamp(48px,7vw,100px)}
           <circle cx="157" cy="300" r="12" fill="#7E5B39"/>
           <circle cx="157" cy="300" r="7" fill="url(#brassg)"/>
           <circle cx="157" cy="300" r="2" fill="#3A3128"/>
+          </g>
         </svg>
       </div>
       <div class="charge" id="charge"></div>
@@ -378,6 +382,7 @@ footer{margin-top:clamp(48px,7vw,100px)}
   'use strict';
   const $ = id => document.getElementById(id);
   const paper = $('paper'), cv = $('cv'), ctx = cv.getContext('2d');
+  const pensvg = $('pensvg'), mast = $('mast'), mastCap = $('mastCap'), pivotG = $('pivotG');
   const arm = $('arm'), charge = $('charge'), chargeLabel = $('chargeLabel');
   const deflEl = $('defl'), stateEl = $('state'), flash = $('flash');
   const logEl = $('log'), clockEl = $('clock');
@@ -400,6 +405,9 @@ footer{margin-top:clamp(48px,7vw,100px)}
       fresh.set(samples.subarray(samples.length - take), n - take);
     }
     samples = fresh;
+    pensvg.setAttribute('viewBox', `0 0 180 ${H}`);
+    mast.setAttribute('height', H); mastCap.setAttribute('y', H - 8);
+    pivotG.setAttribute('transform', `translate(0 ${(H / 2 - 300).toFixed(1)})`);
   }
   addEventListener('resize', resize, {passive:true});
   resize();
@@ -659,6 +667,18 @@ footer{margin-top:clamp(48px,7vw,100px)}
     $('logNote').textContent = 'Newest first';
   });
 
+  // pre-warm the sheet with history so the first screen already carries an event
+  (function prewarm(){
+    const n = samples.length, span = n / SPEED;
+    simT = 0;
+    const ev = makeEvent(4.6 + Math.round(Math.random() * 6) / 10, 'auto');
+    ev.t0 = -span * 0.58; ev.wall = new Date(startWall.getTime() + ev.t0 * 1000);
+    logEl.firstElementChild.children[1].textContent = fmtUTC(ev.wall);
+    $('sMaxWhen').textContent = ev.id + ' · ' + fmtUTC(ev.wall);
+    for (let i = 0; i < n; i++) samples[i] = value(-(n - 1 - i) / SPEED);
+    gridOff = n;
+    nextAuto = 4 + Math.random() * 5;
+  })();
   updateUI();
   start();
 })();
