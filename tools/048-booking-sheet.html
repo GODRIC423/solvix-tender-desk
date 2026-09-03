@@ -832,7 +832,7 @@ function compute(){
   C.minSvc=actSvc.length?Math.min.apply(null,actSvc.map(function(v){return v.dur;})):0;
 
   var totAvail=0,totBooked=0,totValue=0,totLost=0,totCount=0,totFree=0,totGaps=0,
-      nCancel=0,nNoShow=0,nClash=0,nOut=0,nOrphan=0;
+      nCancel=0,nNoShow=0,nClash=0,nOut=0,nOrphan=0,offValue=0,offCount=0;
 
   S.res.forEach(function(r){
     var rs=hm2min(r.start), re=hm2min(r.end);
@@ -886,8 +886,10 @@ function compute(){
     if(r.on){
       totAvail+=avail; totBooked+=booked; totCount+=cnt;
       totFree+=free; totGaps+=gaps.length;
+      totValue+=value; totLost+=lost;
+    }else{
+      offValue+=value; offCount+=items.length;   /* off today: cannot be delivered as booked */
     }
-    totValue+=value; totLost+=lost;
   });
 
   S.bk.forEach(function(b){
@@ -901,6 +903,7 @@ function compute(){
 
   C.tot={avail:totAvail,booked:totBooked,value:totValue,lost:totLost,count:totCount,
          free:totFree,gaps:totGaps,cancel:nCancel,noshow:nNoShow,clash:nClash,out:nOut,orphan:nOrphan,
+         offValue:offValue,offCount:offCount,
          util:totAvail>0?(totBooked/totAvail*100):null,
          idle:Math.max(0,totAvail-totBooked)};
   return C;
@@ -1066,6 +1069,8 @@ function renderBookings(){
   var t=C.tot;
   $('#bkFoot').textContent=t.count+' appointments hold '+durTxt(t.booked)+' and are worth '+money(t.value)+
     (t.lost>0?'. '+money(t.lost)+' sat in no-shows':'')+
+    (t.offCount?'. '+t.offCount+' appointment(s) sit on a resource that is off today — worth '+money(t.offValue)+
+      ', left out of the totals until they are moved':'')+
     (t.clash?'. '+t.clash+' clash(es) found in the loaded data — fix them':'')+'.';
 }
 
@@ -1105,7 +1110,8 @@ function renderSummary(){
     h.push('<div class="kv"><span class="nm">'+esc(resName(p.r))+(p.r.on?'':' <span class="tag warn">off</span>')+'</span>'+
       '<span class="nums">'+pct(u)+' · '+money(p.value)+'</span>'+
       '<span class="bar"><i class="'+cls+'" style="width:'+w.toFixed(1)+'%"></i></span>'+
-      '<span class="sub">'+durTxt(p.booked)+' booked of '+durTxt(p.avail)+' · '+p.count+' appt'+(p.count===1?'':'s')+
+      '<span class="sub">'+(p.r.on?durTxt(p.booked)+' booked of '+durTxt(p.avail):'off today — '+
+        money(p.value)+' not counted')+' · '+p.count+' appt'+(p.count===1?'':'s')+
       (p.free>0?' · '+durTxt(p.free)+' still sellable':'')+'</span></div>');
   });
   host.innerHTML=h.join('')||'<div class="empty">No resources yet.</div>';
@@ -1149,7 +1155,8 @@ function renderNotes(){
     'clipped to opening times), shown to 1 decimal place. Booked value counts appointments marked booked, confirmed, '+
     'arrived or completed; no-shows are reported separately and cancellations are released. A gap is a free run with '+
     'the '+C.buffer+'-minute buffer removed from each end, listed at '+C.gapMin+' minutes or more. Overlaps on the same '+
-    'resource are refused at the point of booking. Everything is saved in this browser only.';
+    'resource are refused at the point of booking. A resource switched off is left out of both capacity and '+
+    'booked value, and its appointments are flagged for moving. Everything is saved in this browser only.';
   $('#edHint').textContent=editId?'Editing an existing appointment — Save keeps its place in the day.':
     'Clashes on the same resource are refused, including the '+C.buffer+'-minute buffer.';
 }
@@ -1234,6 +1241,9 @@ function renderDoc(){
   h.push('</tbody><tfoot><tr><td colspan="5">'+t.count+' appointment(s) hold time — including '+t.noshow+
     ' no-show(s), which earn nothing — and '+t.cancel+' cancellation(s) released the room</td><td class="n">'+t.booked+'</td>'+
     '<td class="n">'+money(t.value)+'</td><td></td></tr></tfoot></table>');
+
+  if(t.offCount)h.push('<p style="font-size:8pt;margin:0 0 6pt">'+t.offCount+' appointment(s) sit on a resource '+
+    'marked off today, worth '+money(t.offValue)+'. They are excluded from the totals until they are moved.</p>');
 
   /* per-resource summary + gaps */
   h.push('<h3 class="sec">Utilisation by resource</h3>');
