@@ -304,6 +304,11 @@ body.preview #work{display:none}
 .doc-sec tfoot td{font-weight:700;background:var(--sunk);border-top:1.5px solid var(--line-hard)}
 .doc-sec tbody tr:hover{background:transparent}
 .doc-sum{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+.doc-work{margin-top:12px;border:1px solid var(--line);border-radius:4px;background:var(--sunk);padding:9px 11px}
+.doc-work h5{margin:0 0 5px;font:700 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.doc-work p{font:11.5px/1.55 var(--sans);color:var(--ink-2)}
+.doc-work p+p{margin-top:5px}
+.doc-work b{font-family:var(--mono);font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
 @media(max-width:640px){.doc-sum{grid-template-columns:1fr}}
 .doc-notes{margin-top:14px;font:12.5px/1.55 var(--sans);white-space:pre-line}
 .doc-sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:18px}
@@ -332,6 +337,8 @@ footer.site{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 30p
   .doc-sec td{padding:1.2mm 1.6mm;border-bottom:.5pt solid #ccc}
   .doc-sum{display:grid!important;grid-template-columns:1fr 1fr;gap:5mm;margin-top:4.5mm}
   .doc-notes{font-size:8.6pt;margin-top:4mm}
+  .doc-work{background:#fff!important;border:.5pt solid #999;padding:2mm 2.5mm;margin-top:3mm}
+  .doc-work h5{font-size:7pt}.doc-work p{font-size:8.2pt;line-height:1.45}
   .doc-sign{display:grid!important;margin-top:6mm}
   .doc-sign div{font-size:8pt}
   .note{border-left:2.5pt solid #000;background:#fff!important;padding:2.5mm 3mm;font-size:8.4pt}
@@ -413,7 +420,8 @@ footer.site{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 30p
 
     <div class="doc-sum">
       <div class="doc-sec" style="margin-top:0"><h4>Contribution statement at forecast volume</h4>
-        <div class="tw"><table id="dCvp"></table></div></div>
+        <div class="tw"><table id="dCvp"></table></div>
+        <div class="doc-work" id="dWork"></div></div>
       <div class="doc-sec" style="margin-top:0"><h4>Break-even and target profit summary</h4>
         <div class="tw"><table id="dSum"></table></div></div>
     </div>
@@ -1011,8 +1019,9 @@ function scenTableHTML(withActions){
     '<th class="n">Break-even units</th><th class="n">CM ratio</th><th class="n">Margin of safety</th>'+
     '<th class="n">Profit at forecast</th>'+(withActions?'<th></th>':'')+'</tr></thead><tbody>';
   var C=calc(S);
-  h+='<tr class="scenrow"><td>'+(esc(S.meta.scenario)||'Current sheet')+'<span class="pill">On screen now</span></td>'+
-    '<td class="tiny">working copy</td>'+
+  h+='<tr class="scenrow"><td>'+(esc(S.meta.scenario)||'Current sheet')+'<span class="pill">'+
+    (withActions?'On screen now':'This analysis')+'</span></td>'+
+    '<td class="tiny">'+(withActions?'working copy':dateLong(S.meta.date))+'</td>'+
     '<td class="n">'+money(C.F)+'</td>'+
     '<td class="n">'+(C.be?money(C.be.revenue):'—')+'</td>'+
     '<td class="n">'+(C.be?units(C.be.units):'—')+'</td>'+
@@ -1020,7 +1029,7 @@ function scenTableHTML(withActions){
     '<td class="n">'+(C.mosPct==null?'—':pct(C.mosPct,1))+'</td>'+
     '<td class="n'+(C.profit<0?' neg':'')+'">'+money(C.profit)+'</td>'+
     (withActions?'<td></td>':'')+'</tr>';
-  if(!S.scenarios.length){
+  if(!S.scenarios.length&&withActions){
     h+='<tr><td colspan="'+(withActions?9:8)+'" class="empty">No saved scenarios yet'+
       (withActions?' — set the sheet up how you want it, then press <strong>Save current scenario</strong> to keep it and compare.':'.')+'</td></tr>';
   }
@@ -1265,9 +1274,38 @@ function paintDoc(C){
   h+='</tbody>';
   $('#dSum').innerHTML=h;
 
+  var wk='<h5>How these figures were reached</h5>';
+  if(C.single){
+    wk+='<p>Contribution per unit = <b>'+money(C.prods[0].price)+'</b> price &minus; <b>'+money(C.prods[0].vcost)+
+      '</b> variable cost = <b>'+money(C.cbar)+'</b>.</p>';
+  }else{
+    wk+='<p>Weighted contribution per unit = (<b>'+money(C.revenue)+'</b> revenue &minus; <b>'+money(C.varTot)+
+      '</b> variable costs) &divide; <b>'+units(C.totalUnits)+'</b> forecast units = <b>'+money(C.cbar)+'</b>.</p>';
+  }
+  if(C.be){
+    wk+='<p>Break-even volume = <b>'+money(C.F)+'</b> fixed costs &divide; <b>'+money(C.cbar)+'</b> = <b>'+
+      fmtNum(C.be.bundles,1)+'</b> units'+(C.single?'':', split across the forecast mix')+
+      ' and rounded up '+(C.single?'':'line by line ')+'to <b>'+units(C.be.units)+'</b> whole units.</p>';
+    wk+='<p>Break-even revenue = '+(C.single?'<b>'+units(C.be.units)+'</b> units &times; <b>'+money(C.prods[0].price)+'</b>'
+      :'each line&rsquo;s break-even units &times; its own price')+' = <b>'+(C.be?money(C.be.revenue):'—')+'</b>.</p>';
+  }else{
+    wk+='<p>No break-even point can be calculated: the contribution per unit is zero or negative, so no volume covers the fixed costs.</p>';
+  }
+  if(C.mosPct!=null){
+    wk+='<p>Margin of safety = (<b>'+money(C.revenue)+'</b> forecast &minus; <b>'+money(C.be.revenue)+
+      '</b> break-even) &divide; <b>'+money(C.revenue)+'</b> = <b>'+pct(C.mosPct,1)+'</b>.</p>';
+  }
+  if(C.tgt){
+    wk+='<p>Target profit volume = (<b>'+money(C.F)+'</b> fixed costs + <b>'+money(nz(S.target.profit))+
+      '</b> target) &divide; <b>'+money(C.cbar)+'</b> = <b>'+units(C.tgt.units)+'</b> units, worth <b>'+
+      money(C.tgt.revenue)+'</b>.</p>';
+  }
+  $('#dWork').innerHTML=wk;
+
   $('#dBe').innerHTML=beTableHTML(C);
   $('#dSens').innerHTML=sensTableHTML(C);
   $('#dScenTab').innerHTML=scenTableHTML(false);
+  $('#dScenWrap').hidden = !S.scenarios.length;
 
   var n='Assumptions and notes\n';
   n+='Break-even units = total fixed costs ÷ contribution per unit'+(C.single?'':' (weighted by the forecast sales mix)')+
