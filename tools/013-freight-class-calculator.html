@@ -587,6 +587,10 @@ function fx(n,dp){ if(!isFinite(n)) return '—'; var v=n.toFixed(dp); if(/^-0(\
 function grp(s){ var p=String(s).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
 function fmt(n,dp){ return isFinite(n)? grp(fx(n,dp)) : '—'; }
 function money(n){ return isFinite(n)? S.opts.cur+grp(fx(n,2)) : '—'; }
+function dispLen(v){ var n=numOf(v); if(!isFinite(n)) return ''; return S.sys==='met'? Math.round(n*2.54*10)/10 : Math.round(n*100)/100; }
+function dispWt(v){ var n=numOf(v); if(!isFinite(n)) return ''; return S.sys==='met'? Math.round(n/LB_PER_KG*10)/10 : Math.round(n*100)/100; }
+function canonLen(v){ var n=numOf(v); if(!isFinite(n)) return ''; return S.sys==='met'? n*IN_PER_CM : n; }
+function canonWt(v){ var n=numOf(v); if(!isFinite(n)) return ''; return S.sys==='met'? n*LB_PER_KG : n; }
 function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function dateLong(iso){
   if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
@@ -668,8 +672,8 @@ function compute(){
   var lines=[], tw=0, tc=0, tq=0, tlf=0, anyLine=false, lfOK=true, flags=[];
   for(var i=0;i<S.units.length;i++){
     var u=S.units[i];
-    var L=numOf(u.L)*(met?IN_PER_CM:1), W=numOf(u.W)*(met?IN_PER_CM:1), H=numOf(u.H)*(met?IN_PER_CM:1);
-    var q=Math.floor(numOf(u.q)), w=numOf(u.w)*(met?LB_PER_KG:1);
+    var L=numOf(u.L), W=numOf(u.W), H=numOf(u.H);
+    var q=Math.floor(numOf(u.q)), w=numOf(u.w);
     var ok = L>0&&W>0&&H>0&&q>0&&w>0;
     var cuEach = ok ? (L*W*H)/1728 : NaN;
     var cuLine = ok ? cuEach*q : NaN;
@@ -732,11 +736,11 @@ function rowHTML(u,i){
     '<td class="idx rmhd">'+n+'</td>'+
     '<td class="cdesc"><input type="text" data-k="d" data-i="'+i+'" aria-label="Description, line '+n+'" value="'+esc(u.d)+'" placeholder="What is on the pallet?"><span class="pv"></span></td>'+
     '<td class="ctype"><select data-k="t" data-i="'+i+'" aria-label="Type or pallet preset, line '+n+'">'+typeOptsHTML+'</select><span class="pv"></span></td>'+
-    cell('L',u.L,'Length','0.1','0')+
-    cell('W',u.W,'Width','0.1','0')+
-    cell('H',u.H,'Height','0.1','0')+
+    cell('L',dispLen(u.L),'Length','0.1','0')+
+    cell('W',dispLen(u.W),'Width','0.1','0')+
+    cell('H',dispLen(u.H),'Height','0.1','0')+
     cell('q',u.q,'Pieces','1','1')+
-    cell('w',u.w,'Weight each','0.1','0')+
+    cell('w',dispWt(u.w),'Weight each','0.1','0')+
     '<td class="stk"><input type="checkbox" data-k="s" data-i="'+i+'" aria-label="Stackable, line '+n+'"'+(u.s?' checked':'')+'><span class="pv"></span></td>'+
     '<td class="calc c-cu">—</td>'+
     '<td class="calc c-wt">—</td>'+
@@ -799,11 +803,11 @@ function paint(){
     var u=S.units[i];
     pvs[0].textContent=u.d||'—';
     pvs[1].textContent=typeShort(u.t);
-    pvs[2].textContent=(u.L===''||u.L==null)?'—':String(u.L);
-    pvs[3].textContent=(u.W===''||u.W==null)?'—':String(u.W);
-    pvs[4].textContent=(u.H===''||u.H==null)?'—':String(u.H);
+    pvs[2].textContent=dispLen(u.L)===''?'—':String(dispLen(u.L));
+    pvs[3].textContent=dispLen(u.W)===''?'—':String(dispLen(u.W));
+    pvs[4].textContent=dispLen(u.H)===''?'—':String(dispLen(u.H));
     pvs[5].textContent=(u.q===''||u.q==null)?'—':String(u.q);
-    pvs[6].textContent=(u.w===''||u.w==null)?'—':String(u.w);
+    pvs[6].textContent=dispWt(u.w)===''?'—':String(dispWt(u.w));
     pvs[7].textContent=u.s?'Yes':'No';
   }
   $('tQty').textContent = C.any? fmt(C.tq,0) : '—';
@@ -940,17 +944,8 @@ function redrawAll(){ fillForm(); renderRows(); renderSaved(); paint(); }
 /* ── unit conversion on toggle ──────────────────────────────────── */
 function switchSystem(sys){
   if(sys===S.sys) return;
-  var toMet = sys==='met';
-  for(var i=0;i<S.units.length;i++){
-    var u=S.units[i];
-    ['L','W','H'].forEach(function(k){
-      var n=numOf(u[k]); if(!isFinite(n)) return;
-      u[k]= toMet ? Math.round(n*2.54*10)/10 : Math.round(n/2.54*100)/100;
-    });
-    var w=numOf(u.w);
-    if(isFinite(w)) u.w = toMet ? Math.round(w/LB_PER_KG*10)/10 : Math.round(w*LB_PER_KG*10)/10;
-  }
-  S.sys=sys; S.sample=false;
+  S.sys=sys;                      /* dimensions are stored in inches and pounds;
+                                     the toggle only changes how they are shown */
   redrawAll(); save();
 }
 
@@ -978,7 +973,7 @@ function buildCSV(){
     'Density (lb/ft3)','Class','Linear ft (est)']));
   for(var i=0;i<C.lines.length;i++){
     var ln=C.lines[i], u=ln.u;
-    L.push(crow([i+1,u.d,typeShort(u.t),u.L,u.W,u.H,u.q,u.w,u.s?'Yes':'No',
+    L.push(crow([i+1,u.d,typeShort(u.t),dispLen(u.L),dispLen(u.W),dispLen(u.H),u.q,dispWt(u.w),u.s?'Yes':'No',
       ln.ok?fx(ln.cuEach,3):'', ln.ok?fx(ln.cu,2):'', ln.ok?fx(ln.wt,1):'',
       ln.ok?fx(ln.den,2):'', ln.band?ln.band.c:'', isFinite(ln.lf)?fx(ln.lf,2):'']));
   }
@@ -1036,6 +1031,8 @@ function bind(){
     if(isNaN(i)||!k||!S.units[i]) return;
     if(k==='s') S.units[i].s=t.checked;
     else if(k==='d') S.units[i].d=t.value;
+    else if(k==='L'||k==='W'||k==='H') S.units[i][k]=canonLen(t.value);
+    else if(k==='w') S.units[i].w=canonWt(t.value);
     else S.units[i][k]=t.value;
     S.sample=false;
     if(RULES[k]) validateCell(t);
@@ -1048,12 +1045,14 @@ function bind(){
     S.units[i].t=t.value;
     var def=null; for(var j=0;j<TYPES.length;j++) if(TYPES[j].k===t.value) def=TYPES[j];
     if(def && def.L>0){
-      var met=S.sys==='met';
-      S.units[i].L = met? Math.round(def.L*2.54*10)/10 : def.L;
-      S.units[i].W = met? Math.round(def.W*2.54*10)/10 : def.W;
+      S.units[i].L=def.L; S.units[i].W=def.W;
       var tr=t.closest('tr');
-      tr.querySelector('input[data-k="L"]').value=S.units[i].L;
-      tr.querySelector('input[data-k="W"]').value=S.units[i].W;
+      tr.querySelector('input[data-k="L"]').value=dispLen(def.L);
+      tr.querySelector('input[data-k="W"]').value=dispLen(def.W);
+      var ce=tr.querySelectorAll('.cellerr');
+      for(var z=0;z<ce.length;z++){ ce[z].hidden=true; ce[z].textContent=''; }
+      var ci=tr.querySelectorAll('input.inv');
+      for(var y=0;y<ci.length;y++) ci[y].classList.remove('inv');
     }
     S.sample=false; paint(); save();
   });
@@ -1068,9 +1067,8 @@ function bind(){
   });
 
   function addUnit(pre){
-    var met=S.sys==='met';
     var u={d:'', t:pre?'p4840':'crate', L:'', W:'', H:'', q:1, w:'', s:false};
-    if(pre){ u.L=met?121.9:48; u.W=met?101.6:40; u.H=met?121.9:48; }
+    if(pre){ u.L=48; u.W=40; u.H=48; }
     S.units.push(u); S.sample=false; renderRows(); paint(); save();
     var last=$('unitBody').querySelector('tr:last-child input[data-k="d"]'); if(last) last.focus();
   }
