@@ -60,35 +60,28 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .f b{
   position:absolute;left:0;right:0;overflow:hidden;
-  background:linear-gradient(180deg,#232323 0%,var(--flap) 55%,var(--flap-lo) 100%);
+  display:flex;justify-content:center;
   font-weight:600;font-style:normal;
-}
-.f .u,.f .fu{top:0;bottom:calc(50% + 1px);border-radius:2px 2px 0 0;
-  background:linear-gradient(180deg,#343434 0%,#232323 100%)}
-.f .d,.f .fd{top:calc(50% + 1px);bottom:0;border-radius:0 0 2px 2px;
-  background:linear-gradient(180deg,#282828 0%,#161616 100%)}
-.f .fd{background:linear-gradient(180deg,#3C3C3C 0%,#1A1A1A 100%)}
-.f b::before{
-  content:attr(data-c);
-  position:absolute;left:0;width:100%;
-  height:var(--ch);line-height:var(--ch);
+  line-height:var(--ch);
   font-size:calc(var(--cw) * 1.19);
-  text-align:center;
   color:inherit;
 }
-.f .u::before,.f .fu::before{top:0}
-.f .d::before,.f .fd::before{top:calc(var(--ch) / -2 - 1px)}
-.f .fu{z-index:3;transform-origin:50% 100%;visibility:hidden}
-.f .fd{z-index:4;transform-origin:50% 0%;visibility:hidden}
+.f .u,.f .fu{top:0;bottom:calc(50% + 1px);align-items:flex-start;border-radius:2px 2px 0 0;
+  background:linear-gradient(180deg,#343434 0%,#232323 100%)}
+.f .d,.f .fd{top:calc(50% + 1px);bottom:0;align-items:flex-end;border-radius:0 0 2px 2px;
+  background:linear-gradient(180deg,#282828 0%,#161616 100%)}
+.f .fd{background:linear-gradient(180deg,#3C3C3C 0%,#1A1A1A 100%)}
+.f .fu{z-index:3;transform-origin:50% 100%}
+.f .fd{z-index:4;transform-origin:50% 0%}
 .f .fu,.f .fd{backface-visibility:hidden}
 @keyframes fuA{from{transform:rotateX(0)}to{transform:rotateX(-90deg)}}
 @keyframes fdA{from{transform:rotateX(88deg)}to{transform:rotateX(0)}}
 @keyframes fuB{from{transform:rotateX(0)}to{transform:rotateX(-90deg)}}
 @keyframes fdB{from{transform:rotateX(88deg)}to{transform:rotateX(0)}}
-.ga .fu{visibility:visible;animation:fuA var(--step) cubic-bezier(.45,.05,.85,.5) both}
-.ga .fd{visibility:visible;animation:fdA var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
-.gb .fu{visibility:visible;animation:fuB var(--step) cubic-bezier(.45,.05,.85,.5) both}
-.gb .fd{visibility:visible;animation:fdB var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
+.ga .fu{animation:fuA var(--step) cubic-bezier(.45,.05,.85,.5) both}
+.ga .fd{animation:fdA var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
+.gb .fu{animation:fuB var(--step) cubic-bezier(.45,.05,.85,.5) both}
+.gb .fd{animation:fdB var(--step) cubic-bezier(.2,.55,.5,1) var(--step) both}
 
 .grp{display:flex;align-items:center;--fg:var(--white)}
 .grp.amber{--fg:var(--amber)}
@@ -357,7 +350,27 @@ var STEP = 56;                       /* ms per flap; CSS --step is half of this 
 var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------- module factory ---------- */
-var CELL = '<b class="u" data-c=" "></b><b class="d" data-c=" "></b><b class="fu" data-c=" "></b><b class="fd" data-c=" "></b>';
+var CELL = '<b class="u"></b><b class="d"></b>';
+
+/* flipping leaves are borrowed from a pool only while a module is turning,
+   which keeps the resting board down to two boxes per character */
+var pool = [];
+function lease(c){
+  var lv = pool.pop();
+  if (!lv){
+    lv = [document.createElement("b"), document.createElement("b")];
+    lv[0].className = "fu"; lv[1].className = "fd";
+  }
+  c.lv = lv;
+  c.el.appendChild(lv[0]); c.el.appendChild(lv[1]);
+}
+function release(c){
+  c.el.classList.remove("ga", "gb");
+  if (c.lv){
+    c.el.removeChild(c.lv[0]); c.el.removeChild(c.lv[1]);
+    pool.push(c.lv); c.lv = null;
+  }
+}
 
 function build(host, n){
   var html = "";
@@ -368,7 +381,7 @@ function build(host, n){
   for (var j = nodes.length - n; j < nodes.length; j++){
     var el = nodes[j];
     out.push({
-      el: el, u: el.children[0], d: el.children[1], fu: el.children[2], fd: el.children[3],
+      el: el, u: el.children[0], d: el.children[1], lv: null,
       cur: " ", tgt: " ", next: 0, alt: false, inA: false, seq: SEQ
     });
   }
@@ -384,14 +397,14 @@ function setTarget(c, ch, delay, back){
   ch = String(ch).toUpperCase();
   if (sq.indexOf(ch) < 0) ch = sq.charAt(0);
   if (reduced){
-    c.cur = c.tgt = ch; c.u.dataset.c = ch; c.d.dataset.c = ch;
-    c.el.classList.remove("ga", "gb");
+    c.cur = c.tgt = ch; c.u.textContent = ch; c.d.textContent = ch;
+    release(c);
     return;
   }
   if (back > 0){
     var s = sq.charAt(((sq.indexOf(ch) - back) % sl + sl) % sl);
-    c.cur = s; c.u.dataset.c = s; c.d.dataset.c = s;
-    c.el.classList.remove("ga", "gb");
+    c.cur = s; c.u.textContent = s; c.d.textContent = s;
+    release(c);
   }
   if (c.cur === ch && c.tgt === ch) return;
   c.tgt = ch;
@@ -411,10 +424,11 @@ function step(c, now){
   var sq = c.seq;
   var ni = (sq.indexOf(c.cur) + 1) % sq.length;
   var nc = sq.charAt(ni);
-  c.u.dataset.c = nc;
-  c.d.dataset.c = c.cur;
-  c.fu.dataset.c = c.cur;
-  c.fd.dataset.c = nc;
+  if (!c.lv) lease(c);
+  c.u.textContent = nc;
+  c.d.textContent = c.cur;
+  c.lv[0].textContent = c.cur;
+  c.lv[1].textContent = nc;
   c.alt = !c.alt;
   c.el.classList.remove(c.alt ? "gb" : "ga");
   c.el.classList.add(c.alt ? "ga" : "gb");
@@ -434,9 +448,9 @@ function frame(now){
     var c = act[i];
     if (now < c.next) continue;
     if (c.cur === c.tgt){
-      c.d.dataset.c = c.cur;
-      c.u.dataset.c = c.cur;
-      c.el.classList.remove("ga", "gb");
+      c.d.textContent = c.cur;
+      c.u.textContent = c.cur;
+      release(c);
       c.inA = false;
       act.splice(i, 1);
       continue;
