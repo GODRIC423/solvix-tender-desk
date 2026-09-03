@@ -173,6 +173,7 @@ table input:focus,table select:focus{background:var(--raise)}
 :root[data-theme="dark"]{
   --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}
 
+[hidden]{display:none!important}
 @media(max-width:1040px){.split{grid-template-columns:minmax(0,1fr)}.sticky{position:static}
   #resCard{order:-1}}
 .split>*,.stack>*,.grid>*{min-width:0}
@@ -203,7 +204,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .stbl col.c-bp{width:74px}.stbl col.c-ap{width:112px}.stbl col.c-pk{width:74px}
 .stbl col.c-uc{width:100px}.stbl col.c-ln{width:94px}.stbl col.c-sh{width:88px}.stbl col.c-al{width:104px}
 .mtbl col.c-no{width:34px}.mtbl col.c-tx{width:auto}.mtbl col.c-tm{width:78px}
-.mtbl col.c-rr{width:150px}.mtbl col.c-ho{width:72px}.mtbl col.c-st{width:92px}
+.mtbl col.c-rr{width:184px}.mtbl col.c-ho{width:72px}.mtbl col.c-st{width:92px}
 .mtbl col.c-cu{width:92px}.mtbl col.c-x{width:34px}
 table.nobp .bpc{display:none}
 .num-cell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -238,6 +239,14 @@ tr.alrow>td{background:var(--sunk)}
 .alwrap{display:flex;flex-wrap:wrap;gap:6px}
 .alsrc{font:11.5px/1.5 var(--sans);color:var(--ink-2);margin-top:7px}
 .alsrc b{font-weight:650}
+
+/* cost drivers */
+.drv{display:flex;flex-direction:column;gap:5px}
+.drvr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:12.5px}
+.drvr span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drvr b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700}
+.drvr .bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.drvr .bar i{display:block;height:100%;background:var(--accent)}
 
 /* baker's summary */
 .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dotted var(--line);font-size:13.5px}
@@ -329,9 +338,10 @@ tr.alrow>td{background:var(--sunk)}
     <section class="card">
       <div class="hd">
         <h2>Recipe</h2>
-        <span class="chip warn" id="sampleChip" hidden>Sample recipe — edit or clear</span>
-        <button type="button" class="btn sm" id="bSampleA">Sample: sourdough</button>
-        <button type="button" class="btn sm" id="bSampleB">Sample: ragù</button>
+        <span class="chip warn" id="sampleChip" hidden>Sample — edit or clear</span>
+        <span class="tinylbl">Load</span>
+        <button type="button" class="btn sm" id="bSampleA">Sourdough</button>
+        <button type="button" class="btn sm" id="bSampleB">Ragù</button>
       </div>
       <div class="bd stack">
         <div class="fgrid">
@@ -369,7 +379,7 @@ tr.alrow>td{background:var(--sunk)}
             </select></div>
           <div class="f" id="wCurC" hidden><label for="iCurC">Symbol</label>
             <input id="iCurC" type="text" maxlength="4" placeholder="R"></div>
-          <div class="f"><label for="iDisp">Show quantities in</label>
+          <div class="f"><label for="iDisp">Quantity display</label>
             <select id="iDisp">
               <option value="auto">As entered (auto)</option>
               <option value="metric">Metric — g / ml</option>
@@ -496,6 +506,13 @@ tr.alrow>td{background:var(--sunk)}
           <div class="v" id="sLab">—</div><div class="sub2" id="sLabSub">—</div></div>
       </div>
 
+      <div class="note warn">
+        <strong>Check before you cook.</strong> This sheet scales quantities and costs by arithmetic only.
+        It does not judge whether a scaled batch fits your mixer, pan or oven, and scaled times are a
+        starting point — always cook and cool to a verified core temperature with a probe. Allergen output
+        is only what you have entered here: confirm every line against the current supplier specification
+        before you declare it to a customer.
+      </div>
       <div class="note bad" id="alBox">
         <strong>Allergens in this dish</strong>
         <div class="alwrap" id="alChips" style="margin-top:7px"></div>
@@ -514,13 +531,11 @@ tr.alrow>td{background:var(--sunk)}
         <div class="kv"><span>Dough weight per piece</span><b id="kPiece">—</b></div>
       </div>
 
-      <div class="note warn">
-        <strong>Check before you cook.</strong> This sheet scales quantities and costs by arithmetic only.
-        It does not judge whether a scaled batch fits your mixer, pan or oven, and scaled times are a
-        starting point — always cook and cool to a verified core temperature with a probe. Allergen output
-        is only what you have entered here: confirm every line against the current supplier specification
-        before you declare it to a customer.
+      <div id="drvBox">
+        <div class="tinylbl" style="margin-bottom:6px">Where the cost goes</div>
+        <div class="drv" id="drvList"></div>
       </div>
+
     </div>
     <div class="ft">
       <span class="tinylbl">Food cost %</span>
@@ -763,14 +778,32 @@ var ALL=[
 function alDef(k){for(var i=0;i<ALL.length;i++)if(ALL[i].k===k)return ALL[i];return null;}
 function alActive(){return ALL.filter(function(a){return S.alStd==="us"?a.us:a.eu;});}
 function alInStd(k){var d=alDef(k);return !!d&&(S.alStd==="us"?d.us:d.eu);}
+/* wheat is reported inside "cereals containing gluten" under the EU/UK list */
+function alNorm(k){return (S.alStd!=="us"&&k==="wheat")?"gluten":k;}
+function alCodes(list){
+  var out=[],seen={};
+  (list||[]).forEach(function(k){var n=alNorm(k);if(seen[n])return;seen[n]=1;
+    var d=alDef(n);if(d)out.push(d.c);});
+  return out;
+}
+function alRoll(alSet,alSrc){
+  var srcA={},srcO={},orderA=[],orderO=[];
+  Object.keys(alSet||{}).forEach(function(k){
+    var n=alNorm(k),into=alInStd(n)?srcA:srcO,ord=alInStd(n)?orderA:orderO;
+    if(!into[n]){into[n]=[];ord.push(n);}
+    (alSrc[k]||[]).forEach(function(s){if(into[n].indexOf(s)<0)into[n].push(s);});
+  });
+  return {act:orderA,oth:orderO,srcA:srcA,srcO:srcO};
+}
 var ROLES=[["flour","Flour"],["liquid","Liquid"],["salt","Salt"],["leaven","Leaven / pre-ferment"],
   ["fat","Fat"],["sugar","Sugar"],["other","Other"]];
 function roleOpts(sel){var h="";ROLES.forEach(function(r){
   h+='<option value="'+r[0]+'"'+(r[0]===sel?" selected":"")+">"+esc(r[1])+"</option>";});return h;}
-var RULES=[["none","Fixed — does not scale"],["lin","× factor (hands-on)"],["heat","Heat-through × f^⅔"]];
+var RULES=[["none","Fixed"],["lin","× factor"],["heat","Heat-through × f^⅔"]];
+var RULEDOC={none:"Fixed — does not scale",lin:"× factor (scales with batch)",heat:"Heat-through × factor^⅔"};
 function ruleOpts(sel){var h="";RULES.forEach(function(r){
   h+='<option value="'+r[0]+'"'+(r[0]===sel?" selected":"")+">"+esc(r[1])+"</option>";});return h;}
-function ruleLbl(k){for(var i=0;i<RULES.length;i++)if(RULES[i][0]===k)return RULES[i][1];return RULES[0][1];}
+function ruleLbl(k){return RULEDOC[k]||RULEDOC.none;}
 
 /* ══ state ══════════════════════════════════════════════════════ */
 function blankState(){
@@ -1013,11 +1046,8 @@ function plural(w,n){
 
 /* ══ editable tables ════════════════════════════════════════════ */
 function alBtnLabel(it){
-  var ks=it.al.filter(function(k){return alInStd(k);});
-  var other=it.al.filter(function(k){return !alInStd(k);});
-  if(!ks.length&&!other.length)return {t:"none",cls:"albtn none"};
-  var codes=ks.map(function(k){return alDef(k).c;});
-  if(other.length)codes.push("+"+other.length);
+  var codes=alCodes(it.al);
+  if(!codes.length)return {t:"none",cls:"albtn none"};
   return {t:codes.join(" "),cls:"albtn"};
 }
 function renderIng(){
@@ -1045,7 +1075,7 @@ function renderIng(){
       h+='<label class="check"><input type="checkbox" class="alck" data-k="'+a.k+'"'+
         (it.al.indexOf(a.k)>=0?" checked":"")+'> <span>'+esc(a.n)+' <span class="mono">'+a.c+'</span></span></label>';
     });
-    var extra=it.al.filter(function(k){return !alInStd(k);});
+    var extra=it.al.filter(function(k){return !alInStd(alNorm(k));});
     h+='</div>'+(extra.length?'<p class="hint">Also recorded (outside the selected standard): '+
       esc(extra.map(function(k){return alDef(k).n;}).join(", "))+'</p>':'')+'</td>';
     ar.innerHTML=h;b.appendChild(ar);
@@ -1152,7 +1182,7 @@ function renderOut(){
   }else{
     c.rows.forEach(function(r){
       var p=r.p,tr=document.createElement("tr");
-      var codes=p.ref.al.map(function(k){var d=alDef(k);return d?d.c:"";}).filter(Boolean).join(" ");
+      var codes=alCodes(p.ref.al).join(" ");
       tr.innerHTML=
         '<td class="nm-cell">'+esc(p.ref.name||"—")+'</td>'+
         '<td class="num-cell">'+fmtAmt(p.base,p.ud.dim,p.ref.unit,false)+'</td>'+
@@ -1217,11 +1247,10 @@ function renderOut(){
   $("#fChip").textContent=(c.f===null)?"no scale set":("× "+nf(c.f,4));
 
   /* allergens */
-  var keys=Object.keys(c.alSet);
+  var roll=alRoll(c.alSet,c.alSrc);
   var box=$("#alBox"),chips=$("#alChips"),src=$("#alSrc");
-  var act=keys.filter(function(k){return alInStd(k);});
-  var oth=keys.filter(function(k){return !alInStd(k);});
-  if(!keys.length){
+  var act=roll.act,oth=roll.oth;
+  if(!act.length&&!oth.length){
     box.className="note";chips.innerHTML='<span class="altag n">No allergens recorded</span>';
     src.innerHTML="Nothing has been ticked on any ingredient. That is not the same as allergen-free — "+
       "check every supplier specification before you say so.";
@@ -1231,9 +1260,9 @@ function renderOut(){
       return '<span class="altag">'+esc(d.c)+' '+esc(d.n)+'</span>';}).join("")||
       '<span class="altag n">None in the selected standard</span>';
     src.innerHTML=act.map(function(k){
-      return '<b>'+esc(alDef(k).n)+':</b> '+esc(c.alSrc[k].join(", "));}).join("<br>")+
-      (oth.length?'<br><b>Also recorded:</b> '+esc(oth.map(function(k){
-        return alDef(k).n+" ("+c.alSrc[k].join(", ")+")";}).join("; ")):"");
+      return '<b>'+esc(alDef(k).n)+':</b> '+esc(roll.srcA[k].join(", "));}).join("<br>")+
+      (oth.length?(act.length?"<br>":"")+'<b>Also recorded, outside the selected standard:</b> '+
+        esc(oth.map(function(k){return alDef(k).n+" ("+roll.srcO[k].join(", ")+")";}).join("; ")):"");
   }
 
   /* baker's */
@@ -1249,6 +1278,17 @@ function renderOut(){
     $("#kTot").textContent=(c.totPct===null)?"—":pct(c.totPct,1);
     $("#kPiece").textContent=(c.piece===null)?"—":fmtAmt(c.piece,"m","g",false);
   }
+  /* cost drivers */
+  var drv=c.rows.filter(function(r){return ok(r.cost)&&r.cost>0;})
+    .sort(function(a,b){return b.cost-a.cost;}).slice(0,5);
+  var dl2=$("#drvList");
+  $("#drvBox").hidden=!drv.length;
+  dl2.innerHTML=drv.map(function(r){
+    var w=(r.share===null)?0:Math.max(1,Math.min(100,r.share));
+    return '<div class="drvr"><span>'+esc(r.p.ref.name||"—")+'</span>'+
+      '<b>'+esc(money(r.cost))+' · '+esc(r.share===null?"—":pct(r.share,1))+'</b>'+
+      '<span class="bar"><i style="width:'+w+'%"></i></span></div>';
+  }).join("");
   $("#scaleHint").textContent=c.drive||"—";
   $("#sampleChip").hidden=!S.sample;
   renderDoc(c);
@@ -1264,7 +1304,7 @@ function volName(){return S.volStd==="us"?"US customary (cup 236.59 ml · tbsp 1
   :"Metric / UK (cup 250 ml · tbsp 15 ml · tsp 5 ml)");}
 function renderDoc(c){
   var pl=plural(S.portion,ok(c.portions)?c.portions:2),p1=plural(S.portion,1);
-  var keys=Object.keys(c.alSet),act=keys.filter(alInStd),oth=keys.filter(function(k){return !alInStd(k);});
+  var roll=alRoll(c.alSet,c.alSrc),act=roll.act,oth=roll.oth;
   var h="";
   h+='<div class="lh"><div><div class="bz">'+esc(S.biz||"—")+'</div>'+
      '<div class="ad">'+esc(S.site||"")+(S.chef?"\n"+esc(S.chef):"")+'</div></div>'+
@@ -1286,9 +1326,9 @@ function renderDoc(c){
   h+='<div class="albox"><b class="t">Allergen declaration — '+esc(stdName())+'</b>'+
      '<div class="big">'+(act.length?esc(act.map(function(k){return alDef(k).n;}).join(" · ")):"None recorded on any ingredient")+'</div>'+
      (act.length?'<div class="sm">'+act.map(function(k){
-        return "<b>"+esc(alDef(k).n)+":</b> "+esc(c.alSrc[k].join(", "));}).join("<br>")+'</div>':"")+
-     (oth.length?'<div class="sm"><b>Also recorded:</b> '+esc(oth.map(function(k){
-        return alDef(k).n+" ("+c.alSrc[k].join(", ")+")";}).join("; "))+'</div>':"")+
+        return "<b>"+esc(alDef(k).n)+":</b> "+esc(roll.srcA[k].join(", "));}).join("<br>")+'</div>':"")+
+     (oth.length?'<div class="sm"><b>Also recorded, outside the selected standard:</b> '+esc(oth.map(function(k){
+        return alDef(k).n+" ("+roll.srcO[k].join(", ")+")";}).join("; "))+'</div>':"")+
      '<div class="sm">Declared from the ingredient lines on this sheet only. Cross-contact in this kitchen is '+
      'not assessed here. Verify against the current supplier specification before advising any customer.</div></div>';
 
@@ -1310,7 +1350,7 @@ function renderDoc(c){
       '<td class="n">'+esc(r.packs===null?"—":nf(r.packs,0))+'</td>'+
       '<td class="n">'+esc(p.epU===null?"—":unitCostStr(p.epU,p.ud.dim))+'</td>'+
       '<td class="n">'+esc(money(r.cost))+'</td>'+
-      '<td class="c">'+esc(p.ref.al.map(function(k){var d=alDef(k);return d?d.c:"";}).filter(Boolean).join(" ")||"—")+'</td></tr>';
+      '<td class="c">'+esc(alCodes(p.ref.al).join(" ")||"—")+'</td></tr>';
   });
   if(!c.rows.length)h+='<tr><td colspan="'+(S.bp?9:8)+'">No ingredients entered.</td></tr>';
   h+='</tbody><tfoot><tr><td>Batch total</td><td class="n"></td>'+
@@ -1466,10 +1506,12 @@ function buildCsv(){
   L.push("");
   L.push(csvRow(["ALLERGEN DECLARATION",stdName()]));
   L.push(csvRow(["Allergen","Code","In selected standard","Ingredients"]));
-  var keys=Object.keys(c.alSet);
-  if(!keys.length)L.push(csvRow(["None recorded","","",""]));
-  keys.forEach(function(k){var d=alDef(k);
-    L.push(csvRow([d.n,d.c,alInStd(k)?"yes":"no",c.alSrc[k].join("; ")]));});
+  var rl=alRoll(c.alSet,c.alSrc);
+  if(!rl.act.length&&!rl.oth.length)L.push(csvRow(["None recorded","","",""]));
+  rl.act.forEach(function(k){var d=alDef(k);
+    L.push(csvRow([d.n,d.c,"yes",rl.srcA[k].join("; ")]));});
+  rl.oth.forEach(function(k){var d=alDef(k);
+    L.push(csvRow([d.n,d.c,"no",rl.srcO[k].join("; ")]));});
   L.push("");
   L.push(csvRow(["Scaled times are a starting point only. Cook, cool and reheat to verified core temperatures. "+
     "Allergen data is what was entered here — confirm against supplier specifications."]));
