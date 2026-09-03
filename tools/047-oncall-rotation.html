@@ -297,3 +297,232 @@ tr.inact td.who .nm{color:var(--muted);text-decoration:line-through}
 }
 </style>
 </head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">OC</div>
+    <div style="min-width:0">
+      <h1>On-Call Rotation Planner</h1>
+      <div class="sub">ROUND-ROBIN ROTA &middot; FAIRNESS &middot; HANDOVER</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="btnCsv">CSV</button>
+    <button type="button" class="btn sm" id="btnIcs">iCal (.ics)</button>
+    <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+    <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint pagestack">
+
+  <div class="note banner" id="sampleBanner">
+    <div class="bt"><strong>Sample rota loaded.</strong> A six-person weekly on-call rotation starting this
+      Monday, with example leave and public holidays. Replace it with your own team, or start from an empty rota.</div>
+    <button type="button" class="btn sm" id="btnBlank">Start a blank rota</button>
+  </div>
+
+  <section class="statband" id="statband" aria-live="polite">
+    <div class="stat hero"><div class="k">On call now</div><div class="v" id="sNow">&mdash;</div><div class="sub2" id="sNowSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Next handover</div><div class="v sm" id="sHand">&mdash;</div><div class="sub2" id="sHandSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Then on call</div><div class="v nm" id="sNext">&mdash;</div><div class="sub2" id="sNextSub">&mdash;</div></div>
+    <div class="stat" id="sGapBox"><div class="k">Uncovered shifts</div><div class="v" id="sGap">&mdash;</div><div class="sub2" id="sGapSub">&mdash;</div></div>
+    <div class="stat" id="sFairBox"><div class="k">Fairness spread</div><div class="v" id="sFair">&mdash;</div><div class="sub2" id="sFairSub">&mdash;</div></div>
+  </section>
+
+  <div class="note warn" id="disclaimerBox">
+    <strong>Planning aid only &mdash; not a working-time or pay compliance check.</strong>
+    This tool allocates on-call cover fairly and shows who holds the pager. It does not check rest periods,
+    maximum weekly hours, night-work limits or standby pay, it does not know your public holidays (it uses
+    only the dates you enter), and it is not a call-out or escalation system. Before you publish a rota,
+    check it against the contracts of employment, any collective or works agreement, and the working-time
+    rules that apply where your people are based &mdash; take advice from your HR or legal adviser if in doubt.
+  </div>
+
+  <div class="split">
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd">
+          <h2>Rotation setup</h2>
+          <button type="button" class="btn sm" id="btnSample">Load sample</button>
+        </div>
+        <div class="bd stack">
+          <div class="fgrid wide">
+            <div class="f"><label for="iOrg">Organisation</label>
+              <input id="iOrg" type="text" autocomplete="organization" placeholder="Company name"></div>
+            <div class="f"><label for="iTeam">Team / rota name</label>
+              <input id="iTeam" type="text" placeholder="e.g. Platform Ops primary"></div>
+            <div class="f"><label for="iContact">Rota owner &amp; contact</label>
+              <input id="iContact" type="text" placeholder="Name, phone or email"></div>
+            <div class="f"><label for="iEsc">Escalation / second line</label>
+              <input id="iEsc" type="text" placeholder="Who to call if the on-call engineer does not answer"></div>
+          </div>
+          <div class="fgrid">
+            <div class="f"><label for="iStart">First handover date</label>
+              <input id="iStart" type="date"><div class="err" id="eStart" hidden></div></div>
+            <div class="f"><label for="iTime">Handover time</label>
+              <input id="iTime" type="time" step="300"><div class="err" id="eTime" hidden></div></div>
+            <div class="f"><label for="iCad">Handover every</label>
+              <select id="iCad">
+                <option value="daily">Day (daily rota)</option>
+                <option value="weekly">Week (weekly rota)</option>
+                <option value="fortnightly">2 weeks</option>
+                <option value="custom">Custom number of days</option>
+              </select></div>
+            <div class="f" id="stepWrap" hidden><label for="iStep">Days per shift</label>
+              <input id="iStep" type="number" min="1" max="31" step="1"><div class="err" id="eStep" hidden></div></div>
+            <div class="f"><label for="iPeriods">Shifts to generate</label>
+              <input id="iPeriods" type="number" min="1" max="120" step="1"><div class="err" id="ePeriods" hidden></div></div>
+            <div class="f"><label for="iTz">Time zone label</label>
+              <input id="iTz" type="text" placeholder="e.g. Europe/London"></div>
+          </div>
+          <p class="hint" id="rangeHint">&mdash;</p>
+          <div class="fgrid wide">
+            <div class="f"><label for="iMode">Allocation rule</label>
+              <select id="iMode">
+                <option value="balanced">Balanced round-robin &mdash; fewest shifts first</option>
+                <option value="strict">Strict round-robin &mdash; rota order, skip unavailable</option>
+              </select></div>
+            <div class="f"><label for="iWknd">Weekend days</label>
+              <select id="iWknd">
+                <option value="satsun">Saturday &amp; Sunday</option>
+                <option value="frisat">Friday &amp; Saturday</option>
+                <option value="thufri">Thursday &amp; Friday</option>
+                <option value="sunonly">Sunday only</option>
+                <option value="none">Do not count weekends</option>
+              </select></div>
+          </div>
+          <label class="check" for="iB2B"><input type="checkbox" id="iB2B">
+            <span>Avoid the same person taking two shifts back to back, where someone else is available</span></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Team &amp; availability</h2>
+          <span class="chip" id="memChip">&mdash;</span>
+          <button type="button" class="btn sm" id="btnAddMem">+ Add person</button>
+        </div>
+        <div class="tw"><table id="memTbl">
+          <caption class="lbl" style="text-align:left;padding:8px 10px 0">Rota order runs top to bottom</caption>
+          <thead><tr>
+            <th scope="col" style="width:34px">#</th>
+            <th scope="col">Name</th>
+            <th scope="col">Contact</th>
+            <th scope="col">Unavailable dates (blackout)</th>
+            <th scope="col" class="c" style="width:58px">On rota</th>
+            <th scope="col" style="width:74px"><span class="lbl">Order</span></th>
+            <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+          </tr></thead>
+          <tbody id="memBody"></tbody>
+        </table></div>
+        <div class="ft"><p class="hint">Blackout dates: single days or ranges, separated by commas &mdash;
+          <span class="mono">2026-04-06, 2026-04-13..2026-04-20</span>. A person is skipped for any shift that
+          overlaps one of their blackout days.</p></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Public holidays</h2><span class="chip" id="holChip">&mdash;</span></div>
+        <div class="bd stack">
+          <div class="f"><label for="iHol">Holiday dates &mdash; one per line, optional name after an equals sign</label>
+            <textarea id="iHol" rows="5" spellcheck="false"
+              placeholder="2026-12-25 = Christmas Day&#10;2026-12-28 = Substitute day"></textarea>
+            <div class="err" id="eHol" hidden></div>
+            <p class="hint">These are the dates <em>you</em> enter. No public-holiday calendar is built in, and
+              none is looked up &mdash; check your own jurisdiction's official list.</p></div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="stack">
+      <section class="card sticky">
+        <div class="hd"><h2>Fairness report</h2>
+          <span class="chip" id="fairChip">&mdash;</span>
+          <button type="button" class="btn sm" id="btnCsvFair">CSV</button>
+        </div>
+        <div class="bd">
+          <div class="fair" id="fairList"><p class="empty">Add people to the rota to see the split.</p></div>
+        </div>
+        <div class="ft" style="display:block">
+          <div class="kvrow"><span>Shifts allocated</span><span class="v" id="fShifts">&mdash;</span></div>
+          <div class="kvrow"><span>Even split would be</span><span class="v" id="fTarget">&mdash;</span></div>
+          <div class="kvrow"><span>Shift spread (max &minus; min)</span><span class="v" id="fSpread">&mdash;</span></div>
+          <div class="kvrow"><span>Weekend-day spread</span><span class="v" id="fWspread">&mdash;</span></div>
+          <div class="kvrow"><span>Holiday-day spread</span><span class="v" id="fHspread">&mdash;</span></div>
+          <p class="legend" style="margin-top:8px"><span>Bar = share of shifts. Target line is an equal split
+            of every generated shift across the people on the rota.</span></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="hd">
+      <h2>Schedule</h2>
+      <span class="chip" id="schedChip">&mdash;</span>
+      <div class="f" style="flex-direction:row;align-items:center;gap:6px">
+        <label for="iAsAt" style="text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--ink-2)">Show as at</label>
+        <input id="iAsAt" type="datetime-local" style="width:200px">
+        <button type="button" class="btn sm" id="btnNow">Now</button>
+      </div>
+    </div>
+    <div class="tw"><table id="schedTbl">
+      <thead><tr>
+        <th scope="col" style="width:46px">Shift</th>
+        <th scope="col">Starts</th>
+        <th scope="col">Ends</th>
+        <th scope="col" class="n" style="width:56px">Days</th>
+        <th scope="col" class="n" style="width:64px">W/end</th>
+        <th scope="col" class="n" style="width:56px">Hol</th>
+        <th scope="col">On call</th>
+        <th scope="col" style="width:190px">Assign / cover</th>
+        <th scope="col" style="width:150px">Status</th>
+      </tr></thead>
+      <tbody id="schedBody"></tbody>
+    </table></div>
+    <div class="ft"><p class="hint" id="schedFoot">&mdash;</p></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Swaps &amp; cover log</h2><span class="chip" id="swapChip">&mdash;</span>
+      <button type="button" class="btn sm dgr" id="btnResetOv">Reset all manual changes</button></div>
+    <div class="bd stack">
+      <div class="swappanel">
+        <div class="f"><label for="iSwapA">Swap this shift</label><select id="iSwapA"></select></div>
+        <div class="f"><label for="iSwapB">with this shift</label><select id="iSwapB"></select></div>
+        <div class="f"><label for="iSwapNote">Reason (optional)</label>
+          <input id="iSwapNote" type="text" placeholder="e.g. wedding, agreed with team lead"></div>
+        <div class="act"><button type="button" class="btn pri" id="btnSwap">Record swap</button></div>
+      </div>
+      <div class="err" id="eSwap" hidden></div>
+      <p class="msg" id="swapMsg"></p>
+    </div>
+    <div class="tw"><table id="swapTbl">
+      <thead><tr>
+        <th scope="col" style="width:132px">Recorded</th>
+        <th scope="col" style="width:74px">Type</th>
+        <th scope="col">Shift</th>
+        <th scope="col">Was</th>
+        <th scope="col">Now</th>
+        <th scope="col">Reason</th>
+        <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+      </tr></thead>
+      <tbody id="swapBody"></tbody>
+    </table></div>
+  </section>
+
+</main>
+
+<footer class="app noprint" style="padding-top:0">
+  <p class="hint" id="methodNote">&mdash;</p>
+</footer>
+
+<section class="printonly doc" id="printdoc"></section>
