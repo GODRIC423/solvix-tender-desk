@@ -1,0 +1,1143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concrete Volume &amp; Bag Calculator — Solvix Toolkit</title>
+<meta name="description" content="Work out concrete volume for slabs, footings, columns and steps, then the exact 40/60/80 lb bag count or ready-mix order in quarter-yard increments, with cost. Offline, print-ready order sheet, CSV export.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23B45309'/%3E%3Cpath d='M6 20h20v5H6z' fill='%23fff' opacity='.95'/%3E%3Cpath d='M9 8l5 3v5l-5-3zM23 8l-5 3v5l5-3z' fill='%23fff' opacity='.75'/%3E%3Ccircle cx='16' cy='13' r='2.6' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#B45309; --accent-ink:#8F4207; --accent-wash:#FBF0DC; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E8962F; --accent-ink:#F2B264; --accent-wash:#33230C; --on-accent:#1A1206}}
+:root[data-theme="dark"]{--accent:#E8962F; --accent-ink:#F2B264; --accent-wash:#33230C; --on-accent:#1A1206}
+
+.app{padding-bottom:40px}
+.split{margin-top:14px}
+#work{min-width:0}
+#results{min-width:0}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}#results{order:-1}}
+
+/* pour table */
+#pours{min-width:780px}
+#pours td{vertical-align:top}
+#pours td.mid{vertical-align:middle}
+.dimgrid{display:flex;flex-wrap:wrap;gap:6px}
+.dimf{display:flex;flex-direction:column;gap:2px;width:98px}
+.dimf .mini{font:600 9.5px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.dimf input{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;border-color:var(--line)}
+.dimf .err{font-size:10px;line-height:1.25}
+.rowno{font:600 12px/1 var(--mono);color:var(--muted)}
+.vcell{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vcell .sm{display:block;font-size:11px;color:var(--muted)}
+#pours td.desc input{border-color:var(--line)}
+.qtyf{width:74px}
+.shapesel{min-width:126px}
+
+/* results */
+.statgrid{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+@media(max-width:1050px) and (min-width:901px){.statgrid{grid-template-columns:1fr}}
+@media(max-width:420px){.statgrid{grid-template-columns:1fr}}
+.stat.hero .v{font-size:31px}
+.stat .sub{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:4px}
+.stat.pick{border-color:var(--ok);background:var(--ok-wash)}
+.brk{width:100%;font-size:13px}
+.brk td{padding:5px 0;border-bottom:1px dotted var(--line)}
+.brk td:last-child{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.brk tr:last-child td{border-bottom:0;font-weight:650}
+.wasterow{display:flex;align-items:center;gap:10px}
+.wasterow input[type=range]{flex:1;padding:0;min-width:90px;accent-color:var(--accent)}
+.wasteval{font:700 15px/1 var(--mono);min-width:48px;text-align:right}
+.savedlist{display:flex;flex-direction:column;gap:6px}
+.savedrow{display:flex;gap:8px;align-items:center;font-size:13.5px;border:1px solid var(--line);border-radius:4px;padding:7px 9px;background:var(--raise)}
+.savedrow .nm{margin-right:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.savedrow .when{font:11px/1 var(--mono);color:var(--muted);white-space:nowrap}
+
+/* print document */
+#doc{color:#000}
+.dochead{display:flex;justify-content:space-between;gap:16px;border-bottom:2.5px solid #000;padding-bottom:8px;margin-bottom:10px}
+.dochead .co{font:700 16pt/1.2 var(--sans)}
+.dochead .cosub{font-size:9.5pt;color:#333;margin-top:3px;white-space:pre-line}
+.dochead .rt{text-align:right}
+.dochead .ttl{font:700 13pt/1.2 var(--sans);letter-spacing:.02em;text-transform:uppercase}
+.dochead .meta{font-size:9.5pt;color:#333;margin-top:4px}
+.docmeta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.docmeta .k{font:600 8pt/1.2 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:#555}
+.docmeta .v{font-size:10.5pt;margin-top:2px}
+#doc h3{font-size:10.5pt;text-transform:uppercase;letter-spacing:.06em;margin:12px 0 5px;border-bottom:1px solid #999;padding-bottom:3px}
+#doc table{width:100%;border-collapse:collapse;font-size:9.5pt}
+#doc th{background:#eee;border-bottom:1px solid #888;padding:5px 6px;font-size:8pt}
+#doc td{border-bottom:1px solid #ccc;padding:5px 6px}
+#doc tfoot td{font-weight:700;border-top:1.5px solid #888;background:#f4f4f4}
+.ordbox{border:1.5px solid #000;padding:9px 11px;margin-top:8px}
+.ordbox .big{font:700 15pt/1.1 var(--mono);margin-top:2px}
+.orders{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.docnote{border:1px solid #000;padding:8px 10px;margin-top:12px;font-size:9pt;line-height:1.45}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:18px;font-size:9pt}
+.sign .ln{border-bottom:1px solid #000;height:26px;margin-bottom:3px}
+.docfoot{margin-top:14px;border-top:1px solid #999;padding-top:6px;font-size:8.5pt;color:#444}
+footer.site{margin-top:18px;font-size:12px;color:var(--muted);line-height:1.55}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+
+
+<main class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">C</div>
+    <div style="min-width:0">
+      <h1>Concrete Volume &amp; Bag Calculator</h1>
+      <div class="sub">SLABS · FOOTINGS · COLUMNS · STEPS</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn sm" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="bCsv">CSV</button>
+    <button type="button" class="btn sm" id="bJson">Export JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="bClear">Clear all data</button>
+  </div>
+</header>
+
+  <div class="split">
+    <!-- ══ inputs ══ -->
+    <div class="stack noprint" id="work">
+
+      <div class="card">
+        <div class="hd">
+          <h2>Job details</h2>
+          <span class="chip warn" id="sampleChip">Sample job — edit or clear</span>
+        </div>
+        <div class="bd stack">
+          <div class="grid cols-3">
+            <div class="f"><label for="jRef">Job / quote ref</label><input id="jRef" data-job="ref" autocomplete="off"></div>
+            <div class="f"><label for="jClient">Client</label><input id="jClient" data-job="client" autocomplete="off"></div>
+            <div class="f"><label for="jDate">Date</label><input id="jDate" type="date" data-job="date"></div>
+          </div>
+          <div class="grid cols-2">
+            <div class="f"><label for="jSite">Site address</label><input id="jSite" data-job="site" autocomplete="off"></div>
+            <div class="f"><label for="jBy">Prepared by (your business)</label><input id="jBy" data-job="by" autocomplete="off"></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="jUnits">Units</label>
+              <select id="jUnits">
+                <option value="imp">Imperial — ft / in, yd³</option>
+                <option value="met">Metric — m / mm, m³</option>
+              </select></div>
+            <div class="f"><label for="jCur">Currency</label>
+              <select id="jCur">
+                <option value="$">$ — Dollar</option>
+                <option value="£">£ — Pound</option>
+                <option value="€">€ — Euro</option>
+                <option value="custom">Custom symbol…</option>
+              </select></div>
+            <div class="f" id="curCustomWrap" hidden><label for="jCurCustom">Custom symbol</label><input id="jCurCustom" maxlength="4" autocomplete="off"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd">
+          <h2>Pour schedule</h2>
+          <span class="hint" id="rowCount"></span>
+        </div>
+        <div class="tw">
+          <table id="pours">
+            <caption class="vh">Each concrete element in this job, with its dimensions and calculated volume</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="width:26px">#</th>
+                <th scope="col" style="min-width:150px">Element</th>
+                <th scope="col" style="min-width:134px">Shape</th>
+                <th scope="col">Dimensions</th>
+                <th scope="col" class="r" style="width:84px">Qty</th>
+                <th scope="col" class="r" style="min-width:104px">Volume</th>
+                <th scope="col" style="width:38px"><span class="vh">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="tb"></tbody>
+            <tfoot>
+              <tr><td colspan="5" class="r">Net volume of all pours</td><td class="vcell" id="tfVol">—</td><td></td></tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="ft noprint">
+          <button type="button" class="btn pri sm" data-add="slab">+ Slab</button>
+          <button type="button" class="btn sm" data-add="footing">+ Footing</button>
+          <button type="button" class="btn sm" data-add="column">+ Column</button>
+          <button type="button" class="btn sm" data-add="steps">+ Steps</button>
+          <span class="hint" style="margin-left:auto">Feet fields accept 12' 6" · inch fields accept 3 1/2</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Waste, bags &amp; prices</h2></div>
+        <div class="bd stack">
+          <div class="f">
+            <label for="waste">Waste / over-order allowance</label>
+            <div class="wasterow">
+              <input type="range" id="waste" min="0" max="15" step="0.5" value="10" aria-describedby="wasteHint">
+              <output class="wasteval" id="wasteVal" for="waste">10.0%</output>
+            </div>
+            <div class="hint" id="wasteHint">Covers spillage, subgrade irregularity and over-dig. 5–10% is typical for formed work; 10–15% where the subgrade is rough.</div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="bagSize">Bag size</label>
+              <select id="bagSize">
+                <option value="80">80 lb — yields 0.60 ft³</option>
+                <option value="60">60 lb — yields 0.45 ft³</option>
+                <option value="40">40 lb — yields 0.30 ft³</option>
+              </select></div>
+            <div class="f"><label for="bagPrice">Price per bag <span id="curB1" class="mono"></span></label>
+              <input id="bagPrice" type="number" min="0" step="0.01" inputmode="decimal">
+              <span class="err" id="errBagPrice" hidden></span></div>
+            <div class="f"><label for="mixPrice">Ready-mix price <span id="mixUnitLbl" class="mono"></span></label>
+              <input id="mixPrice" type="number" min="0" step="0.01" inputmode="decimal">
+              <span class="err" id="errMixPrice" hidden></span></div>
+          </div>
+          <div class="f"><label for="jNotes">Notes for the order sheet</label>
+            <textarea id="jNotes" data-job="notes" placeholder="Mix spec, slump, fibre, pump access, delivery window…"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Saved jobs</h2><span class="hint">Stored in this browser only</span></div>
+        <div class="bd stack">
+          <div class="row">
+            <input id="saveName" placeholder="Name this job…" autocomplete="off" style="flex:1;min-width:160px">
+            <button type="button" class="btn sm pri" id="bSave">Save job</button>
+            <button type="button" class="btn sm" id="bNew">New blank job</button>
+          </div>
+          <div class="savedlist" id="savedList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ results ══ -->
+    <div id="results" class="noprint">
+      <div class="card sticky">
+        <div class="hd"><h2>Order</h2><span class="chip" id="unitChip">yd³</span></div>
+        <div class="bd stack">
+          <div class="stat hero">
+            <div class="k" id="heroK">Concrete required incl. 10% waste</div>
+            <div class="v" id="heroV">—</div>
+            <div class="sub" id="heroSub">Add a pour to see the volume</div>
+          </div>
+          <div class="statgrid">
+            <div class="stat" id="bagStat">
+              <div class="k" id="bagK">Bags — 80 lb</div>
+              <div class="v" id="bagV">—</div>
+              <div class="sub" id="bagSub">—</div>
+            </div>
+            <div class="stat" id="mixStat">
+              <div class="k">Ready-mix order</div>
+              <div class="v" id="mixV">—</div>
+              <div class="sub" id="mixSub">—</div>
+            </div>
+          </div>
+          <div id="cheaper"></div>
+          <table class="brk">
+            <caption class="vh">Volume breakdown</caption>
+            <tbody>
+              <tr><td>Net volume</td><td id="bNet">—</td></tr>
+              <tr><td id="bWasteK">Waste allowance</td><td id="bWaste">—</td></tr>
+              <tr><td>Total to order</td><td id="bTot">—</td></tr>
+            </tbody>
+          </table>
+          <div class="note warn" id="disclaimerScreen">
+            <strong>Estimate only.</strong> This tool converts the dimensions you enter into volume and
+            multiplies by published bag yields. It does not verify your dimensions, structural design,
+            reinforcement, subgrade, formwork movement or local building code. Bag yields are the
+            manufacturer's nominal figures and vary with water content and compaction. Confirm the final
+            quantity and mix specification with your supplier and your engineer or building official
+            before ordering or placing concrete.
+          </div>
+        </div>
+        <div class="ft">
+          <span class="chip" id="ftChip">—</span>
+          <span class="hint" style="margin-left:auto">Materials always rounded up</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ printed order sheet ══ -->
+  <section class="printonly" id="doc" aria-hidden="true"></section>
+
+  <footer class="site noprint">
+    Volumes: slab and footing L×W×D, column π r² h, steps summed as stacked slabs (bottom tread spans the
+    full run). Conversions: 1 yd³ = 27 ft³, 1 ft³ = 0.0283168 m³. Bag yields are the manufacturers' nominal
+    figures — 40 lb = 0.30 ft³, 60 lb = 0.45 ft³, 80 lb = 0.60 ft³ — and bag counts are rounded up.
+    Ready-mix is rounded up to the next 0.25 yd³ as supplied by most plants. Estimating aid only; not a
+    structural design and not a substitute for your supplier's or engineer's advice.
+  </footer>
+</main>
+
+<input type="file" id="fileIn" accept="application/json,.json" class="vh" aria-hidden="true" tabindex="-1">
+
+<script>
+(function(){
+"use strict";
+/* ─── constants ─────────────────────────────────────────────── */
+var KEY='solvix.concrete-calculator.v1';
+var FT3_PER_M3=35.31466672148859, M3_PER_FT3=0.028316846592;
+var M_PER_FT=0.3048, M_PER_IN=0.0254, M_PER_MM=0.001;
+var YD3_PER_M3=FT3_PER_M3/27;
+var BAG_YIELD_FT3={40:0.30,60:0.45,80:0.60};
+var RM_STEP_YD3=0.25;
+
+var SHAPES={
+  slab:{name:'Slab / pad',qty:'Slabs',
+    dims:[{k:'a',lab:'Length',kind:'len'},{k:'b',lab:'Width',kind:'len'},{k:'c',lab:'Thickness',kind:'sml'}]},
+  footing:{name:'Footing / strip',qty:'Runs',
+    dims:[{k:'a',lab:'Length',kind:'len'},{k:'b',lab:'Width',kind:'sml'},{k:'c',lab:'Depth',kind:'sml'}]},
+  column:{name:'Column / pier',qty:'Columns',
+    dims:[{k:'a',lab:'Diameter',kind:'sml'},{k:'b',lab:'Height',kind:'len'}]},
+  steps:{name:'Steps / stairs',qty:'Flights',
+    dims:[{k:'d',lab:'Steps',kind:'cnt'},{k:'a',lab:'Width',kind:'len'},{k:'b',lab:'Riser',kind:'sml'},{k:'c',lab:'Tread',kind:'sml'}]}
+};
+var SHAPE_ORDER=['slab','footing','column','steps'];
+
+/* ─── helpers ───────────────────────────────────────────────── */
+function $(id){return document.getElementById(id);}
+function el(t,c,x){var e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;}
+function fin(n){return typeof n==='number'&&isFinite(n);}
+function z(n){return Object.is(n,-0)?0:n;}
+function nf(n,dp){ if(!fin(n))return '—'; n=z(n);
+  return n.toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+function trimNum(n,dp){ if(!fin(n))return '';
+  var s=z(n).toFixed(dp); if(s.indexOf('.')>-1)s=s.replace(/0+$/,'').replace(/\.$/,''); return s; }
+function todayISO(){var d=new Date(),p=function(v){return String(v).padStart(2,'0');};
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function longDate(iso){
+  if(!iso)return '—';
+  var p=String(iso).split('-'); if(p.length!==3)return iso;
+  var d=new Date(+p[0],+p[1]-1,+p[2]); if(isNaN(d.getTime()))return iso;
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+}
+function rid(){return 'p'+Math.random().toString(36).slice(2,9);}
+
+/* parse a length written as 12' 6", 12ft 6in, 3 1/2, or a plain decimal.
+   Returns a number in the field's display unit, or NaN. */
+function parseDisp(str){
+  if(str==null) return NaN;
+  var s=String(str).trim().replace(/,/g,'');
+  if(!s) return NaN;
+  var m=s.match(/^(?:(-?\d*\.?\d+)\s*(?:'|’|ft|feet|foot))\s*(?:(\d*\.?\d+)\s*(?:"|”|in|ins|inch|inches)?)?$/i);
+  if(m && (m[1]||m[2])) return (parseFloat(m[1]||'0'))+(parseFloat(m[2]||'0'))/12;
+  m=s.match(/^(-?\d*\.?\d+)\s*(?:"|”|in|ins|inch|inches)$/i);
+  if(m) return parseFloat(m[1]);
+  m=s.match(/^(-?\d+)?\s+(\d+)\s*\/\s*(\d+)$/);           /* 3 1/2 */
+  if(m && +m[3]!==0) return (parseFloat(m[1]||'0'))+(+m[2])/(+m[3]);
+  m=s.match(/^(\d+)\s*\/\s*(\d+)$/);                       /* 1/2 */
+  if(m && +m[2]!==0) return (+m[1])/(+m[2]);
+  m=s.match(/^-?\d*\.?\d+$/);
+  if(m) return parseFloat(s);
+  return NaN;
+}
+
+/* ─── state ─────────────────────────────────────────────────── */
+var S=null, saveTimer=null;
+
+function sampleState(){
+  return {
+    v:1, sample:true, units:'imp', cur:'$', curCustom:'',
+    job:{ref:'Q-2481',client:'R. Delgado',site:'24 Maple Ave, Lot 7',date:todayISO(),
+         by:'Kestrel Concrete & Groundworks',
+         notes:'3,000 psi, 4 in slump, 3/4 in aggregate. Pump required — no truck access past the gate.'},
+    waste:10, bagSize:80,
+    bagPrice:6.48,               /* per bag, in the job currency */
+    mixPriceM3:185*YD3_PER_M3,   /* $185.00 per yd³, held internally per m³ */
+    rows:[
+      {id:rid(),desc:'Garage slab 24 × 20',shape:'slab',a:24*M_PER_FT,b:20*M_PER_FT,c:5*M_PER_IN,d:0,qty:1},
+      {id:rid(),desc:'Perimeter footing',shape:'footing',a:88*M_PER_FT,b:16*M_PER_IN,c:10*M_PER_IN,d:0,qty:1},
+      {id:rid(),desc:'Porch piers',shape:'column',a:12*M_PER_IN,b:3.5*M_PER_FT,c:0,d:0,qty:4},
+      {id:rid(),desc:'Front entry steps',shape:'steps',a:4*M_PER_FT,b:7*M_PER_IN,c:11*M_PER_IN,d:3,qty:1}
+    ],
+    saved:[]
+  };
+}
+function blankState(keepSaved){
+  var s=sampleState();
+  s.sample=false;
+  s.job={ref:'',client:'',site:'',date:todayISO(),by:s.job.by,notes:''};
+  s.rows=[newRow('slab')];
+  s.saved=keepSaved||[];
+  return s;
+}
+function newRow(shape){
+  var r={id:rid(),desc:'',shape:shape,a:NaN,b:NaN,c:NaN,d:NaN,qty:1};
+  if(shape==='steps'){r.d=3;}
+  return r;
+}
+function snapshot(){
+  return {v:1,units:S.units,cur:S.cur,curCustom:S.curCustom,job:JSON.parse(JSON.stringify(S.job)),
+          waste:S.waste,bagSize:S.bagSize,bagPrice:S.bagPrice,mixPriceM3:S.mixPriceM3,
+          rows:JSON.parse(JSON.stringify(S.rows)).map(function(r){
+            ['a','b','c','d','qty'].forEach(function(k){ if(!fin(r[k]))r[k]=null; }); return r;})};
+}
+function applySnapshot(sn){
+  S.units=sn.units==='met'?'met':'imp';
+  S.cur=typeof sn.cur==='string'?sn.cur:'$';
+  S.curCustom=typeof sn.curCustom==='string'?sn.curCustom:'';
+  var j=sn.job||{};
+  S.job={ref:j.ref||'',client:j.client||'',site:j.site||'',date:j.date||todayISO(),by:j.by||'',notes:j.notes||''};
+  S.waste=fin(+sn.waste)?Math.min(15,Math.max(0,+sn.waste)):10;
+  S.bagSize=BAG_YIELD_FT3[sn.bagSize]?+sn.bagSize:80;
+  S.bagPrice=fin(+sn.bagPrice)?+sn.bagPrice:NaN;
+  S.mixPriceM3=fin(+sn.mixPriceM3)?+sn.mixPriceM3:NaN;
+  S.rows=(Array.isArray(sn.rows)?sn.rows:[]).map(function(r){
+    var o={id:r.id||rid(),desc:String(r.desc==null?'':r.desc),
+           shape:SHAPES[r.shape]?r.shape:'slab',a:NaN,b:NaN,c:NaN,d:NaN,qty:NaN};
+    ['a','b','c','d','qty'].forEach(function(k){ var v=(r[k]===null||r[k]===''||r[k]===undefined)?NaN:+r[k];
+      o[k]=fin(v)?v:NaN; });
+    return o;});
+  if(!S.rows.length)S.rows=[newRow('slab')];
+  S.sample=!!sn.sample;
+}
+
+/* ─── persistence ───────────────────────────────────────────── */
+function save(){
+  try{
+    var o=snapshot(); o.sample=S.sample; o.saved=S.saved;
+    localStorage.setItem(KEY,JSON.stringify(o));
+  }catch(e){/* storage blocked or full — the tool keeps working */}
+}
+function saveSoon(){ if(saveTimer)clearTimeout(saveTimer); saveTimer=setTimeout(save,180); }
+function load(){
+  var raw=null;
+  try{ raw=localStorage.getItem(KEY); }catch(e){ raw=null; }
+  if(!raw) return false;
+  try{
+    var o=JSON.parse(raw); if(!o||typeof o!=='object') return false;
+    S=sampleState(); applySnapshot(o);
+    S.saved=Array.isArray(o.saved)?o.saved.filter(function(x){return x&&x.snapshot;}):[];
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ─── units ─────────────────────────────────────────────────── */
+function isImp(){return S.units==='imp';}
+function unitLbl(kind){
+  if(kind==='cnt') return 'no.';
+  if(kind==='len') return isImp()?'ft':'m';
+  return isImp()?'in':'mm';
+}
+function toDisp(m,kind){                      /* metres → display unit */
+  if(!fin(m)) return NaN;
+  if(kind==='cnt') return m;
+  if(kind==='len') return isImp()? m/M_PER_FT : m;
+  return isImp()? m/M_PER_IN : m/M_PER_MM;
+}
+function toM(v,kind){                          /* display unit → metres */
+  if(!fin(v)) return NaN;
+  if(kind==='cnt') return v;
+  if(kind==='len') return isImp()? v*M_PER_FT : v;
+  return isImp()? v*M_PER_IN : v*M_PER_MM;
+}
+function dispDp(kind){ return kind==='cnt'?0 : (kind==='len'? (isImp()?4:4) : (isImp()?3:1)); }
+function volLbl(){ return isImp()?'yd³':'m³'; }
+function volFromM3(m3){ return isImp()? m3*YD3_PER_M3 : m3; }
+function smallVolLbl(){ return isImp()?'ft³':'m³'; }
+function smallVolFromM3(m3){ return isImp()? m3*FT3_PER_M3 : m3; }
+function curSym(){ return S.cur==='custom' ? (S.curCustom||'¤') : S.cur; }
+function money(n){ if(!fin(n))return '—';
+  return curSym()+z(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function mixPriceDisp(){                       /* per yd³ or per m³ */
+  if(!fin(S.mixPriceM3)) return NaN;
+  return isImp()? S.mixPriceM3/YD3_PER_M3 : S.mixPriceM3;
+}
+function setMixPriceDisp(v){
+  S.mixPriceM3 = fin(v) ? (isImp()? v*YD3_PER_M3 : v) : NaN;
+}
+
+/* ─── the maths ─────────────────────────────────────────────── */
+/* Every dimension is stored in metres, every count as a plain number.
+   Returns cubic metres for one row (all quantities included). */
+function rowVolM3(r){
+  var q=r.qty, def=SHAPES[r.shape];
+  if(!def || !fin(q) || q<=0) return NaN;
+  var v=NaN;
+  if(r.shape==='slab' || r.shape==='footing'){
+    if(!(fin(r.a)&&fin(r.b)&&fin(r.c))) return NaN;
+    if(r.a<=0||r.b<=0||r.c<=0) return NaN;
+    v=r.a*r.b*r.c;                                   /* L × W × D */
+  } else if(r.shape==='column'){
+    if(!(fin(r.a)&&fin(r.b))) return NaN;
+    if(r.a<=0||r.b<=0) return NaN;
+    var rad=r.a/2;
+    v=Math.PI*rad*rad*r.b;                           /* π r² h */
+  } else if(r.shape==='steps'){
+    if(!(fin(r.a)&&fin(r.b)&&fin(r.c)&&fin(r.d))) return NaN;
+    var n=Math.floor(r.d);
+    if(r.a<=0||r.b<=0||r.c<=0||n<1) return NaN;
+    /* stacked slabs: step i (from the top) spans i treads */
+    var sum=0;
+    for(var i=1;i<=n;i++) sum += r.a * r.b * (i*r.c);
+    v=sum;
+  }
+  if(!fin(v)) return NaN;
+  return v*q;
+}
+function rowComplete(r){ return fin(rowVolM3(r)); }
+
+function totals(){
+  var netM3=0, any=false, incomplete=0;
+  S.rows.forEach(function(r){
+    var v=rowVolM3(r);
+    if(fin(v)&&v>0){ netM3+=v; any=true; }
+    else if(rowHasInput(r)) incomplete++;
+  });
+  var w=fin(S.waste)?S.waste:0;
+  var totM3 = any? netM3*(1+w/100) : NaN;
+  var totFt3 = fin(totM3)? totM3*FT3_PER_M3 : NaN;
+  var totYd3 = fin(totFt3)? totFt3/27 : NaN;
+  var yld=BAG_YIELD_FT3[S.bagSize]||BAG_YIELD_FT3[80];
+  var bags = (fin(totFt3)&&yld>0)? Math.ceil(totFt3/yld - 1e-9) : NaN;
+  var mixYd3 = fin(totYd3)? Math.ceil(totYd3/RM_STEP_YD3 - 1e-9)*RM_STEP_YD3 : NaN;
+  var mixM3 = fin(mixYd3)? mixYd3/YD3_PER_M3 : NaN;
+  var bagCost = (fin(bags)&&fin(S.bagPrice))? bags*S.bagPrice : NaN;
+  var mixCost = (fin(mixYd3)&&fin(S.mixPriceM3))? mixYd3*(S.mixPriceM3/YD3_PER_M3) : NaN;
+  return {any:any,incomplete:incomplete,netM3:any?netM3:NaN,wastePct:w,
+          wasteM3:any?netM3*w/100:NaN,totM3:totM3,totFt3:totFt3,totYd3:totYd3,
+          yld:yld,bags:bags,mixYd3:mixYd3,mixM3:mixM3,bagCost:bagCost,mixCost:mixCost};
+}
+function rowHasInput(r){
+  return (r.desc&&r.desc.trim()) || fin(r.a)||fin(r.b)||fin(r.c)||fin(r.d);
+}
+
+/* ─── rendering: pour table ─────────────────────────────────── */
+function buildRows(){
+  var tb=$('tb'); tb.textContent='';
+  S.rows.forEach(function(r,i){ tb.appendChild(rowEl(r,i)); });
+  $('rowCount').textContent=S.rows.length+(S.rows.length===1?' pour':' pours');
+}
+function rowEl(r,i){
+  var tr=el('tr'); tr.dataset.id=r.id;
+
+  var tdN=el('td','mid'); tdN.appendChild(el('span','rowno',String(i+1))); tr.appendChild(tdN);
+
+  var tdD=el('td','desc mid');
+  var din=el('input'); din.type='text'; din.value=r.desc; din.dataset.f='desc';
+  din.setAttribute('aria-label','Element description, row '+(i+1));
+  din.placeholder='e.g. Rear patio slab'; tdD.appendChild(din); tr.appendChild(tdD);
+
+  var tdS=el('td','mid');
+  var sel=el('select','shapesel'); sel.dataset.f='shape';
+  sel.setAttribute('aria-label','Shape, row '+(i+1));
+  SHAPE_ORDER.forEach(function(k){ var o=el('option',null,SHAPES[k].name); o.value=k; if(k===r.shape)o.selected=true; sel.appendChild(o); });
+  tdS.appendChild(sel); tr.appendChild(tdS);
+
+  var tdDim=el('td'); tdDim.appendChild(dimGrid(r,i)); tr.appendChild(tdDim);
+
+  var tdQ=el('td');
+  var qwrap=el('div','dimf qtyf'); qwrap.style.width='72px';
+  qwrap.appendChild(el('span','mini',SHAPES[r.shape].qty));
+  var q=el('input'); q.type='text'; q.inputMode='decimal'; q.dataset.f='qty';
+  q.value=fin(r.qty)?trimNum(r.qty,3):''; q.setAttribute('aria-label',SHAPES[r.shape].qty+', row '+(i+1));
+  qwrap.appendChild(q);
+  var qe=el('span','err'); qe.dataset.err='qty'; qe.hidden=true; qwrap.appendChild(qe);
+  tdQ.appendChild(qwrap); tr.appendChild(tdQ);
+
+  var tdV=el('td','vcell mid'); tdV.dataset.vol='1'; tr.appendChild(tdV);
+
+  var tdX=el('td','mid');
+  var x=el('button','btn ico sm dgr noprint','✕'); x.type='button'; x.dataset.del='1';
+  x.title='Remove row '+(i+1); x.setAttribute('aria-label','Remove row '+(i+1));
+  tdX.appendChild(x); tr.appendChild(tdX);
+  return tr;
+}
+function dimGrid(r,i){
+  var g=el('div','dimgrid');
+  SHAPES[r.shape].dims.forEach(function(d){
+    var w=el('div','dimf');
+    var lab=el('span','mini',d.lab+' '+unitLbl(d.kind));
+    w.appendChild(lab);
+    var inp=el('input'); inp.type='text'; inp.inputMode='decimal'; inp.dataset.f=d.k; inp.dataset.kind=d.kind;
+    inp.setAttribute('aria-label',d.lab+' in '+unitLbl(d.kind)+', row '+(i+1));
+    inp.value = fin(r[d.k]) ? trimNum(toDisp(r[d.k],d.kind),dispDp(d.kind)) : '';
+    w.appendChild(inp);
+    var e=el('span','err'); e.dataset.err=d.k; e.hidden=true; w.appendChild(e);
+    g.appendChild(w);
+  });
+  return g;
+}
+function refreshRowShape(tr,r,i){
+  var tdDim=tr.children[3];
+  tdDim.textContent=''; tdDim.appendChild(dimGrid(r,i));
+  var qwrap=tr.children[4].querySelector('.dimf');
+  qwrap.querySelector('.mini').textContent=SHAPES[r.shape].qty;
+  qwrap.querySelector('input').setAttribute('aria-label',SHAPES[r.shape].qty+', row '+(i+1));
+}
+function rowById(id){ for(var i=0;i<S.rows.length;i++) if(S.rows[i].id===id) return S.rows[i]; return null; }
+
+/* ─── rendering: results ────────────────────────────────────── */
+function render(){
+  var t=totals();
+
+  /* per-row volumes */
+  Array.prototype.forEach.call($('tb').children,function(tr){
+    var r=rowById(tr.dataset.id); if(!r) return;
+    var cell=tr.querySelector('[data-vol]'); if(!cell) return;
+    var v=rowVolM3(r);
+    cell.textContent='';
+    if(fin(v)&&v>0){
+      cell.appendChild(document.createTextNode(nf(smallVolFromM3(v),2)+' '+smallVolLbl()));
+      var s=el('span','sm', isImp()? nf(v*YD3_PER_M3,3)+' yd³' : nf(v*FT3_PER_M3,2)+' ft³');
+      cell.appendChild(s);
+    } else {
+      cell.appendChild(document.createTextNode('—'));
+    }
+  });
+  $('tfVol').textContent = t.any ? nf(smallVolFromM3(t.netM3),2)+' '+smallVolLbl() : '—';
+
+  /* hero */
+  $('heroK').textContent='Concrete required incl. '+trimNum(t.wastePct,1)+'% waste';
+  $('heroV').textContent = t.any ? nf(volFromM3(t.totM3),2)+' '+volLbl() : '—';
+  $('heroSub').textContent = t.any
+    ? (isImp()? nf(t.totFt3,1)+' ft³ · '+nf(t.totM3,2)+' m³'
+              : nf(t.totFt3,1)+' ft³ · '+nf(t.totYd3,2)+' yd³')
+    : 'Enter a pour above to see the order quantity.';
+  $('unitChip').textContent=volLbl();
+
+  /* bags */
+  $('bagK').textContent='Bags — '+S.bagSize+' lb';
+  $('bagV').textContent = fin(t.bags)? nf(t.bags,0)+' bags' : '—';
+  $('bagSub').textContent = fin(t.bags)
+    ? (t.yld.toFixed(2)+' ft³ per bag, rounded up' + (fin(t.bagCost)? ' · '+money(t.bagCost) : ''))
+    : 'Set a bag size and dimensions.';
+
+  /* ready-mix */
+  $('mixV').textContent = fin(t.mixYd3)? nf(t.mixYd3,2)+' yd³' : '—';
+  $('mixSub').textContent = fin(t.mixYd3)
+    ? ('= '+nf(t.mixM3,2)+' m³ · ordered in ¼ yd³ steps' + (fin(t.mixCost)? ' · '+money(t.mixCost) : ''))
+    : 'Rounded up to the next ¼ yd³.';
+
+  /* cheaper option */
+  var ch=$('cheaper'); ch.textContent='';
+  $('bagStat').classList.remove('pick'); $('mixStat').classList.remove('pick');
+  if(fin(t.bagCost)&&fin(t.mixCost)&&t.bagCost>0&&t.mixCost>0){
+    var d=Math.abs(t.bagCost-t.mixCost), bagWins=t.bagCost<t.mixCost;
+    (bagWins?$('bagStat'):$('mixStat')).classList.add('pick');
+    var n=el('div','note');
+    n.innerHTML='<strong>'+(bagWins?'Bagged mix':'Ready-mix')+' is cheaper by '+esc(money(d))+'</strong> on material alone — '
+      +esc(money(t.bagCost))+' in bags vs '+esc(money(t.mixCost))+' delivered. Bagging '+nf(t.bags,0)
+      +' bags is roughly '+nf(t.bags*S.bagSize/2000,1)+' US tons to move and mix by hand.';
+    ch.appendChild(n);
+  }
+
+  /* breakdown */
+  $('bNet').textContent = t.any? nf(volFromM3(t.netM3),3)+' '+volLbl() : '—';
+  $('bWasteK').textContent='Waste allowance ('+trimNum(t.wastePct,1)+'%)';
+  $('bWaste').textContent = t.any? '+ '+nf(volFromM3(t.wasteM3),3)+' '+volLbl() : '—';
+  $('bTot').textContent = t.any? nf(volFromM3(t.totM3),2)+' '+volLbl() : '—';
+
+  var ftc=$('ftChip');
+  ftc.className='chip'+(t.incomplete? ' warn':(t.any?' ok':''));
+  ftc.textContent = t.incomplete
+    ? t.incomplete+(t.incomplete===1?' row is incomplete':' rows are incomplete')
+    : (t.any? S.rows.filter(rowComplete).length+' pours costed' : 'No pours yet');
+
+  $('sampleChip').hidden=!S.sample;
+  $('curB1').textContent='('+curSym()+')';
+  $('mixUnitLbl').textContent='('+curSym()+' per '+(isImp()?'yd³':'m³')+')';
+  buildDoc(t);
+}
+
+/* ─── printed order sheet ───────────────────────────────────── */
+function dimText(r){
+  var out=[];
+  SHAPES[r.shape].dims.forEach(function(d){
+    var v=toDisp(r[d.k],d.kind);
+    out.push(d.lab+' '+(fin(v)? trimNum(v,dispDp(d.kind))+(d.kind==='cnt'?'':' '+unitLbl(d.kind)) : '—'));
+  });
+  return out.join(' · ');
+}
+function buildDoc(t){
+  var j=S.job, h=[];
+  h.push('<div class="dochead"><div><div class="co">'+esc(j.by||'Concrete order sheet')+'</div>'+
+    '<div class="cosub">Prepared with the Solvix Concrete Volume &amp; Bag Calculator</div></div>'+
+    '<div class="rt"><div class="ttl">Concrete Order Sheet</div>'+
+    '<div class="meta">'+esc(longDate(j.date))+(j.ref?' &nbsp;·&nbsp; Ref '+esc(j.ref):'')+'</div></div></div>');
+
+  h.push('<div class="docmeta">'+
+    '<div><div class="k">Client</div><div class="v">'+esc(j.client||'—')+'</div></div>'+
+    '<div><div class="k">Site</div><div class="v">'+esc(j.site||'—')+'</div></div>'+
+    '<div><div class="k">Job ref</div><div class="v">'+esc(j.ref||'—')+'</div></div>'+
+    '<div><div class="k">Date</div><div class="v">'+esc(longDate(j.date))+'</div></div></div>');
+
+  h.push('<h3>Pour schedule</h3><table><thead><tr>'+
+    '<th scope="col">#</th><th scope="col">Element</th><th scope="col">Shape</th>'+
+    '<th scope="col">Dimensions</th><th scope="col" style="text-align:right">Qty</th>'+
+    '<th scope="col" style="text-align:right">Volume '+smallVolLbl()+'</th>'+
+    '<th scope="col" style="text-align:right">'+volLbl()+'</th></tr></thead><tbody>');
+  S.rows.forEach(function(r,i){
+    var v=rowVolM3(r);
+    h.push('<tr><td>'+(i+1)+'</td><td>'+esc(r.desc||SHAPES[r.shape].name)+'</td><td>'+esc(SHAPES[r.shape].name)+'</td>'+
+      '<td>'+esc(dimText(r))+'</td><td style="text-align:right">'+(fin(r.qty)?trimNum(r.qty,3):'—')+'</td>'+
+      '<td style="text-align:right">'+(fin(v)?nf(smallVolFromM3(v),2):'—')+'</td>'+
+      '<td style="text-align:right">'+(fin(v)?nf(volFromM3(v),3):'—')+'</td></tr>');
+  });
+  h.push('</tbody><tfoot><tr><td colspan="5">Net volume</td>'+
+    '<td style="text-align:right">'+(t.any?nf(smallVolFromM3(t.netM3),2):'—')+'</td>'+
+    '<td style="text-align:right">'+(t.any?nf(volFromM3(t.netM3),3):'—')+'</td></tr>'+
+    '<tr><td colspan="5">Waste allowance '+trimNum(t.wastePct,1)+'%</td>'+
+    '<td style="text-align:right">'+(t.any?nf(smallVolFromM3(t.wasteM3),2):'—')+'</td>'+
+    '<td style="text-align:right">'+(t.any?nf(volFromM3(t.wasteM3),3):'—')+'</td></tr>'+
+    '<tr><td colspan="5">Total to order</td>'+
+    '<td style="text-align:right">'+(t.any?nf(smallVolFromM3(t.totM3),2):'—')+'</td>'+
+    '<td style="text-align:right">'+(t.any?nf(volFromM3(t.totM3),2):'—')+'</td></tr></tfoot></table>');
+
+  h.push('<h3>Order this</h3><div class="orders">'+
+    '<div class="ordbox"><div class="k" style="font-size:8pt;letter-spacing:.07em;text-transform:uppercase;color:#555">Option A — bagged</div>'+
+    '<div class="big">'+(fin(t.bags)?nf(t.bags,0)+' × '+S.bagSize+' lb bags':'—')+'</div>'+
+    '<div style="font-size:9pt;margin-top:3px">Nominal yield '+t.yld.toFixed(2)+' ft³ per bag · rounded up<br>'+
+    'Material cost '+(fin(t.bagCost)?esc(money(t.bagCost)):'—')+
+    (fin(S.bagPrice)?' at '+esc(money(S.bagPrice))+' per bag':'')+'</div></div>'+
+    '<div class="ordbox"><div class="k" style="font-size:8pt;letter-spacing:.07em;text-transform:uppercase;color:#555">Option B — ready-mix</div>'+
+    '<div class="big">'+(fin(t.mixYd3)?nf(t.mixYd3,2)+' yd³':'—')+'</div>'+
+    '<div style="font-size:9pt;margin-top:3px">'+(fin(t.mixM3)?'= '+nf(t.mixM3,2)+' m³ · ':'')+'rounded up to the next ¼ yd³<br>'+
+    'Material cost '+(fin(t.mixCost)?esc(money(t.mixCost)):'—')+
+    (fin(mixPriceDisp())?' at '+esc(money(mixPriceDisp()))+' per '+(isImp()?'yd³':'m³'):'')+'</div></div></div>');
+
+  if(j.notes && j.notes.trim())
+    h.push('<h3>Notes</h3><div style="font-size:10pt;white-space:pre-line">'+esc(j.notes)+'</div>');
+
+  h.push('<div class="docnote"><strong>Estimate only — check before you pour.</strong> '+
+    'These quantities come from the dimensions entered above, multiplied by published nominal bag yields '+
+    '(40 lb = 0.30 ft³, 60 lb = 0.45 ft³, 80 lb = 0.60 ft³) and rounded up. This sheet is not a structural '+
+    'design and does not check reinforcement, subgrade, formwork, cover, mix specification or compliance with '+
+    'any building code. Actual yield varies with water content, compaction and site losses. Confirm the final '+
+    'quantity, mix and placement method with your ready-mix supplier and your engineer or building official '+
+    'before ordering.</div>');
+
+  h.push('<div class="sign"><div><div class="ln"></div>Approved by (client)</div>'+
+    '<div><div class="ln"></div>Date</div></div>');
+
+  h.push('<div class="docfoot">Volumes: slab and footing L×W×D · column π r² h · steps summed as stacked slabs. '+
+    '1 yd³ = 27 ft³ · 1 ft³ = 0.0283168 m³. Generated '+esc(new Date().toLocaleString())+
+    ' · Solvix Concrete Volume &amp; Bag Calculator.</div>');
+
+  $('doc').innerHTML=h.join('');
+}
+
+/* ─── field sync (job / settings) ───────────────────────────── */
+function syncFields(){
+  document.querySelectorAll('[data-job]').forEach(function(inp){
+    inp.value=S.job[inp.dataset.job]||'';
+  });
+  $('jUnits').value=S.units;
+  $('jCur').value=(S.cur==='$'||S.cur==='£'||S.cur==='€')?S.cur:'custom';
+  $('curCustomWrap').hidden=($('jCur').value!=='custom');
+  $('jCurCustom').value=S.curCustom||'';
+  $('waste').value=String(S.waste);
+  $('wasteVal').textContent=trimNum(S.waste,1)+'%';
+  $('bagSize').value=String(S.bagSize);
+  $('bagPrice').value=fin(S.bagPrice)?trimNum(S.bagPrice,2):'';
+  var mp=mixPriceDisp();
+  $('mixPrice').value=fin(mp)?trimNum(mp,2):'';
+  $('curB1').textContent='('+curSym()+')';
+  $('mixUnitLbl').textContent='('+curSym()+' per '+(isImp()?'yd³':'m³')+')';
+}
+function renderSaved(){
+  var wrap=$('savedList'); wrap.textContent='';
+  if(!S.saved.length){ wrap.appendChild(el('div','hint','No saved jobs yet. Save the current job to keep it and start another.')); return; }
+  S.saved.slice().sort(function(a,b){return (b.at||0)-(a.at||0);}).forEach(function(j){
+    var row=el('div','savedrow');
+    row.appendChild(el('span','nm',j.name||'Untitled job'));
+    row.appendChild(el('span','when',j.at? new Date(j.at).toLocaleDateString():''));
+    var l=el('button','btn sm','Load'); l.type='button'; l.dataset.loadId=j.id;
+    var d=el('button','btn sm dgr','Delete'); d.type='button'; d.dataset.delId=j.id;
+    row.appendChild(l); row.appendChild(d); wrap.appendChild(row);
+  });
+}
+
+function touched(){ if(S.sample){ S.sample=false; } }
+
+/* ─── validation ────────────────────────────────────────────── */
+function setErr(input,msg){
+  var wrap=input.parentNode, k=input.dataset.f;
+  var e=wrap.querySelector('[data-err="'+k+'"]');
+  if(msg){ input.classList.add('inv'); input.setAttribute('aria-invalid','true'); if(e){e.textContent=msg; e.hidden=false;} }
+  else { input.classList.remove('inv'); input.removeAttribute('aria-invalid'); if(e){e.textContent=''; e.hidden=true;} }
+}
+
+/* ─── events: table ─────────────────────────────────────────── */
+$('tb').addEventListener('input',function(ev){
+  var inp=ev.target, tr=inp.closest('tr'); if(!tr) return;
+  var r=rowById(tr.dataset.id); if(!r) return;
+  var f=inp.dataset.f; if(!f) return;
+  touched();
+  if(f==='desc'){ r.desc=inp.value; }
+  else if(f==='qty'){
+    var q=parseDisp(inp.value);
+    r.qty = (fin(q)&&q>0)? q : (inp.value.trim()===''? NaN : (fin(q)? q : NaN));
+    setErr(inp, inp.value.trim()==='' ? '' : (fin(q)&&q>0? '' : 'Must be a number above 0'));
+  } else {
+    var kind=inp.dataset.kind;
+    var v=parseDisp(inp.value);
+    r[f] = fin(v)? toM(v,kind) : NaN;
+    setErr(inp, inp.value.trim()==='' ? '' : (fin(v)&&v>0? '' : 'Enter a number above 0'));
+  }
+  render(); saveSoon();
+});
+$('tb').addEventListener('change',function(ev){
+  var sel=ev.target; if(sel.dataset.f!=='shape') return;
+  var tr=sel.closest('tr'), r=rowById(tr.dataset.id); if(!r) return;
+  touched();
+  r.shape=sel.value;
+  if(r.shape==='steps' && !fin(r.d)) r.d=3;
+  var idx=S.rows.indexOf(r);
+  refreshRowShape(tr,r,idx);
+  render(); saveSoon();
+});
+$('tb').addEventListener('click',function(ev){
+  var b=ev.target.closest('[data-del]'); if(!b) return;
+  var tr=b.closest('tr'), r=rowById(tr.dataset.id); if(!r) return;
+  touched();
+  S.rows=S.rows.filter(function(x){return x!==r;});
+  if(!S.rows.length) S.rows=[newRow('slab')];
+  buildRows(); render(); save();
+});
+document.querySelectorAll('[data-add]').forEach(function(b){
+  b.addEventListener('click',function(){
+    touched();
+    S.rows.push(newRow(b.dataset.add));
+    buildRows(); render(); save();
+    var last=$('tb').lastElementChild;
+    if(last){ var i=last.querySelector('input[data-f="desc"]'); if(i) i.focus(); }
+  });
+});
+
+/* ─── events: job + settings ────────────────────────────────── */
+document.querySelectorAll('[data-job]').forEach(function(inp){
+  inp.addEventListener('input',function(){ touched(); S.job[inp.dataset.job]=inp.value; render(); saveSoon(); });
+});
+$('jUnits').addEventListener('change',function(){
+  S.units=$('jUnits').value==='met'?'met':'imp';
+  buildRows(); syncFields(); render(); save();
+});
+$('jCur').addEventListener('change',function(){
+  var v=$('jCur').value;
+  if(v==='custom'){ $('curCustomWrap').hidden=false; S.cur='custom'; if(!S.curCustom)S.curCustom='¤'; $('jCurCustom').value=S.curCustom; }
+  else { $('curCustomWrap').hidden=true; S.cur=v; }
+  syncFields(); render(); save();
+});
+$('jCurCustom').addEventListener('input',function(){ S.curCustom=$('jCurCustom').value.slice(0,4); render(); saveSoon(); });
+$('waste').addEventListener('input',function(){
+  var v=parseFloat($('waste').value); S.waste=fin(v)?Math.min(15,Math.max(0,v)):10;
+  $('wasteVal').textContent=trimNum(S.waste,1)+'%'; touched(); render(); saveSoon();
+});
+$('bagSize').addEventListener('change',function(){
+  var v=+$('bagSize').value; S.bagSize=BAG_YIELD_FT3[v]?v:80; touched(); render(); save();
+});
+$('bagPrice').addEventListener('input',function(){
+  var v=parseFloat($('bagPrice').value);
+  S.bagPrice=fin(v)&&v>=0?v:NaN; touched(); render(); saveSoon();
+});
+$('bagPrice').addEventListener('blur',function(){
+  var raw=$('bagPrice').value.trim(), e=$('errBagPrice'), bad=raw!=='' && !(fin(parseFloat(raw))&&parseFloat(raw)>=0);
+  $('bagPrice').classList.toggle('inv',bad); e.hidden=!bad; e.textContent=bad?'Enter a price of 0 or more':'';
+});
+$('mixPrice').addEventListener('input',function(){
+  var v=parseFloat($('mixPrice').value);
+  setMixPriceDisp(fin(v)&&v>=0?v:NaN); touched(); render(); saveSoon();
+});
+$('mixPrice').addEventListener('blur',function(){
+  var raw=$('mixPrice').value.trim(), e=$('errMixPrice'), bad=raw!=='' && !(fin(parseFloat(raw))&&parseFloat(raw)>=0);
+  $('mixPrice').classList.toggle('inv',bad); e.hidden=!bad; e.textContent=bad?'Enter a price of 0 or more':'';
+});
+
+/* ─── saved jobs ────────────────────────────────────────────── */
+$('bSave').addEventListener('click',function(){
+  var nm=$('saveName').value.trim() || S.job.ref || S.job.client || 'Job '+new Date().toLocaleDateString();
+  S.saved.push({id:'j'+Date.now().toString(36),name:nm,at:Date.now(),snapshot:snapshot()});
+  $('saveName').value=''; renderSaved(); save();
+});
+$('bNew').addEventListener('click',function(){
+  if(!confirm('Start a new blank job? The current job is replaced (saved jobs are kept).')) return;
+  var saved=S.saved; S=blankState(saved);
+  buildRows(); syncFields(); renderSaved(); render(); save();
+});
+$('savedList').addEventListener('click',function(ev){
+  var l=ev.target.closest('[data-load-id]'), d=ev.target.closest('[data-del-id]');
+  if(l){
+    var j=S.saved.filter(function(x){return x.id===l.dataset.loadId;})[0]; if(!j) return;
+    if(!confirm('Load "'+j.name+'"? This replaces the job currently on screen.')) return;
+    applySnapshot(j.snapshot); S.sample=false;
+    buildRows(); syncFields(); render(); save();
+    window.scrollTo({top:0,behavior:'auto'});
+  } else if(d){
+    var jj=S.saved.filter(function(x){return x.id===d.dataset.delId;})[0]; if(!jj) return;
+    if(!confirm('Delete saved job "'+jj.name+'"?')) return;
+    S.saved=S.saved.filter(function(x){return x.id!==d.dataset.delId;});
+    renderSaved(); save();
+  }
+});
+
+/* ─── export ────────────────────────────────────────────────── */
+function download(name,text,mime){
+  var blob=new Blob([text],{type:mime});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },0);
+}
+function csvCell(v){
+  var s=(v==null?'':String(v));
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvLine(arr){ return arr.map(csvCell).join(','); }
+function buildCsv(){
+  var t=totals(), L=[];
+  L.push(csvLine(['Concrete Volume & Bag Calculator — order sheet']));
+  L.push(csvLine(['Prepared by',S.job.by]));
+  L.push(csvLine(['Job ref',S.job.ref]));
+  L.push(csvLine(['Client',S.job.client]));
+  L.push(csvLine(['Site',S.job.site]));
+  L.push(csvLine(['Date',S.job.date]));
+  L.push(csvLine(['Units',isImp()?'Imperial (ft/in)':'Metric (m/mm)']));
+  L.push(csvLine(['Currency',curSym()]));
+  L.push('');
+  L.push(csvLine(['#','Element','Shape','Dimensions','Qty','Volume ft3','Volume yd3','Volume m3']));
+  S.rows.forEach(function(r,i){
+    var v=rowVolM3(r);
+    L.push(csvLine([i+1,r.desc||SHAPES[r.shape].name,SHAPES[r.shape].name,dimText(r),
+      fin(r.qty)?trimNum(r.qty,3):'',
+      fin(v)?(v*FT3_PER_M3).toFixed(3):'',
+      fin(v)?(v*YD3_PER_M3).toFixed(4):'',
+      fin(v)?v.toFixed(4):'']));
+  });
+  L.push('');
+  L.push(csvLine(['Net volume','','','','',fin(t.netM3)?(t.netM3*FT3_PER_M3).toFixed(3):'',
+                  fin(t.netM3)?(t.netM3*YD3_PER_M3).toFixed(4):'',fin(t.netM3)?t.netM3.toFixed(4):'']));
+  L.push(csvLine(['Waste allowance %',trimNum(t.wastePct,1)]));
+  L.push(csvLine(['Total to order','','','','',fin(t.totFt3)?t.totFt3.toFixed(3):'',
+                  fin(t.totYd3)?t.totYd3.toFixed(4):'',fin(t.totM3)?t.totM3.toFixed(4):'']));
+  L.push('');
+  L.push(csvLine(['Bag size (lb)',S.bagSize]));
+  L.push(csvLine(['Bag yield (ft3)',t.yld.toFixed(2)]));
+  L.push(csvLine(['Bags required (rounded up)',fin(t.bags)?t.bags:'']));
+  L.push(csvLine(['Price per bag',fin(S.bagPrice)?S.bagPrice.toFixed(2):'']));
+  L.push(csvLine(['Bag material cost',fin(t.bagCost)?t.bagCost.toFixed(2):'']));
+  L.push(csvLine(['Ready-mix order (yd3, ¼ yd3 steps)',fin(t.mixYd3)?t.mixYd3.toFixed(2):'']));
+  L.push(csvLine(['Ready-mix order (m3)',fin(t.mixM3)?t.mixM3.toFixed(3):'']));
+  L.push(csvLine(['Price per '+(isImp()?'yd3':'m3'),fin(mixPriceDisp())?mixPriceDisp().toFixed(2):'']));
+  L.push(csvLine(['Ready-mix material cost',fin(t.mixCost)?t.mixCost.toFixed(2):'']));
+  L.push('');
+  L.push(csvLine(['Estimate only. Bag yields are nominal manufacturer figures; quantities are rounded up. '+
+    'Not a structural design. Confirm quantity and mix with your supplier and engineer before ordering.']));
+  return L.join('\r\n');
+}
+function fileStem(){
+  var base=(S.job.ref||S.job.client||'concrete-order');
+  return base.replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'concrete-order';
+}
+$('bCsv').addEventListener('click',function(){ download(fileStem()+'.csv','\ufeff'+buildCsv(),'text/csv;charset=utf-8'); });
+$('bJson').addEventListener('click',function(){
+  var o=snapshot(); o.sample=S.sample; o.saved=S.saved; o.tool='solvix.concrete-calculator'; o.exported=new Date().toISOString();
+  download(fileStem()+'.json',JSON.stringify(o,null,2),'application/json');
+});
+$('bImport').addEventListener('click',function(){ $('fileIn').click(); });
+$('fileIn').addEventListener('change',function(){
+  var f=$('fileIn').files&&$('fileIn').files[0]; if(!f) return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    var ok=true;
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.rows)) ok=false;
+      else { applySnapshot(o); S.saved=Array.isArray(o.saved)?o.saved.filter(function(x){return x&&x.snapshot;}):S.saved;
+             S.sample=false; buildRows(); syncFields(); renderSaved(); render(); save(); }
+    }catch(e){ ok=false; }
+    var n=$('importNote');
+    if(!ok){
+      if(!n){ n=el('div','note bad'); n.id='importNote'; $('work').insertBefore(n,$('work').firstChild); }
+      n.textContent='That file could not be read as a Solvix concrete job. Choose a JSON file exported from this tool.';
+      n.hidden=false;
+    } else if(n){ n.hidden=true; }
+    $('fileIn').value='';
+  };
+  fr.readAsText(f);
+});
+$('bPrint').addEventListener('click',function(){ window.print(); });
+$('bClear').addEventListener('click',function(){
+  if(!confirm('Clear all data? This deletes the current job and every saved job from this browser. It cannot be undone.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S=blankState([]);
+  buildRows(); syncFields(); renderSaved(); render(); save();
+});
+
+/* ─── boot ──────────────────────────────────────────────────── */
+if(!load()) S=sampleState();
+if(!S.job.date) S.job.date=todayISO();
+buildRows(); syncFields(); renderSaved(); render();
+save();
+window.addEventListener('beforeunload',save);
+})();
+</script>
+</body>
+</html>
