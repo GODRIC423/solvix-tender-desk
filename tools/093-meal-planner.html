@@ -766,6 +766,12 @@ function priceBasis(dim){
 }
 function baseDivisor(dim){return (dim==='mass'||dim==='vol')?1000:1;}
 
+function ingLine(i){
+  var u=UNITS[i.unit]||UNITS.g, q=trimNum(nz(i.qty),3);
+  if(u.d==='ct:ea')return q+' × '+i.name;
+  if(u.d.indexOf('ct:')===0)return q+' '+plural(u.l,nz(i.qty))+' '+i.name;
+  return q+' '+u.l+' '+i.name;
+}
 function plural(l,n){
   if(Math.abs(n-1)<1e-9)return l;
   return /(ch|sh|s|x|z)$/.test(l)?l+'es':l+'s';
@@ -1042,7 +1048,9 @@ function renderAisleSummary(C){
 }
 function renderPrintDoc(C){
   var t=dateFor(0), e=dateFor(C.days-1);
-  $('pTitle').textContent=(S.meta.house||'Meal plan')+' — meal plan & shopping list';
+  var pd=$('iPrintDoc'), what={all:'meal plan & shopping list',plan:'meal plan',
+    list:'shopping list',rec:'recipe cards'}[pd?pd.value:'all']||'meal plan & shopping list';
+  $('pTitle').textContent=(S.meta.house||'Meal plan')+' — '+what;
   $('pSub').textContent='Week beginning '+fullDate(t)+(e?' to '+fullDate(e):'')+
     '  ·  '+C.days+' day'+(C.days===1?'':'s')+'  ·  '+C.meals+' meal'+(C.meals===1?'':'s')+' planned'+
     (S.sample?'   ·   SAMPLE DATA':'');
@@ -1067,7 +1075,7 @@ function renderPrintDoc(C){
       '  ·  '+esc(['b','l','d'].filter(function(t){return String(r.tags||'').indexOf(t)>=0;})
         .map(function(t){return {b:'breakfast',l:'lunch',d:'dinner'}[t];}).join(', ')||'any meal')+'</div>'+
       '<ul>'+r.ings.map(function(i){
-        return '<li>'+esc(trimNum(nz(i.qty),3)+' '+(UNITS[i.unit]?UNITS[i.unit].l:i.unit)+' '+i.name)+
+        return '<li>'+esc(ingLine(i))+
           (i.staple?' <em>(staple)</em>':'')+'</li>';}).join('')+'</ul></div>';
   }).join('');
   rh+='<p style="font-size:9pt;color:#333;margin-top:4mm">Estimates only. Prices are the user’s own figures. '+
@@ -1324,7 +1332,7 @@ function wire(){
     document.body.className=document.body.className.replace(/\bpd-\w+\b/g,'').trim();
     document.body.classList.add('pd-'+v);
   }
-  $('iPrintDoc').addEventListener('change',setPrintMode);
+  $('iPrintDoc').addEventListener('change',function(){setPrintMode();renderResults();});
   setPrintMode();
   $('btnPrint').addEventListener('click',function(){setPrintMode();window.print();});
 
