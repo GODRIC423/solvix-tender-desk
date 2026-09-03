@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moon Almanac 2026 — A Computed Lunar Ephemeris</title>
+<meta name="description" content="A celestial almanac for the year 2026: every day's moon phase computed in the browser from Meeus, a canvas moon shaded from its true phase angle, thirteen full moons and their folklore names.">
+<meta name="theme-color" content="#050505">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ccircle cx='16' cy='16' r='10' fill='%23F5F1E6'/%3E%3Ccircle cx='10' cy='14' r='9' fill='%23050505'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Newsreader:ital,opsz,wght@0,6..72,200..600;1,6..72,200..500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --black:#050505;
+  --ink:#F5F1E6;
+  --silver:#C0C0C0;
+  --indigo:#2B2D6E;
+  --indigo-lit:#9497e8;
+  --line:rgba(192,192,192,.20);
+  --line-soft:rgba(192,192,192,.10);
+  --disc-dark:#12131f;
+  --display:"Gloock",'Times New Roman',serif;
+  --text:"Newsreader",'Iowan Old Style',Georgia,serif;
+  --pad:clamp(18px,4.2vw,72px);
+  --maxw:1460px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--black);color:var(--ink);
+  font-family:var(--text);font-size:clamp(15px,1.02vw,17px);font-weight:300;line-height:1.62;
+  overflow-x:hidden;
+  font-optical-sizing:auto;
+}
+#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.veil{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(120% 78% at 50% -12%, rgba(43,45,110,.42), rgba(43,45,110,.10) 45%, transparent 72%);}
+.wrap{position:relative;z-index:1}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--indigo-lit);outline-offset:3px;border-radius:2px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:var(--black);padding:.6em 1em;z-index:99}
+.skip:focus{left:12px;top:12px}
+
+/* ---------- masthead ---------- */
+.masthead{
+  position:relative;z-index:3;display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:clamp(14px,2.2vw,26px) var(--pad) 0;
+  font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--silver);
+}
+.masthead nav{display:flex;gap:clamp(12px,2vw,26px);flex-wrap:wrap}
+.masthead a{text-decoration:none;opacity:.78;transition:opacity .3s,color .3s}
+.masthead a:hover{opacity:1;color:var(--ink)}
+.mark{display:flex;align-items:center;gap:.6em;color:var(--ink);opacity:.95}
+.mark .glyph{width:11px;height:11px;border-radius:50%;background:var(--ink);
+  box-shadow:inset -4px 0 0 0 var(--black),0 0 12px rgba(245,241,230,.45)}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;isolation:isolate;overflow:hidden;
+  min-height:min(94svh,880px);
+  display:grid;grid-template-rows:1fr auto;
+  padding:0 var(--pad) clamp(20px,3vw,40px);
+}
+.stage{position:relative;display:grid;place-items:center;padding:clamp(24px,5vh,68px) 0 clamp(34px,5vh,58px)}
+.moonwrap{position:relative;display:grid;place-items:center;grid-area:1/1}
+.moonwrap::after{content:"";position:absolute;inset:-34%;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,rgba(245,241,230,.16),rgba(43,45,110,.20) 38%,transparent 68%);
+  animation:breathe 14s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.045)}}
+#heroMoon{display:block;width:var(--ms);height:var(--ms);border-radius:50%}
+.moonwrap{--ms:min(50vmin,440px)}
+.dial{position:absolute;width:calc(var(--ms) * 1.30);height:calc(var(--ms) * 1.30);pointer-events:none;overflow:visible}
+.dial circle{fill:none;stroke:rgba(192,192,192,.13)}
+.dial line{stroke:rgba(192,192,192,.30);stroke-width:1}
+.dial line.on{stroke:var(--indigo-lit);stroke-width:1.6}
+.titleblock{grid-area:1/1;position:relative;display:grid;justify-items:center;gap:.1em;pointer-events:none;width:100%}
+h1{
+  margin:0;font-family:var(--display);font-weight:400;
+  font-size:clamp(3.4rem,13.2vw,12.2rem);line-height:.82;letter-spacing:-.025em;
+  text-align:center;color:var(--ink);mix-blend-mode:exclusion;
+}
+h1 .l2{display:block;letter-spacing:.005em}
+.year{
+  position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  display:flex;align-items:center;gap:clamp(12px,2vw,26px);width:min(100%,720px);margin:0;
+  font-size:clamp(.6rem,1.05vw,.75rem);letter-spacing:.42em;text-transform:uppercase;color:var(--silver);
+  justify-content:center;
+}
+.year::before,.year::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,var(--line),transparent)}
+.year span{padding-left:.5em}
+.herofoot{
+  display:grid;grid-template-columns:1fr auto;gap:clamp(16px,3vw,48px);align-items:end;
+  border-top:1px solid var(--line-soft);padding-top:clamp(14px,2vw,22px);
+}
+.tonight{display:flex;flex-wrap:wrap;gap:clamp(16px,3.2vw,52px);align-items:baseline}
+.tonight .lede{font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--indigo-lit);width:100%;margin-bottom:-.2em}
+.datum{display:flex;flex-direction:column;gap:.1em}
+.datum b{font-family:var(--display);font-weight:400;font-size:clamp(1.1rem,2vw,1.65rem);line-height:1.15;letter-spacing:.005em}
+.datum small{font-size:.63rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver)}
+.scroll{font-size:.64rem;letter-spacing:.22em;text-transform:uppercase;color:var(--silver);
+  display:flex;align-items:center;gap:.7em;white-space:nowrap}
+.scroll i{display:block;width:1px;height:34px;background:linear-gradient(180deg,var(--line),transparent);
+  animation:fall 2.6s ease-in-out infinite}
+@keyframes fall{0%{transform:scaleY(.2);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}
+  51%{transform:scaleY(1);transform-origin:bottom}100%{transform:scaleY(.2);transform-origin:bottom}}
+
+/* ---------- reading ---------- */
+.reading{
+  max-width:var(--maxw);margin:clamp(70px,11vh,150px) auto 0;padding:0 var(--pad);
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:clamp(28px,5vw,86px);align-items:start;
+}
+.section-no{font-size:.64rem;letter-spacing:.28em;text-transform:uppercase;color:var(--indigo-lit);
+  display:block;margin-bottom:1.1em}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(1.9rem,4.4vw,3.5rem);line-height:1.02;
+  letter-spacing:-.015em;margin:0 0 .5em}
+.dropcap{font-size:clamp(1.02rem,1.28vw,1.2rem);line-height:1.72;max-width:56ch;color:#e9e5d9}
+.dropcap p+p{margin-top:1.05em}
+.dropcap p:first-of-type::first-letter{
+  font-family:var(--display);float:left;font-size:4.15em;line-height:.78;padding:.06em .12em 0 0;color:var(--ink)}
+.aside{border:1px solid var(--line-soft);border-radius:2px;padding:clamp(18px,2.4vw,30px);
+  background:linear-gradient(180deg,rgba(43,45,110,.20),rgba(5,5,5,.4))}
+.aside h3{margin:0 0 1em;font-family:var(--display);font-weight:400;font-size:1.28rem;letter-spacing:.01em}
+.eclipses{list-style:none;margin:0;padding:0;display:grid;gap:.9em}
+.eclipses li{display:grid;grid-template-columns:auto 1fr;gap:.9em;align-items:baseline;
+  padding-bottom:.9em;border-bottom:1px dotted var(--line-soft);font-size:.94rem}
+.eclipses li:last-child{border-bottom:0;padding-bottom:0}
+.eclipses time{font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--indigo-lit);white-space:nowrap}
+.eclipses em{font-style:italic;color:var(--ink)}
+.eclipses span{color:var(--silver)}
+
+/* ---------- legend ---------- */
+.legend{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:clamp(14px,2.4vw,34px);align-items:center;
+  margin-top:clamp(26px,4vw,52px);padding-top:clamp(16px,2vw,24px);border-top:1px solid var(--line-soft);
+  font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--silver)}
+.legend b{font-weight:400;color:var(--indigo-lit);letter-spacing:.22em}
+.legend i{display:inline-flex;align-items:center;gap:.6em;font-style:normal}
+
+/* ---------- moon disc component ---------- */
+.disc{position:relative;display:block;width:var(--d,18px);height:var(--d,18px);border-radius:50%;
+  background:var(--disc-dark);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(192,192,192,.16)}
+.disc::before,.disc::after{content:"";position:absolute;top:0;bottom:0}
+.disc::before{width:50%;background:var(--ink)}
+.disc.wax::before{right:0}
+.disc.wan::before{left:0}
+.disc::after{left:50%;width:calc(var(--c,1) * 100%);transform:translateX(-50%);border-radius:50%}
+.disc.gib::after{background:var(--ink)}
+.disc.cre::after{background:var(--disc-dark)}
+.disc.new::before,.disc.new::after{display:none}
+.disc.full::before{width:100%;right:0;left:0}
+.disc.full::after{display:none}
+
+/* ---------- almanac ---------- */
+.almhead{max-width:var(--maxw);margin:clamp(64px,10vh,130px) auto 0;padding:0 var(--pad);
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:10px 24px;
+  border-bottom:1px solid var(--line);padding-bottom:clamp(10px,1.4vw,18px)}
+.almhead h2{margin:0;font-size:clamp(1.7rem,3.6vw,2.9rem)}
+.almhead .tally{font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--silver)}
+.almanac{max-width:var(--maxw);margin:clamp(26px,3.5vw,46px) auto 0;padding:0 var(--pad);
+  display:grid;grid-template-columns:minmax(250px,300px) minmax(0,1fr);gap:clamp(26px,3.6vw,64px);align-items:start}
+.panel{position:sticky;top:24px;align-self:start;border:1px solid var(--line-soft);border-radius:2px;
+  padding:clamp(18px,1.7vw,26px);background:rgba(5,5,5,.72);backdrop-filter:blur(8px)}
+.panel .pmoonwrap{position:relative;display:grid;place-items:center;margin-bottom:1.2em}
+.panel .pmoonwrap::after{content:"";position:absolute;inset:-16%;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,rgba(43,45,110,.55),transparent 70%)}
+#panelMoon{display:block;width:100%;max-width:230px;aspect-ratio:1;border-radius:50%}
+.pkicker{font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;color:var(--indigo-lit);margin:0 0 .5em}
+.pdate{font-family:var(--display);font-weight:400;font-size:clamp(1.35rem,1.8vw,1.75rem);line-height:1.1;margin:0 0 .12em;letter-spacing:.005em}
+.pphase{font-style:italic;color:var(--silver);margin:0 0 1.1em;font-size:1.02rem}
+.prows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-soft)}
+.prows li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:.62em 0;border-bottom:1px solid var(--line-soft);font-size:.9rem}
+.prows dt,.prows .k{font-size:.63rem;letter-spacing:.18em;text-transform:uppercase;color:var(--silver)}
+.prows .v{font-variant-numeric:tabular-nums;color:var(--ink)}
+.phint{margin:1em 0 0;font-size:.7rem;letter-spacing:.1em;color:var(--silver);opacity:.72;line-height:1.5}
+
+.months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(20px,2.4vw,40px) clamp(16px,2vw,34px)}
+.month{min-width:0}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  border-bottom:1px solid var(--line);padding-bottom:.42em;margin-bottom:.7em}
+.mhead h3{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(1.32rem,1.85vw,1.7rem);letter-spacing:.005em;line-height:1}
+.mhead .mno{font-size:.62rem;letter-spacing:.2em;color:var(--silver)}
+.folk{margin:0 0 .5em;font-style:italic;color:var(--indigo-lit);font-size:.95rem}
+.lore{margin:0 0 1em;font-size:.845rem;line-height:1.58;color:#cfcabd}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:5px}
+.dow span{font-size:.55rem;letter-spacing:.1em;text-align:center;color:var(--silver);opacity:.6}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.day{appearance:none;background:none;border:0;padding:4px 0 3px;margin:0;cursor:pointer;color:inherit;font:inherit;
+  display:grid;justify-items:center;gap:2px;border-radius:3px;position:relative;transition:background .22s}
+.day .num{font-size:.6rem;letter-spacing:.02em;color:var(--silver);opacity:.62;font-variant-numeric:tabular-nums;line-height:1}
+.day .disc{--d:clamp(15px,1.35vw,19px)}
+.day:hover,.day:focus-visible{background:rgba(43,45,110,.42)}
+.day:hover .num,.day:focus-visible .num,.day[aria-current="true"] .num{opacity:1;color:var(--ink)}
+.day[aria-current="true"]{background:rgba(43,45,110,.62);box-shadow:inset 0 0 0 1px rgba(148,151,232,.55)}
+.day.key .disc{box-shadow:inset 0 0 0 1px rgba(192,192,192,.16),0 0 0 1.5px rgba(245,241,230,.55)}
+.day.ecl::after{content:"";position:absolute;top:1px;right:calc(50% - 12px);width:4px;height:4px;border-radius:50%;
+  background:var(--indigo-lit);box-shadow:0 0 5px var(--indigo-lit)}
+.pad{visibility:hidden}
+.phz{list-style:none;margin:.85em 0 0;padding:.7em 0 0;border-top:1px dotted var(--line-soft);
+  display:grid;gap:.32em;font-size:.72rem;color:var(--silver);letter-spacing:.03em}
+.phz li{display:grid;grid-template-columns:12px auto 1fr;gap:.55em;align-items:center;font-variant-numeric:tabular-nums}
+.phz .disc{--d:11px}
+.phz .nm{color:var(--ink);letter-spacing:.14em;text-transform:uppercase;font-size:.6rem}
+.phz .tm{text-align:right;opacity:.75}
+
+/* ---------- coda ---------- */
+.coda{max-width:var(--maxw);margin:clamp(70px,11vh,150px) auto 0;padding:0 var(--pad);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:clamp(28px,5vw,86px);align-items:start}
+.pull{font-family:var(--display);font-weight:400;font-size:clamp(1.6rem,3.2vw,2.6rem);line-height:1.16;
+  letter-spacing:-.01em;margin:0;color:var(--ink)}
+.pull span{color:var(--indigo-lit)}
+.colophon{max-width:var(--maxw);margin:clamp(60px,9vh,120px) auto 0;padding:clamp(22px,3vw,34px) var(--pad) clamp(40px,6vh,74px);
+  border-top:1px solid var(--line-soft);
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:clamp(18px,3vw,44px);
+  font-size:.8rem;color:var(--silver)}
+.colophon h4{margin:0 0 .7em;font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;color:var(--indigo-lit);font-weight:400}
+.colophon p{margin:0;line-height:1.62}
+.colophon a{color:var(--ink);text-underline-offset:3px;text-decoration-color:var(--line)}
+
+noscript .nojs{display:block;margin:2em auto;max-width:60ch;padding:1em;border:1px solid var(--line);
+  text-align:center;color:var(--silver)}
+
+/* ---------- responsive ---------- */
+@media (max-width:1180px){
+  .months{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:980px){
+  .reading,.coda{grid-template-columns:1fr;gap:clamp(24px,5vw,40px)}
+  .coda .pull{order:-1}
+  .almanac{grid-template-columns:1fr;gap:0}
+  .panel{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:auto 1fr;gap:clamp(14px,3vw,22px);
+    align-items:center;border-left:0;border-right:0;border-top:0;border-radius:0;
+    margin:0 calc(-1 * var(--pad)) clamp(22px,4vw,32px);padding:12px var(--pad);
+    background:rgba(5,5,5,.9)}
+  .panel .pmoonwrap{margin:0}
+  #panelMoon{width:62px;height:62px}
+  .panel .ptext{display:grid;grid-template-columns:1fr auto;gap:2px clamp(10px,3vw,20px);align-items:center}
+  .pkicker{display:none}
+  .pdate{font-size:1.1rem}
+  .pphase{margin:0;font-size:.86rem}
+  .prows{display:flex;gap:clamp(10px,3vw,20px);border-top:0;grid-column:1/-1}
+  .prows li{border-bottom:0;padding:0;flex-direction:column;gap:0;font-size:.8rem}
+  .prows .k{font-size:.54rem;letter-spacing:.12em}
+  .prows li:nth-child(4){display:none}
+  .phint{display:none}
+  .day .disc{--d:20px}
+  .day .num{font-size:.62rem}
+}
+@media (max-width:760px){
+  .masthead nav{display:none}
+  .masthead{font-size:.62rem}
+}
+@media (max-width:640px){
+  .months{grid-template-columns:1fr;gap:clamp(26px,7vw,38px)}
+  .month{max-width:420px}
+  .herofoot{grid-template-columns:1fr}
+  .scroll{display:none}
+  .day .disc{--d:26px}
+  .day .num{font-size:.66rem}
+  .dow span{font-size:.6rem}
+  h1{font-size:clamp(3rem,16.5vw,5.4rem)}
+  .year{letter-spacing:.28em;font-size:.58rem}
+  .moonwrap{--ms:min(68vmin,300px)}
+  .moonwrap::after{inset:-22%}
+  .hero{min-height:100svh;padding-bottom:16px}
+  .stage{padding:8px 0 40px}
+  .tonight{gap:14px 26px}
+  .datum b{font-size:1.12rem}
+  .herofoot{gap:14px}
+  .prows li:nth-child(3){display:none}
+}
+@media (max-width:520px){ .tonight .datum:nth-child(5){display:none} }
+@media (max-width:400px){ .prows li:nth-child(2){display:none} }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+
+<div class="wrap">
+<a class="skip" href="#almanac">Skip to the twelve months</a>
+
+<header class="masthead">
+  <div class="mark"><span class="glyph" aria-hidden="true"></span> Moon Almanac</div>
+  <nav aria-label="Sections">
+    <a href="#reading">The Reading</a>
+    <a href="#almanac">Twelve Months</a>
+    <a href="#eclipses">Eclipses</a>
+    <a href="#colophon">Method</a>
+  </nav>
+</header>
+
+<main id="top">
+
+  <section class="hero" aria-labelledby="pagetitle">
+    <div class="stage">
+      <div class="moonwrap">
+        <svg class="dial" viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="97.5"></circle><g id="dialTicks"><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(0 100 100)" data-t="0"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(30 100 100)" data-t="1"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(60 100 100)" data-t="2"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(90 100 100)" data-t="3"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(120 100 100)" data-t="4"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(150 100 100)" data-t="5"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(180 100 100)" data-t="6"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(210 100 100)" data-t="7"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(240 100 100)" data-t="8"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(270 100 100)" data-t="9"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(300 100 100)" data-t="10"></line><line x1="100" y1="2.2" x2="100" y2="9" transform="rotate(330 100 100)" data-t="11"></line></g></svg>
+        <canvas id="heroMoon" role="img" aria-label="A shaded rendering of the moon at its current phase"></canvas>
+      </div>
+      <div class="titleblock">
+        <h1 id="pagetitle">Moon<span class="l2">Almanac</span></h1>
+      </div>
+      <p class="year"><span>MMXXVI &nbsp;·&nbsp; Geocentric &nbsp;·&nbsp; Times UTC</span></p>
+    </div>
+    <div class="herofoot">
+      <div class="tonight">
+        <span class="lede" id="tonightLede">Tonight</span>
+        <span class="datum"><b id="tDate">—</b><small>Date</small></span>
+        <span class="datum"><b id="tPhase">—</b><small>Phase</small></span>
+        <span class="datum"><b id="tIllum">—</b><small>Illuminated</small></span>
+        <span class="datum"><b id="tNext">—</b><small>Next principal phase</small></span>
+      </div>
+      <p class="scroll">Read downward <i aria-hidden="true"></i></p>
+    </div>
+  </section>
+
+  <section class="reading" id="reading" aria-labelledby="readingH">
+    <div>
+      <span class="section-no">§ I — The Reading</span>
+      <h2 id="readingH">Thirteen full moons, and one of them spare.</h2>
+      <div class="dropcap">
+        <p>Nothing in this almanac was copied from a table. Every disc you see on this page was computed the moment it loaded, from the same periodic terms an ephemeris uses: the moon's mean longitude carried forward by its anomaly, the sun's apparent longitude, and the difference between them — the elongation — turned into an angle of illumination and then into light falling across a sphere.</p>
+        <p>2026 is a generous year. It opens with a full moon on the third of January, before the decorations are down, and closes with another on Christmas Eve. Between them fall thirteen full moons rather than the usual twelve, because a lunation is eleven days shorter than the calendar year and the surplus has to go somewhere. It goes into May, which receives two: one on the first, one on the thirty-first. The second is a blue moon, a name that has nothing to do with colour and everything to do with bookkeeping.</p>
+        <p>The moon at the top of this page is not a drawing. It is a sphere of maria and craters lit from a direction derived from tonight's phase angle, with the terminator falling where the geometry says it must, and the unlit limb raised very slightly by earthshine — the sunlight our own planet throws back at it, which is why a young crescent carries a grey ghost of the whole disc inside its horns.</p>
+      </div>
+    </div>
+    <aside class="aside" id="eclipses" aria-labelledby="eclH">
+      <h3 id="eclH">Eclipses of 2026</h3>
+      <ul class="eclipses">
+        <li><time datetime="2026-02-17">17 Feb</time><span><em>Annular solar.</em> A ring of fire over Antarctica; partial from the southern ocean and the tip of Africa.</span></li>
+        <li><time datetime="2026-03-03">3 Mar</time><span><em>Total lunar.</em> The Worm Moon passes wholly into shadow — the Pacific, the Americas and East Asia keep watch.</span></li>
+        <li><time datetime="2026-08-12">12 Aug</time><span><em>Total solar.</em> The great one: totality across Greenland, Iceland and northern Spain in the late evening light.</span></li>
+        <li><time datetime="2026-08-28">28 Aug</time><span><em>Partial lunar.</em> A bite taken out of the Sturgeon Moon, visible from the Americas, Europe and Africa.</span></li>
+      </ul>
+      <p class="phint">Eclipse days are marked in the calendar with an indigo point.</p>
+    </aside>
+    <div class="legend" aria-hidden="true">
+      <b>How to read the grid</b>
+      <i><span class="disc new" style="--d:15px"></span> New</i>
+      <i><span class="disc wax cre" style="--d:15px;--c:.5"></span> Waxing crescent</i>
+      <i><span class="disc wax gib" style="--d:15px;--c:.5"></span> Waxing gibbous</i>
+      <i><span class="disc full" style="--d:15px"></span> Full</i>
+      <i><span class="disc wan cre" style="--d:15px;--c:.5"></span> Waning crescent</i>
+      <i>Ringed disc = principal phase · Indigo point = eclipse</i>
+    </div>
+  </section>
+
+  <div class="almhead">
+    <div>
+      <span class="section-no">§ II — The register</span>
+      <h2 id="almanacH">Twelve months, day by day.</h2>
+    </div>
+    <p class="tally">13 full moons · 12 new · 365 discs, each computed</p>
+  </div>
+
+  <section class="almanac" aria-labelledby="almanacH">
+
+    <div class="panel" role="region" aria-labelledby="panelH" aria-live="polite">
+      <h3 id="panelH" class="pkicker">Ephemeris</h3>
+      <div class="pmoonwrap"><canvas id="panelMoon" role="img" aria-label="Shaded moon for the selected day"></canvas></div>
+      <div class="ptext">
+        <div>
+          <p class="pdate" id="pDate">—</p>
+          <p class="pphase" id="pPhase">—</p>
+        </div>
+        <ul class="prows">
+          <li><span class="k">Illuminated</span><span class="v" id="pIllum">—</span></li>
+          <li><span class="k">Age</span><span class="v" id="pAge">—</span></li>
+          <li><span class="k">Elongation</span><span class="v" id="pElong">—</span></li>
+          <li><span class="k">Next</span><span class="v" id="pNext">—</span></li>
+        </ul>
+      </div>
+      <p class="phint">Hover or tab through any day to bring it to the glass.</p>
+    </div>
+
+    <div class="months" id="months">
+      <article class="month" data-m="0">
+        <div class="mhead"><h3>January</h3><span class="mno">I</span></div>
+        <p class="folk">Wolf Moon · Moon after Yule</p>
+        <p class="lore">Cold-throated and high. Hunger brings the wolves close enough to the settlements to be heard from the doorway; the Saxons simply counted it from the feast.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="January 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="1">
+        <div class="mhead"><h3>February</h3><span class="mno">II</span></div>
+        <p class="folk">Snow Moon · Hunger Moon</p>
+        <p class="lore">The deepest snow and the thinnest larder. On the northern coasts it is the Storm Moon, when the sea is not asked for anything it might refuse to give back.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="February 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="2">
+        <div class="mhead"><h3>March</h3><span class="mno">III</span></div>
+        <p class="folk">Worm Moon · Lenten Moon</p>
+        <p class="lore">The thaw softens the ground until the casts appear and sap climbs the maples. As the Lenten Moon it still sets the date of Easter for half the world.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="March 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="3">
+        <div class="mhead"><h3>April</h3><span class="mno">IV</span></div>
+        <p class="folk">Pink Moon · Paschal Moon</p>
+        <p class="lore">Named not for the moon but for the moss phlox that carpets the eastern woods the week it rises. Also the Egg Moon, and the Moon of the first full grass.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="April 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="4">
+        <div class="mhead"><h3>May</h3><span class="mno">V</span></div>
+        <p class="folk">Flower Moon · and a Blue Moon</p>
+        <p class="lore">Milk Moon in the byre, Hare Moon in the field. This year May is given two full moons; the second, on the thirty-first, is the blue one — a surplus, not a colour.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="May 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="5">
+        <div class="mhead"><h3>June</h3><span class="mno">VI</span></div>
+        <p class="folk">Strawberry Moon · Mead Moon</p>
+        <p class="lore">The shortest ripening of the year. Near the solstice the full moon keeps low to the horizon and reddens through the summer haze all the way across the sky.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="June 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="6">
+        <div class="mhead"><h3>July</h3><span class="mno">VII</span></div>
+        <p class="folk">Buck Moon · Thunder Moon</p>
+        <p class="lore">New antlers push clear of the velvet. The second name belongs to the storms that pile up over hot afternoons; the third, Hay Moon, to the first cut brought in.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="July 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="7">
+        <div class="mhead"><h3>August</h3><span class="mno">VIII</span></div>
+        <p class="folk">Sturgeon Moon · Grain Moon</p>
+        <p class="lore">The great lake fish run and are easily taken. On the twelfth the new moon slides fully over the sun: totality from Greenland to the plains of northern Spain.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="August 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="8">
+        <div class="mhead"><h3>September</h3><span class="mno">IX</span></div>
+        <p class="folk">Harvest Moon · Corn Moon</p>
+        <p class="lore">The title of Harvest goes to whichever full moon falls nearest the equinox; in 2026 it is September's, rising close to sunset several evenings running to lend light to the reaping.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="September 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="9">
+        <div class="mhead"><h3>October</h3><span class="mno">X</span></div>
+        <p class="folk">Hunter's Moon · Dying Grass Moon</p>
+        <p class="lore">The fields are bare, the deer are fat and every track shows. The slaughter month keeps its older, bloodier name for the meat that must be salted before frost.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="October 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="10">
+        <div class="mhead"><h3>November</h3><span class="mno">XI</span></div>
+        <p class="folk">Beaver Moon · Frost Moon</p>
+        <p class="lore">The last traps set before the water closes over. Called also the Mourning Moon, being the final full moon to rise before the year turns at the solstice.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="November 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+      <article class="month" data-m="11">
+        <div class="mhead"><h3>December</h3><span class="mno">XII</span></div>
+        <p class="folk">Cold Moon · Long Night Moon</p>
+        <p class="lore">Full near midwinter, it climbs higher and stays out longer than any moon of the year — a lamp hung deliberately over the shortest days. To the druids, the Oak Moon.</p>
+        <div class="dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="days" role="group" aria-label="December 2026"></div>
+        <ul class="phz"></ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="coda" aria-labelledby="codaH">
+    <p class="pull">A calendar tells you what day it is. An almanac tells you <span>what the sky will be doing</span> while it happens.</p>
+    <div>
+      <span class="section-no">§ III — On keeping one</span>
+      <h2 id="codaH">Keep it by the window.</h2>
+      <div class="dropcap">
+        <p>An almanac is a promise made in advance and kept in public. It is checkable: go outside on the twenty-sixth of September, look east around sunset, and the disc that comes up over the roofline will be the disc printed here, or this page was wrong. Very little else on the internet offers that.</p>
+        <p>The habit worth forming is smaller than astronomy. Note the moon once a week — the phase, the hour, where on the horizon it appeared — and by the end of the year you will have learned, without ever meaning to, that the moon rises about fifty minutes later each night, that a crescent never appears at midnight, and that the full moon of December stands where the sun stood in June. These are not facts you memorise. They are facts you notice, and noticing is the whole of the discipline.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="colophon" id="colophon">
+  <div>
+    <h4>Method</h4>
+    <p>Phase instants after Jean Meeus, <em>Astronomical Algorithms</em> (2nd ed.), ch. 49; daily elongation and illuminated fraction from the abridged lunar and solar series of ch. 45–47. Computed in your browser at load, geocentric, times in UTC, good to a minute or two.</p>
+  </div>
+  <div>
+    <h4>The rendering</h4>
+    <p>The moons are drawn pixel by pixel on a canvas: a procedural albedo map of maria and craters over a bump field, lit by a Lambert term from the true phase angle, with limb darkening and a trace of earthshine on the night side.</p>
+  </div>
+  <div>
+    <h4>Folklore</h4>
+    <p>Month names follow the Algonquian and Old English traditions as collected by the farmers' almanacs of the eighteenth century. Where the two disagree, both are given.</p>
+  </div>
+  <div>
+    <h4>Colophon</h4>
+    <p>Set in Gloock and Newsreader. Silver, indigo and moon cream on black. <a href="#top">Return to the top of the year</a>.</p>
+  </div>
+</footer>
+</div>
+
+<noscript><p class="nojs">This almanac computes every moon in your browser; with JavaScript disabled the twelve month grids cannot be drawn. The written year, the eclipses and the folklore above remain readable.</p></noscript>
+
+<script>
+(function(){
+"use strict";
+var RAD=Math.PI/180, S=Math.sin, C=Math.cos;
+var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+var DAYNAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var SYN=29.530588861;
+
+/* ---------- 1. astronomy ---------- */
+function jdOf(ms){return ms/86400000+2440587.5;}
+function dateOf(jd){return new Date((jd-2440587.5)*86400000);}
+
+function phaseEvent(kk,type){
+  var k=kk+type,T=k/1236.85;
+  var jde=2451550.09766+29.530588861*k+0.00015437*T*T-0.00000015*T*T*T+0.00000000073*T*T*T*T;
+  var E=1-0.002516*T-0.0000074*T*T;
+  var M=(2.5534+29.10535670*k-0.0000014*T*T-0.00000011*T*T*T)*RAD;
+  var Mm=(201.5643+385.81693528*k+0.0107582*T*T+0.00001238*T*T*T)*RAD;
+  var F=(160.7108+390.67050284*k-0.0016118*T*T-0.00000227*T*T*T)*RAD;
+  var O=(124.7746-1.56375588*k+0.0020672*T*T+0.00000215*T*T*T)*RAD;
+  var c=0;
+  if(type===0||type===0.5){
+    var a0=type===0?-0.40720:-0.40614, a1=type===0?0.17241:0.17302,
+        a2=type===0?0.01608:0.01614, a3=type===0?0.01039:0.01043,
+        a4=type===0?0.00739:0.00734, a5=type===0?-0.00514:-0.00515,
+        a6=type===0?0.00208:0.00209;
+    c=a0*S(Mm)+a1*E*S(M)+a2*S(2*Mm)+a3*S(2*F)+a4*E*S(Mm-M)+a5*E*S(Mm+M)+a6*E*E*S(2*M)
+      -0.00111*S(Mm-2*F)-0.00057*S(Mm+2*F)+0.00056*E*S(2*Mm+M)-0.00042*S(3*Mm)
+      +0.00042*E*S(M+2*F)+0.00038*E*S(M-2*F)-0.00024*E*S(2*Mm-M)-0.00017*S(O)
+      -0.00007*S(Mm+2*M)+0.00004*S(3*F)+0.00004*S(2*Mm-2*F)+0.00003*S(Mm+M-2*F)
+      +0.00003*S(2*Mm+2*F)-0.00003*S(Mm+M+2*F)+0.00003*S(Mm-M+2*F)-0.00002*S(Mm-M-2*F)
+      -0.00002*S(3*Mm+M)+0.00002*S(4*Mm);
+  } else {
+    c=-0.62801*S(Mm)+0.17172*E*S(M)-0.01183*E*S(Mm+M)+0.00862*S(2*Mm)+0.00804*S(2*F)
+      +0.00454*E*S(Mm-M)+0.00204*E*E*S(2*M)-0.00180*S(Mm-2*F)-0.00070*S(Mm+2*F)
+      -0.00040*S(3*Mm)-0.00034*E*S(2*Mm-M)+0.00032*E*S(M+2*F)+0.00032*E*S(M-2*F)
+      -0.00028*E*E*S(Mm+2*M)+0.00027*E*S(2*Mm+M)-0.00017*S(O);
+    var W=0.00306-0.00038*E*C(M)+0.00026*C(Mm)-0.00002*C(Mm-M)+0.00002*C(Mm+M)+0.00002*C(2*F);
+    c+=(type===0.25?W:-W);
+  }
+  return jde+c;
+}
+function moonState(jd){
+  var T=(jd-2451545)/36525;
+  var Ms=(357.5291+35999.0503*T)*RAD;
+  var Ls=280.4665+36000.7698*T+1.9146*S(Ms)+0.019993*S(2*Ms);
+  var D=(297.8502+445267.1115*T)*RAD, Mm=(134.9634+477198.8675*T)*RAD, F=(93.2721+483202.0175*T)*RAD;
+  var Lm=218.3165+481267.8813*T+6.2886*S(Mm)+1.2740*S(2*D-Mm)+0.6583*S(2*D)+0.2136*S(2*Mm)
+    -0.1851*S(Ms)-0.1143*S(2*F)+0.0588*S(2*D-2*Mm)+0.0572*S(2*D-Ms-Mm)+0.0533*S(2*D+Mm);
+  var e=((Lm-Ls)%360+360)%360;
+  return {elong:e,k:(1-C(e*RAD))/2,waxing:e<180};
+}
+function phaseName(e){
+  if(e<6.5||e>353.5)return "New Moon";
+  if(e<83.5)return "Waxing Crescent";
+  if(e<96.5)return "First Quarter";
+  if(e<173.5)return "Waxing Gibbous";
+  if(e<186.5)return "Full Moon";
+  if(e<263.5)return "Waning Gibbous";
+  if(e<276.5)return "Last Quarter";
+  return "Waning Crescent";
+}
+/* principal phase events spanning 2025-2027 */
+var EVT=[], PNAMES=["New","First Quarter","Full","Last Quarter"], PSHORT=["New","First qtr","Full","Last qtr"];
+(function(){
+  for(var k=300;k<360;k++){
+    for(var t=0;t<4;t++){
+      var jd=phaseEvent(k,t/4), d=dateOf(jd), y=d.getUTCFullYear();
+      if(y>=2025&&y<=2027) EVT.push({jd:jd,t:t,d:d});
+    }
+  }
+  EVT.sort(function(a,b){return a.jd-b.jd;});
+})();
+function lastNew(jd){var r=null;for(var i=0;i<EVT.length;i++){if(EVT[i].t===0&&EVT[i].jd<=jd)r=EVT[i];}return r;}
+function nextEvent(jd){for(var i=0;i<EVT.length;i++){if(EVT[i].jd>jd)return EVT[i];}return null;}
+var ECLIPSES={"2026-02-17":"Annular solar eclipse","2026-03-03":"Total lunar eclipse",
+  "2026-08-12":"Total solar eclipse","2026-08-28":"Partial lunar eclipse"};
+function iso(d){return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
+function hhmm(d){return String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0");}
+
+/* ---------- 2. moon texture (albedo + bump) ---------- */
+var TEX=520, ALB=null, BX=null, BY=null;
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function buildTexture(){
+  var ac=document.createElement("canvas");ac.width=ac.height=TEX;var a=ac.getContext("2d");
+  var hc=document.createElement("canvas");hc.width=hc.height=TEX;var h=hc.getContext("2d");
+  a.fillStyle="#d6d0c2";a.fillRect(0,0,TEX,TEX);
+  h.fillStyle="#808080";h.fillRect(0,0,TEX,TEX);
+  var rand=rng(20260103);
+  function mare(cx,cy,rx,ry,rot,dark){
+    a.save();a.translate(cx*TEX,cy*TEX);a.rotate(rot);
+    var g=a.createRadialGradient(0,0,0,0,0,Math.max(rx,ry)*TEX);
+    g.addColorStop(0,"rgba("+dark+","+dark+","+(dark+6)+",0.95)");
+    g.addColorStop(0.62,"rgba("+dark+","+dark+","+(dark+6)+",0.72)");
+    g.addColorStop(1,"rgba("+dark+","+dark+","+(dark+6)+",0)");
+    a.fillStyle=g;a.beginPath();a.ellipse(0,0,rx*TEX,ry*TEX,0,0,6.2832);a.fill();a.restore();
+  }
+  mare(0.30,0.44,0.155,0.265,-0.22,126);   /* Procellarum */
+  mare(0.385,0.275,0.125,0.105,0.1,120);   /* Imbrium */
+  mare(0.555,0.295,0.082,0.072,0,118);     /* Serenitatis */
+  mare(0.615,0.395,0.088,0.080,0.3,122);   /* Tranquillitatis */
+  mare(0.715,0.475,0.062,0.075,0,124);     /* Fecunditatis */
+  mare(0.775,0.315,0.050,0.042,0,116);     /* Crisium */
+  mare(0.655,0.520,0.045,0.040,0,126);     /* Nectaris */
+  mare(0.435,0.610,0.085,0.055,0.1,132);   /* Nubium */
+  mare(0.315,0.615,0.052,0.048,0,130);     /* Humorum */
+  mare(0.470,0.155,0.230,0.030,-0.06,134); /* Frigoris */
+  mare(0.245,0.290,0.055,0.045,0,138);
+  /* bright highland mottling */
+  for(var i=0;i<190;i++){
+    var x=rand(),y=rand(),dx=x-0.5,dy=y-0.5;
+    if(dx*dx+dy*dy>0.245)continue;
+    var r=(3+rand()*22);
+    a.fillStyle="rgba(245,241,230,"+(0.02+rand()*0.05)+")";
+    a.beginPath();a.arc(x*TEX,y*TEX,r,0,6.2832);a.fill();
+  }
+  /* craters: albedo + height */
+  h.filter="blur(1.6px)";
+  var n=0;
+  for(var c=0;c<2600&&n<300;c++){
+    var x2=rand(),y2=rand(),ddx=x2-0.5,ddy=y2-0.5,rr=ddx*ddx+ddy*ddy;
+    if(rr>0.243)continue;
+    /* fewer craters on the maria */
+    var onMare=(a.getImageData((x2*TEX)|0,(y2*TEX)|0,1,1).data[0]<170);
+    if(onMare&&rand()>0.22)continue;
+    var rad=1.6+Math.pow(rand(),3.4)*11*(1+rr*1.3);
+    n++;
+    var gh=h.createRadialGradient(x2*TEX,y2*TEX,0,x2*TEX,y2*TEX,rad);
+    gh.addColorStop(0,"rgba(112,112,112,.85)");
+    gh.addColorStop(0.58,"rgba(118,118,118,.7)");
+    gh.addColorStop(0.86,"rgba(150,150,150,.6)");
+    gh.addColorStop(1,"rgba(128,128,128,0)");
+    h.fillStyle=gh;h.beginPath();h.arc(x2*TEX,y2*TEX,rad,0,6.2832);h.fill();
+    var ga=a.createRadialGradient(x2*TEX,y2*TEX,0,x2*TEX,y2*TEX,rad*1.1);
+    var dk=0.05+rand()*0.10;
+    ga.addColorStop(0,"rgba(126,122,113,"+dk+")");
+    ga.addColorStop(0.74,"rgba(126,122,113,"+(dk*0.45)+")");
+    ga.addColorStop(0.9,"rgba(250,246,236,"+(0.045+rand()*0.075)+")");
+    ga.addColorStop(1,"rgba(250,246,236,0)");
+    a.fillStyle=ga;a.beginPath();a.arc(x2*TEX,y2*TEX,rad*1.12,0,6.2832);a.fill();
+  }
+  h.filter="none";
+  /* Tycho rays — soft, blurred, low contrast */
+  a.save();a.filter="blur(7px)";a.translate(0.455*TEX,0.775*TEX);
+  for(var t2=0;t2<30;t2++){
+    a.rotate(6.2832/30+rand()*0.05);
+    var len=(0.08+rand()*0.30)*TEX;
+    var gr=a.createLinearGradient(0,0,len,0);
+    gr.addColorStop(0,"rgba(250,247,238,0.085)");gr.addColorStop(0.5,"rgba(250,247,238,0.05)");gr.addColorStop(1,"rgba(250,247,238,0)");
+    a.fillStyle=gr;a.beginPath();a.moveTo(0,-1);a.lineTo(len,-3-rand()*3);a.lineTo(len,3+rand()*3);a.lineTo(0,1);a.closePath();a.fill();
+  }
+  a.restore();a.filter="none";
+  /* soften the whole albedo map a touch */
+  a.filter="blur(0.7px)";a.drawImage(ac,0,0);a.filter="none";
+  /* fine grain */
+  var id=a.getImageData(0,0,TEX,TEX),dd=id.data;
+  for(var p=0;p<dd.length;p+=4){var nse=(rand()-0.5)*13;dd[p]+=nse;dd[p+1]+=nse;dd[p+2]+=nse;}
+  a.putImageData(id,0,0);
+
+  var av=a.getImageData(0,0,TEX,TEX).data;
+  var hv=h.getImageData(0,0,TEX,TEX).data;
+  ALB=new Float32Array(TEX*TEX);BX=new Float32Array(TEX*TEX);BY=new Float32Array(TEX*TEX);
+  for(var yy=0;yy<TEX;yy++)for(var xx=0;xx<TEX;xx++){
+    var i2=yy*TEX+xx;
+    ALB[i2]=(av[i2*4]/255)*1.10;
+    var xl=xx>0?xx-1:xx, xr=xx<TEX-1?xx+1:xx, yu=yy>0?yy-1:yy, yd=yy<TEX-1?yy+1:yy;
+    BX[i2]=(hv[(yy*TEX+xr)*4]-hv[(yy*TEX+xl)*4])/255*0.62;
+    BY[i2]=(hv[(yd*TEX+xx)*4]-hv[(yu*TEX+xx)*4])/255*0.62;
+  }
+}
+
+/* ---------- 3. canvas moon renderer ---------- */
+var DPR=Math.min(2,window.devicePixelRatio||1);
+function renderMoon(cv,elong){
+  if(!ALB)return;
+  var css=cv.clientWidth;
+  if(!css)return;
+  var N=Math.max(24,Math.round(css*DPR));
+  if(cv.width!==N){cv.width=N;cv.height=N;}
+  var ctx=cv.getContext("2d");
+  var img=ctx.createImageData(N,N),d=img.data;
+  var R=N/2, inv=1/R;
+  var ia=Math.abs(180-elong)*RAD, sgn=elong<180?1:-1;
+  var Lx=Math.sin(ia)*sgn, Lz=Math.cos(ia);
+  for(var y=0;y<N;y++){
+    var ny=(y+0.5-R)*inv, ny2=ny*ny;
+    for(var x=0;x<N;x++){
+      var nx=(x+0.5-R)*inv, r2=nx*nx+ny2, o=(y*N+x)*4;
+      if(r2>1)continue;
+      var nz=Math.sqrt(1-r2);
+      var tu=((nx+1)*0.5*TEX)|0, tv=((ny+1)*0.5*TEX)|0;
+      if(tu>=TEX)tu=TEX-1; if(tv>=TEX)tv=TEX-1;
+      var ti=tv*TEX+tu, alb=ALB[ti];
+      var vx=nx+BX[ti]*nz, vy=ny+BY[ti]*nz, vz=nz;
+      var il=1/Math.sqrt(vx*vx+vy*vy+vz*vz);
+      var lam=(vx*il)*Lx+(vz*il)*Lz;
+      if(lam<0)lam=0;
+      var b=(1.34*lam/(lam+0.36))*(0.93+0.07*nz);
+      if(b>1.06)b=1.06;
+      var lum=alb*b;
+      var es=0.06*(1-Math.min(1,lam*7))*(0.55+alb*0.5);
+      var rr=lum*252+es*46, gg=lum*248+es*52, bb=lum*236+es*108;
+      var a2=255, rad=Math.sqrt(r2);
+      if(rad>0.992)a2=255*(1-(rad-0.992)/0.008);
+      d[o]=rr>255?255:rr; d[o+1]=gg>255?255:gg; d[o+2]=bb>255?255:bb; d[o+3]=a2;
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+/* ---------- 4. build the year ---------- */
+var heroCv=document.getElementById("heroMoon"), panelCv=document.getElementById("panelMoon");
+var pDate=document.getElementById("pDate"),pPhase=document.getElementById("pPhase"),
+    pIllum=document.getElementById("pIllum"),pAge=document.getElementById("pAge"),
+    pElong=document.getElementById("pElong"),pNext=document.getElementById("pNext");
+var currentElong=-999, pending=null, rafId=0;
+
+function setPanel(date,st){
+  var jd=jdOf(date.getTime());
+  var ln=lastNew(jd), age=ln?(jd-ln.jd):0;
+  var nx=nextEvent(jd);
+  pDate.textContent=DAYNAMES[date.getUTCDay()].slice(0,3)+" "+date.getUTCDate()+" "+MONTHS[date.getUTCMonth()];
+  var nm=phaseName(st.elong), ecl=ECLIPSES[iso(date)];
+  pPhase.textContent=ecl?nm+" — "+ecl.toLowerCase():nm;
+  pIllum.textContent=(st.k*100).toFixed(1)+"%";
+  pAge.textContent=age.toFixed(1)+" d";
+  pElong.textContent=st.elong.toFixed(1)+"°";
+  pNext.textContent=nx?PSHORT[nx.t]+" "+nx.d.getUTCDate()+" "+MONTHS[nx.d.getUTCMonth()].slice(0,3):"—";
+  queueRender(st.elong);
+}
+function queueRender(elong){
+  pending=elong;
+  if(rafId)return;
+  rafId=requestAnimationFrame(function(){
+    rafId=0;
+    if(pending===null)return;
+    if(Math.abs(pending-currentElong)<0.02){pending=null;return;}
+    currentElong=pending;pending=null;
+    renderMoon(panelCv,currentElong);
+  });
+}
+
+function discClass(st){
+  var c=Math.abs(2*st.k-1);
+  var cls="disc "+(st.waxing?"wax":"wan")+" "+(st.k>0.5?"gib":"cre");
+  if(st.k<0.012)cls="disc new";
+  if(st.k>0.988)cls="disc full";
+  return {cls:cls,c:c.toFixed(3)};
+}
+function makeDisc(st,size){
+  var s=document.createElement("span"), dc=discClass(st);
+  s.className=dc.cls; s.style.setProperty("--c",dc.c);
+  if(size)s.style.setProperty("--d",size);
+  return s;
+}
+
+function build(){
+  var monthEls=document.querySelectorAll(".month");
+  for(var m=0;m<12;m++){
+    var art=monthEls[m], daysEl=art.querySelector(".days"), phzEl=art.querySelector(".phz");
+    var first=new Date(Date.UTC(2026,m,1));
+    var lead=(first.getUTCDay()+6)%7;
+    for(var p=0;p<lead;p++){var pd=document.createElement("span");pd.className="day pad";pd.setAttribute("aria-hidden","true");daysEl.appendChild(pd);}
+    var dim=new Date(Date.UTC(2026,m+1,0)).getUTCDate();
+    for(var dnum=1;dnum<=dim;dnum++){
+      var dt=new Date(Date.UTC(2026,m,dnum,12,0,0));
+      var st=moonState(jdOf(dt.getTime()));
+      var btn=document.createElement("button");
+      btn.type="button";btn.className="day";btn.dataset.m=m;btn.dataset.d=dnum;btn.tabIndex=(dnum===1?0:-1);
+      var key=EVT.filter(function(e){return e.d.getUTCFullYear()===2026&&e.d.getUTCMonth()===dt.getUTCMonth()&&e.d.getUTCDate()===dt.getUTCDate();});
+      if(key.length)btn.classList.add("key");
+      var eclv=ECLIPSES[iso(dt)];
+      if(eclv)btn.classList.add("ecl");
+      btn.setAttribute("aria-label",dnum+" "+MONTHS[m]+" 2026, "+phaseName(st.elong)+", "+Math.round(st.k*100)+"% illuminated"+(eclv?", "+eclv:""));
+      btn.appendChild(makeDisc(st));
+      var num=document.createElement("span");num.className="num";num.textContent=dnum;btn.appendChild(num);
+      daysEl.appendChild(btn);
+    }
+    /* principal phases for this month */
+    var evs=EVT.filter(function(e){return e.d.getUTCFullYear()===2026&&e.d.getUTCMonth()===m;});
+    for(var q=0;q<evs.length;q++){
+      var ev=evs[q], li=document.createElement("li");
+      var sub=moonState(ev.jd);
+      li.appendChild(makeDisc(sub,"11px"));
+      var nmEl=document.createElement("span");nmEl.className="nm";nmEl.textContent=PNAMES[ev.t];li.appendChild(nmEl);
+      var tmEl=document.createElement("span");tmEl.className="tm";
+      tmEl.textContent=ev.d.getUTCDate()+" · "+hhmm(ev.d);li.appendChild(tmEl);
+      phzEl.appendChild(li);
+    }
+  }
+}
+
+/* ---------- 5. interaction ---------- */
+var activeBtn=null;
+function activate(btn,scrollIntoView){
+  if(!btn||btn===activeBtn)return;
+  if(activeBtn)activeBtn.removeAttribute("aria-current");
+  activeBtn=btn;btn.setAttribute("aria-current","true");
+  var m=+btn.dataset.m,d=+btn.dataset.d;
+  var dt=new Date(Date.UTC(2026,m,d,12,0,0));
+  setPanel(dt,moonState(jdOf(dt.getTime())));
+}
+function bind(){
+  var months=document.getElementById("months");
+  months.addEventListener("mouseover",function(e){
+    var b=e.target.closest?e.target.closest(".day"):null;
+    if(b&&!b.classList.contains("pad"))activate(b);
+  });
+  months.addEventListener("focusin",function(e){
+    var b=e.target.closest?e.target.closest(".day"):null;
+    if(b&&!b.classList.contains("pad"))activate(b);
+  });
+  months.addEventListener("click",function(e){
+    var b=e.target.closest?e.target.closest(".day"):null;
+    if(b&&!b.classList.contains("pad")){activate(b);b.focus();}
+  });
+  months.addEventListener("keydown",function(e){
+    var b=e.target.closest?e.target.closest(".day"):null;
+    if(!b)return;
+    var grid=b.parentNode, list=[].slice.call(grid.querySelectorAll(".day:not(.pad)"));
+    var i=list.indexOf(b), n=-1;
+    if(e.key==="ArrowRight")n=i+1;
+    else if(e.key==="ArrowLeft")n=i-1;
+    else if(e.key==="ArrowDown")n=i+7;
+    else if(e.key==="ArrowUp")n=i-7;
+    else if(e.key==="Home")n=0;
+    else if(e.key==="End")n=list.length-1;
+    else return;
+    e.preventDefault();
+    if(n<0)n=0; if(n>list.length-1)n=list.length-1;
+    list.forEach(function(el){el.tabIndex=-1;});
+    list[n].tabIndex=0;list[n].focus();
+  });
+}
+
+/* ---------- 6. starfield ---------- */
+(function stars(){
+  var cv=document.getElementById("stars"), ctx=cv.getContext("2d");
+  var w=0,h=0,pts=[],dpr=Math.min(2,window.devicePixelRatio||1);
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function seed(){
+    w=cv.clientWidth;h=cv.clientHeight;
+    cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    var count=Math.min(320,Math.round(w*h/5200));
+    pts=[];
+    for(var i=0;i<count;i++){
+      var layer=Math.random();
+      pts.push({x:Math.random()*w,y:Math.random()*h,
+        r:0.28+layer*1.15,
+        a:0.16+Math.random()*0.62,
+        vx:-(0.0022+layer*0.010),vy:0.0016+layer*0.0062,
+        tw:Math.random()*6.283,ts:0.4+Math.random()*1.1,
+        hue:Math.random()<0.16});
+    }
+  }
+  function draw(t){
+    ctx.clearRect(0,0,w,h);
+    for(var i=0;i<pts.length;i++){
+      var s=pts[i];
+      var tw=reduce?1:(0.68+0.32*Math.sin(t*0.001*s.ts+s.tw));
+      ctx.globalAlpha=Math.max(0,s.a*tw);
+      ctx.fillStyle=s.hue?"#9497e8":"#F5F1E6";
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,6.2832);ctx.fill();
+      if(s.r>1.05){
+        ctx.globalAlpha=s.a*tw*0.18;
+        ctx.beginPath();ctx.arc(s.x,s.y,s.r*3.4,0,6.2832);ctx.fill();
+      }
+    }
+    ctx.globalAlpha=1;
+  }
+  var last=0,acc=0,raf=0;
+  function loop(t){
+    raf=0;
+    if(document.hidden)return;
+    var dt=Math.min(64,t-last);last=t;
+    for(var i=0;i<pts.length;i++){
+      var s=pts[i];
+      s.x+=s.vx*dt;s.y+=s.vy*dt;
+      if(s.x<-4)s.x=w+4; if(s.y>h+4)s.y=-4;
+    }
+    draw(t);
+    raf=requestAnimationFrame(loop);
+  }
+  function start(){if(!raf&&!reduce&&!document.hidden){last=performance.now();raf=requestAnimationFrame(loop);}}
+  function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}}
+  seed();draw(0);
+  if(!reduce)start();
+  document.addEventListener("visibilitychange",function(){document.hidden?stop():start();});
+  var rt;
+  window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(function(){seed();draw(performance.now());},220);});
+})();
+
+/* ---------- 7. boot ---------- */
+buildTexture();
+build();
+bind();
+
+var now=new Date();
+var heroDate, isNow=(now.getUTCFullYear()===2026);
+if(isNow){heroDate=now;}
+else{heroDate=new Date(Date.UTC(2026,0,3,10,4));
+  document.getElementById("tonightLede").textContent="Frontispiece — the Wolf Moon";}
+var heroState=moonState(jdOf(heroDate.getTime()));
+renderMoon(heroCv,heroState.elong);
+heroCv.setAttribute("aria-label","The moon on "+heroDate.getUTCDate()+" "+MONTHS[heroDate.getUTCMonth()]+" 2026: "+
+  phaseName(heroState.elong)+", "+Math.round(heroState.k*100)+" percent illuminated");
+(function heroFoot(){
+  var jd=jdOf(heroDate.getTime()), nx=nextEvent(jd);
+  document.getElementById("tDate").textContent=heroDate.getUTCDate()+" "+MONTHS[heroDate.getUTCMonth()]+(isNow?"":" 2026");
+  document.getElementById("tPhase").textContent=phaseName(heroState.elong);
+  document.getElementById("tIllum").textContent=Math.round(heroState.k*100)+"%";
+  document.getElementById("tNext").textContent=nx?PNAMES[nx.t]+", "+nx.d.getUTCDate()+" "+MONTHS[nx.d.getUTCMonth()].slice(0,3)+" "+hhmm(nx.d):"—";
+})();
+
+/* default panel selection */
+(function initPanel(){
+  var m=isNow?heroDate.getUTCMonth():0, d=isNow?heroDate.getUTCDate():3;
+  var sel=document.querySelector('.day[data-m="'+m+'"][data-d="'+d+'"]');
+  if(sel){
+    var grid=sel.parentNode;
+    [].slice.call(grid.querySelectorAll(".day")).forEach(function(el){el.tabIndex=-1;});
+    sel.tabIndex=0;
+    activate(sel);
+  } else {
+    var dt=new Date(Date.UTC(2026,0,3,12,0,0));
+    setPanel(dt,moonState(jdOf(dt.getTime())));
+  }
+})();
+
+/* light the dial tick for the month in view */
+(function dial(){
+  var g=document.getElementById("dialTicks");
+  if(!g)return;
+  var t=g.querySelector('[data-t="'+heroDate.getUTCMonth()+'"]');
+  if(t)t.setAttribute("class","on");
+})();
+
+/* keep the panel moon crisp when its box changes size */
+if("ResizeObserver" in window){
+  var ro=new ResizeObserver(function(){
+    var e=currentElong;currentElong=-999;
+    if(e>-900)queueRender(e);
+  });
+  ro.observe(panelCv);
+}
+})();
+</script>
+</body>
+</html>
