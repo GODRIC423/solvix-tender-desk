@@ -860,3 +860,248 @@ function calc(){
           perPortion:(portionsTotal>0)?total/portionsTotal:null,
           slotsTotal:days*3};
 }
+
+/* ══ rendering ═════════════════════════════════════════════════════ */
+function aisleOpts(cur){
+  return AISLES.map(function(a){
+    return '<option value="'+esc(a)+'"'+(a===cur?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+}
+function unitOpts(cur){
+  return UNIT_ORDER.map(function(u){
+    return '<option value="'+u+'"'+(u===cur?' selected':'')+'>'+esc(UNITS[u].l)+'</option>';}).join('');
+}
+function cookedSlots(){
+  var out=[],d,m,k,s,r;
+  for(d=0;d<S.meta.days;d++)for(m=0;m<3;m++){
+    k=slotKey(d,m); s=S.plan[k];
+    if(s&&s.r&&s.r!=='LO'){r=recipeById(s.r);if(r)out.push({key:k,label:dayShort(d)+' '+MEALS[m].toLowerCase()+' — '+r.name});}
+  }
+  return out;
+}
+function slotSelect(d,m,s){
+  var cur=s?(s.r==='LO'?('LO:'+(s.src||'')):s.r):'';
+  var h='<option value=""'+(cur===''?' selected':'')+'>— nothing planned —</option>';
+  var tag=MEALTAG[m], sug=[], oth=[], found=(cur==='');
+  S.recipes.forEach(function(r){ (String(r.tags||'').indexOf(tag)>=0?sug:oth).push(r); });
+  function o(r){ var sel=(cur===r.id); if(sel)found=true;
+    return '<option value="'+esc(r.id)+'"'+(sel?' selected':'')+'>'+esc(r.name)+'</option>'; }
+  if(sug.length)h+='<optgroup label="Suggested for '+MEALS[m].toLowerCase()+'">'+sug.map(o).join('')+'</optgroup>';
+  if(oth.length)h+='<optgroup label="'+(sug.length?'Other recipes':'Recipes')+'">'+oth.map(o).join('')+'</optgroup>';
+  var idx=d*3+m, lo=cookedSlots().filter(function(c){return slotIdx(c.key)<idx;});
+  if(lo.length){
+    h+='<optgroup label="Leftovers of…">'+lo.map(function(c){
+      var v='LO:'+c.key, sel=(cur===v); if(sel)found=true;
+      return '<option value="'+esc(v)+'"'+(sel?' selected':'')+'>Leftovers — '+esc(c.label)+'</option>';
+    }).join('')+'</optgroup>';
+  }
+  if(!found)h+='<option value="'+esc(cur)+'" selected>⚠ leftovers — source meal gone</option>';
+  return h;
+}
+function renderWeek(){
+  var tb=$('wkBody'), days=S.meta.days, def=portionsDefault(), h='', d, m;
+  for(d=0;d<days;d++){
+    h+='<tr><td class="day">'+esc(dayLong(d))+'<small>'+esc(dayDate(d))+'</small></td>';
+    for(m=0;m<3;m++){
+      var k=slotKey(d,m), s=S.plan[k], has=!!(s&&s.r), isLo=!!(s&&s.r==='LO');
+      h+='<td data-l="'+MEALS[m]+'"'+(isLo?' class="slot-lo"':'')+'>'+
+         '<select class="mSel" data-k="'+k+'" aria-label="'+MEALS[m]+' on '+esc(dayLong(d))+'">'+slotSelect(d,m,s)+'</select>'+
+         '<span class="pv" data-pv="'+k+'"></span>'+
+         '<div class="prow"'+(has?'':' hidden')+'>'+
+           '<label for="p_'+k+'">Portions</label>'+
+           '<input id="p_'+k+'" class="mPor'+(s&&s.p!=null?' ov':'')+'" data-k="'+k+'" type="number" min="0" max="99" step="0.5" '+
+             'inputmode="decimal" value="'+(s&&s.p!=null?esc(trimNum(s.p,2)):'')+'" placeholder="'+esc(trimNum(def,2))+'">'+
+         '</div></td>';
+    }
+    h+='</tr>';
+  }
+  tb.innerHTML=h;
+}
+function updatePv(C){
+  var d,m,k,s;
+  for(d=0;d<S.meta.days;d++)for(m=0;m<3;m++){
+    k=slotKey(d,m);
+    var el=document.querySelector('[data-pv="'+k+'"]'); if(!el)continue;
+    s=S.plan[k];
+    if(!s||!s.r){el.textContent='—';continue;}
+    if(s.r==='LO'){
+      var src=s.src&&C.cooked[s.src];
+      el.textContent=src?('Leftovers of '+dayShort(src.d)+' '+MEALS[src.m].toLowerCase()):'Leftovers (no source)';
+      continue;
+    }
+    var c=C.cooked[k], r=recipeById(s.r);
+    el.textContent=(r?r.name:'—')+(c?'  ·  '+trimNum(c.portions,2)+' portions':'');
+  }
+}
+function renderRecList(){
+  var h=S.recipes.map(function(r){
+    return '<button type="button" class="rpill" data-r="'+esc(r.id)+'" aria-pressed="'+(r.id===S.sel)+'">'+
+      esc(r.name||'Untitled')+'<span class="n">×'+esc(trimNum(nz(r.serves),2))+'</span></button>';
+  }).join('');
+  $('recList').innerHTML=h||'<span class="hint">No recipes yet.</span>';
+  $('chipRecipes').textContent=S.recipes.length+' recipe'+(S.recipes.length===1?'':'s');
+}
+function renderRecEditor(){
+  var r=recipeById(S.sel), box=$('recEditor');
+  if(!r){box.style.display='none';return;}
+  box.style.display='';
+  $('iRecName').value=r.name||'';
+  $('iRecServ').value=trimNum(nz(r.serves),2);
+  $('iTagB').checked=String(r.tags||'').indexOf('b')>=0;
+  $('iTagL').checked=String(r.tags||'').indexOf('l')>=0;
+  $('iTagD').checked=String(r.tags||'').indexOf('d')>=0;
+  var h=r.ings.map(function(ing){
+    var u=UNITS[ing.unit]||UNITS.g, dim=u.d, pf=priceFactor(dim);
+    return '<tr data-i="'+esc(ing.id)+'">'+
+      '<td><input type="number" class="ta-r" data-f="qty" min="0" step="0.05" inputmode="decimal" value="'+esc(trimNum(nz(ing.qty),3))+'" aria-label="Quantity"></td>'+
+      '<td><select data-f="unit" aria-label="Unit">'+unitOpts(ing.unit)+'</select></td>'+
+      '<td><input type="text" data-f="name" value="'+esc(ing.name)+'" aria-label="Ingredient name" autocomplete="off"></td>'+
+      '<td><select data-f="aisle" aria-label="Aisle">'+aisleOpts(ing.aisle)+'</select></td>'+
+      '<td><input type="number" class="ta-r" data-f="price" min="0" step="0.01" inputmode="decimal" value="'+esc(trimNum(nz(ing.price)*pf,2))+'" aria-label="Price '+esc(priceBasis(dim))+'" title="'+esc(sym()+' '+priceBasis(dim))+'"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-f="staple" '+(ing.staple?'checked':'')+' aria-label="Cupboard staple" style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td><button type="button" class="btn ico rm" data-rm="'+esc(ing.id)+'" aria-label="Remove '+esc(ing.name||'ingredient')+'">✕</button></td>'+
+      '</tr>';
+  }).join('');
+  $('ingBody').innerHTML=h||'<tr><td colspan="7" class="empty">No ingredients yet — add the first one below.</td></tr>';
+  var one=0;
+  r.ings.forEach(function(ing){
+    var u=UNITS[ing.unit]||UNITS.g;
+    one+=nz(ing.qty)*u.f/baseDivisor(u.d)*nz(ing.price);
+  });
+  var per=nz(r.serves)>0?one/nz(r.serves):null;
+  $('recCost').innerHTML='Batch of '+esc(trimNum(nz(r.serves),2))+': <strong>'+esc(money(one))+
+    '</strong> &nbsp;·&nbsp; per portion: <strong>'+(per==null?'—':esc(money(per)))+'</strong>';
+  $('priceBasisHint').textContent=imperial()?'lb / qt / item':'kg / L / item';
+  $('thPrice').textContent='Price ('+sym()+')';
+}
+function renderPantry(C){
+  var box=$('pantryBody');
+  var stap=C.list.filter(function(i){return i.staple;});
+  if(!stap.length){box.innerHTML='<span class="hint">No cupboard staples in this plan yet — tick <em>Staple</em> on an ingredient to list it here.</span>';}
+  else{
+    box.innerHTML=stap.map(function(i){
+      return '<label class="check"><input type="checkbox" class="pchk" data-k="'+esc(i.key)+'"'+(i.held?' checked':'')+'>'+
+        '<span>'+esc(i.name)+' <span class="q">'+esc(qtyStr(i.need,i.dim))+'</span></span></label>';
+    }).join('');
+  }
+  var held=C.heldList.length;
+  $('chipPantry').textContent=held+' of '+stap.length+' already held';
+}
+function renderList(C){
+  var tb=$('slBody'), h='', lastAisle=null, aisleCost=0, aisleN=0, rows=[];
+  if(!C.buyList.length){
+    tb.innerHTML='<tr><td colspan="6" class="empty">Nothing to buy yet — plan a meal to build the list.</td></tr>';
+  }else{
+    C.buyList.forEach(function(i,ix){
+      rows.push(i);
+      if(i.aisle!==lastAisle){
+        if(lastAisle!==null)h=h.replace('@@'+lastAisle+'@@',esc(money(aisleCost))+' · '+aisleN+' item'+(aisleN===1?'':'s'));
+        lastAisle=i.aisle;aisleCost=0;aisleN=0;
+        h+='<tr class="grp"><td colspan="6">'+esc(i.aisle)+'<span class="gc">@@'+i.aisle+'@@</span></td></tr>';
+      }
+      aisleCost+=i.cost;aisleN++;
+      var done=!!S.bought[i.key];
+      h+='<tr'+(done?' class="done"':'')+' data-row="'+esc(i.key)+'">'+
+        '<td class="tick"><input type="checkbox" class="bchk" data-k="'+esc(i.key)+'"'+(done?' checked':'')+
+          ' aria-label="Bought '+esc(i.name)+'"></td>'+
+        '<td class="item">'+esc(i.name)+'<small>'+esc(i.used.join(', '))+'</small></td>'+
+        '<td class="n">'+esc(qtyStr(i.need,i.dim))+'</td>'+
+        '<td class="n"><strong>'+esc(qtyStr(i.buy,i.dim,true))+'</strong></td>'+
+        '<td class="n">'+(i.price>0?esc(money(i.price*priceFactor(i.dim)))+'<br><span class="hint">'+esc(priceBasis(i.dim))+'</span>':'—')+'</td>'+
+        '<td class="n">'+(i.price>0?esc(money(i.cost)):'—')+'</td></tr>';
+    });
+    if(lastAisle!==null)h=h.replace('@@'+lastAisle+'@@',esc(money(aisleCost))+' · '+aisleN+' item'+(aisleN===1?'':'s'));
+    tb.innerHTML=h;
+  }
+  $('slTotal').textContent=C.buyList.length?money(C.total):'—';
+  $('chipList').textContent=C.buyList.length+' to buy'+(C.heldList.length?' · '+C.heldList.length+' from pantry':'');
+}
+function renderAisleSummary(C){
+  var by={};
+  C.buyList.forEach(function(i){ if(!by[i.aisle])by[i.aisle]={n:0,c:0}; by[i.aisle].n++; by[i.aisle].c+=i.cost; });
+  var keys=AISLES.filter(function(a){return by[a];});
+  $('aisleBody').innerHTML=keys.length?keys.map(function(a){
+    return '<tr><td>'+esc(a)+'</td><td class="n">'+by[a].n+'</td><td class="n">'+esc(money(by[a].c))+'</td></tr>';
+  }).join(''):'<tr><td colspan="3" class="empty">No items yet.</td></tr>';
+  $('fItems').textContent=C.buyList.length||'—';
+  $('fCost').textContent=C.buyList.length?money(C.total):'—';
+}
+function renderPrintDoc(C){
+  var t=dateFor(0), e=dateFor(C.days-1);
+  $('pTitle').textContent=(S.meta.house||'Meal plan')+' — meal plan & shopping list';
+  $('pSub').textContent='Week beginning '+fullDate(t)+(e?' to '+fullDate(e):'')+
+    '  ·  '+C.days+' day'+(C.days===1?'':'s')+'  ·  '+C.meals+' meal'+(C.meals===1?'':'s')+' planned'+
+    (S.sample?'   ·   SAMPLE DATA':'');
+  var cells=[
+    ['Household',(nz(S.meta.adults)+' adult'+(nz(S.meta.adults)===1?'':'s')+', '+nz(S.meta.kids)+' child'+(nz(S.meta.kids)===1?'':'ren'))],
+    ['Portions per meal',trimNum(C.def,2)+'  (child = '+trimNum(nz(S.meta.kidPct),0)+'% of an adult)'],
+    ['Items to buy',String(C.buyList.length)],
+    ['Estimated total',money(C.total)],
+    ['From the pantry',C.heldList.length+' staple'+(C.heldList.length===1?'':'s')+' held ('+money(C.heldVal)+' avoided)'],
+    ['Cost per person per day',C.perPersonDay==null?'—':money(C.perPersonDay)],
+    ['Quantity units',imperial()?'Imperial (oz / fl oz / lb / qt)':'Metric (g / ml / kg / L)'],
+    ['Prepared',fullDate(new Date())]
+  ];
+  $('pMeta').innerHTML=cells.map(function(c){
+    return '<div><div class="k">'+esc(c[0])+'</div><div>'+esc(c[1])+'</div></div>';}).join('');
+
+  var rh='<div class="phead" style="margin-top:6mm"><div class="t">Recipe cards</div>'+
+    '<div class="m">'+esc(S.meta.house||'Meal planner')+' — '+S.recipes.length+' recipes, quantities as written (base servings)</div></div>';
+  rh+=S.recipes.map(function(r){
+    return '<div class="recdoc"><h3>'+esc(r.name||'Untitled')+'</h3>'+
+      '<div class="rs">Serves '+esc(trimNum(nz(r.serves),2))+
+      '  ·  '+esc(['b','l','d'].filter(function(t){return String(r.tags||'').indexOf(t)>=0;})
+        .map(function(t){return {b:'breakfast',l:'lunch',d:'dinner'}[t];}).join(', ')||'any meal')+'</div>'+
+      '<ul>'+r.ings.map(function(i){
+        return '<li>'+esc(trimNum(nz(i.qty),3)+' '+(UNITS[i.unit]?UNITS[i.unit].l:i.unit)+' '+i.name)+
+          (i.staple?' <em>(staple)</em>':'')+'</li>';}).join('')+'</ul></div>';
+  }).join('');
+  rh+='<p style="font-size:9pt;color:#333;margin-top:4mm">Estimates only. Prices are the user’s own figures. '+
+      'This planner does not check nutrition, allergens or dietary suitability — read product labels.</p>';
+  $('cRecPrint').innerHTML=rh;
+}
+function renderResults(){
+  var C=calc();
+  $('oTotal').textContent=C.buyList.length?money(C.total):'—';
+  $('oTotalSub').textContent=C.buyList.length
+    ? (C.buyList.length+' items · '+C.meals+' meals · '+C.days+' days')
+    : 'Plan a meal to see the shop';
+  $('oItems').textContent=C.buyList.length||'—';
+  $('oMeals').textContent=C.meals?(C.meals+' / '+C.slotsTotal):'—';
+  $('oPPD').textContent=C.perPersonDay==null?'—':money(C.perPersonDay);
+  $('oPP').textContent=C.perPortion==null?'—':money(C.perPortion);
+  $('oHeld').textContent=C.heldList.length?(C.heldList.length+' pantry staple'+(C.heldList.length===1?'':'s')):'none';
+  $('oHeldVal').textContent=C.heldList.length?('worth about '+money(C.heldVal)+' — not in the total'):'tick staples below once you have them';
+  $('chipMeals').textContent=C.meals+' of '+C.slotsTotal+' meals'+(C.loMeals?' · '+C.loMeals+' leftovers':'');
+  $('chipPortions').textContent=trimNum(C.def,2)+' portions / meal';
+  $('chipUnits').textContent=imperial()?'IMPERIAL':'METRIC';
+  $('hPortions').innerHTML='Every recipe is scaled by <strong>cooked portions ÷ base servings</strong>. '+
+    'With '+esc(trimNum(nz(S.meta.adults),0))+' adult'+(nz(S.meta.adults)===1?'':'s')+' and '+
+    esc(trimNum(nz(S.meta.kids),0))+' child'+(nz(S.meta.kids)===1?'':'ren')+' at '+
+    esc(trimNum(nz(S.meta.kidPct),0))+'%, each meal is cooked for <strong>'+esc(trimNum(C.def,2))+' portions</strong>.';
+  var wb=$('warnBox');
+  if(C.warn.length){
+    var uniq=C.warn.filter(function(v,i,a){return a.indexOf(v)===i;});
+    wb.innerHTML='<div class="note bad"><strong>Check the plan.</strong><ul style="margin:5px 0 0;padding-left:18px">'+
+      uniq.slice(0,6).map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul></div>';
+  }else wb.innerHTML='';
+  renderList(C); renderAisleSummary(C); renderPantry(C); renderPrintDoc(C); updatePv(C);
+  return C;
+}
+function renderSetup(){
+  var m=S.meta;
+  $('iHouse').value=m.house||'';
+  $('iStart').value=m.start||'';
+  $('iDays').value=String(m.days);
+  $('iAdults').value=trimNum(nz(m.adults),0);
+  $('iKids').value=trimNum(nz(m.kids),0);
+  $('iKidPct').value=trimNum(nz(m.kidPct),0);
+  $('iCur').value=(m.cur==='£'||m.cur==='$'||m.cur==='€')?m.cur:'custom';
+  $('iCurCustom').value=m.curCustom||'';
+  $('wCurCustom').hidden=($('iCur').value!=='custom');
+  $('iUnits').value=m.units;
+  $('thUnitPrice').textContent='Unit price ('+sym()+')';
+}
+function renderAll(){
+  renderSetup(); renderWeek(); renderRecList(); renderRecEditor(); renderResults();
+  $('sampleBanner').hidden=!S.sample;
+}

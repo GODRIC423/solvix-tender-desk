@@ -628,3 +628,397 @@ footer.site{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 30p
   throughout, volumes are rounded up to whole units, money is shown to 2 decimal places, and all figures exclude
   VAT and other sales taxes. Works offline; your data stays in this browser.
 </footer>
+<script>
+(function(){
+"use strict";
+var KEY='solvix.break-even.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var PY={week:52,month:12,quarter:4,year:1};
+var PDAYS={week:7,month:30,quarter:91,year:365};
+var PWORD={week:'week',month:'month',quarter:'quarter',year:'year'};
+var FREQ={week:'Per week',month:'Per month',quarter:'Per quarter',year:'Per year',once:'One-off this period'};
+
+/* ── helpers ─────────────────────────────────────────────── */
+function nz(v){return (typeof v==='number'&&isFinite(v))?v:0;}
+function ok(v){return v!=null&&typeof v==='number'&&isFinite(v);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';});}
+function fmtNum(n,dp){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  var neg=n<0, x=Math.abs(n), s=x.toFixed(dp);
+  if(parseFloat(s)===0)neg=false;
+  var p=s.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return (neg?'−':'')+p.join('.');
+}
+function cur(){var c=S.meta.cur; return c==='custom'?(S.meta.curCustom||'¤'):(c||'£');}
+function money(n){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  var neg=n<0, x=Math.abs(n);
+  if(x<0.005){neg=false;x=0;}
+  return (neg?'−':'')+cur()+fmtNum(x,2);
+}
+function money0(n){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  var neg=n<0,x=Math.abs(n); if(x<0.5){neg=false;x=0;}
+  return (neg?'−':'')+cur()+fmtNum(x,0);
+}
+function pct(n,dp){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  return fmtNum(n*100,dp==null?1:dp)+'%';
+}
+function units(n){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  return fmtNum(n,0);
+}
+function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dateLong(iso){
+  if(!iso)return '—';
+  var p=String(iso).split('-'); if(p.length!==3)return esc(iso);
+  var M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var mi=parseInt(p[1],10)-1; if(!(mi>=0&&mi<12))return esc(iso);
+  return parseInt(p[2],10)+' '+M[mi]+' '+p[0];
+}
+function slug(s){return (String(s||'break-even').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'break-even').slice(0,50);}
+function toast(t,bad){
+  var el=$('#toast');
+  if(!el){el=document.createElement('div');el.id='toast';el.className='noprint';
+    el.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:90;'+
+      'padding:10px 15px;border-radius:5px;font:600 13.5px/1.4 var(--sans);max-width:88vw;text-align:center;'+
+      'box-shadow:0 6px 24px -8px rgba(0,0,0,.45)';
+    el.setAttribute('role','status');document.body.appendChild(el);}
+  el.style.background=bad?'var(--bad-wash)':'var(--ok-wash)';
+  el.style.color=bad?'var(--bad)':'var(--ok)';
+  el.style.border='1px solid '+(bad?'var(--bad)':'var(--ok)');
+  el.textContent=t; el.hidden=false;
+  clearTimeout(el._t); el._t=setTimeout(function(){el.hidden=true;},3200);
+}
+
+/* ── sample scenario ─────────────────────────────────────── */
+function sample(){
+  return {
+    v:1,
+    meta:{biz:'Kiln & Craft Coffee Roasters Ltd',
+      addr:'Unit 7, Halewood Trade Park, Sheffield S9 2QX\n0114 496 0182 · hello@kilnandcraft.example',
+      scenario:'FY26 Q3 trading plan', ref:'BE-2026-03', by:'R. Okonjo, Finance',
+      date:todayISO(), period:'month', days:30, cur:'£', curCustom:'', notes:
+      'Prices are the current published list excluding VAT. Variable cost per unit is green coffee, packaging, '+
+      'freight-in and card fees. Wholesale volume assumes the two new cafe accounts sign in month one.'},
+    fixed:[
+      {id:uid(),desc:'Unit rent & service charge',freq:'month',amt:2400},
+      {id:uid(),desc:'Salaries incl. employer NI & pension',freq:'month',amt:5850},
+      {id:uid(),desc:'Roaster lease & servicing',freq:'month',amt:780},
+      {id:uid(),desc:'Utilities & trade waste',freq:'month',amt:640},
+      {id:uid(),desc:'Insurance (combined liability & stock)',freq:'year',amt:3120},
+      {id:uid(),desc:'Accounting & software subscriptions',freq:'month',amt:195},
+      {id:uid(),desc:'Marketing retainer',freq:'month',amt:450}
+    ],
+    prods:[
+      {id:uid(),name:'Retail 250g bag',price:12.50,vcost:5.40,units:900},
+      {id:uid(),name:'Wholesale 1kg bag',price:26.00,vcost:15.20,units:320},
+      {id:uid(),name:'Subscription box (monthly)',price:22.00,vcost:9.60,units:260},
+      {id:uid(),name:'Cafe drinks (per cup)',price:3.40,vcost:1.05,units:2600}
+    ],
+    target:{profit:6000,minMos:20},
+    scenarios:[],
+    ui:{banner:true}
+  };
+}
+function blank(){
+  return {v:1,
+    meta:{biz:'',addr:'',scenario:'',ref:'',by:'',date:todayISO(),period:'month',days:30,cur:'£',curCustom:'',notes:''},
+    fixed:[{id:uid(),desc:'',freq:'month',amt:null}],
+    prods:[{id:uid(),name:'',price:null,vcost:null,units:null}],
+    target:{profit:0,minMos:20},
+    scenarios:[], ui:{banner:false}};
+}
+
+var S=sample();
+
+/* ── persistence ─────────────────────────────────────────── */
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function migrate(o){
+  if(!o||typeof o!=='object')return null;
+  var b=blank();
+  var st={v:1,
+    meta:Object.assign({},b.meta,o.meta||{}),
+    fixed:Array.isArray(o.fixed)?o.fixed:[],
+    prods:Array.isArray(o.prods)?o.prods:[],
+    target:Object.assign({},b.target,o.target||{}),
+    scenarios:Array.isArray(o.scenarios)?o.scenarios:[],
+    ui:Object.assign({},b.ui,o.ui||{})};
+  if(!st.fixed.length)st.fixed=[{id:uid(),desc:'',freq:'month',amt:null}];
+  if(!st.prods.length)st.prods=[{id:uid(),name:'',price:null,vcost:null,units:null}];
+  st.fixed=st.fixed.map(function(r){return {id:r.id||uid(),desc:String(r.desc||''),
+    freq:FREQ[r.freq]?r.freq:'month',amt:numOrNull(r.amt)};});
+  st.prods=st.prods.map(function(r){return {id:r.id||uid(),name:String(r.name||''),
+    price:numOrNull(r.price),vcost:numOrNull(r.vcost),units:numOrNull(r.units)};});
+  st.scenarios=st.scenarios.filter(function(s){return s&&s.snap;}).map(function(s){
+    return {id:s.id||uid(),name:String(s.name||'Scenario'),savedAt:String(s.savedAt||''),snap:{
+      meta:Object.assign({},b.meta,(s.snap.meta)||{}),
+      fixed:Array.isArray(s.snap.fixed)?s.snap.fixed:[],
+      prods:Array.isArray(s.snap.prods)?s.snap.prods:[],
+      target:Object.assign({},b.target,(s.snap.target)||{})}};
+  });
+  if(!PY[st.meta.period])st.meta.period='month';
+  st.meta.days=numOrNull(st.meta.days)||PDAYS[st.meta.period];
+  return st;
+}
+function numOrNull(v){
+  if(v===''||v==null)return null;
+  var n=typeof v==='number'?v:parseFloat(String(v).replace(/[^0-9eE.+-]/g,''));
+  return isFinite(n)?n:null;
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return false;
+    var st=migrate(JSON.parse(raw));
+    if(st){S=st;return true;}
+  }catch(e){}
+  return false;
+}
+
+/* ── the maths ───────────────────────────────────────────── */
+function fixedPer(row,period){
+  var a=nz(row.amt);
+  if(row.freq==='once')return a;
+  var f=PY[row.freq]||12;
+  return a*f/(PY[period]||12);
+}
+/* solve break-even (or target-profit) volume for a set of lines */
+function solve(lines,F,target){
+  var tot=0,cont=0,i;
+  for(i=0;i<lines.length;i++){tot+=lines[i].units;cont+=lines[i].contrib*lines[i].units;}
+  var cbar = tot>0 ? cont/tot : (lines.length===1 ? lines[0].contrib : null);
+  if(!ok(cbar)||cbar<=0)return null;
+  var need=F+nz(target);
+  if(need<0)need=0;
+  var bundles=need/cbar;
+  var out={bundles:bundles,cbar:cbar,lines:[],units:0,revenue:0};
+  for(i=0;i<lines.length;i++){
+    var w = tot>0 ? lines[i].units/tot : (lines.length===1?1:0);
+    var ex=bundles*w;
+    var u=Math.ceil(ex-1e-9); if(u<0)u=0;
+    var rev=u*lines[i].price;
+    out.lines.push({exact:ex,units:u,revenue:rev,share:w});
+    out.units+=u; out.revenue+=rev;
+  }
+  return out;
+}
+/* one what-if: multipliers on price, variable cost and fixed cost */
+function whatIf(base,F,pm,vm,fm){
+  var lines=base.map(function(p){
+    var price=p.price*pm, v=p.vcost*vm;
+    return {price:price,vcost:v,units:p.units,contrib:price-v};
+  });
+  var Fx=F*fm, tot=0,rev=0,varT=0,i;
+  for(i=0;i<lines.length;i++){tot+=lines[i].units;rev+=lines[i].price*lines[i].units;varT+=lines[i].vcost*lines[i].units;}
+  var cont=rev-varT;
+  var cbar = tot>0?cont/tot:(lines.length===1?lines[0].contrib:null);
+  var be=solve(lines,Fx,0);
+  var profit=cont-Fx;
+  var mos = (be&&rev>0)?(rev-be.revenue)/rev:null;
+  return {cbar:cbar,be:be,profit:profit,mos:mos,rev:rev,cont:cont,fixed:Fx};
+}
+function calc(st){
+  var period=PY[st.meta.period]?st.meta.period:'month';
+  var fixRows=st.fixed.map(function(r){
+    return {id:r.id,desc:r.desc,freq:r.freq,amt:numOrNull(r.amt),per:fixedPer(r,period)};});
+  var F=0; fixRows.forEach(function(r){F+=r.per;});
+  var prods=st.prods.map(function(p){
+    var price=nz(p.price),v=nz(p.vcost),u=nz(p.units),c=price-v;
+    return {id:p.id,name:p.name,price:price,vcost:v,units:u,contrib:c,
+      cmr:price>0?c/price:null,rev:price*u,varTot:v*u,contribTot:c*u,
+      rawPrice:numOrNull(p.price),rawV:numOrNull(p.vcost),rawU:numOrNull(p.units)};
+  });
+  var totalUnits=0,revenue=0,varTot=0;
+  prods.forEach(function(p){totalUnits+=p.units;revenue+=p.rev;varTot+=p.varTot;});
+  var contribTot=revenue-varTot;
+  prods.forEach(function(p){p.mix = totalUnits>0 ? p.units/totalUnits : (prods.length===1?1:null);});
+  var single=prods.length===1;
+  var cbar = totalUnits>0 ? contribTot/totalUnits : (single?prods[0].contrib:null);
+  var pbar = totalUnits>0 ? revenue/totalUnits : (single?prods[0].price:null);
+  var cmr = revenue>0 ? contribTot/revenue : (ok(pbar)&&pbar>0?cbar/pbar:null);
+  var profit=contribTot-F;
+  var be=solve(prods,F,0);
+  var tgt=solve(prods,F,nz(st.target.profit));
+  var mosRev = (be&&revenue>0)?revenue-be.revenue:null;
+  var mosPct = (be&&revenue>0)?(revenue-be.revenue)/revenue:null;
+  var mosUnits = be?totalUnits-be.units:null;
+  var dol = (profit>0&&contribTot>0)?contribTot/profit:null;
+  var days=nz(st.meta.days)||PDAYS[period];
+  var beDay = (be&&revenue>0&&days>0)?Math.ceil(be.revenue/revenue*days-1e-9):null;
+  return {period:period,pword:PWORD[period],days:days,fixRows:fixRows,F:F,prods:prods,
+    totalUnits:totalUnits,revenue:revenue,varTot:varTot,contribTot:contribTot,
+    cbar:cbar,pbar:pbar,cmr:cmr,profit:profit,be:be,tgt:tgt,
+    mosRev:mosRev,mosPct:mosPct,mosUnits:mosUnits,dol:dol,beDay:beDay,single:single};
+}
+
+/* ── input rows ──────────────────────────────────────────── */
+function fixRowHTML(r,i){
+  var o='';
+  for(var k in FREQ){o+='<option value="'+k+'"'+(r.freq===k?' selected':'')+'>'+FREQ[k]+'</option>';}
+  return '<tr data-id="'+r.id+'">'+
+    '<td class="td"><input type="text" data-k="desc" value="'+esc(r.desc)+'" placeholder="e.g. Rent" aria-label="Fixed cost description, row '+(i+1)+'"></td>'+
+    '<td><select data-k="freq" aria-label="Frequency, row '+(i+1)+'">'+o+'</select></td>'+
+    '<td class="n"><input type="number" data-k="amt" step="0.01" min="0" inputmode="decimal" value="'+(r.amt==null?'':r.amt)+'" aria-label="Amount, row '+(i+1)+'"><span class="cellerr" hidden></span></td>'+
+    '<td class="calc" data-c="per">—</td>'+
+    '<td><button type="button" class="rm" data-rm="fix" title="Remove this line" aria-label="Remove fixed cost row '+(i+1)+'">×</button></td>'+
+    '</tr>';
+}
+function prodRowHTML(p,i){
+  return '<tr data-id="'+p.id+'">'+
+    '<td class="td"><input type="text" data-k="name" value="'+esc(p.name)+'" placeholder="e.g. Retail bag" aria-label="Product name, row '+(i+1)+'"></td>'+
+    '<td class="n"><input type="number" data-k="price" step="0.01" min="0" inputmode="decimal" value="'+(p.price==null?'':p.price)+'" aria-label="Unit price, row '+(i+1)+'"><span class="cellerr" hidden></span></td>'+
+    '<td class="n"><input type="number" data-k="vcost" step="0.01" min="0" inputmode="decimal" value="'+(p.vcost==null?'':p.vcost)+'" aria-label="Variable cost per unit, row '+(i+1)+'"><span class="cellerr" hidden></span></td>'+
+    '<td class="n"><input type="number" data-k="units" step="1" min="0" inputmode="decimal" value="'+(p.units==null?'':p.units)+'" aria-label="Forecast units, row '+(i+1)+'"><span class="cellerr" hidden></span></td>'+
+    '<td class="calc hi" data-c="contrib">—</td>'+
+    '<td class="calc" data-c="cmr">—</td>'+
+    '<td class="calc" data-c="mix">—</td>'+
+    '<td class="calc" data-c="rev">—</td>'+
+    '<td><button type="button" class="rm" data-rm="prod" title="Remove this line" aria-label="Remove product row '+(i+1)+'">×</button></td>'+
+    '</tr>';
+}
+function buildRows(){
+  $('#fixBody').innerHTML=S.fixed.map(fixRowHTML).join('');
+  $('#prodBody').innerHTML=S.prods.map(prodRowHTML).join('');
+}
+function fillMeta(){
+  document.querySelectorAll('[data-p]').forEach(function(el){
+    var path=el.getAttribute('data-p').split('.'), v=S[path[0]]?S[path[0]][path[1]]:'';
+    el.value=(v==null?'':v);
+  });
+  $('#curCustomWrap').hidden = S.meta.cur!=='custom';
+}
+function setErr(cell,msg){
+  var inp=cell.querySelector('input'), sp=cell.querySelector('.cellerr');
+  if(!inp||!sp)return;
+  if(msg){inp.classList.add('inv');sp.textContent=msg;sp.hidden=false;}
+  else{inp.classList.remove('inv');sp.textContent='';sp.hidden=true;}
+}
+
+/* ── output table builders (shared by screen and document) ─ */
+function cvpHTML(C){
+  var pcOf=function(n){return C.revenue>0?pct(n/C.revenue,1):'—';};
+  var rows=[
+    ['Sales revenue',money(C.revenue),C.revenue>0?'100.0%':'—',''],
+    ['Less variable costs','−'+money(C.varTot).replace('−',''),pcOf(C.varTot),''],
+    ['Contribution',money(C.contribTot),pcOf(C.contribTot),'hi'],
+    ['Less fixed costs','−'+money(C.F).replace('−',''),pcOf(C.F),''],
+    [(C.profit<0?'Loss for the period':'Profit for the period'),money(C.profit),pcOf(C.profit),'tot']
+  ];
+  var h='<thead><tr><th>Contribution statement</th><th class="n">Amount</th><th class="n">% of sales</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    if(r[3]==='tot')return;
+    h+='<tr'+(r[3]==='hi'?' style="font-weight:650"':'')+'><td>'+r[0]+'</td><td class="n">'+r[1]+'</td><td class="n">'+r[2]+'</td></tr>';
+  });
+  var last=rows[rows.length-1];
+  h+='</tbody><tfoot><tr><td>'+last[0]+'</td><td class="n'+(C.profit<0?' neg':'')+'">'+last[1]+'</td><td class="n">'+last[2]+'</td></tr></tfoot>';
+  return h;
+}
+function beTableHTML(C){
+  var h='<thead><tr><th>Line</th><th class="n">Mix %</th><th class="n">Contribution / unit</th>'+
+    '<th class="n">Break-even units</th><th class="n">Break-even revenue</th>'+
+    '<th class="n">Units for target profit</th><th class="n">Revenue for target profit</th></tr></thead><tbody>';
+  if(!C.prods.length){h+='<tr><td colspan="7" class="empty">No product lines yet.</td></tr>';}
+  C.prods.forEach(function(p,i){
+    var b=C.be?C.be.lines[i]:null, t=C.tgt?C.tgt.lines[i]:null;
+    h+='<tr><td>'+(esc(p.name)||'<span style="color:var(--muted)">Line '+(i+1)+'</span>')+'</td>'+
+      '<td class="n">'+(ok(p.mix)?pct(p.mix,1):'—')+'</td>'+
+      '<td class="n">'+money(p.contrib)+'</td>'+
+      '<td class="n">'+(b?units(b.units):'—')+'</td>'+
+      '<td class="n">'+(b?money(b.revenue):'—')+'</td>'+
+      '<td class="n">'+(t?units(t.units):'—')+'</td>'+
+      '<td class="n">'+(t?money(t.revenue):'—')+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td>Total</td><td class="n">'+(C.totalUnits>0?'100.0%':'—')+'</td>'+
+    '<td class="n">'+money(C.cbar)+'</td>'+
+    '<td class="n">'+(C.be?units(C.be.units):'—')+'</td>'+
+    '<td class="n">'+(C.be?money(C.be.revenue):'—')+'</td>'+
+    '<td class="n">'+(C.tgt?units(C.tgt.units):'—')+'</td>'+
+    '<td class="n">'+(C.tgt?money(C.tgt.revenue):'—')+'</td></tr></tfoot>';
+  return h;
+}
+var DELTAS=[-20,-10,-5,0,5,10,20];
+function sensRows(C){
+  var base=C.prods.map(function(p){return {price:p.price,vcost:p.vcost,units:p.units};});
+  var groups=[
+    {t:'Unit price moves',f:function(d){return [1+d/100,1,1];}},
+    {t:'Variable cost per unit moves',f:function(d){return [1,1+d/100,1];}},
+    {t:'Total fixed costs move',f:function(d){return [1,1,1+d/100];}}
+  ];
+  var baseCase=whatIf(base,C.F,1,1,1);
+  var out=[];
+  groups.forEach(function(g){
+    var rows=[];
+    DELTAS.forEach(function(d){
+      var m=g.f(d), w=whatIf(base,C.F,m[0],m[1],m[2]);
+      var chg=(baseCase.be&&w.be&&baseCase.be.revenue>0)?(w.be.revenue-baseCase.be.revenue)/baseCase.be.revenue:null;
+      rows.push({d:d,w:w,chg:d===0?null:chg});
+    });
+    out.push({t:g.t,rows:rows});
+  });
+  return out;
+}
+function sensTableHTML(C){
+  var g=sensRows(C);
+  var h='<thead><tr><th>Change</th><th class="n">Contribution / unit</th><th class="n">Break-even units</th>'+
+    '<th class="n">Break-even revenue</th><th class="n">vs base</th>'+
+    '<th class="n">Profit at forecast</th><th class="n">Margin of safety</th></tr></thead><tbody>';
+  g.forEach(function(grp){
+    h+='<tr class="sgrp"><td colspan="7">'+grp.t+'</td></tr>';
+    grp.rows.forEach(function(r){
+      var lbl=r.d===0?'Base case':(r.d>0?'+':'−')+Math.abs(r.d)+'%';
+      h+='<tr'+(r.d===0?' class="base"':'')+'><td class="dlt">'+lbl+'</td>'+
+        '<td class="n">'+money(r.w.cbar)+'</td>'+
+        '<td class="n">'+(r.w.be?units(r.w.be.units):'—')+'</td>'+
+        '<td class="n">'+(r.w.be?money(r.w.be.revenue):'—')+'</td>'+
+        '<td class="n">'+(r.chg==null?'—':(r.chg>0?'+':'')+fmtNum(r.chg*100,1)+'%')+'</td>'+
+        '<td class="n'+(r.w.profit<0?' neg':'')+'">'+money(r.w.profit)+'</td>'+
+        '<td class="n">'+(r.w.mos==null?'—':pct(r.w.mos,1))+'</td></tr>';
+    });
+  });
+  h+='</tbody>';
+  return h;
+}
+function scenSummary(snap){
+  var st={meta:snap.meta,fixed:snap.fixed,prods:snap.prods,target:snap.target};
+  var C=calc(st);
+  return C;
+}
+function scenTableHTML(withActions){
+  var h='<thead><tr><th>Scenario</th><th>Saved</th><th class="n">Fixed costs</th><th class="n">Break-even revenue</th>'+
+    '<th class="n">Break-even units</th><th class="n">CM ratio</th><th class="n">Margin of safety</th>'+
+    '<th class="n">Profit at forecast</th>'+(withActions?'<th></th>':'')+'</tr></thead><tbody>';
+  var C=calc(S);
+  h+='<tr class="scenrow"><td>'+(esc(S.meta.scenario)||'Current sheet')+'<span class="pill">On screen now</span></td>'+
+    '<td class="tiny">working copy</td>'+
+    '<td class="n">'+money(C.F)+'</td>'+
+    '<td class="n">'+(C.be?money(C.be.revenue):'—')+'</td>'+
+    '<td class="n">'+(C.be?units(C.be.units):'—')+'</td>'+
+    '<td class="n">'+pct(C.cmr,1)+'</td>'+
+    '<td class="n">'+(C.mosPct==null?'—':pct(C.mosPct,1))+'</td>'+
+    '<td class="n'+(C.profit<0?' neg':'')+'">'+money(C.profit)+'</td>'+
+    (withActions?'<td></td>':'')+'</tr>';
+  if(!S.scenarios.length){
+    h+='<tr><td colspan="'+(withActions?9:8)+'" class="empty">No saved scenarios yet'+
+      (withActions?' — set the sheet up how you want it, then press <strong>Save current scenario</strong> to keep it and compare.':'.')+'</td></tr>';
+  }
+  S.scenarios.forEach(function(sc){
+    var C2=scenSummary(sc.snap);
+    h+='<tr class="scenrow" data-sid="'+sc.id+'"><td>'+esc(sc.name)+'</td>'+
+      '<td class="tiny">'+esc(sc.savedAt)+'</td>'+
+      '<td class="n">'+money(C2.F)+'</td>'+
+      '<td class="n">'+(C2.be?money(C2.be.revenue):'—')+'</td>'+
+      '<td class="n">'+(C2.be?units(C2.be.units):'—')+'</td>'+
+      '<td class="n">'+pct(C2.cmr,1)+'</td>'+
+      '<td class="n">'+(C2.mosPct==null?'—':pct(C2.mosPct,1))+'</td>'+
+      '<td class="n'+(C2.profit<0?' neg':'')+'">'+money(C2.profit)+'</td>'+
+      (withActions?'<td style="white-space:nowrap"><button type="button" class="btn sm" data-load="'+sc.id+'">Load</button> '+
+        '<button type="button" class="btn sm dgr" data-del="'+sc.id+'">Delete</button></td>':'')+'</tr>';
+  });
+  h+='</tbody>';
+  return h;
+}
