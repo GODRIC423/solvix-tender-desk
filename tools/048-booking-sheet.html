@@ -347,3 +347,444 @@ td.tm .d2{font:11px/1.3 var(--mono);color:var(--muted);white-space:nowrap}
 }
 </style>
 </head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">BK</div>
+    <div style="min-width:0">
+      <h1>Appointment Booking Sheet</h1>
+      <div class="sub">DAY BOOK &middot; CLASH-PROOF &middot; UTILISATION</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm pri" id="btnPrint">Print day sheet</button>
+    <button type="button" class="btn sm" id="btnCsv">CSV</button>
+    <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+    <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint pagestack">
+
+  <div class="note banner" id="sampleBanner">
+    <div class="bt"><strong>Sample day loaded.</strong> A three-chair salon and treatment room with eleven
+      appointments, ten-minute buffers and a full price list. Type over it with your own day, or start empty.</div>
+    <button type="button" class="btn sm" id="btnBlank">Start an empty day</button>
+  </div>
+
+  <section class="statband" id="statband" aria-live="polite">
+    <div class="stat hero"><div class="k">Booked value &mdash; <span id="sDateK">today</span></div>
+      <div class="v" id="sValue">&mdash;</div><div class="sub2" id="sValueSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Utilisation</div><div class="v" id="sUtil">&mdash;</div>
+      <div class="sub2" id="sUtilSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Appointments</div><div class="v" id="sCount">&mdash;</div>
+      <div class="sub2" id="sCountSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Bookable time left</div><div class="v sm" id="sFree">&mdash;</div>
+      <div class="sub2" id="sFreeSub">&mdash;</div></div>
+    <div class="stat" id="sLostBox"><div class="k">Lost to no-shows</div><div class="v sm" id="sLost">&mdash;</div>
+      <div class="sub2" id="sLostSub">&mdash;</div></div>
+  </section>
+
+  <div class="note warn" id="disclaimerBox">
+    <strong>A booking sheet, not a compliance or payment record.</strong>
+    This tool prevents double-booking on the same person, room, chair or bay and reports how full the day is.
+    It does not check staff working-time limits, rest breaks, ratios, insurance or licensing, it does not take
+    payment or hold a deposit, and it does not send reminders. It holds client names and contact details in this
+    browser only &mdash; nothing is uploaded &mdash; so treat printed sheets and exported files as personal data
+    and handle them under your own data-protection duties. Confirm anything contractual (cancellation terms,
+    deposits, staff hours) with the person responsible for it.
+  </div>
+
+  <section class="card">
+    <div class="hd"><h2>Business &amp; day settings</h2>
+      <button type="button" class="btn sm" id="btnSample">Load sample day</button></div>
+    <div class="bd stack">
+      <div class="fgrid wide">
+        <div class="f"><label for="iOrg">Business name</label>
+          <input id="iOrg" type="text" autocomplete="organization" placeholder="Salon, clinic, garage, studio"></div>
+        <div class="f"><label for="iAddr">Address / location</label>
+          <input id="iAddr" type="text" placeholder="Street, town, postcode"></div>
+        <div class="f"><label for="iPhone">Booking line / email</label>
+          <input id="iPhone" type="text" placeholder="Phone or email"></div>
+        <div class="f"><label for="iRef">Sheet reference</label>
+          <input id="iRef" type="text" placeholder="e.g. DAY-2026-09-03"></div>
+      </div>
+      <div class="fgrid">
+        <div class="f"><label for="iDate">Date of day book</label>
+          <input id="iDate" type="date"><div class="err" id="eDate" hidden></div></div>
+        <div class="f"><label for="iOpen">Day opens</label>
+          <input id="iOpen" type="time" step="300"><div class="err" id="eOpen" hidden></div></div>
+        <div class="f"><label for="iClose">Day closes</label>
+          <input id="iClose" type="time" step="300"><div class="err" id="eClose" hidden></div></div>
+        <div class="f"><label for="iSlot">Slot size</label>
+          <select id="iSlot">
+            <option value="5">5 minutes</option><option value="10">10 minutes</option>
+            <option value="15">15 minutes</option><option value="20">20 minutes</option>
+            <option value="30">30 minutes</option><option value="60">1 hour</option>
+          </select></div>
+        <div class="f"><label for="iBuffer">Buffer between appointments</label>
+          <input id="iBuffer" type="number" min="0" max="120" step="1"><div class="err" id="eBuffer" hidden></div></div>
+        <div class="f"><label for="iGapMin">List gaps of at least</label>
+          <input id="iGapMin" type="number" min="1" max="480" step="1"><div class="err" id="eGapMin" hidden></div></div>
+        <div class="f"><label for="iCur">Currency</label>
+          <select id="iCur"><option value="&pound;">&pound; GBP</option><option value="$">$ USD</option>
+            <option value="&euro;">&euro; EUR</option><option value="custom">Custom symbol&hellip;</option></select></div>
+        <div class="f" id="curCustWrap" hidden><label for="iCurCust">Custom symbol</label>
+          <input id="iCurCust" type="text" maxlength="4" placeholder="e.g. R"></div>
+        <div class="f"><label for="iTf">Clock</label>
+          <select id="iTf"><option value="24">24-hour (17:30)</option><option value="12">12-hour (5:30 pm)</option></select></div>
+      </div>
+      <p class="hint" id="dayHint">&mdash;</p>
+    </div>
+  </section>
+
+  <div class="split">
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd"><h2>Day book</h2>
+          <span class="chip" id="gridChip">&mdash;</span></div>
+        <div class="bd">
+          <div class="gridwrap tw"><div id="gridHost"></div></div>
+          <div class="legend">
+            <span><b class="k1"></b>Booked / confirmed</span>
+            <span><b class="k2"></b>Arrived or completed</span>
+            <span><b class="k3"></b>No-show</span>
+            <span><b class="k4"></b>Outside that resource&rsquo;s hours</span>
+            <span>Click any empty slot to book it &middot; click an appointment to edit it</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="editorCard">
+        <div class="hd"><h2 id="edTitle">New appointment</h2>
+          <span class="chip" id="edChip" hidden>Editing</span>
+          <button type="button" class="btn sm" id="btnNew">Clear form</button></div>
+        <div class="bd stack">
+          <div class="edit">
+            <div class="f"><label for="iResSel">Staff / room / bay</label>
+              <select id="iResSel"></select></div>
+            <div class="f"><label for="iStart">Start time</label>
+              <input id="iStart" type="time" step="300"></div>
+            <div class="f wide2"><label for="iSvcSel">Service</label>
+              <select id="iSvcSel"></select></div>
+            <div class="f" id="svcNameWrap" hidden><label for="iSvcName">Service name</label>
+              <input id="iSvcName" type="text" placeholder="One-off service"></div>
+            <div class="f"><label for="iDur">Duration (minutes)</label>
+              <input id="iDur" type="number" min="1" max="720" step="1"></div>
+            <div class="f"><label for="iPrice">Price</label>
+              <input id="iPrice" type="number" min="0" step="0.01"></div>
+            <div class="f wide2"><label for="iClient">Client name</label>
+              <input id="iClient" type="text" placeholder="Who the appointment is for"></div>
+            <div class="f wide2"><label for="iContact">Client phone / email</label>
+              <input id="iContact" type="text" placeholder="Contact for reminders"></div>
+            <div class="f"><label for="iStatus">Status</label>
+              <select id="iStatus">
+                <option value="booked">Booked</option><option value="confirmed">Confirmed</option>
+                <option value="arrived">Arrived</option><option value="done">Completed</option>
+                <option value="noshow">No-show</option><option value="cancelled">Cancelled</option>
+              </select></div>
+            <div class="f wide2"><label for="iNotes">Note</label>
+              <input id="iNotes" type="text" placeholder="Allergy, request, deposit taken&hellip;"></div>
+          </div>
+          <div class="err" id="eForm" hidden></div>
+          <div class="edact">
+            <button type="button" class="btn pri" id="btnSave">Save appointment</button>
+            <button type="button" class="btn" id="btnDelete" hidden>Delete this appointment</button>
+            <span class="sp" id="edHint">&mdash;</span>
+          </div>
+          <p class="msg" id="formMsg"></p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Appointments</h2>
+          <span class="chip" id="bkChip">&mdash;</span></div>
+        <div class="tw"><table id="bkTbl">
+          <thead><tr>
+            <th scope="col" style="width:96px">Time</th>
+            <th scope="col" style="width:130px">Resource</th>
+            <th scope="col">Client</th>
+            <th scope="col" style="width:150px">Service</th>
+            <th scope="col" class="n" style="width:64px">Mins</th>
+            <th scope="col" class="n" style="width:82px">Price</th>
+            <th scope="col" style="width:124px">Status</th>
+            <th scope="col" style="width:104px">Flags</th>
+            <th scope="col" style="width:96px"><span class="sr">Actions</span></th>
+          </tr></thead>
+          <tbody id="bkBody"></tbody>
+        </table></div>
+        <div class="ft"><span class="hint" id="bkFoot">&mdash;</span></div>
+      </section>
+
+    </div>
+
+    <aside class="stack">
+      <section class="card sticky">
+        <div class="hd"><h2>Day summary</h2><span class="chip" id="sumChip">&mdash;</span></div>
+        <div class="bd stack">
+          <div class="util" id="utilList"></div>
+        </div>
+        <div class="ft" style="display:block">
+          <div class="kvrow"><span>Booked service time</span><span class="v" id="tBooked">&mdash;</span></div>
+          <div class="kvrow"><span>Available time</span><span class="v" id="tAvail">&mdash;</span></div>
+          <div class="kvrow"><span>Utilisation</span><span class="v" id="tUtil">&mdash;</span></div>
+          <div class="kvrow"><span>Bookable time left</span><span class="v ok" id="tFree">&mdash;</span></div>
+          <div class="kvrow"><span>No-show / cancelled</span><span class="v" id="tLost">&mdash;</span></div>
+          <div class="kvrow big"><span>Total booked value</span><span class="v" id="tValue">&mdash;</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Gaps you could sell</h2><span class="chip" id="gapChip">&mdash;</span></div>
+        <div class="bd"><div class="gaplist" id="gapList"></div></div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="grid cols-2">
+    <section class="card">
+      <div class="hd"><h2>Staff, rooms &amp; bays</h2>
+        <button type="button" class="btn sm" id="btnAddRes">+ Add resource</button></div>
+      <div class="tw"><table id="resTbl">
+        <thead><tr>
+          <th scope="col" style="width:32px">#</th>
+          <th scope="col">Name</th>
+          <th scope="col" style="width:132px">Type / role</th>
+          <th scope="col" style="width:104px">Available from</th>
+          <th scope="col" style="width:104px">Until</th>
+          <th scope="col" class="c" style="width:64px">On today</th>
+          <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+        </tr></thead>
+        <tbody id="resBody"></tbody>
+      </table></div>
+      <div class="ft"><span class="hint">Hours are clipped to the opening times above. Turn a resource off to
+        take them out of the day without losing their bookings.</span></div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Service &amp; price list</h2>
+        <button type="button" class="btn sm" id="btnAddSvc">+ Add service</button></div>
+      <div class="tw"><table id="svcTbl">
+        <thead><tr>
+          <th scope="col">Service</th>
+          <th scope="col" class="n" style="width:96px">Minutes</th>
+          <th scope="col" class="n" style="width:100px">Price</th>
+          <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+        </tr></thead>
+        <tbody id="svcBody"></tbody>
+      </table></div>
+      <div class="ft"><span class="hint">Picking a service snaps the appointment to this duration and price.
+        Editing a service here does not rewrite appointments already booked.</span></div>
+    </section>
+  </div>
+
+</main>
+
+<footer class="app noprint" style="padding-top:0">
+  <p class="hint" id="methodNote">&mdash;</p>
+</footer>
+
+<section class="printonly doc" id="printdoc"></section>
+
+<script>
+"use strict";
+(function(){
+/* ══════════════════════════════════════════════════════════════════
+   Appointment Booking Sheet
+   Day book: one column per resource, time down the side. Overlaps on a
+   resource are refused (respecting the buffer), services snap to their
+   duration and price, and the day summary reports utilisation per
+   resource, booked value and every bookable gap. Nothing is hardcoded.
+   ══════════════════════════════════════════════════════════════════ */
+var KEY='solvix.booking-sheet.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var DOWL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MONL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+var MAXROWS=320;
+var ST={
+  booked:{l:'Booked',blocks:true,value:true,cls:'st-booked',tag:''},
+  confirmed:{l:'Confirmed',blocks:true,value:true,cls:'',tag:'acc'},
+  arrived:{l:'Arrived',blocks:true,value:true,cls:'st-arrived',tag:'ok'},
+  done:{l:'Completed',blocks:true,value:true,cls:'st-done',tag:'ok'},
+  noshow:{l:'No-show',blocks:true,value:false,cls:'st-noshow',tag:'bad'},
+  cancelled:{l:'Cancelled',blocks:false,value:false,cls:'',tag:''}
+};
+var STORDER=['booked','confirmed','arrived','done','noshow','cancelled'];
+
+/* ── helpers ───────────────────────────────────────────────────── */
+function p2(n){return n<10?'0'+n:''+n;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:d;}
+function intv(v,d){var n=parseInt(v,10);return isFinite(n)?n:d;}
+function uid(p){return (p||'x')+Math.random().toString(36).slice(2,9);}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function hm2min(s){
+  var m=/^(\d{1,2}):(\d{2})/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var h=parseInt(m[1],10),mi=parseInt(m[2],10);
+  if(!isFinite(h)||!isFinite(mi)||h<0||h>23||mi<0||mi>59)return null;
+  return h*60+mi;
+}
+function min2hm(m){m=Math.round(m);var h=Math.floor(m/60)%24;if(h<0)h+=24;return p2(h)+':'+p2(((m%60)+60)%60);}
+function fmtT(m){
+  if(m==null||!isFinite(m))return '—';
+  var mm=Math.round(m),h=Math.floor(mm/60),mi=((mm%60)+60)%60,plus='';
+  if(h>=24){plus='+1d';h=h%24;}
+  if(S.tf==='12'){var ap=h<12?'am':'pm',h12=h%12;if(h12===0)h12=12;return h12+':'+p2(mi)+' '+ap+(plus?' '+plus:'');}
+  return p2(h)+':'+p2(mi)+(plus?' '+plus:'');
+}
+function durTxt(m){
+  if(m==null||!isFinite(m)||m<0)return '—';
+  m=Math.round(m);
+  if(m<60)return m+' min';
+  var h=Math.floor(m/60),r=m%60;
+  return h+'h'+(r?' '+r+'m':'');
+}
+function sym(){return S.cur==='custom'?(S.curCust||'¤'):(S.cur||'£');}
+function money(v){
+  if(v==null||!isFinite(v))return '—';
+  if(Object.is(v,-0))v=0;
+  var neg=v<0,s=Math.abs(v).toFixed(2),p=s.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return (neg?'-':'')+sym()+p[0]+'.'+p[1];
+}
+function pct(v){
+  if(v==null||!isFinite(v))return '—';
+  return (Math.round(v*10)/10).toFixed(1)+'%';
+}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+function dparse(s){
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var d=new Date(+m[1],+m[2]-1,+m[3]);
+  if(d.getFullYear()!==+m[1]||d.getMonth()!==+m[2]-1||d.getDate()!==+m[3])return null;
+  return d;
+}
+function dateLong(iso){var d=dparse(iso);if(!d)return '—';
+  return DOWL[d.getDay()]+' '+d.getDate()+' '+MONL[d.getMonth()]+' '+d.getFullYear();}
+function dateShort(iso){var d=dparse(iso);if(!d)return '—';
+  return DOWL[d.getDay()].slice(0,3)+' '+d.getDate()+' '+MONL[d.getMonth()].slice(0,3);}
+function stampNow(){
+  var d=new Date();
+  return p2(d.getDate())+' '+MONL[d.getMonth()].slice(0,3)+' '+d.getFullYear()+' '+p2(d.getHours())+':'+p2(d.getMinutes());
+}
+
+/* ── state ─────────────────────────────────────────────────────── */
+var S=null, editId=null, msgTimer=null;
+
+function sample(){
+  var r1=uid('r'),r2=uid('r'),r3=uid('r');
+  var s1=uid('s'),s2=uid('s'),s3=uid('s'),s4=uid('s'),s5=uid('s');
+  function bk(res,st,dur,svcId,svcName,price,name,contact,status,note){
+    return {id:uid('b'),res:res,start:hm2min(st),dur:dur,svc:svcId,svcName:svcName,
+      price:price,name:name,contact:contact,status:status,note:note||''};
+  }
+  return {
+    org:'Marlow Lane Salon & Clinic',
+    addr:'14 Marlow Lane, Stretton, ST3 6QA',
+    phone:'01782 555 0148 · desk@marlowlane.example',
+    ref:'DAY-'+todayISO(),
+    date:todayISO(),
+    open:'09:00', close:'18:00',
+    slot:15, buffer:10, gapMin:15,
+    cur:'£', curCust:'', tf:'24',
+    res:[
+      {id:r1,name:'Amara',role:'Stylist · Chair 1',start:'09:00',end:'17:00',on:true},
+      {id:r2,name:'Joel',role:'Stylist · Chair 2',start:'10:00',end:'18:00',on:true},
+      {id:r3,name:'Priya',role:'Therapist · Room 3',start:'09:30',end:'16:30',on:true}
+    ],
+    svc:[
+      {id:s1,name:'Cut & finish',dur:45,price:42},
+      {id:s2,name:'Colour — full head',dur:120,price:95},
+      {id:s3,name:'Blow dry',dur:30,price:24},
+      {id:s4,name:'Beard trim',dur:20,price:14},
+      {id:s5,name:'Facial — deep cleanse',dur:60,price:55}
+    ],
+    bk:[
+      bk(r1,'09:00',45,s1,'Cut & finish',42,'Hannah Wren','07700 900318','confirmed','Half-head foils quoted for next visit'),
+      bk(r1,'10:00',120,s2,'Colour — full head',95,'Deborah Ng','07700 900742','booked','Patch test done 27th'),
+      bk(r1,'13:00',45,s1,'Cut & finish',42,'Marcus Bell','07700 900155','booked',''),
+      bk(r1,'14:30',30,s3,'Blow dry',24,'Sofia Alvarez','07700 900620','booked','Wedding guest — finish by 15:10'),
+      bk(r1,'15:30',45,s1,'Cut & finish',42,'Erin Doyle','07700 900977','booked',''),
+      bk(r2,'10:00',20,s4,'Beard trim',14,'Tom Frey','07700 900204','done','Paid by card'),
+      bk(r2,'10:40',45,s1,'Cut & finish',42,'Ryan Patel','07700 900431','confirmed',''),
+      bk(r2,'12:00',30,s3,'Blow dry',24,'Grace Miller','07700 900588','noshow','Did not arrive, no contact'),
+      bk(r2,'14:00',120,s2,'Colour — full head',95,'Nadia Haq','07700 900866','booked','Allergy: PPD — use ammonia-free'),
+      bk(r3,'09:30',60,s5,'Facial — deep cleanse',55,'Alice Nkemdirim','07700 900093','confirmed',''),
+      bk(r3,'11:00',60,s5,'Facial — deep cleanse',55,'Ben Osei','07700 900710','cancelled','Cancelled 48h ahead — no fee'),
+      bk(r3,'13:00',60,s5,'Facial — deep cleanse',55,'Kim Ho','07700 900265','booked','')
+    ],
+    prep:'',
+    sample:true
+  };
+}
+function blank(){
+  var r1=uid('r'),r2=uid('r');
+  return {
+    org:'',addr:'',phone:'',ref:'DAY-'+todayISO(),date:todayISO(),
+    open:'09:00',close:'17:00',slot:15,buffer:0,gapMin:15,
+    cur:'£',curCust:'',tf:'24',
+    res:[{id:r1,name:'Resource 1',role:'',start:'09:00',end:'17:00',on:true},
+         {id:r2,name:'Resource 2',role:'',start:'09:00',end:'17:00',on:true}],
+    svc:[{id:uid('s'),name:'Standard appointment',dur:30,price:0}],
+    bk:[],prep:'',sample:false
+  };
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  var raw=null;
+  try{raw=localStorage.getItem(KEY);}catch(e){raw=null;}
+  if(!raw)return null;
+  try{var o=JSON.parse(raw);return normalise(o);}catch(e){return null;}
+}
+function normalise(o){
+  if(!o||typeof o!=='object')return null;
+  var d=sample(), s={};
+  s.org=String(o.org==null?'':o.org); s.addr=String(o.addr==null?'':o.addr);
+  s.phone=String(o.phone==null?'':o.phone); s.ref=String(o.ref==null?'':o.ref);
+  s.prep=String(o.prep==null?'':o.prep);
+  s.date=dparse(o.date)?o.date:d.date;
+  s.open=hm2min(o.open)!=null?o.open:'09:00';
+  s.close=hm2min(o.close)!=null?o.close:'18:00';
+  s.slot=[5,10,15,20,30,60].indexOf(intv(o.slot,15))>=0?intv(o.slot,15):15;
+  s.buffer=clamp(intv(o.buffer,0),0,120);
+  s.gapMin=clamp(intv(o.gapMin,15),1,480);
+  s.cur=(o.cur==='$'||o.cur==='€'||o.cur==='£'||o.cur==='custom')?o.cur:'£';
+  s.curCust=String(o.curCust==null?'':o.curCust).slice(0,4);
+  s.tf=o.tf==='12'?'12':'24';
+  s.res=[]; s.svc=[]; s.bk=[];
+  (Array.isArray(o.res)?o.res:[]).forEach(function(r){
+    if(!r||typeof r!=='object')return;
+    s.res.push({id:String(r.id||uid('r')),name:String(r.name==null?'':r.name),
+      role:String(r.role==null?'':r.role),
+      start:hm2min(r.start)!=null?r.start:s.open,
+      end:hm2min(r.end)!=null?r.end:s.close, on:r.on!==false});
+  });
+  (Array.isArray(o.svc)?o.svc:[]).forEach(function(v){
+    if(!v||typeof v!=='object')return;
+    s.svc.push({id:String(v.id||uid('s')),name:String(v.name==null?'':v.name),
+      dur:clamp(intv(v.dur,30),1,720),price:Math.max(0,num(v.price,0))});
+  });
+  (Array.isArray(o.bk)?o.bk:[]).forEach(function(b){
+    if(!b||typeof b!=='object')return;
+    var st=hm2min(b.start); if(st==null)st=intv(b.start,null);
+    if(st==null||!isFinite(st))return;
+    s.bk.push({id:String(b.id||uid('b')),res:String(b.res||''),start:clamp(Math.round(st),0,1439),
+      dur:clamp(intv(b.dur,30),1,720),svc:String(b.svc||''),
+      svcName:String(b.svcName==null?'':b.svcName),price:Math.max(0,num(b.price,0)),
+      name:String(b.name==null?'':b.name),contact:String(b.contact==null?'':b.contact),
+      status:ST[b.status]?b.status:'booked',note:String(b.note==null?'':b.note)});
+  });
+  if(!s.res.length)s.res=blank().res;
+  s.sample=!!o.sample;
+  return s;
+}
