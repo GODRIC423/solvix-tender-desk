@@ -1,0 +1,1503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quote &amp; Estimate Builder — Solvix Toolkit</title>
+<meta name="description" content="Build a numbered quotation with optional line items the client can include or exclude, good/better/best packages side by side, a validity period and expiry date, scope and terms blocks and a deposit required on acceptance — then convert the accepted quote straight into an invoice. Prints as a document, exports CSV and JSON.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Cpath d='M8 10h16M8 15h16M8 20h9' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M17.5 24.6l3 3 6-6.4' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#3F4A9E; --accent-ink:#31397B; --accent-wash:#EAECF8; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#7E88DE; --accent-ink:#9EA6EA; --accent-wash:#1B1F35; --on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#7E88DE; --accent-ink:#9EA6EA; --accent-wash:#1B1F35; --on-accent:#0B1017}
+
+.app{padding-bottom:40px}
+.wrap{padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(302px,.58fr)}
+@media(max-width:980px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>div{min-width:0}
+[hidden]{display:none!important}
+.stack{gap:14px}
+.fg{display:grid;gap:10px}
+.fg.c2{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+.fg.c3{grid-template-columns:repeat(auto-fit,minmax(124px,1fr))}
+.fg.c4{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
+.fg+.fg{margin-top:10px}
+.hd .tag{font:600 10.5px/1 var(--mono);letter-spacing:.05em;color:var(--muted)}
+.sticky{top:calc(var(--abh,58px) + 10px)}
+.mini{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.mini+.mini{margin-top:4px}
+.sp{margin-top:10px}
+
+/* sample + notices */
+.samp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.samp .btn{margin-left:auto}
+.note.warn{margin-bottom:12px}
+#msg{font:600 12.5px/1.4 var(--sans);color:var(--ok);min-height:0}
+#msg:empty{display:none}
+
+/* results panel */
+.res .stat+.stat{margin-top:8px}
+.res .stat.hero .v{font-size:30px}
+.res .stat.hero .v.dim{color:var(--ink-2)}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.sgrid .stat{margin-top:0}
+.stat .sub{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:3px}
+.stat.plain{background:var(--surface);border-color:var(--line-hard)}
+.ln{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13.5px;border-bottom:1px dotted var(--line)}
+.ln:last-child{border-bottom:0}
+.ln .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln.tot{font-weight:650;border-top:1px solid var(--line-hard);border-bottom:0;margin-top:3px;padding-top:8px}
+.ln.sub2{color:var(--muted)}
+.res .row{gap:6px}
+
+/* item table */
+#tItems td,#tItems th{padding:6px 7px}
+#tItems th.c,#tItems td.c{text-align:center}
+.desc-c{min-width:190px}
+.desc-c input.d{font-weight:500}
+.desc-c .u{display:flex;align-items:center;gap:5px;margin-top:3px}
+.desc-c .u span{font:10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.desc-c .u input{font-size:12px;padding:3px 5px;max-width:118px;font-family:var(--mono)}
+.w-qty{width:66px} .w-money{width:88px} .w-rate{width:56px}
+#tItems select.tier{min-width:132px;font-size:12.5px}
+#tItems tr.off td{opacity:.5}
+#tItems tr.off:hover td{opacity:.72}
+#tItems td.amt{white-space:nowrap;font-weight:600}
+#tItems .flag{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#tItems input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent)}
+.regempty td,.emptyrow td{color:var(--muted);text-align:center;padding:18px}
+td .err{margin-top:3px}
+.tfootnote{font:11.5px/1.45 var(--sans);color:var(--muted);padding:9px 10px 0}
+
+/* tier cards */
+.tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px}
+.tier{border:1px solid var(--line-hard);border-radius:4px;padding:11px 12px;background:var(--raise);display:flex;flex-direction:column;gap:7px}
+.tier.on{border-color:var(--accent);background:var(--accent-wash);box-shadow:inset 0 0 0 1px var(--accent)}
+.tier .pick{display:flex;gap:7px;align-items:center;font:600 12.5px/1 var(--sans)}
+.tier .pick input{width:16px;height:16px;accent-color:var(--accent);flex:none}
+.tier input.nm{font-weight:650;font-size:14.5px;padding:5px 7px}
+.tier textarea.tg{min-height:44px;font-size:12.5px;padding:5px 7px}
+.tier .amt{font:700 20px/1.15 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tier.on .amt{color:var(--accent-ink)}
+.tier .sub{font:11.5px/1.4 var(--sans);color:var(--muted)}
+
+/* mobile primary answer */
+.mbar{display:none}
+@media(max-width:980px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,56px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 12px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 20px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+}
+footer.foot{max-width:1180px;margin:0 auto;padding:16px clamp(10px,2vw,22px) 0;
+  font:11.5px/1.5 var(--sans);color:var(--muted);border-top:1px solid var(--line)}
+
+/* ── the printed / previewed document ─────────────────────────────── */
+#docwrap{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px)}
+.doc{background:#fff;color:#111;border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 30px 30px;max-width:190mm;margin:0 auto 40px;box-shadow:var(--sh);font-size:13px;line-height:1.5}
+.doc.show{display:block}
+.doc h2,.doc h3{color:#111}
+.doc-hd{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;
+  border-bottom:2px solid #111;padding-bottom:12px}
+.doc-hd .who{font-size:12.5px;white-space:pre-line;color:#333}
+.doc-hd .who strong{display:block;font-size:15.5px;color:#111;margin-bottom:3px}
+.doc-ttl{text-align:right}
+.doc-ttl .t{font:700 22px/1.1 var(--sans);letter-spacing:.03em;text-transform:uppercase}
+.doc-ttl .no{font:700 17px/1.3 var(--mono);margin-top:5px}
+.doc-ttl .dt{font-size:12.5px;color:#444;margin-top:3px}
+.doc-meta{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16px}
+.doc-meta .box{border:1px solid #bbb;padding:10px 12px;border-radius:3px}
+.doc-meta .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-meta .b{white-space:pre-line;font-size:12.5px}
+.doc .kv{display:flex;gap:8px;font-size:12.5px;padding:1px 0}
+.doc .kv span:first-child{color:#666;min-width:124px}
+.doc .kv b{font-weight:650}
+.doc-blk{margin-top:15px;border:1px solid #bbb;border-left:4px solid #111;padding:9px 12px;border-radius:0 3px 3px 0;font-size:12.5px}
+.doc-blk .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-blk .b{white-space:pre-line}
+.doc table{margin-top:14px;font-size:12px}
+.doc th{background:#eee;color:#333;border-bottom:1px solid #999;padding:7px 8px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc td{padding:6px 8px;border-bottom:1px solid #ddd;color:#111;vertical-align:top}
+.doc tbody tr:hover{background:transparent}
+.doc tfoot td{background:#f4f4f4;border-top:1.5px solid #999;font-weight:700;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .opt{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:#666;margin-top:2px}
+.doc h3.sec{font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;color:#444;margin-top:18px}
+.doc-bot{display:grid;grid-template-columns:1fr minmax(238px,296px);gap:20px;margin-top:16px;align-items:start}
+.doc-tot{border:1px solid #999;border-radius:3px;overflow:hidden}
+.doc-tot .r{display:flex;justify-content:space-between;gap:12px;padding:6px 11px;font-size:12.5px;border-bottom:1px solid #ddd}
+.doc-tot .r:last-child{border-bottom:0}
+.doc-tot .r.g{background:#111;color:#fff;font-weight:700;font-size:14px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tot .r .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.doc-dep{border:1px solid #999;border-radius:3px;padding:10px 12px;font-size:12.5px;background:#f6f6f6;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-dep .r{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.doc-dep .r.g{border-top:1px solid #999;margin-top:5px;padding-top:6px;font-weight:700}
+.doc-dep .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.doc-dep .hd{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:5px}
+.doc-note{margin-top:16px;border:1px solid #999;background:#f6f6f6;padding:10px 12px;border-radius:3px;
+  font-size:11px;line-height:1.45;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-note b{font-size:11.5px}
+.doc-acc{margin-top:18px;border:1.5px solid #111;border-radius:3px;padding:12px 14px}
+.doc-acc .t{font:700 12.5px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+.doc-acc p{font-size:12px;color:#222}
+.doc-sign{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:16px;font-size:11.5px;color:#444}
+.doc-sign .l{border-top:1px solid #666;padding-top:5px;margin-top:26px}
+.doc-ft{margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:10.5px;color:#555;text-align:center}
+.doc-cmp td.pick{font-weight:700}
+@media(max-width:640px){.doc{padding:18px 16px}.doc-meta,.doc-bot,.doc-sign{grid-template-columns:1fr}}
+@media print{
+  #docwrap{max-width:none;padding:0}
+  .doc{border:0;box-shadow:none;padding:0;max-width:none;margin:0;font-size:10.5pt;color:#000}
+  .doc-hd{border-bottom:2px solid #000}
+  .wrap{padding-top:0}
+  .doc-acc,.doc-note{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" id="shell">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">QB</div>
+    <div style="min-width:0">
+      <h1>Quote &amp; Estimate Builder</h1>
+      <div class="sub">OPTIONAL LINES · TIERED PACKAGES · DEPOSIT ON ACCEPTANCE</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="bPreview" aria-pressed="false">Preview document</button>
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">Save JSON</button>
+    <button type="button" class="btn" id="bImport">Load JSON</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="note samp" id="sampleBanner">
+    <div><strong>Sample quote loaded.</strong> Brand &amp; website package for a dental practice — three tiers, three optional add-ons. Edit any figure, or start blank.</div>
+    <button type="button" class="btn sm" id="bBlank">Start a blank quote</button>
+  </div>
+
+  <div class="note warn" id="disclaimer">
+    <strong>This is a price quotation, not a contract or tax advice.</strong> It totals only the figures you type in and
+    applies the tax rate you set to each line. It does not check your tax registration, the correct rate or place of
+    supply, whether the work is priced viably, or whether your terms are enforceable. Check tax treatment with your
+    accountant and have your terms of business reviewed by a solicitor before you send quotes out. Once signed, a
+    quotation and its terms can form a binding contract.
+  </div>
+
+  <div class="mbar" id="mbar">
+    <div class="k" id="mbarK">Quote total incl. tax</div>
+    <div class="v" id="mbarV">—</div>
+  </div>
+
+  <div class="split">
+    <div class="stack">
+
+      <!-- ── document ─────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd">
+          <h2>Document</h2>
+          <span class="tag" id="tagNo">QT-0000</span>
+        </div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f">
+              <label for="iMode">Document type</label>
+              <select id="iMode" data-p="mode">
+                <option value="quote">Quotation</option>
+                <option value="invoice">Invoice (converted from this quote)</option>
+              </select>
+              <div class="hint">Switching to invoice carries every field across and bills the accepted package.</div>
+            </div>
+            <div class="f">
+              <label for="iCur">Currency</label>
+              <select id="iCur" data-cur>
+                <option value="GBP">GBP — £</option>
+                <option value="USD">USD — $</option>
+                <option value="EUR">EUR — €</option>
+                <option value="AUD">AUD — $</option>
+                <option value="CAD">CAD — $</option>
+                <option value="CUS">Custom symbol…</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg c2 sp" id="curCustom" hidden>
+            <div class="f">
+              <label for="iCurSym">Custom symbol</label>
+              <input id="iCurSym" data-p="cur.sym" maxlength="4" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iCurCode">Custom code</label>
+              <input id="iCurCode" data-p="cur.code" maxlength="6" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="fg c4 sp">
+            <div class="f">
+              <label for="iPrefix">Quote prefix</label>
+              <input id="iPrefix" data-p="q.prefix" maxlength="10" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iSeq">Quote number</label>
+              <input id="iSeq" type="number" min="1" step="1" data-p="q.seq" data-n="1" data-min="1" data-max="99999999">
+              <div class="err" id="eSeq" hidden></div>
+            </div>
+            <div class="f">
+              <label for="iPad">Digits</label>
+              <input id="iPad" type="number" min="1" max="10" step="1" data-p="q.pad" data-n="1" data-min="1" data-max="10">
+              <div class="err" id="ePad" hidden></div>
+            </div>
+            <div class="f">
+              <label for="iDate">Quote date</label>
+              <input id="iDate" type="date" data-p="q.date">
+            </div>
+          </div>
+
+          <div class="fg c3 sp">
+            <div class="f">
+              <label for="iValid">Valid for (days)</label>
+              <input id="iValid" type="number" min="0" max="3650" step="1" data-p="q.validDays" data-n="1" data-min="0" data-max="3650">
+              <div class="err" id="eValid" hidden></div>
+            </div>
+            <div class="f">
+              <label for="iExpiry">Expires on</label>
+              <input id="iExpiry" type="text" readonly aria-readonly="true">
+              <div class="hint">Quote date + validity</div>
+            </div>
+            <div class="f">
+              <label for="iDeposit">Deposit to accept (%)</label>
+              <input id="iDeposit" type="number" min="0" max="100" step="0.5" data-p="q.depositPct" data-n="1" data-min="0" data-max="100">
+              <div class="err" id="eDeposit" hidden></div>
+            </div>
+          </div>
+
+          <div class="fg c3 sp">
+            <div class="f">
+              <label for="iDisc">Discount on acceptance (%)</label>
+              <input id="iDisc" type="number" min="0" max="100" step="0.5" data-p="q.discPct" data-n="1" data-min="0" data-max="100">
+              <div class="err" id="eDisc" hidden></div>
+            </div>
+            <div class="f">
+              <label for="iTaxLabel">Tax label</label>
+              <input id="iTaxLabel" data-p="q.taxLabel" maxlength="14" autocomplete="off">
+              <div class="hint">VAT, GST, Sales tax…</div>
+            </div>
+            <div class="f">
+              <label for="iPrepared">Prepared by</label>
+              <input id="iPrepared" data-p="q.prepared" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="fg c2 sp" id="invBox" hidden>
+            <div class="f">
+              <label for="iInvPrefix">Invoice prefix</label>
+              <input id="iInvPrefix" data-p="inv.prefix" maxlength="10" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iInvSeq">Invoice number</label>
+              <input id="iInvSeq" type="number" min="1" step="1" data-p="inv.seq" data-n="1" data-min="1" data-max="99999999">
+              <div class="err" id="eInvSeq" hidden></div>
+            </div>
+            <div class="f">
+              <label for="iInvDate">Invoice date</label>
+              <input id="iInvDate" type="date" data-p="inv.date">
+            </div>
+            <div class="f">
+              <label for="iInvDue">Payment terms (days)</label>
+              <input id="iInvDue" type="number" min="0" max="365" step="1" data-p="inv.dueDays" data-n="1" data-min="0" data-max="365">
+              <div class="err" id="eInvDue" hidden></div>
+            </div>
+            <div class="f" style="grid-column:1/-1">
+              <label class="check" for="iDepPaid"><input type="checkbox" id="iDepPaid" data-p="inv.depositPaid" data-b="1">
+                <span>Deposit already received — deduct it and show the balance due</span></label>
+            </div>
+            <div class="f" style="grid-column:1/-1">
+              <label for="iPay">Payment details (printed on the invoice)</label>
+              <textarea id="iPay" data-p="inv.pay" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── parties ──────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Parties</h2></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="stack">
+              <div class="f"><label for="iIssName">Your business</label><input id="iIssName" data-p="issuer.name" autocomplete="organization"></div>
+              <div class="f"><label for="iIssAddr">Address</label><textarea id="iIssAddr" data-p="issuer.addr" rows="3"></textarea></div>
+              <div class="f"><label for="iIssTax">Tax / company registration</label><input id="iIssTax" data-p="issuer.tax" autocomplete="off"></div>
+              <div class="f"><label for="iIssCon">Contact</label><input id="iIssCon" data-p="issuer.contact" autocomplete="off"></div>
+            </div>
+            <div class="stack">
+              <div class="f"><label for="iCliName">Client</label><input id="iCliName" data-p="client.name" autocomplete="off"></div>
+              <div class="f"><label for="iCliAddr">Address</label><textarea id="iCliAddr" data-p="client.addr" rows="3"></textarea></div>
+              <div class="f"><label for="iCliRef">Project / reference</label><input id="iCliRef" data-p="client.ref" autocomplete="off"></div>
+              <div class="f"><label for="iCliCon">Client contact</label><input id="iCliCon" data-p="client.contact" autocomplete="off"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── line items ───────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd">
+          <h2>Line items</h2>
+          <span class="tag" id="tagItems">0 lines</span>
+          <button type="button" class="btn sm" id="bAdd">+ Line</button>
+          <button type="button" class="btn sm" id="bAddOpt">+ Optional add-on</button>
+        </div>
+        <div class="tw">
+          <table id="tItems">
+            <caption class="lbl" style="text-align:left;padding:9px 10px 0">Every line, with the package it belongs to and whether the client has taken it</caption>
+            <thead>
+              <tr>
+                <th scope="col">Description</th>
+                <th scope="col" class="n">Qty</th>
+                <th scope="col" class="n">Unit price</th>
+                <th scope="col" class="n">Tax %</th>
+                <th scope="col">In package</th>
+                <th scope="col" class="c">Optional</th>
+                <th scope="col" class="c">Taken</th>
+                <th scope="col" class="n">Amount</th>
+                <th scope="col"><span class="lbl">Del</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbItems"></tbody>
+          </table>
+        </div>
+        <p class="tfootnote">Non-optional lines in the accepted package are always charged. <strong>Optional</strong> lines are
+          quoted as add-ons — untick <strong>Taken</strong> and they drop out of the total but still print on the quote as an
+          option the client can add before it expires.</p>
+        <div class="ft">
+          <span class="mini" id="ftItems">—</span>
+        </div>
+      </section>
+
+      <!-- ── tiers ────────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd">
+          <h2>Packages — good, better, best</h2>
+          <span class="tag">Totals include tax and the options ticked above</span>
+        </div>
+        <div class="bd">
+          <div class="tiers" id="tierCards"></div>
+          <p class="mini sp">Pick the package the client has accepted. Everything below — the total, the deposit, the
+            printed document and the invoice — follows that choice.</p>
+        </div>
+      </section>
+
+      <!-- ── scope / terms ────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Scope, exclusions and terms</h2></div>
+        <div class="bd stack">
+          <div class="f"><label for="iScope">Scope of work</label>
+            <textarea id="iScope" data-p="q.scope" rows="4"></textarea></div>
+          <div class="f"><label for="iExcl">Not included / exclusions</label>
+            <textarea id="iExcl" data-p="q.excl" rows="3"></textarea>
+            <div class="hint">The single most useful block on a quote — say plainly what the price does not cover.</div></div>
+          <div class="f"><label for="iTerms">Terms and conditions</label>
+            <textarea id="iTerms" data-p="q.terms" rows="5"></textarea></div>
+        </div>
+      </section>
+
+      <!-- ── register ─────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd">
+          <h2>Quote register</h2>
+          <span class="tag" id="tagReg">0 logged</span>
+        </div>
+        <div class="tw">
+          <table id="tReg">
+            <thead>
+              <tr>
+                <th scope="col">Number</th><th scope="col">Date</th><th scope="col">Client</th>
+                <th scope="col">Package</th><th scope="col" class="n">Total</th>
+                <th scope="col">Status</th><th scope="col"><span class="lbl">Del</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbReg"></tbody>
+          </table>
+        </div>
+        <div class="ft"><span class="mini">Logging a quote records the number, then hands this document the next one in sequence.</span></div>
+      </section>
+
+      <footer class="foot">
+        Line amount = quantity × unit price, rounded to 2 dp. Any acceptance discount is applied line by line, then tax is
+        charged per line at its own rate and totalled per rate band, so the printed tax summary always reconciles to the
+        total. Deposit = accepted total including tax × deposit %. Expiry = quote date + validity in calendar days.
+        Figures, rates and terms are yours; this tool does no tax lookup and gives no legal or tax advice.
+      </footer>
+    </div>
+
+    <!-- ── results ────────────────────────────────────────────────── -->
+    <div>
+      <section class="card sticky res">
+        <div class="hd">
+          <h2 id="resTitle">Quotation total</h2>
+          <span class="chip" id="chipTier">—</span>
+        </div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k" id="heroK">Quote total incl. tax</div>
+            <div class="v" id="heroV">—</div>
+            <div class="sub" id="heroS">—</div>
+          </div>
+          <div class="sgrid">
+            <div class="stat">
+              <div class="k" id="depK">Deposit to accept</div>
+              <div class="v" id="depV" style="font-size:19px">—</div>
+              <div class="sub" id="depS">—</div>
+            </div>
+            <div class="stat">
+              <div class="k" id="balK">Balance on completion</div>
+              <div class="v" id="balV" style="font-size:19px">—</div>
+              <div class="sub" id="balS">—</div>
+            </div>
+          </div>
+          <div class="stat plain sp" style="padding:9px 12px">
+            <div class="ln"><span>Lines charged</span><span class="v" id="rLines">—</span></div>
+            <div class="ln"><span>Subtotal before discount</span><span class="v" id="rSub">—</span></div>
+            <div class="ln" id="rDiscRow"><span id="rDiscK">Discount</span><span class="v" id="rDisc">—</span></div>
+            <div class="ln"><span>Net</span><span class="v" id="rNet">—</span></div>
+            <div id="rBands"></div>
+            <div class="ln tot"><span id="rTotK">Total</span><span class="v" id="rTot">—</span></div>
+            <div class="ln sub2" id="rOptRow"><span>Options offered but not taken</span><span class="v" id="rOpt">—</span></div>
+          </div>
+          <div class="stat plain sp" style="padding:9px 12px">
+            <div class="ln"><span>Validity</span><span class="v" id="rValid">—</span></div>
+            <div class="ln"><span id="rExpK">Expires</span><span class="v" id="rExp">—</span></div>
+          </div>
+          <div id="msg" class="sp" role="status" aria-live="polite"></div>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn" id="bLog">Log quote &amp; take next number</button>
+          <button type="button" class="btn pri" id="bConvert">Convert to invoice</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="docwrap"><section class="doc printonly" id="doc" aria-label="Quotation document"></section></div>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.quote-builder.v1';
+var $=function(s,r){return (r||document).querySelector(s)};
+var CURS={GBP:'£',USD:'$',EUR:'€',AUD:'$',CAD:'$'};
+var TIDX={a:0,b:1,c:2};
+var TVALS=['a','a!','b','b!','c'];
+
+/* ── helpers ─────────────────────────────────────────────────────── */
+var uidN=0;
+function uid(){uidN++;return 'l'+Date.now().toString(36)+uidN.toString(36)}
+function r2(n){return Math.round((n+(n>=0?1e-9:-1e-9))*100)/100}
+function r3(n){return Math.round((n+(n>=0?1e-9:-1e-9))*1000)/1000}
+function num(v){var n=parseFloat(String(v==null?'':v).replace(/[^0-9.eE+-]/g,''));return isFinite(n)?n:0}
+function nz(n){var v=r2(n);return v===0?0:v}
+function money(n){
+  if(n==null||typeof n!=='number'||!isFinite(n))return '—';
+  var v=nz(n),s=Math.abs(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  return (v<0?'-':'')+S.cur.sym+s;
+}
+function qtyTxt(n){if(n==null||!isFinite(n))return '—';return String(r3(n))}
+function pct(n){if(n==null||!isFinite(n))return '—';return String(r3(n))}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function nl(s){return esc(s).replace(/\r?\n/g,'<br>')}
+function dsp(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '—';
+  var p=iso.split('-'),M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mi=parseInt(p[1],10);if(!(mi>=1&&mi<=12))return iso;
+  return parseInt(p[2],10)+' '+M[mi-1]+' '+p[0];
+}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function isoOk(s){return /^\d{4}-\d{2}-\d{2}$/.test(String(s||''))}
+function addDays(iso,d){
+  if(!isoOk(iso)||!isFinite(d))return '';
+  var p=String(iso).split('-');
+  var t=Date.UTC(+p[0],+p[1]-1,+p[2])+Math.round(d)*86400000;
+  var x=new Date(t);
+  return x.getUTCFullYear()+'-'+String(x.getUTCMonth()+1).padStart(2,'0')+'-'+String(x.getUTCDate()).padStart(2,'0');
+}
+function daysBetween(a,b){
+  if(!isoOk(a)||!isoOk(b))return null;
+  var pa=a.split('-'),pb=b.split('-');
+  return Math.round((Date.UTC(+pb[0],+pb[1]-1,+pb[2])-Date.UTC(+pa[0],+pa[1]-1,+pa[2]))/86400000);
+}
+function padNo(prefix,seq,pad){
+  var n=Math.max(0,Math.round(num(seq)));
+  var p=Math.min(10,Math.max(1,Math.round(num(pad))||1));
+  return String(prefix==null?'':prefix)+String(n).padStart(p,'0');
+}
+function getp(o,p){var a=p.split('.'),x=o;for(var i=0;i<a.length;i++){if(x==null)return '';x=x[a[i]]}return x==null?'':x}
+function setp(o,p,v){var a=p.split('.'),x=o;for(var i=0;i<a.length-1;i++){if(x[a[i]]==null)x[a[i]]={};x=x[a[i]]}x[a[a.length-1]]=v}
+
+/* ── state ───────────────────────────────────────────────────────── */
+var S;
+function blankItem(opt){
+  return {id:uid(),desc:'',unit:'each',qty:1,price:0,tax:20,tier:'a',opt:!!opt,inc:!opt};
+}
+function blankState(){
+  return {v:1,sample:false,mode:'quote',
+    cur:{sym:'£',code:'GBP'},
+    issuer:{name:'',addr:'',tax:'',contact:''},
+    client:{name:'',addr:'',ref:'',contact:''},
+    q:{prefix:'QT-',seq:1,pad:4,date:today(),validDays:30,depositPct:30,discPct:0,
+       taxLabel:'VAT',prepared:'',scope:'',excl:'',terms:''},
+    inv:{prefix:'INV-',seq:1,pad:4,date:today(),dueDays:14,depositPaid:false,pay:'',fromQuote:''},
+    tiers:[{key:'a',name:'Essential',tag:''},{key:'b',name:'Recommended',tag:''},{key:'c',name:'Premium',tag:''}],
+    sel:'b',
+    items:[blankItem(false),blankItem(false),blankItem(true)],
+    reg:[]};
+}
+function sampleState(){
+  var s=blankState();
+  s.sample=true;s.mode='quote';s.sel='b';
+  s.issuer={name:'Brightside Studio Ltd',
+    addr:'Studio 4, The Maltings\n18 Wharf Road\nBristol BS1 4RX',
+    tax:'VAT GB 341 8827 55 · Co. 09114772',
+    contact:'hello@brightside-studio.example · 0117 442 9080'};
+  s.client={name:'Meridian Dental Practice',
+    addr:'112 Whiteladies Road\nClifton\nBristol BS8 2RP',
+    ref:'Brand refresh and new website — 2026 relaunch',
+    contact:'Dr N. Ayanwale, Practice Principal'};
+  s.q={prefix:'QT-',seq:1042,pad:4,date:'2026-09-02',validDays:30,depositPct:35,discPct:5,
+    taxLabel:'VAT',prepared:'J. Ferreira, Studio Director',
+    scope:'Design and build of a new practice website with a refreshed brand identity, written and photographed content, and a booking journey for new-patient enquiries. Delivered from our Bristol studio over an estimated 9 working weeks from the deposit date, with two rounds of amends at each design stage.',
+    excl:'Domain and SSL registration fees, third-party licence and subscription fees (booking platform, payment gateway, stock imagery), printing of any physical collateral, ongoing content updates after handover, and any work arising from a change of brief after design sign-off. Additional amend rounds are charged at our standard hourly rate.',
+    terms:'1. This quotation is valid for the period shown and may be withdrawn or repriced after it expires.\n2. Work is scheduled on receipt of the signed acceptance and the deposit shown; the deposit is non-refundable once design work has begun.\n3. The balance falls due on handover to your live server and is payable within 14 days of the invoice date.\n4. Copyright in the delivered design passes to the client on payment in full. We retain the right to show the work in our portfolio.\n5. Prices are held in the currency shown and exclude any third-party fees listed under exclusions.\n6. Either party may end the engagement in writing; work completed to that date is chargeable pro rata.'};
+  s.inv={prefix:'INV-',seq:2087,pad:4,date:today(),dueDays:14,depositPaid:true,
+    pay:'Brightside Studio Ltd · Sort code 20-14-88 · Account 4471 0925\nIBAN GB29 BARC 2014 8844 7109 25\nPlease quote the invoice number as the payment reference.',fromQuote:''};
+  s.tiers=[
+    {key:'a',name:'Essential',tag:'A clean, fast six-page site on your refreshed colours and type.'},
+    {key:'b',name:'Recommended',tag:'Full brand refresh, written content and an accessibility audit.'},
+    {key:'c',name:'Premium',tag:'Everything, plus a photo shoot and online booking with payments.'}];
+  s.items=[
+    {id:'i1',desc:'Discovery workshop, sitemap and content plan',unit:'project',qty:1,price:480,tax:20,tier:'a',opt:false,inc:true},
+    {id:'i2',desc:'Brand refresh — logo lockups, colour, type, usage sheet',unit:'project',qty:1,price:950,tax:20,tier:'b',opt:false,inc:true},
+    {id:'i3',desc:'Website design — page templates, desktop and mobile',unit:'template',qty:6,price:240,tax:20,tier:'a',opt:false,inc:true},
+    {id:'i4',desc:'Front-end build, CMS setup and content loading',unit:'project',qty:1,price:1850,tax:20,tier:'a',opt:false,inc:true},
+    {id:'i5',desc:'Copywriting — practice, treatment and team pages',unit:'page',qty:8,price:95,tax:20,tier:'b',opt:false,inc:true},
+    {id:'i6',desc:'Photography — half-day shoot, practice and team',unit:'day',qty:1,price:420,tax:20,tier:'c',opt:false,inc:true},
+    {id:'i7',desc:'Online booking and payment gateway integration',unit:'project',qty:1,price:1150,tax:20,tier:'c',opt:false,inc:true},
+    {id:'i8',desc:'Accessibility audit and remediation (WCAG 2.2 AA)',unit:'project',qty:1,price:540,tax:20,tier:'b',opt:true,inc:true},
+    {id:'i9',desc:'Hosting, backups and maintenance',unit:'month',qty:12,price:45,tax:20,tier:'a',opt:true,inc:true},
+    {id:'i10',desc:'Printed brand guideline booklets (zero-rated print)',unit:'copy',qty:25,price:6.4,tax:0,tier:'b',opt:true,inc:true},
+    {id:'i11',desc:'On-site CMS training session for the practice team',unit:'hour',qty:2,price:85,tax:20,tier:'a',opt:true,inc:false}
+  ];
+  s.reg=[
+    {no:'QT-1041',date:'2026-08-26',client:'Halloway Orthodontics',tier:'Essential',total:4188,status:'Issued',inv:''},
+    {no:'QT-1040',date:'2026-08-19',client:'Ridgeway Veterinary Group',tier:'Premium',total:11640.6,status:'Invoiced',inv:'INV-2086'}
+  ];
+  return s;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw)return null;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object')return null;
+    return normalise(o);
+  }catch(e){return null}
+}
+function normalise(o){
+  var d=blankState(),i;
+  var s={v:1,sample:!!o.sample,mode:o.mode==='invoice'?'invoice':'quote',
+    cur:{sym:String((o.cur&&o.cur.sym)||'£').slice(0,4)||'£',code:String((o.cur&&o.cur.code)||'GBP').slice(0,6)||'GBP'},
+    issuer:Object.assign({},d.issuer,o.issuer||{}),
+    client:Object.assign({},d.client,o.client||{}),
+    q:Object.assign({},d.q,o.q||{}),
+    inv:Object.assign({},d.inv,o.inv||{}),
+    tiers:[],sel:'b',items:[],reg:[]};
+  /* strings stay strings */
+  ['prefix','date','taxLabel','prepared','scope','excl','terms'].forEach(function(k){s.q[k]=String(s.q[k]==null?'':s.q[k])});
+  ['prefix','date','pay','fromQuote'].forEach(function(k){s.inv[k]=String(s.inv[k]==null?'':s.inv[k])});
+  ['name','addr','tax','contact'].forEach(function(k){s.issuer[k]=String(s.issuer[k]==null?'':s.issuer[k])});
+  ['name','addr','ref','contact'].forEach(function(k){s.client[k]=String(s.client[k]==null?'':s.client[k])});
+  s.q.seq=Math.max(0,Math.round(num(s.q.seq)));
+  s.q.pad=Math.min(10,Math.max(1,Math.round(num(s.q.pad))||4));
+  s.q.validDays=Math.min(3650,Math.max(0,Math.round(num(s.q.validDays))));
+  s.q.depositPct=Math.min(100,Math.max(0,num(s.q.depositPct)));
+  s.q.discPct=Math.min(100,Math.max(0,num(s.q.discPct)));
+  s.inv.seq=Math.max(0,Math.round(num(s.inv.seq)));
+  s.inv.pad=Math.min(10,Math.max(1,Math.round(num(s.inv.pad))||4));
+  s.inv.dueDays=Math.min(365,Math.max(0,Math.round(num(s.inv.dueDays))));
+  s.inv.depositPaid=!!s.inv.depositPaid;
+  var ts=Array.isArray(o.tiers)?o.tiers:[];
+  for(i=0;i<3;i++){
+    var t=ts[i]||{};
+    s.tiers.push({key:d.tiers[i].key,
+      name:String(t.name==null||t.name===''?d.tiers[i].name:t.name),
+      tag:String(t.tag==null?'':t.tag)});
+  }
+  s.sel=(o.sel==='a'||o.sel==='b'||o.sel==='c')?o.sel:'b';
+  var its=Array.isArray(o.items)?o.items:[];
+  for(i=0;i<its.length;i++){
+    var it=its[i]||{};
+    var tier=String(it.tier||'a');
+    if(TVALS.indexOf(tier)<0)tier='a';
+    var opt=!!it.opt;
+    s.items.push({id:String(it.id||uid()),desc:String(it.desc==null?'':it.desc),
+      unit:String(it.unit==null?'':it.unit),qty:num(it.qty),price:num(it.price),
+      tax:Math.min(100,Math.max(0,num(it.tax))),tier:tier,opt:opt,inc:opt?!!it.inc:true});
+  }
+  var rg=Array.isArray(o.reg)?o.reg:[];
+  for(i=0;i<rg.length;i++){var e=rg[i]||{};
+    s.reg.push({no:String(e.no||''),date:String(e.date||''),client:String(e.client||''),
+      tier:String(e.tier||''),total:num(e.total),status:String(e.status||'Issued'),inv:String(e.inv||'')});}
+  return s;
+}
+
+/* ── numbering ───────────────────────────────────────────────────── */
+function quoteNo(){return padNo(S.q.prefix,S.q.seq,S.q.pad)}
+function invoiceNo(){return padNo(S.inv.prefix,S.inv.seq,S.inv.pad)}
+function docNo(){return S.mode==='invoice'?invoiceNo():quoteNo()}
+function tierName(k){for(var i=0;i<S.tiers.length;i++){if(S.tiers[i].key===k)return S.tiers[i].name||('Tier '+k.toUpperCase())}return '—'}
+function expiryDate(){return addDays(S.q.date,S.q.validDays)}
+function dueDate(){return addDays(S.inv.date,S.inv.dueDays)}
+
+/* ── computation ─────────────────────────────────────────────────── */
+function inTier(it,t){
+  var only=it.tier.charAt(it.tier.length-1)==='!';
+  var base=it.tier.charAt(0);
+  if(base==='c')return t==='c';
+  if(only)return base===t;
+  return TIDX[base]<=TIDX[t];
+}
+function totalsFor(t){
+  /* returns the money picture for package t with the client's current option choices */
+  var rows=[],i,sub=0,discT=0,bandMap={},order=[];
+  for(i=0;i<S.items.length;i++){
+    var it=S.items[i];
+    var inP=inTier(it,t);
+    var active=inP&&(!it.opt||it.inc);
+    var net=r2(num(it.qty)*num(it.price));
+    var disc=r2(net*num(S.q.discPct)/100);
+    var after=r2(net-disc);
+    var row={it:it,inP:inP,active:active,net:net,disc:disc,after:after,
+      tax:r2(after*num(it.tax)/100)};
+    rows.push(row);
+    if(!active)continue;
+    sub=r2(sub+net);discT=r2(discT+disc);
+    var key=r3(num(it.tax)).toFixed(3);
+    if(!bandMap[key]){bandMap[key]={rate:r3(num(it.tax)),net:0,tax:0};order.push(key)}
+    bandMap[key].net=r2(bandMap[key].net+after);
+  }
+  order.sort(function(a,b){return parseFloat(b)-parseFloat(a)});
+  var bands=[],tax=0;
+  for(i=0;i<order.length;i++){
+    var b=bandMap[order[i]];
+    b.tax=r2(b.net*b.rate/100);
+    tax=r2(tax+b.tax);bands.push(b);
+  }
+  var net=r2(sub-discT);
+  var total=r2(net+tax);
+  var deposit=r2(total*num(S.q.depositPct)/100);
+  var nCharged=0,optNotTaken=0,nOptOffered=0;
+  for(i=0;i<rows.length;i++){
+    if(rows[i].active)nCharged++;
+    if(rows[i].inP&&rows[i].it.opt){nOptOffered++;if(!rows[i].it.inc)optNotTaken=r2(optNotTaken+r2(rows[i].after+rows[i].tax))}
+  }
+  return {rows:rows,sub:sub,disc:discT,net:net,bands:bands,tax:tax,total:total,
+    deposit:deposit,balance:r2(total-deposit),has:nCharged>0,n:nCharged,
+    optNotTaken:optNotTaken,nOpt:nOptOffered};
+}
+function compute(){
+  var C=totalsFor(S.sel);
+  C.tiers={a:totalsFor('a'),b:totalsFor('b'),c:totalsFor('c')};
+  return C;
+}
+
+/* ── field population ────────────────────────────────────────────── */
+function fillFields(){
+  var els=document.querySelectorAll('[data-p]');
+  for(var i=0;i<els.length;i++){
+    var el=els[i],p=el.getAttribute('data-p'),v=getp(S,p);
+    if(el.type==='checkbox')el.checked=!!v; else el.value=(v===0?'0':(v==null?'':String(v)));
+  }
+  var code=S.cur.code;
+  var known=CURS[code]&&CURS[code]===S.cur.sym;
+  $('#iCur').value=known?code:'CUS';
+  $('#curCustom').hidden=known;
+  syncMode();
+}
+function syncMode(){
+  var isInv=S.mode==='invoice';
+  $('#invBox').hidden=!isInv;
+  $('#iMode').value=S.mode;
+  $('#resTitle').textContent=isInv?'Invoice total':'Quotation total';
+  $('#heroK').textContent=isInv?'Invoice total incl. tax':'Quote total incl. tax';
+  $('#mbarK').textContent=isInv?'Invoice total incl. tax':'Quote total incl. tax';
+  $('#depK').textContent=isInv?(S.inv.depositPaid?'Deposit received':'Deposit due'):'Deposit to accept';
+  $('#balK').textContent=isInv?'Balance due':'Balance on completion';
+  $('#rExpK').textContent=isInv?'Payment due':'Expires';
+  $('#bConvert').textContent=isInv?'Back to quotation':'Convert to invoice';
+  $('#bLog').disabled=isInv;
+  $('#tagNo').textContent=docNo();
+  $('#doc').setAttribute('aria-label',isInv?'Invoice document':'Quotation document');
+}
+
+/* ── item table ──────────────────────────────────────────────────── */
+function tierOptions(sel){
+  var n=[tierName('a'),tierName('b'),tierName('c')];
+  var opts=[
+    ['a', n[0]+' and up (all packages)'],
+    ['a!',n[0]+' only'],
+    ['b', n[1]+' and up'],
+    ['b!',n[1]+' only'],
+    ['c', n[2]+' only']
+  ];
+  var h='';
+  for(var i=0;i<opts.length;i++){
+    h+='<option value="'+opts[i][0]+'"'+(opts[i][0]===sel?' selected':'')+'>'+esc(opts[i][1])+'</option>';
+  }
+  return h;
+}
+function buildItems(){
+  var tb=$('#tbItems'),h='';
+  if(!S.items.length){
+    h='<tr class="emptyrow"><td colspan="9">No lines yet — add one to start pricing.</td></tr>';
+  }
+  for(var i=0;i<S.items.length;i++){
+    var it=S.items[i],id=esc(it.id),nm=esc(it.desc||'Line '+(i+1));
+    h+='<tr data-id="'+id+'">'+
+      '<td class="desc-c"><input class="d" data-k="desc" value="'+esc(it.desc)+'" aria-label="Description, line '+(i+1)+'" placeholder="What you are quoting for">'+
+        '<span class="u"><span>per</span><input data-k="unit" value="'+esc(it.unit)+'" aria-label="Unit, '+nm+'" placeholder="unit"></span></td>'+
+      '<td class="n"><input type="number" class="w-qty" data-k="qty" data-min="0" data-max="1000000" step="any" value="'+(it.qty)+'" aria-label="Quantity, '+nm+'"><div class="err" hidden></div></td>'+
+      '<td class="n"><input type="number" class="w-money" data-k="price" data-min="0" data-max="100000000" step="any" value="'+(it.price)+'" aria-label="Unit price, '+nm+'"><div class="err" hidden></div></td>'+
+      '<td class="n"><input type="number" class="w-rate" data-k="tax" data-min="0" data-max="100" step="any" value="'+(it.tax)+'" aria-label="Tax percent, '+nm+'"><div class="err" hidden></div></td>'+
+      '<td><select class="tier" data-k="tier" aria-label="In package, '+nm+'">'+tierOptions(it.tier)+'</select></td>'+
+      '<td class="c"><input type="checkbox" data-k="opt"'+(it.opt?' checked':'')+' aria-label="Optional add-on, '+nm+'"></td>'+
+      '<td class="c"><input type="checkbox" data-k="inc"'+(it.inc?' checked':'')+(it.opt?'':' disabled')+' aria-label="Taken by client, '+nm+'"></td>'+
+      '<td class="n amt" data-amt>—</td>'+
+      '<td><button type="button" class="btn ico sm" data-act="del" aria-label="Delete line '+(i+1)+'">✕</button></td>'+
+      '</tr>';
+  }
+  tb.innerHTML=h;
+}
+function buildTiers(){
+  var w=$('#tierCards'),h='';
+  for(var i=0;i<S.tiers.length;i++){
+    var t=S.tiers[i],k=t.key;
+    h+='<div class="tier'+(S.sel===k?' on':'')+'" data-tier="'+k+'">'+
+      '<label class="pick" for="pk_'+k+'"><input type="radio" name="tierpick" id="pk_'+k+'" value="'+k+'"'+(S.sel===k?' checked':'')+'> Accepted</label>'+
+      '<input class="nm" data-tn="'+i+'" value="'+esc(t.name)+'" aria-label="Package '+(i+1)+' name">'+
+      '<textarea class="tg" data-tg="'+i+'" rows="2" aria-label="Package '+(i+1)+' description" placeholder="One line the client will read">'+esc(t.tag)+'</textarea>'+
+      '<div class="amt" data-tamt="'+k+'">—</div>'+
+      '<div class="sub" data-tsub="'+k+'">—</div>'+
+      '</div>';
+  }
+  w.innerHTML=h;
+}
+function buildReg(){
+  var tb=$('#tbReg'),h='';
+  if(!S.reg.length){
+    h='<tr class="regempty"><td colspan="7">Nothing logged yet. Use “Log quote &amp; take next number” when you send one out.</td></tr>';
+  }
+  for(var i=0;i<S.reg.length;i++){
+    var e=S.reg[i];
+    h+='<tr data-r="'+i+'"><td class="mono">'+esc(e.no)+'</td><td>'+esc(dsp(e.date))+'</td>'+
+      '<td>'+esc(e.client||'—')+'</td><td>'+esc(e.tier||'—')+'</td>'+
+      '<td class="n">'+esc(money(e.total))+'</td>'+
+      '<td><span class="chip '+(e.status==='Invoiced'?'ok':'')+'">'+esc(e.status)+(e.inv?' '+esc(e.inv):'')+'</span></td>'+
+      '<td><button type="button" class="btn ico sm" data-act="delreg" aria-label="Delete register row '+(i+1)+'">✕</button></td></tr>';
+  }
+  tb.innerHTML=h;
+  $('#tagReg').textContent=S.reg.length+' logged';
+}
+
+/* ── recalc / render ─────────────────────────────────────────────── */
+function recalc(){
+  var C=compute(),i;
+  /* per-row amounts */
+  var trs=$('#tbItems').querySelectorAll('tr[data-id]');
+  for(i=0;i<trs.length;i++){
+    var tr=trs[i],row=null;
+    for(var j=0;j<C.rows.length;j++){if(C.rows[j].it.id===tr.getAttribute('data-id')){row=C.rows[j];break}}
+    if(!row)continue;
+    var cell=tr.querySelector('[data-amt]');
+    var flag='';
+    if(!row.inP)flag='<span class="flag">not in '+esc(tierName(S.sel))+'</span>';
+    else if(row.it.opt&&!row.it.inc)flag='<span class="flag">option not taken</span>';
+    else if(row.it.opt)flag='<span class="flag">option taken</span>';
+    cell.innerHTML=esc(money(row.net))+flag;
+    tr.classList.toggle('off',!row.active);
+  }
+  $('#tagItems').textContent=S.items.length+(S.items.length===1?' line':' lines');
+  $('#ftItems').textContent=C.has?(C.n+' of '+S.items.length+' lines charged in '+tierName(S.sel)+
+     (C.nOpt?' · '+C.nOpt+' option'+(C.nOpt===1?'':'s')+' offered':'')):'No lines are charged in '+tierName(S.sel)+' yet.';
+
+  /* tier cards */
+  for(i=0;i<S.tiers.length;i++){
+    var k=S.tiers[i].key,T=C.tiers[k];
+    var card=$('.tier[data-tier="'+k+'"]');
+    if(!card)continue;
+    card.classList.toggle('on',S.sel===k);
+    var a=card.querySelector('[data-tamt]');
+    var sb=card.querySelector('[data-tsub]');
+    a.textContent=T.has?money(T.total):'—';
+    sb.textContent=T.has?(T.n+' line'+(T.n===1?'':'s')+' · deposit '+money(T.deposit)):'Nothing priced in this package';
+  }
+
+  /* hero + results */
+  var heroV=$('#heroV');
+  heroV.textContent=C.has?money(C.total):'—';
+  heroV.classList.toggle('dim',!C.has);
+  $('#mbarV').textContent=C.has?money(C.total):'—';
+  $('#heroS').textContent=C.has
+    ? (tierName(S.sel)+' package · '+money(C.net)+' net + '+money(C.tax)+' '+(S.q.taxLabel||'tax'))
+    : 'Add a line, or pick a package that has lines in it.';
+  $('#chipTier').textContent=C.has?tierName(S.sel):'no lines';
+  $('#chipTier').className='chip'+(C.has?' ok':'');
+
+  var isInv=S.mode==='invoice';
+  var dep=C.deposit,bal=C.balance;
+  $('#depV').textContent=C.has?money(dep):'—';
+  $('#depS').textContent=r3(num(S.q.depositPct))+'% of the total'+(isInv&&S.inv.depositPaid?' — received':'');
+  if(isInv){
+    var due=S.inv.depositPaid?r2(C.total-dep):C.total;
+    $('#balV').textContent=C.has?money(due):'—';
+    $('#balS').textContent=S.inv.depositPaid?'Total less deposit received':'Full amount, no deposit deducted';
+  }else{
+    $('#balV').textContent=C.has?money(bal):'—';
+    $('#balS').textContent='Due on completion';
+  }
+
+  $('#rLines').textContent=C.has?String(C.n):'—';
+  $('#rSub').textContent=C.has?money(C.sub):'—';
+  $('#rDiscRow').hidden=!(num(S.q.discPct)>0);
+  $('#rDiscK').textContent='Discount '+r3(num(S.q.discPct))+'%';
+  $('#rDisc').textContent=C.has?'-'+money(C.disc).replace('-',''):'—';
+  $('#rNet').textContent=C.has?money(C.net):'—';
+  var bh='';
+  for(i=0;i<C.bands.length;i++){
+    var b=C.bands[i];
+    bh+='<div class="ln"><span>'+esc(S.q.taxLabel||'Tax')+' '+pct(b.rate)+'% on '+esc(money(b.net))+'</span><span class="v">'+esc(money(b.tax))+'</span></div>';
+  }
+  if(!C.has)bh='<div class="ln"><span>'+esc(S.q.taxLabel||'Tax')+'</span><span class="v">—</span></div>';
+  $('#rBands').innerHTML=bh;
+  $('#rTotK').textContent=isInv?'Invoice total':'Quote total';
+  $('#rTot').textContent=C.has?money(C.total):'—';
+  $('#rOptRow').hidden=!(C.optNotTaken>0);
+  $('#rOpt').textContent=money(C.optNotTaken);
+
+  /* validity */
+  var exp=expiryDate();
+  $('#iExpiry').value=exp?dsp(exp):'—';
+  if(isInv){
+    var dd=dueDate();
+    $('#rValid').textContent=num(S.inv.dueDays)+' day terms';
+    $('#rExp').textContent=dd?dsp(dd):'—';
+  }else{
+    $('#rValid').textContent=num(S.q.validDays)+' days';
+    $('#rExp').textContent=exp?dsp(exp):'—';
+    var left=daysBetween(today(),exp);
+    if(left!=null){
+      $('#rExp').textContent=dsp(exp)+' ('+(left<0?Math.abs(left)+' days ago':(left===0?'today':'in '+left+' days'))+')';
+    }
+  }
+  $('#tagNo').textContent=docNo();
+  renderDoc(C);
+}
+
+/* ── the document ────────────────────────────────────────────────── */
+function lineRows(C,which){
+  var h='',i,any=false;
+  for(i=0;i<C.rows.length;i++){
+    var R=C.rows[i],it=R.it;
+    var show=which==='charged'?R.active:(R.inP&&it.opt&&!it.inc);
+    if(!show)continue;
+    any=true;
+    h+='<tr><td>'+esc(it.desc||'—')+
+      (it.opt&&which==='charged'?'<span class="opt">Optional — accepted</span>':'')+
+      '</td>'+
+      '<td class="n">'+esc(qtyTxt(it.qty))+(it.unit?' '+esc(it.unit):'')+'</td>'+
+      '<td class="n">'+esc(money(it.price))+'</td>'+
+      '<td class="n">'+esc(pct(it.tax))+'%</td>'+
+      '<td class="n">'+esc(money(R.net))+'</td></tr>';
+  }
+  if(!any)h='<tr><td colspan="5" style="color:#666">None.</td></tr>';
+  return h;
+}
+function renderDoc(C){
+  var isInv=S.mode==='invoice',d='';
+  var no=docNo(),exp=expiryDate(),dd=dueDate();
+  var ttl=isInv?'Invoice':'Quotation';
+  d+='<div class="doc-hd">'+
+     '<div class="who"><strong>'+(esc(S.issuer.name)||'Your business')+'</strong>'+esc(S.issuer.addr)+
+       (S.issuer.tax?'\n'+esc(S.issuer.tax):'')+(S.issuer.contact?'\n'+esc(S.issuer.contact):'')+'</div>'+
+     '<div class="doc-ttl"><div class="t">'+ttl+'</div><div class="no">'+esc(no)+'</div>'+
+       '<div class="dt">'+esc(dsp(isInv?S.inv.date:S.q.date))+'</div></div></div>';
+
+  d+='<div class="doc-meta">'+
+     '<div class="box"><div class="k">'+(isInv?'Invoice to':'Quotation for')+'</div><div class="b"><strong>'+
+       (esc(S.client.name)||'—')+'</strong>'+(S.client.addr?'\n'+esc(S.client.addr):'')+
+       (S.client.contact?'\n'+esc(S.client.contact):'')+'</div></div>'+
+     '<div class="box"><div class="k">Details</div>'+
+       '<div class="kv"><span>Project / reference</span><b>'+(esc(S.client.ref)||'—')+'</b></div>'+
+       '<div class="kv"><span>Package</span><b>'+esc(tierName(S.sel))+'</b></div>'+
+       (isInv
+         ? '<div class="kv"><span>Invoice date</span><b>'+esc(dsp(S.inv.date))+'</b></div>'+
+           '<div class="kv"><span>Payment due</span><b>'+esc(dd?dsp(dd):'—')+'</b> <span style="color:#666">('+num(S.inv.dueDays)+' days)</span></div>'+
+           (S.inv.fromQuote?'<div class="kv"><span>Against quotation</span><b>'+esc(S.inv.fromQuote)+'</b></div>':'')
+         : '<div class="kv"><span>Valid for</span><b>'+num(S.q.validDays)+' days</b></div>'+
+           '<div class="kv"><span>Valid until</span><b>'+esc(exp?dsp(exp):'—')+'</b></div>')+
+       '<div class="kv"><span>Prepared by</span><b>'+(esc(S.q.prepared)||'—')+'</b></div>'+
+     '</div></div>';
+
+  if(S.q.scope)d+='<div class="doc-blk"><div class="k">Scope of work</div><div class="b">'+esc(S.q.scope)+'</div></div>';
+
+  d+='<h3 class="sec">'+(isInv?'Charged':'Priced')+' — '+esc(tierName(S.sel))+' package</h3>';
+  d+='<table><thead><tr><th scope="col">Description</th><th scope="col" class="n">Qty</th>'+
+     '<th scope="col" class="n">Unit price</th><th scope="col" class="n">Tax</th>'+
+     '<th scope="col" class="n">Amount</th></tr></thead><tbody>'+lineRows(C,'charged')+'</tbody>'+
+     '<tfoot><tr><td colspan="4">Subtotal before discount</td><td class="n">'+esc(C.has?money(C.sub):'—')+'</td></tr></tfoot></table>';
+
+  if(!isInv&&C.optNotTaken>0){
+    d+='<h3 class="sec">Options quoted but not taken</h3>'+
+       '<table><thead><tr><th scope="col">Description</th><th scope="col" class="n">Qty</th>'+
+       '<th scope="col" class="n">Unit price</th><th scope="col" class="n">Tax</th>'+
+       '<th scope="col" class="n">Amount</th></tr></thead><tbody>'+lineRows(C,'options')+'</tbody></table>'+
+       '<p style="font-size:11.5px;color:#444;margin-top:6px">These are held at the prices shown and may be added at any '+
+       'time before this quotation expires. Adding all of them would take the total to '+
+       esc(money(r2(C.total+C.optNotTaken)))+' including tax.</p>';
+  }
+
+  /* totals */
+  var tot='<div class="doc-tot">';
+  tot+='<div class="r"><span>Subtotal</span><span class="v">'+esc(C.has?money(C.sub):'—')+'</span></div>';
+  if(num(S.q.discPct)>0)
+    tot+='<div class="r"><span>Discount '+r3(num(S.q.discPct))+'%</span><span class="v">-'+esc(money(C.disc).replace('-',''))+'</span></div>';
+  tot+='<div class="r"><span>Net</span><span class="v">'+esc(C.has?money(C.net):'—')+'</span></div>';
+  for(var bi=0;bi<C.bands.length;bi++){
+    var b=C.bands[bi];
+    tot+='<div class="r"><span>'+esc(S.q.taxLabel||'Tax')+' '+pct(b.rate)+'% on '+esc(money(b.net))+'</span><span class="v">'+esc(money(b.tax))+'</span></div>';
+  }
+  tot+='<div class="r g"><span>'+(isInv?'Invoice total':'Quote total')+'</span><span class="v">'+esc(C.has?money(C.total):'—')+'</span></div>';
+  if(isInv&&S.inv.depositPaid){
+    tot+='<div class="r"><span>Less deposit received</span><span class="v">-'+esc(money(C.deposit).replace('-',''))+'</span></div>';
+    tot+='<div class="r g"><span>Balance due</span><span class="v">'+esc(C.has?money(r2(C.total-C.deposit)):'—')+'</span></div>';
+  }
+  tot+='</div>';
+
+  var dep='<div class="doc-dep"><div class="hd">'+(isInv?'Payment':'To accept this quotation')+'</div>';
+  if(isInv){
+    dep+='<div class="r"><span>Terms</span><span class="v">'+num(S.inv.dueDays)+' days</span></div>'+
+         '<div class="r"><span>Due</span><span class="v">'+esc(dd?dsp(dd):'—')+'</span></div>'+
+         '<div class="r g"><span>Amount payable</span><span class="v">'+
+           esc(C.has?money(S.inv.depositPaid?r2(C.total-C.deposit):C.total):'—')+'</span></div>';
+    if(S.inv.pay)dep+='<div style="margin-top:8px;white-space:pre-line;font-size:11.5px">'+esc(S.inv.pay)+'</div>';
+  }else{
+    dep+='<div class="r"><span>Deposit '+r3(num(S.q.depositPct))+'%</span><span class="v">'+esc(C.has?money(C.deposit):'—')+'</span></div>'+
+         '<div class="r"><span>Balance on completion</span><span class="v">'+esc(C.has?money(C.balance):'—')+'</span></div>'+
+         '<div class="r g"><span>Total incl. tax</span><span class="v">'+esc(C.has?money(C.total):'—')+'</span></div>'+
+         '<div style="margin-top:7px;font-size:11.5px;color:#333">Work is scheduled once the signed acceptance and the deposit are received.</div>';
+  }
+  dep+='</div>';
+  d+='<div class="doc-bot"><div>'+dep+'</div><div>'+tot+'</div></div>';
+
+  if(!isInv){
+    d+='<h3 class="sec">Package comparison</h3>'+
+       '<table class="doc-cmp"><thead><tr><th scope="col">Package</th><th scope="col">What it covers</th>'+
+       '<th scope="col" class="n">Lines</th><th scope="col" class="n">Deposit</th><th scope="col" class="n">Total incl. tax</th></tr></thead><tbody>';
+    for(var ti=0;ti<S.tiers.length;ti++){
+      var tk=S.tiers[ti].key,T=C.tiers[tk],on=S.sel===tk;
+      d+='<tr'+(on?' style="background:#f0f0f0"':'')+'><td class="'+(on?'pick':'')+'">'+esc(S.tiers[ti].name)+
+         (on?' <span class="opt" style="color:#111">Accepted</span>':'')+'</td>'+
+         '<td>'+esc(S.tiers[ti].tag||'—')+'</td>'+
+         '<td class="n">'+T.n+'</td>'+
+         '<td class="n">'+esc(T.has?money(T.deposit):'—')+'</td>'+
+         '<td class="n"><b>'+esc(T.has?money(T.total):'—')+'</b></td></tr>';
+    }
+    d+='</tbody></table>'+
+       '<p style="font-size:11.5px;color:#444;margin-top:6px">Package totals reflect the optional add-ons currently ticked. '+
+       'Prices are held until '+esc(exp?dsp(exp):'the expiry date shown')+'.</p>';
+  }
+
+  if(S.q.excl)d+='<div class="doc-blk"><div class="k">Not included</div><div class="b">'+esc(S.q.excl)+'</div></div>';
+  if(S.q.terms)d+='<div class="doc-blk"><div class="k">Terms and conditions</div><div class="b">'+esc(S.q.terms)+'</div></div>';
+
+  if(!isInv){
+    d+='<div class="doc-acc"><div class="t">Acceptance</div>'+
+       '<p>I accept the <strong>'+esc(tierName(S.sel))+'</strong> package set out in quotation '+esc(no)+
+       ' at <strong>'+esc(C.has?money(C.total):'—')+'</strong> including tax, together with the scope, exclusions and terms above, '+
+       'and agree to pay the deposit of <strong>'+esc(C.has?money(C.deposit):'—')+'</strong> to begin the work. '+
+       'This offer lapses on '+esc(exp?dsp(exp):'the expiry date shown')+' unless accepted in writing.</p>'+
+       '<div class="doc-sign">'+
+         '<div><div style="color:#666">Signed for and on behalf of '+(esc(S.client.name)||'the client')+'</div>'+
+           '<div class="l">Signature · name in capitals · position</div></div>'+
+         '<div><div style="color:#666">Date and purchase order reference</div><div class="l">Date · PO number</div></div>'+
+       '</div></div>';
+  }
+
+  d+='<div class="doc-note"><b>Important — please read.</b> This '+(isInv?'invoice':'quotation')+
+     ' is produced from figures entered by '+(esc(S.issuer.name)||'the issuer')+
+     ' and totals only those figures. Tax is applied at the rate shown against each line and totalled per rate band; '+
+     'it is not a determination of the correct tax rate, registration status or place of supply, and it is not legal, '+
+     'accounting or tax advice. Check tax treatment with a qualified accountant and have contract terms reviewed by a '+
+     'solicitor before relying on them. '+(isInv?'':'A quotation is an offer, not a contract, until it is accepted in writing. ')+
+     'Errors and omissions excepted.</div>';
+
+  d+='<div class="doc-ft">'+esc(ttl)+' '+esc(no)+' · '+(esc(S.client.name)||'—')+' · '+
+     esc(dsp(isInv?S.inv.date:S.q.date))+' · '+esc(S.cur.code)+' · page 1 of 1</div>';
+
+  $('#doc').innerHTML=d;
+}
+
+/* ── validation ──────────────────────────────────────────────────── */
+function errBox(el){
+  var id=el.getAttribute('id');
+  if(id){var e=$('#e'+id.replace(/^i/,''));if(e)return e}
+  var p=el.parentNode;
+  return p?p.querySelector('.err'):null;
+}
+function vld(el){
+  if(!el||!el.getAttribute)return true;
+  var mn=el.getAttribute('data-min'),mx=el.getAttribute('data-max');
+  if(mn==null&&mx==null)return true;
+  var box=errBox(el),raw=String(el.value==null?'':el.value).trim(),msg='';
+  if(raw===''){msg='Enter a number.';}
+  else{
+    var n=parseFloat(raw);
+    if(!isFinite(n))msg='Enter a number.';
+    else if(mn!=null&&n<parseFloat(mn))msg='Cannot be less than '+mn+'.';
+    else if(mx!=null&&n>parseFloat(mx))msg='Cannot be more than '+mx+'.';
+  }
+  el.classList.toggle('inv',!!msg);
+  if(box){box.textContent=msg;box.hidden=!msg}
+  return !msg;
+}
+
+/* ── exports ─────────────────────────────────────────────────────── */
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){try{document.body.removeChild(a)}catch(e){}URL.revokeObjectURL(url)},400);
+  }catch(e){}
+}
+function cell(v){
+  var s=String(v==null?'':v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function safeName(s){return String(s||'document').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'document'}
+function csv(){
+  var C=compute(),rows=[],i;
+  var isInv=S.mode==='invoice';
+  rows.push([isInv?'Invoice':'Quotation',docNo(),'','','','','','','','']);
+  rows.push(['Document date',isInv?S.inv.date:S.q.date,'','','','','','','','']);
+  rows.push([isInv?'Payment due':'Valid until',isInv?dueDate():expiryDate(),'','','','','','','','']);
+  rows.push(['From',S.issuer.name,'To',S.client.name,'Reference',S.client.ref,'','','','']);
+  rows.push(['Package accepted',tierName(S.sel),'Currency',S.cur.code,'Prepared by',S.q.prepared,'','','','']);
+  rows.push([]);
+  rows.push(['Description','Unit','Qty','Unit price','Line amount','Discount','Net after discount',
+    'Tax %','Tax','Line total','In package','Optional','Taken','Charged']);
+  for(i=0;i<C.rows.length;i++){
+    var R=C.rows[i],it=R.it;
+    rows.push([it.desc,it.unit,r3(it.qty),r2(it.price),R.net,R.disc,R.after,r3(it.tax),
+      R.active?R.tax:'',R.active?r2(R.after+R.tax):'',
+      R.inP?tierName(S.sel):'not in package',it.opt?'Optional':'Included',
+      it.opt?(it.inc?'Taken':'Not taken'):'n/a',R.active?'Yes':'No']);
+  }
+  rows.push([]);
+  rows.push(['Totals — '+tierName(S.sel)+' package','','','','','','','','','']);
+  rows.push(['Subtotal before discount','',C.has?C.sub:'']);
+  rows.push(['Discount '+r3(num(S.q.discPct))+'%','',C.has?C.disc:'']);
+  rows.push(['Net','',C.has?C.net:'']);
+  for(i=0;i<C.bands.length;i++){
+    rows.push([(S.q.taxLabel||'Tax')+' '+pct(C.bands[i].rate)+'% on '+C.bands[i].net,'',C.bands[i].tax]);
+  }
+  rows.push([(isInv?'Invoice':'Quote')+' total incl. tax','',C.has?C.total:'']);
+  rows.push(['Deposit '+r3(num(S.q.depositPct))+'%','',C.has?C.deposit:'']);
+  rows.push([isInv&&S.inv.depositPaid?'Balance due after deposit':'Balance on completion','',
+    C.has?(isInv&&S.inv.depositPaid?r2(C.total-C.deposit):C.balance):'']);
+  if(!isInv&&C.optNotTaken>0)rows.push(['Options offered but not taken','',C.optNotTaken]);
+  rows.push([]);
+  rows.push(['Package comparison','Description','Lines','Deposit','Total incl. tax']);
+  for(i=0;i<S.tiers.length;i++){
+    var T=C.tiers[S.tiers[i].key];
+    rows.push([S.tiers[i].name+(S.sel===S.tiers[i].key?' (accepted)':''),S.tiers[i].tag,T.n,
+      T.has?T.deposit:'',T.has?T.total:'']);
+  }
+  var out='';
+  for(i=0;i<rows.length;i++){
+    var r=rows[i],p=[];
+    for(var j=0;j<r.length;j++)p.push(cell(r[j]));
+    out+=p.join(',')+'\r\n';
+  }
+  dl(safeName((isInv?'invoice-':'quote-')+docNo())+'.csv','﻿'+out,'text/csv;charset=utf-8');
+}
+
+/* ── messaging ───────────────────────────────────────────────────── */
+var msgT=null;
+function say(t){
+  var m=$('#msg');m.textContent=t;
+  if(msgT)clearTimeout(msgT);
+  msgT=setTimeout(function(){m.textContent=''},9000);
+}
+
+/* ── events ──────────────────────────────────────────────────────── */
+function touched(){if(S.sample){S.sample=false;$('#sampleBanner').hidden=true}}
+function afterEdit(){touched();save();recalc()}
+
+function onField(t){
+  var p=t.getAttribute('data-p');
+  if(p){
+    var v;
+    if(t.type==='checkbox')v=!!t.checked;
+    else if(t.getAttribute('data-n'))v=num(t.value);
+    else v=t.value;
+    setp(S,p,v);
+    if(p==='mode'){S.mode=(v==='invoice')?'invoice':'quote';syncMode()}
+    if(p==='inv.depositPaid')syncMode();
+    afterEdit();
+    return true;
+  }
+  var tr=t.closest?t.closest('tr[data-id]'):null;
+  var k=t.getAttribute('data-k');
+  if(tr&&k){
+    var id=tr.getAttribute('data-id'),it=null;
+    for(var i=0;i<S.items.length;i++){if(S.items[i].id===id){it=S.items[i];break}}
+    if(!it)return true;
+    if(k==='desc'||k==='unit')it[k]=t.value;
+    else if(k==='qty'||k==='price')it[k]=num(t.value);
+    else if(k==='tax')it.tax=Math.min(100,Math.max(0,num(t.value)));
+    else if(k==='tier')it.tier=TVALS.indexOf(t.value)>=0?t.value:'a';
+    else if(k==='opt'){
+      it.opt=!!t.checked;
+      if(!it.opt)it.inc=true;
+      var inc=tr.querySelector('[data-k="inc"]');
+      if(inc){inc.disabled=!it.opt;inc.checked=it.inc}
+    }
+    else if(k==='inc')it.inc=!!t.checked;
+    afterEdit();
+    return true;
+  }
+  var tn=t.getAttribute('data-tn'),tg=t.getAttribute('data-tg');
+  if(tn!=null){S.tiers[+tn].name=t.value;afterEdit();buildItems();recalc();return true}
+  if(tg!=null){S.tiers[+tg].tag=t.value;afterEdit();return true}
+  return false;
+}
+document.addEventListener('input',function(e){
+  var t=e.target;if(!t||t.type==='checkbox'||t.type==='radio')return;
+  if(t.id==='iCur')return;
+  onField(t);
+});
+document.addEventListener('change',function(e){
+  var t=e.target;if(!t)return;
+  if(t.id==='iCur'){
+    var c=t.value;
+    if(c==='CUS'){$('#curCustom').hidden=false;}
+    else{S.cur={sym:CURS[c],code:c};$('#curCustom').hidden=true;fillFields();}
+    afterEdit();return;
+  }
+  if(t.name==='tierpick'){S.sel=t.value;afterEdit();return}
+  if(t.type==='checkbox'||t.type==='radio'||t.tagName==='SELECT')onField(t);
+});
+document.addEventListener('blur',function(e){
+  var t=e.target;
+  if(t&&t.getAttribute&&(t.getAttribute('data-min')!=null))vld(t);
+},true);
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('button'):null;
+  if(!b)return;
+  var act=b.getAttribute('data-act'),id=b.id;
+  if(act==='del'){
+    var tr=b.closest('tr[data-id]'),rid=tr.getAttribute('data-id');
+    for(var i=0;i<S.items.length;i++){if(S.items[i].id===rid){S.items.splice(i,1);break}}
+    touched();save();buildItems();recalc();return;
+  }
+  if(act==='delreg'){
+    var r=+b.closest('tr').getAttribute('data-r');
+    S.reg.splice(r,1);touched();save();buildReg();return;
+  }
+  if(id==='bAdd'||id==='bAddOpt'){
+    var it=blankItem(id==='bAddOpt');
+    it.tier=S.sel==='c'?'c':(S.sel==='b'?'b':'a');
+    S.items.push(it);
+    touched();save();buildItems();recalc();
+    var rows=$('#tbItems').querySelectorAll('tr[data-id] input.d');
+    if(rows.length)rows[rows.length-1].focus();
+    return;
+  }
+  if(id==='bPrint'){window.print();return}
+  if(id==='bCsv'){csv();return}
+  if(id==='bJson'){
+    dl(safeName((S.mode==='invoice'?'invoice-':'quote-')+docNo())+'.json',JSON.stringify(S,null,2),'application/json');
+    say('Saved '+docNo()+'.json — load it back with “Load JSON”.');return;
+  }
+  if(id==='bImport'){$('#fImport').click();return}
+  if(id==='bPreview'){
+    var dEl=$('#doc'),on=dEl.classList.toggle('show');
+    b.setAttribute('aria-pressed',on?'true':'false');
+    b.textContent=on?'Hide document':'Preview document';
+    if(on)dEl.scrollIntoView({block:'start'});
+    return;
+  }
+  if(id==='bLog'){
+    var C=compute();
+    S.reg.unshift({no:quoteNo(),date:S.q.date,client:S.client.name,tier:tierName(S.sel),
+      total:C.has?C.total:0,status:'Issued',inv:''});
+    S.q.seq=Math.max(0,Math.round(num(S.q.seq)))+1;
+    S.sample=false;$('#sampleBanner').hidden=true;
+    save();fillFields();buildReg();recalc();
+    say(S.reg[0].no+' logged. This document is now '+quoteNo()+'.');
+    return;
+  }
+  if(id==='bConvert'){
+    if(S.mode==='invoice'){
+      S.mode='quote';S.sample=false;$('#sampleBanner').hidden=true;
+      save();fillFields();recalc();say('Back to quotation '+quoteNo()+'.');
+      return;
+    }
+    var C2=compute();
+    S.mode='invoice';
+    S.inv.fromQuote=quoteNo()+' ('+tierName(S.sel)+')';
+    S.inv.date=today();
+    var qn=quoteNo(),marked=false;
+    for(var j=0;j<S.reg.length;j++){
+      if(S.reg[j].no===qn){S.reg[j].status='Invoiced';S.reg[j].inv=invoiceNo();S.reg[j].total=C2.has?C2.total:0;marked=true;break}
+    }
+    if(!marked)S.reg.unshift({no:qn,date:S.q.date,client:S.client.name,tier:tierName(S.sel),
+      total:C2.has?C2.total:0,status:'Invoiced',inv:invoiceNo()});
+    S.sample=false;$('#sampleBanner').hidden=true;
+    save();fillFields();buildReg();recalc();
+    say('Invoice '+invoiceNo()+' raised from '+qn+' — every field carried across. Print it, or switch back to the quotation.');
+    return;
+  }
+  if(id==='bBlank'||id==='bClear'){
+    if(id==='bClear'&&!window.confirm('Clear all data — parties, line items, packages, terms and the quote register — and start blank? This cannot be undone.'))return;
+    if(id==='bBlank'&&!window.confirm('Replace the sample quote with a blank one?'))return;
+    S=blankState();
+    try{localStorage.removeItem(KEY)}catch(e3){}
+    save();fillFields();buildItems();buildTiers();buildReg();recalc();
+    $('#sampleBanner').hidden=true;
+    $('#iIssName').focus();
+    say('Cleared. Start with your business name.');
+    return;
+  }
+});
+$('#fImport').addEventListener('change',function(){
+  var f=this.files&&this.files[0];if(!f){return}
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object')throw new Error('bad');
+      S=normalise(o);S.sample=false;
+      save();fillFields();buildItems();buildTiers();buildReg();recalc();
+      $('#sampleBanner').hidden=true;
+      say('Loaded '+f.name+' — '+docNo()+'.');
+    }catch(err){
+      say('That file is not a valid Solvix quote JSON export.');
+      $('#msg').style.color='var(--bad)';
+      setTimeout(function(){$('#msg').style.color=''},9000);
+    }
+  };
+  fr.readAsText(f);
+  this.value='';
+});
+window.addEventListener('beforeprint',function(){recalc()});
+
+/* ── boot ────────────────────────────────────────────────────────── */
+(function init(){
+  var ab=document.querySelector('.appbar');
+  function abh(){try{document.documentElement.style.setProperty('--abh',ab.offsetHeight+'px')}catch(e){}}
+  abh();window.addEventListener('resize',abh);
+  S=load()||sampleState();
+  fillFields();buildItems();buildTiers();buildReg();recalc();save();
+  $('#sampleBanner').hidden=!S.sample;
+})();
+})();
+</script>
+</body>
+</html>

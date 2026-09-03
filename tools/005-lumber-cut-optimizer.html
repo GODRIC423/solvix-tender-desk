@@ -505,9 +505,11 @@ footer.foot b{color:var(--ink-2)}
 
 <footer class="foot">
   <b>Method.</b> Pieces are sorted longest-first and packed by first-fit-decreasing bin packing, charging the saw kerf against
-  every cut made. The pack is run once for each stock length on its own and once across all lengths mixed (opening whichever
-  new board gives the lowest cost per unit of finished timber); the cheapest plan that cuts every piece is the one shown, so a
-  plan with more boards can win if it costs less. A board holding <i>k</i> pieces of total length <i>S</i> needs
+  every cut made. The pack is run once for each stock length on its own, and mixed across all lengths by several rules — opening
+  each new board in the length with the lowest cost per unit of finished timber, then downgrading every board to the cheapest
+  length that still holds what was packed on it. The cheapest plan that cuts every piece is the one shown, so a plan with more
+  boards can win when it costs less. Mixed-length packing against a price list has no exact shortcut, so treat the mixed plan as
+  a strong candidate rather than a proven optimum — the strategies table shows what it was measured against. A board holding <i>k</i> pieces of total length <i>S</i> needs
   <i>S</i>&nbsp;+&nbsp;kerf&nbsp;×&nbsp;(<i>k</i>−1) ≤ length − end trim. Waste&nbsp;% = (total stock length bought − total cut
   length) ÷ total stock length bought, counting kerf loss, end trim and offcut. Quantities always round up to whole boards;
   money is shown to 2&nbsp;dp. Not a substitute for checking the timber itself.
@@ -664,66 +666,119 @@ function refreshAutoNames(){
    timber is chosen, so mixed-length plans can beat single lengths. */
 var EPS=1e-6;
 
-function boardFits(b,p,kerf,cap){
-  var k=b.items.length+1;
-  return (b.S+p.len)+kerf*(k-1) <= cap(b.stock)+EPS;
-}
-function pack(pieces, stocks, kerf, trim){
-  var caps={}, avail={};
-  stocks.forEach(function(st){ caps[st.id]=st.len-trim; avail[st.id]=st.qty; });
-  var cap=function(st){ return caps[st.id]; };
-  var boards=[], unfit=[], anyPrice=false;
-  stocks.forEach(function(st){ if(st.price>0) anyPrice=true; });
-
-  for(var i=0;i<pieces.length;i++){
-    var p=pieces[i], placed=false, j;
-    for(j=0;j<boards.length;j++){
-      if(boardFits(boards[j],p,kerf,cap)){ boards[j].items.push(p); boards[j].S+=p.len; placed=true; break; }
-    }
-    if(placed) continue;
-    if(boards.length>=MAXB){ unfit.push(p); continue; }
-
-    /* open a new board: pick the stock length with the best value */
-    var best=null;
-    for(j=0;j<stocks.length;j++){
-      var st=stocks[j];
-      if(avail[st.id]<=0) continue;
-      if(p.len>caps[st.id]+EPS) continue;
-      /* look ahead: greedily fill this candidate with the pieces still to come */
-      var sim=p.len, k=1, q;
-      for(q=i+1;q<pieces.length;q++){
-        var c=pieces[q];
-        if(sim+c.len+kerf*k <= caps[st.id]+EPS){ sim+=c.len; k++; }
-      }
-      var eff = anyPrice ? (st.price/sim) : (st.len/sim);
-      if(best===null || eff<best.eff-1e-12 ||
-         (Math.abs(eff-best.eff)<=1e-12 && (sim>best.sim+EPS ||
-          (Math.abs(sim-best.sim)<=EPS && st.price<best.st.price-1e-9)))){
-        best={st:st, eff:eff, sim:sim};
-      }
-    }
-    if(!best){ unfit.push(p); continue; }
-    avail[best.st.id]--;
-    boards.push({stock:best.st, items:[p], S:p.len});
-  }
-
-  /* finalise every board: cuts, kerf loss, offcut */
+/* every board: total length cut, number of saw cuts, kerf lost, offcut left */
+function finalise(res, kerf, trim){
   var cost=0, stockLen=0, product=0, kerfLoss=0, trimLoss=0, offcut=0, cuts=0;
-  boards.forEach(function(b){
-    var k=b.items.length;
-    var raw=caps[b.stock.id]-b.S-kerf*(k-1);
+  res.boards.forEach(function(b){
+    var k=b.items.length, i, s=0;
+    for(i=0;i<k;i++) s+=b.items[i].len;
+    b.S=s;
+    var raw=(b.stock.len-trim)-s-kerf*(k-1);
     if(raw<0) raw=0;
-    b.cuts = (raw>=kerf-EPS && kerf>0) ? k : (raw>EPS && kerf===0 ? k : k-1);
+    b.cuts = (kerf>0 ? (raw>=kerf-EPS?k:k-1) : (raw>EPS?k:k-1));
     if(b.cuts<0) b.cuts=0;
     b.offcut = raw - (b.cuts===k?kerf:0);
     if(b.offcut<0) b.offcut=0;
     b.kerfLoss=b.cuts*kerf;
-    cost+=b.stock.price; stockLen+=b.stock.len; product+=b.S;
+    cost+=b.stock.price; stockLen+=b.stock.len; product+=s;
     kerfLoss+=b.kerfLoss; trimLoss+=trim; offcut+=b.offcut; cuts+=b.cuts;
   });
-  return {boards:boards, unfit:unfit, cost:cost, stockLen:stockLen, product:product,
-          kerfLoss:kerfLoss, trimLoss:trimLoss, offcut:offcut, cuts:cuts,
-          waste: stockLen>0 ? (stockLen-product)/stockLen*100 : NaN};
+  res.cost=cost; res.stockLen=stockLen; res.product=product; res.kerfLoss=kerfLoss;
+  res.trimLoss=trimLoss; res.offcut=offcut; res.cuts=cuts;
+  res.waste = stockLen>0 ? (stockLen-product)/stockLen*100 : NaN;
+  return res;
+}
+/* value of a candidate board: cost per unit of finished timber it would yield */
+function lookahead(list, from, st, kerf, trim, take){
+  var cap=st.len-trim, s=0, k=0, i, idx=take?[]:null;
+  for(i=from;i<list.length;i++){
+    if(list[i]===null) continue;
+    var c=list[i];
+    if(s+c.len+kerf*k <= cap+EPS){ s+=c.len; k++; if(idx) idx.push(i); }
+  }
+  return {S:s, k:k, idx:idx};
+}
+/* mode 'firstfit' — literal FFD: each piece goes in the first open board that
+   takes it, and a new board is opened in the stock length with the best value.
+   mode 'value'   — each new board is opened already filled with the best-value
+   run of pieces, which suits mixed price lists better.                      */
+function pack(pieces, stocks, kerf, trim, mode){
+  var avail={}, anyPrice=false;
+  stocks.forEach(function(st){ avail[st.id]=st.qty; if(st.price>0) anyPrice=true; });
+  var boards=[], unfit=[], i, j;
+
+  function pickStock(list, from){
+    var best=null, p=list[from];
+    for(j=0;j<stocks.length;j++){
+      var st=stocks[j];
+      if(avail[st.id]<=0) continue;
+      if(p.len > st.len-trim+EPS) continue;
+      var la=lookahead(list, from, st, kerf, trim, mode==='value');
+      var eff = anyPrice ? (st.price/la.S) : (st.len/la.S);
+      if(best===null || eff<best.eff-1e-12 ||
+         (Math.abs(eff-best.eff)<=1e-12 && (la.S>best.la.S+EPS ||
+          (Math.abs(la.S-best.la.S)<=EPS && st.price<best.st.price-1e-9)))){
+        best={st:st, eff:eff, la:la};
+      }
+    }
+    return best;
+  }
+
+  if(mode==='value'){
+    var list=pieces.slice(), left=list.length, from=0;
+    while(left>0){
+      while(from<list.length && list[from]===null) from++;
+      if(from>=list.length) break;
+      if(boards.length>=MAXB){ for(i=from;i<list.length;i++) if(list[i]){ unfit.push(list[i]); list[i]=null; left--; } break; }
+      var pick=pickStock(list, from);
+      if(!pick){ unfit.push(list[from]); list[from]=null; left--; continue; }
+      avail[pick.st.id]--;
+      var items=pick.la.idx.map(function(ix){ var v=list[ix]; list[ix]=null; return v; });
+      left-=items.length;
+      boards.push({stock:pick.st, items:items});
+    }
+  } else {
+    for(i=0;i<pieces.length;i++){
+      var p=pieces[i], placed=false;
+      for(j=0;j<boards.length;j++){
+        var b=boards[j], k=b.items.length+1, s=0, q;
+        for(q=0;q<b.items.length;q++) s+=b.items[q].len;
+        if(s+p.len+kerf*(k-1) <= b.stock.len-trim+EPS){ b.items.push(p); placed=true; break; }
+      }
+      if(placed) continue;
+      if(boards.length>=MAXB){ unfit.push(p); continue; }
+      var pk=pickStock(pieces, i);
+      if(!pk){ unfit.push(p); continue; }
+      avail[pk.st.id]--;
+      boards.push({stock:pk.st, items:[p]});
+    }
+  }
+  return finalise({boards:boards, unfit:unfit}, kerf, trim);
+}
+/* buy the cheapest board that still holds what was packed on it */
+function downgrade(res, stocks, kerf, trim){
+  if(stocks.length<2) return res;
+  var used={}, i;
+  stocks.forEach(function(s){ used[s.id]=0; });
+  res.boards.forEach(function(b){ used[b.stock.id]++; });
+  var order=stocks.slice().sort(function(a,b){ return (a.price-b.price)||(a.len-b.len); });
+  res.boards.forEach(function(b){
+    var s=0, k=b.items.length;
+    for(i=0;i<k;i++) s+=b.items[i].len;
+    var need=s+kerf*(k-1);
+    for(i=0;i<order.length;i++){
+      var st=order[i];
+      if(st.price>=b.stock.price-1e-9) break;
+      if(need > st.len-trim+EPS) continue;
+      if(used[st.id]>=st.qty) continue;
+      used[b.stock.id]--; used[st.id]++; b.stock=st; break;
+    }
+  });
+  return finalise(res, kerf, trim);
+}
+function cloneRes(r){
+  return {boards:r.boards.map(function(b){ return {stock:b.stock, items:b.items.slice()}; }),
+          unfit:r.unfit.slice()};
 }
 
 /* ═══ compute ═══════════════════════════════════════════════════ */
@@ -758,15 +813,32 @@ function compute(){
   });
   pieces.sort(function(a,b){ return (b.len-a.len) || (a.part<b.part?-1:a.part>b.part?1:0); });
 
-  var cands=[];
-  stocks.forEach(function(st){ cands.push({name:'All '+st.label, set:[st], single:true}); });
-  if(stocks.length>1) cands.push({name:'Mixed lengths', set:stocks.slice(), single:false});
-
-  var runs=cands.map(function(c){
-    var r=pack(pieces, c.set, kerf, trim);
-    r.name=c.name; r.single=c.single;
-    return r;
-  }).filter(function(r){ return r.boards.length>0 || r.unfit.length>0 || pieces.length===0; });
+  var runs=[], singles=[];
+  stocks.forEach(function(st){
+    var r=pack(pieces, [st], kerf, trim, 'firstfit');
+    r.name='All '+st.label; r.single=true;
+    singles.push(r); runs.push(r);
+  });
+  if(stocks.length>1 && pieces.length){
+    /* several honest heuristics; the cheapest complete one is offered as the
+       mixed plan, because mixed-length packing with prices has no exact
+       shortcut short of trying every combination */
+    var mixes=[
+      downgrade(pack(pieces, stocks, kerf, trim, 'value'), stocks, kerf, trim),
+      downgrade(pack(pieces, stocks, kerf, trim, 'firstfit'), stocks, kerf, trim)
+    ];
+    singles.forEach(function(r){ mixes.push(downgrade(cloneRes(r), stocks, kerf, trim)); });
+    mixes.sort(function(a,b){
+      if(a.unfit.length!==b.unfit.length) return a.unfit.length-b.unfit.length;
+      if(Math.abs(a.cost-b.cost)>0.004) return a.cost-b.cost;
+      if(a.boards.length!==b.boards.length) return a.boards.length-b.boards.length;
+      return (a.stockLen-a.product)-(b.stockLen-b.product);
+    });
+    var mx=mixes[0];
+    mx.name='Mixed lengths'; mx.single=false;
+    runs.push(mx);
+  }
+  runs=runs.filter(function(r){ return r.boards.length>0 || r.unfit.length>0 || pieces.length===0; });
 
   var ranked=runs.slice().sort(function(a,b){
     if(a.unfit.length!==b.unfit.length) return a.unfit.length-b.unfit.length;
@@ -790,7 +862,7 @@ function rowStock(r,i){
   return '<tr data-i="'+i+'">'+
     '<td class="lab"><input value="'+esc(r.label)+'" data-scope="stock" data-i="'+i+'" data-f="label" aria-label="Stock item '+(i+1)+' description" autocomplete="off"></td>'+
     '<td class="n"><input type="number" min="0" step="any" inputmode="decimal" value="'+(isFinite(r.len)?r.len:'')+'" data-scope="stock" data-i="'+i+'" data-f="len" aria-label="Stock item '+(i+1)+' length"><span class="err" data-err="stock-len-'+i+'" hidden></span></td>'+
-    '<td class="n"><input type="number" min="0" step="0.01" inputmode="decimal" value="'+(isFinite(r.price)?r.price:'')+'" data-scope="stock" data-i="'+i+'" data-f="price" aria-label="Stock item '+(i+1)+' price each"></td>'+
+    '<td class="n"><input type="number" min="0" step="0.01" inputmode="decimal" value="'+(isFinite(r.price)?r.price.toFixed(2):'')+'" data-scope="stock" data-i="'+i+'" data-f="price" aria-label="Stock item '+(i+1)+' price each"></td>'+
     '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" placeholder="∞" value="'+(r.qty===''?'':r.qty)+'" data-scope="stock" data-i="'+i+'" data-f="qty" aria-label="Stock item '+(i+1)+' quantity in stock"></td>'+
     '<td class="act noprint"><button type="button" class="btn sm ico del" data-del="stock" data-i="'+i+'" aria-label="Remove stock item '+(i+1)+'" title="Remove">✕</button></td></tr>';
 }
@@ -889,7 +961,7 @@ function paint(){
   $('sBoards').textContent = ok ? nfmt(best.boards.length,0) : '—';
   $('sWaste').textContent  = ok ? pct(best.waste) : '—';
   $('sCuts').textContent   = ok ? nfmt(best.cuts,0) : '—';
-  $('sOff').textContent    = ok ? fLen(R.usable,false) : '—';
+  $('sOff').textContent    = ok ? fLen(R.usable) : '—';
   $('planChip').textContent= ok ? best.name : 'No plan yet';
   $('mbCost').textContent  = ok ? money(best.cost) : '—';
   $('mbMeta').textContent  = ok ? (nfmt(best.boards.length,0)+' boards · '+pct(best.waste)+' waste · '+nfmt(best.cuts,0)+' cuts') : '—';
@@ -1079,7 +1151,15 @@ document.addEventListener('change', function(ev){
 });
 document.addEventListener('focusout', function(ev){
   var el=ev.target;
-  if(el&&el.getAttribute&&el.getAttribute('data-scope')) validateField(el);
+  if(!el||!el.getAttribute||!el.getAttribute('data-scope')) return;
+  /* tidy prices to 2 dp once the field is left */
+  if(el.getAttribute('data-scope')==='stock' && el.getAttribute('data-f')==='price'){
+    var i=parseInt(el.getAttribute('data-i'),10), n=num(el.value);
+    if(el.value.trim()!=='' && isFinite(n) && n>=0 && S.stock[i]){
+      el.value=n.toFixed(2); S.stock[i].price=Number(n.toFixed(2)); save(); paint();
+    }
+  }
+  validateField(el);
 });
 document.addEventListener('click', function(ev){
   var el=ev.target.closest?ev.target.closest('[data-del]'):null;
