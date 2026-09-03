@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Truckload Profit Calculator — Solvix Toolkit</title>
+<meta name="description" content="Decide whether a truckload is worth taking: revenue against fuel, driver pay, deadhead, tolls and fixed cost per mile. Net profit, revenue per loaded mile, margin, break-even rate and a printable decision sheet comparing up to three loads.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cpath d='M6 23l6.5-7.5 4.2 4L25 10' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M19.5 10H25v5.5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+}}
+:root[data-theme="dark"]{
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+}
+
+.app{padding-top:14px}
+.stack>*{min-width:0}
+.split>*{min-width:0}
+.msg{margin:10px 0 0;padding:8px 11px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 12.5px/1.4 var(--sans);border-left:3px solid var(--ok)}
+.msg.bad{background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+.msg[hidden]{display:none}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;background:var(--raise)}
+.seg button{font:600 12px/1 var(--sans);padding:7px 10px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;
+  border-right:1px solid var(--line);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.seg button:hover:not([aria-pressed="true"]){background:var(--accent-wash);color:var(--accent-ink)}
+
+/* the load matrix */
+.mx{min-width:520px}
+.mx th[scope="row"]{position:sticky;left:0;z-index:2;background:var(--surface);text-transform:none;
+  font:600 12.5px/1.35 var(--sans);letter-spacing:0;color:var(--ink-2);white-space:normal;
+  border-right:1px solid var(--line);min-width:168px;padding:6px 10px}
+.mx th[scope="row"] .u{display:block;font:400 10.5px/1.3 var(--sans);color:var(--muted)}
+.mx td{padding:4px 6px;min-width:112px}
+.mx tbody tr:hover th[scope="row"]{background:var(--accent-wash)}
+.mx tr.sec th{position:sticky;left:0;z-index:2;background:var(--sunk);color:var(--muted);
+  font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:7px 10px;
+  border-top:1px solid var(--line-hard);border-bottom:1px solid var(--line-hard)}
+.mx thead th{vertical-align:bottom;padding:7px 6px}
+.mx .colhd{display:flex;flex-direction:column;gap:3px;align-items:stretch}
+.mx .colhd .pick{font:700 12px/1 var(--sans);padding:6px 6px;border:1px solid var(--line-hard);border-radius:4px;
+  background:var(--raise);color:var(--ink);cursor:pointer;letter-spacing:.02em}
+.mx .colhd .pick[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.mx .colhd .pick:hover:not([aria-pressed="true"]){border-color:var(--accent);color:var(--accent)}
+.mx .colhd .rm{font:600 10.5px/1 var(--sans);padding:4px;border:0;background:transparent;color:var(--muted);cursor:pointer;
+  text-transform:uppercase;letter-spacing:.06em}
+.mx .colhd .rm:hover{color:var(--bad)}
+.mx td.cell{vertical-align:top}
+.mx td .cu{display:block;font:400 10px/1.3 var(--mono);color:var(--muted);text-align:right;padding:1px 6px 0 0}
+.mx td .err{display:block;padding:1px 2px 0}
+.mx td.val{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px;white-space:nowrap}
+.mx tr.net th[scope="row"],.mx tr.net td{background:var(--sunk);border-top:2px solid var(--line-hard);
+  border-bottom:2px solid var(--line-hard)}
+.mx tr.net td.val{font-weight:700;font-size:15.5px}
+.mx tr.net td.pos{color:var(--ok)} .mx tr.net td.neg{color:var(--bad)}
+.mx td.foc,.mx tr.net td.foc{box-shadow:inset 3px 0 0 var(--accent),inset -3px 0 0 var(--accent)}
+.mx thead th.foc{box-shadow:inset 3px 0 0 var(--accent),inset -3px 0 0 var(--accent)}
+.mx td .chip{white-space:nowrap}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:9px}
+.stat .sub{font:400 11px/1.35 var(--sans);color:var(--muted);margin-top:3px}
+.hero-wrap{display:flex;flex-direction:column;gap:9px}
+.hero-wrap .stat.hero .v{font-size:30px}
+.brk{width:100%;font-size:13px;margin-top:2px}
+.brk td{padding:5px 0;border-bottom:1px dotted var(--line)}
+.brk td.n{width:44%}
+.brk tr.tot td{font-weight:700;border-top:1px solid var(--line-hard);border-bottom:0}
+.brk tr.tot td.neg{color:var(--bad)} .brk tr.tot td.pos{color:var(--ok)}
+.ftline{font:600 11.5px/1.4 var(--sans);color:var(--ink-2)}
+.ftline b{font-family:var(--mono)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+footer.foot{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
+  font:12px/1.55 var(--sans);color:var(--muted)}
+footer.foot b{color:var(--ink-2);font-weight:650}
+
+/* print document */
+.docwrap{margin-bottom:7mm}
+.dochd{display:flex;justify-content:space-between;gap:14px;border-bottom:2px solid #000;padding-bottom:5mm}
+.docttl{font:700 17pt/1.15 var(--sans);letter-spacing:-.01em}
+.docsub{font:11pt/1.45 var(--sans);margin-top:2mm}
+.docmeta{font:10pt/1.5 var(--sans);text-align:right;white-space:nowrap}
+.docsig{display:flex;gap:14mm;margin-top:6mm}
+.docsig div{flex:1;border-top:1px solid #000;padding-top:2mm;font:9.5pt/1.3 var(--sans)}
+
+@media(max-width:900px){
+  .split>aside{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:520px){
+  .appbar .sub{display:none}
+}
+@media print{
+  .mx th[scope="row"]{position:static;min-width:0;font-size:9.5pt}
+  .mx tr.sec th{position:static}
+  .tw{overflow:visible}
+  .mx{min-width:0;table-layout:fixed;width:100%}
+  .mx td{min-width:0}
+  .mx td.foc,.mx thead th.foc,.mx tr.net td.foc{box-shadow:none}
+  .mx tr.net th[scope="row"],.mx tr.net td{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .split>aside{order:0}
+  .chip{border:1px solid #888;padding:1px 4px}
+  .kpis{display:grid!important;grid-template-columns:repeat(3,1fr)}
+  .note{border-left:3px solid #000;background:#fff!important}
+  .card{margin-bottom:6mm}
+  .hero-wrap .stat.hero .v{font-size:20pt}
+  .docsig{display:flex!important}
+  #histcard{break-before:auto}
+}
+</style>
+</head>
+<body>
+
+<main class="app">
+
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">TL</div>
+    <div style="min-width:0">
+      <h1>Truckload Profit Calculator</h1>
+      <div class="sub">FREIGHT &middot; LOAD DECISION SHEET</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn sm pri" id="btnPrint">Print decision sheet</button>
+    <button type="button" class="btn sm" id="btnCsv">CSV</button>
+    <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+    <button type="button" class="btn sm" id="btnImp">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileImp" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+  <div class="printonly docwrap" id="doc">
+    <div class="dochd">
+      <div>
+        <div class="docttl">Load Profitability Decision Sheet</div>
+        <div class="docsub">Prepared by <b id="p-biz"></b><br>For <b id="p-for"></b></div>
+      </div>
+      <div class="docmeta">
+        Reference: <b id="p-ref"></b><br>
+        Date: <b id="p-date"></b><br>
+        <span id="p-units"></span> &middot; <span id="p-cur"></span>
+      </div>
+    </div>
+  </div>
+
+  <p class="msg noprint" id="msg" role="status" hidden></p>
+
+  <div class="note warn" style="margin:12px 0 14px">
+    <strong>Estimate only — check it against your own books.</strong>
+    This sheet compares the money a load brings in against the operating costs you enter. It does not
+    include income tax, IFTA fuel tax settlement, factoring or quick-pay fees, insurance claims, trailer
+    rental, detention you may never collect, or any cost you have not typed in below. Fuel burn, tolls and
+    hours are estimates and will differ on the road. It is not accounting, tax or legal advice — confirm
+    the rate on the written rate confirmation and review your cost per mile with your accountant or
+    bookkeeper before you commit a truck.
+  </div>
+
+  <div class="split">
+
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd">
+          <h2>Truck &amp; cost basis</h2>
+          <div class="seg noprint" id="segUnits" role="group" aria-label="Measurement units">
+            <button type="button" data-u="imp">Miles / MPG</button>
+            <button type="button" data-u="met">km / L per 100 km</button>
+          </div>
+        </div>
+        <div class="bd grid cols-3">
+          <div class="f">
+            <label for="i-eff" id="l-eff">Fuel economy (MPG)</label>
+            <input id="i-eff" type="number" min="0.1" step="0.1" inputmode="decimal" data-a="eff">
+            <span class="hint" id="h-eff">Loaded average, all miles.</span>
+            <span class="err" id="e-eff"></span>
+          </div>
+          <div class="f">
+            <label for="i-fuel" id="l-fuel">Fuel price (per gallon)</label>
+            <input id="i-fuel" type="number" min="0" step="0.001" inputmode="decimal" data-a="fuel">
+            <span class="hint" id="h-fuel">Your pump price after discounts.</span>
+            <span class="err" id="e-fuel"></span>
+          </div>
+          <div class="f">
+            <label for="i-fixed" id="l-fixed">Fixed cost per mile</label>
+            <input id="i-fixed" type="number" min="0" step="0.01" inputmode="decimal" data-a="fixed">
+            <span class="hint">Truck payment, insurance, maintenance, plates, admin &divide; annual miles.</span>
+            <span class="err" id="e-fixed"></span>
+          </div>
+          <div class="f">
+            <label for="i-payMode">Driver pay basis</label>
+            <select id="i-payMode" data-a="payMode">
+              <option value="cpm">Cents per loaded mile</option>
+              <option value="pct">Percentage of revenue</option>
+              <option value="hr">Hourly</option>
+            </select>
+            <span class="hint">Owner-operator? Enter what you pay yourself.</span>
+          </div>
+          <div class="f">
+            <label for="i-payRate" id="l-payRate">Driver pay (cents per loaded mile)</label>
+            <input id="i-payRate" type="number" min="0" step="0.1" inputmode="decimal" data-a="payRate">
+            <span class="hint" id="h-payRate">e.g. 62 = 62&cent; per loaded mile.</span>
+            <span class="err" id="e-payRate"></span>
+          </div>
+          <div class="f">
+            <label for="i-target">Target net margin (%)</label>
+            <input id="i-target" type="number" min="0" max="100" step="0.5" inputmode="decimal" data-a="target">
+            <span class="hint">Below this a load is flagged <em>Marginal</em>.</span>
+            <span class="err" id="e-target"></span>
+          </div>
+        </div>
+        <div class="ft">
+          <span class="ftline" id="ftBasis">&mdash;</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Loads compared</h2>
+          <span class="chip" id="loadCount">3 loads</span>
+          <button type="button" class="btn sm noprint" id="btnAdd">+ Add load</button>
+          <button type="button" class="btn sm noprint" id="btnSave">Save to history</button>
+        </div>
+        <div class="tw">
+          <table class="mx" id="mx">
+            <thead id="mxHead"></thead>
+            <tbody id="mxBody"></tbody>
+          </table>
+        </div>
+        <div class="ft">
+          <span class="ftline" id="ftBest">&mdash;</span>
+        </div>
+      </section>
+
+      <section class="card" id="histcard">
+        <div class="hd">
+          <h2>Load history</h2>
+          <span class="chip" id="histCount">0 saved</span>
+          <button type="button" class="btn sm dgr noprint" id="btnHistClear">Clear history</button>
+        </div>
+        <div class="tw">
+          <table id="histTbl">
+            <thead>
+              <tr>
+                <th scope="col">Saved</th>
+                <th scope="col">Load</th>
+                <th scope="col">Lane</th>
+                <th scope="col" class="n" id="hh-mi">Total mi</th>
+                <th scope="col" class="n">Revenue</th>
+                <th scope="col" class="n">Total cost</th>
+                <th scope="col" class="n">Net</th>
+                <th scope="col" class="n">Margin</th>
+                <th scope="col" class="n" id="hh-npm">Net / mi</th>
+                <th scope="col" class="noprint"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="histBody"></tbody>
+            <tfoot id="histFoot"></tfoot>
+          </table>
+        </div>
+        <div class="ft">
+          <span class="ftline" id="ftHist">Nothing saved yet &mdash; press <b>Save to history</b> to keep a record of the loads you priced.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Document details</h2><span class="hint">Printed at the top of the decision sheet.</span></div>
+        <div class="bd grid cols-3">
+          <div class="f">
+            <label for="i-biz">Your business</label>
+            <input id="i-biz" type="text" data-a="biz" autocomplete="organization">
+          </div>
+          <div class="f">
+            <label for="i-for">Prepared for</label>
+            <input id="i-for" type="text" data-a="pfor">
+          </div>
+          <div class="f">
+            <label for="i-ref">Reference</label>
+            <input id="i-ref" type="text" data-a="ref">
+          </div>
+          <div class="f">
+            <label for="i-date">Date</label>
+            <input id="i-date" type="date" data-a="date">
+          </div>
+          <div class="f">
+            <label for="i-cur">Currency</label>
+            <select id="i-cur" data-a="cur">
+              <option value="$">$ &mdash; Dollar</option>
+              <option value="&pound;">&pound; &mdash; Pound</option>
+              <option value="&euro;">&euro; &mdash; Euro</option>
+              <option value="custom">Custom symbol&hellip;</option>
+            </select>
+          </div>
+          <div class="f" id="curCustomWrap" hidden>
+            <label for="i-curc">Custom symbol</label>
+            <input id="i-curc" type="text" maxlength="4" data-a="curc">
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /stack -->
+
+    <aside>
+      <section class="card sticky">
+        <div class="hd">
+          <h2>Decision</h2>
+          <div class="seg noprint" id="segFocus" role="group" aria-label="Load shown in the decision panel"></div>
+        </div>
+        <div class="bd stack">
+          <div class="hero-wrap">
+            <div class="stat hero">
+              <div class="k" id="heroK">Net profit</div>
+              <div class="v" id="heroV">&mdash;</div>
+              <div class="sub" id="heroSub">after fuel, driver pay, fixed cost, tolls and accessorials</div>
+            </div>
+            <div class="row">
+              <span class="chip" id="verdict">&mdash;</span>
+              <span class="hint" id="verdictWhy"></span>
+            </div>
+          </div>
+
+          <div class="kpis">
+            <div class="stat"><div class="k" id="k-rpm">Revenue / loaded mi</div><div class="v num" id="v-rpm">&mdash;</div></div>
+            <div class="stat"><div class="k" id="k-npm">Net / total mi</div><div class="v num" id="v-npm">&mdash;</div></div>
+            <div class="stat"><div class="k">Net margin</div><div class="v num" id="v-mar">&mdash;</div></div>
+          </div>
+
+          <div class="stat">
+            <div class="k" id="k-be">Break-even rate needed</div>
+            <div class="v num" id="v-be">&mdash;</div>
+            <div class="sub" id="v-beSub">&nbsp;</div>
+          </div>
+
+          <div>
+            <div class="lbl" style="margin-bottom:5px">Where the money goes</div>
+            <table class="brk">
+              <tbody>
+                <tr><td>Revenue</td><td class="n num" id="b-rev">&mdash;</td></tr>
+                <tr><td id="b-fuelL">Fuel</td><td class="n num" id="b-fuel">&mdash;</td></tr>
+                <tr><td id="b-drvL">Driver pay</td><td class="n num" id="b-drv">&mdash;</td></tr>
+                <tr><td id="b-fixL">Fixed cost</td><td class="n num" id="b-fix">&mdash;</td></tr>
+                <tr><td>Tolls &amp; permits</td><td class="n num" id="b-tol">&mdash;</td></tr>
+                <tr><td>Lumper / accessorials</td><td class="n num" id="b-acc">&mdash;</td></tr>
+                <tr><td>Total operating cost</td><td class="n num" id="b-cost">&mdash;</td></tr>
+                <tr class="tot"><td>Net profit</td><td class="n num" id="b-net">&mdash;</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="hint" id="perHour">&nbsp;</p>
+        </div>
+        <div class="ft">
+          <span class="ftline" id="ftDec">&mdash;</span>
+        </div>
+      </section>
+    </aside>
+
+  </div><!-- /split -->
+
+  <div class="printonly docsig">
+    <div>Dispatcher / owner signature</div>
+    <div>Date</div>
+  </div>
+
+  <footer class="foot">
+    <b>Method.</b> Total miles = loaded + deadhead. Revenue = flat rate, or rate per loaded mile &times; loaded miles.
+    Fuel = total miles &divide; fuel economy &times; fuel price (metric: total km &times; L/100 km &divide; 100 &times; price per litre).
+    Driver pay = loaded miles &times; cents per mile, or percentage of revenue, or hours &times; hourly rate.
+    Fixed cost = total miles &times; your fixed cost per mile. Net = revenue &minus; fuel &minus; driver &minus; fixed &minus; tolls &minus; accessorials.
+    Margin = net &divide; revenue. Break-even rate = the revenue that makes net zero, divided by loaded miles
+    (with percentage pay, break-even revenue = other costs &divide; (1 &minus; pay %)).
+    Verdict: a loss is <em>Decline</em>, a positive net below your target margin is <em>Marginal</em>, at or above target is <em>Take it</em>.
+    Conversions: 1 mile = 1.609344 km, 1 US gallon = 3.785411784 L, L/100 km = 235.214583 &divide; MPG.
+    Money is rounded to 2 decimal places for display; all arithmetic uses full precision.
+    Everything stays in this browser &mdash; no data is sent anywhere.
+  </footer>
+
+</main>
+
+<script>
+(function(){
+'use strict';
+var KEY='solvix.truckload-profit.v1';
+var MI_KM=1.609344, GAL_L=3.785411784, L100=235.214583;
+var LET='ABCDEFGH', MAXL=3, MAXH=300;
+
+function $(id){return document.getElementById(id);}
+function el(t,c,txt){var e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;}
+
+/* ── state ─────────────────────────────────────────────────────── */
+function sampleState(){
+  return {
+    sample:true, units:'imp', cur:'$', curc:'',
+    biz:'Ridgeline Haulage LLC', pfor:'Dispatch — week 36', ref:'LD-2609',
+    date:new Date().toISOString().slice(0,10),
+    eff:'6.4', fuel:'3.89', fixed:'0.68',
+    payMode:'cpm', payRate:'62', target:'12',
+    focus:'l2',
+    loads:[
+      {id:'l1',cust:'Reddaway Logistics',lane:'Columbus OH → Atlanta GA',loaded:'570',dead:'45',basis:'mile',rate:'2.35',tolls:'18',acc:'65',hours:'12'},
+      {id:'l2',cust:'Kingsway Produce',lane:'Columbus OH → Nashville TN',loaded:'385',dead:'12',basis:'flat',rate:'1050',tolls:'0',acc:'40',hours:'8.5'},
+      {id:'l3',cust:'Delta Freight Brokers',lane:'Columbus OH → Charlotte NC',loaded:'465',dead:'130',basis:'mile',rate:'2.05',tolls:'32',acc:'0',hours:'11'}
+    ],
+    hist:[]
+  };
+}
+function blankLoad(){
+  return {id:'l'+(Date.now().toString(36))+Math.floor(Math.random()*900+100).toString(36),
+    cust:'',lane:'',loaded:'',dead:'0',basis:'mile',rate:'',tolls:'0',acc:'0',hours:''};
+}
+var S=sampleState();
+
+/* ── numbers ───────────────────────────────────────────────────── */
+function n(v){
+  if(v===null||v===undefined) return null;
+  var s=String(v).trim(); if(s==='') return null;
+  var x=parseFloat(s.replace(/,/g,''));
+  return isFinite(x)?x:null;
+}
+function n0(v){var x=n(v); return x===null?0:x;}
+function r(v,d){var p=Math.pow(10,d); var x=Math.round((v+Number.EPSILON)*p)/p; return Object.is(x,-0)?0:x;}
+function curSym(){return S.cur==='custom' ? (String(S.curc||'').trim()||'¤') : S.cur;}
+function money(v){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=r(v,2), neg=x<0;
+  return (neg?'−':'')+curSym()+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function money3(v){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=r(v,3), neg=x<0;
+  return (neg?'−':'')+curSym()+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function nm(v,d){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=r(v,d===undefined?0:d);
+  return x.toLocaleString('en-US',{minimumFractionDigits:d||0,maximumFractionDigits:d||0});
+}
+function pc(v){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=r(v,1); return (x<0?'−':'')+Math.abs(x).toFixed(1)+'%';
+}
+function plain(v,d){ if(v===null||v===undefined||!isFinite(v)) return ''; return r(v,d===undefined?2:d).toFixed(d===undefined?2:d); }
+
+/* ── units ─────────────────────────────────────────────────────── */
+function U(){
+  return S.units==='met'
+    ? {d:'km',dl:'kilometres',vol:'L',per:'/km',eff:'Fuel use (L per 100 km)',effH:'Loaded average, all kilometres.',
+       fuelL:'Fuel price (per litre)',fixedL:'Fixed cost per km',payL:'Driver pay (cents per loaded km)',
+       payH:'e.g. 38.5 = 38.5¢ per loaded km.'}
+    : {d:'mi',dl:'miles',vol:'gal',per:'/mi',eff:'Fuel economy (MPG)',effH:'Loaded average, all miles.',
+       fuelL:'Fuel price (per gallon)',fixedL:'Fixed cost per mile',payL:'Driver pay (cents per loaded mile)',
+       payH:'e.g. 62 = 62¢ per loaded mile.'};
+}
+function convState(to){
+  if(to===S.units) return;
+  var toMet=(to==='met');
+  function cd(v,d){var x=n(v); if(x===null) return v; return String(r(toMet? x*MI_KM : x/MI_KM, d));}
+  function cr(v,d){var x=n(v); if(x===null) return v; return String(r(toMet? x/MI_KM : x*MI_KM, d));}
+  // fuel economy
+  var e=n(S.eff); if(e!==null && e>0) S.eff=String(r(L100/e, toMet?2:2));
+  // fuel price per gallon <-> per litre
+  var f=n(S.fuel); if(f!==null) S.fuel=String(r(toMet? f/GAL_L : f*GAL_L, 3));
+  S.fixed=cr(S.fixed,3);
+  if(S.payMode==='cpm') S.payRate=cr(S.payRate,2);
+  for(var i=0;i<S.loads.length;i++){
+    var L=S.loads[i];
+    L.loaded=cd(L.loaded,1); L.dead=cd(L.dead,1);
+    if(L.basis==='mile') L.rate=cr(L.rate,3);
+  }
+  S.units=to;
+}
+
+/* ── calculation ───────────────────────────────────────────────── */
+function calc(L){
+  var o={};
+  var loaded=n(L.loaded), dead=n0(L.dead);
+  o.loaded=loaded; o.dead=dead;
+  o.total = loaded===null ? null : loaded+dead;
+  var rate=n(L.rate);
+  o.revenue = rate===null ? null : (L.basis==='flat' ? rate : (loaded===null?null:rate*loaded));
+
+  var eff=n(S.eff), price=n(S.fuel);
+  o.vol=null; o.fuel=null;
+  if(o.total!==null && eff!==null && eff>0 && price!==null && price>=0){
+    o.vol = S.units==='met' ? o.total*eff/100 : o.total/eff;
+    o.fuel = o.vol*price;
+  }
+  o.driver=null;
+  if(S.payMode==='cpm'){var c=n(S.payRate); if(c!==null&&loaded!==null) o.driver=loaded*c/100;}
+  else if(S.payMode==='pct'){var p=n(S.payRate); if(p!==null&&o.revenue!==null) o.driver=o.revenue*p/100;}
+  else {var h=n(S.payRate); if(h!==null) o.driver=n0(L.hours)*h;}
+
+  var fx=n(S.fixed);
+  o.fixed = (fx!==null && o.total!==null) ? o.total*fx : null;
+  o.tolls=n0(L.tolls); o.acc=n0(L.acc); o.hours=n0(L.hours);
+  o.extras=o.tolls+o.acc;
+
+  o.cost = (o.fuel!==null&&o.driver!==null&&o.fixed!==null) ? o.fuel+o.driver+o.fixed+o.extras : null;
+  o.net = (o.revenue!==null&&o.cost!==null) ? o.revenue-o.cost : null;
+  o.rpm = (o.revenue!==null&&loaded!==null&&loaded>0) ? o.revenue/loaded : null;
+  o.npm = (o.net!==null&&o.total!==null&&o.total>0) ? o.net/o.total : null;
+  o.cpm = (o.cost!==null&&o.total!==null&&o.total>0) ? o.cost/o.total : null;
+  o.margin = (o.net!==null&&o.revenue!==null&&o.revenue!==0) ? o.net/o.revenue*100 : null;
+  o.nph = (o.net!==null&&o.hours>0) ? o.net/o.hours : null;
+
+  o.beRev=null;
+  if(o.fuel!==null && o.fixed!==null){
+    if(S.payMode==='pct'){
+      var pp=n(S.payRate);
+      if(pp!==null){var k=1-pp/100; if(k>0) o.beRev=(o.fuel+o.fixed+o.extras)/k;}
+    } else if(o.driver!==null){
+      o.beRev=o.fuel+o.driver+o.fixed+o.extras;
+    }
+  }
+  o.beRate = (o.beRev!==null&&loaded!==null&&loaded>0) ? o.beRev/loaded : null;
+
+  var tg=n(S.target); if(tg===null) tg=0;
+  if(o.net===null){o.verdict='none'; o.verdictTxt='—';}
+  else if(o.net<0){o.verdict='bad'; o.verdictTxt='Decline';}
+  else if(o.margin===null||o.margin<tg){o.verdict='warn'; o.verdictTxt='Marginal';}
+  else {o.verdict='ok'; o.verdictTxt='Take it';}
+  return o;
+}
+function loadName(i){return 'Load '+LET.charAt(i);}
+function idx(id){for(var i=0;i<S.loads.length;i++) if(S.loads[i].id===id) return i; return -1;}
+function focusLoad(){var i=idx(S.focus); if(i<0)i=0; return {i:i,L:S.loads[i]};}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+}
+function restore(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw) return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object'||!Array.isArray(o.loads)||!o.loads.length) return false;
+    var base=sampleState();
+    for(var k in base) if(!(k in o)) o[k]=base[k];
+    if(!Array.isArray(o.hist)) o.hist=[];
+    S=o;
+    return true;
+  }catch(e){return false;}
+}
+var msgT=null;
+function msg(text,bad){
+  var m=$('msg'); m.textContent=text; m.className='msg noprint'+(bad?' bad':''); m.hidden=false;
+  if(msgT) clearTimeout(msgT);
+  msgT=setTimeout(function(){m.hidden=true;},5000);
+}
+
+/* ── matrix build ──────────────────────────────────────────────── */
+var ROWS=[
+  {sec:'Load details'},
+  {k:'cust',label:'Customer / broker',type:'text'},
+  {k:'lane',label:'Lane (origin → destination)',type:'text'},
+  {k:'loaded',label:'Loaded miles',unit:'',type:'num',step:'1',min:0},
+  {k:'dead',label:'Deadhead miles',sub:'Empty miles to the pick-up',type:'num',step:'1',min:0},
+  {k:'basis',label:'Rate basis',type:'sel'},
+  {k:'rate',label:'Rate',type:'num',step:'0.01',min:0},
+  {k:'tolls',label:'Tolls & permits',type:'num',step:'0.01',min:0},
+  {k:'acc',label:'Lumper / accessorial costs',sub:'Paid out, not billed on',type:'num',step:'0.01',min:0},
+  {k:'hours',label:'Hours (drive + wait)',type:'num',step:'0.25',min:0},
+  {sec:'Result'},
+  {c:'total',label:'Total miles'},
+  {c:'revenue',label:'Revenue'},
+  {c:'fuel',label:'Fuel'},
+  {c:'driver',label:'Driver pay'},
+  {c:'fixed',label:'Fixed cost'},
+  {c:'extras',label:'Tolls + accessorials'},
+  {c:'cost',label:'Total operating cost'},
+  {c:'net',label:'Net profit',net:true},
+  {c:'margin',label:'Net margin'},
+  {c:'rpm',label:'Revenue / loaded mile'},
+  {c:'npm',label:'Net / total mile'},
+  {c:'beRate',label:'Break-even rate needed'},
+  {c:'verdict',label:'Verdict'}
+];
+
+function buildMatrix(){
+  var head=$('mxHead'), body=$('mxBody');
+  head.textContent=''; body.textContent='';
+  var u=U(), N=S.loads.length;
+
+  var tr=el('tr');
+  var th0=el('th','','Line item'); th0.setAttribute('scope','col'); tr.appendChild(th0);
+  S.loads.forEach(function(L,i){
+    var th=el('th'); th.setAttribute('scope','col'); th.dataset.col=L.id;
+    var w=el('div','colhd');
+    var b=el('button','pick',loadName(i)); b.type='button'; b.dataset.pick=L.id;
+    b.setAttribute('aria-pressed', L.id===S.focus?'true':'false');
+    b.title='Show this load in the decision panel';
+    w.appendChild(b);
+    if(N>1){var rm=el('button','rm','Remove'); rm.type='button'; rm.dataset.rm=L.id;
+      rm.setAttribute('aria-label','Remove '+loadName(i)); w.appendChild(rm);}
+    th.appendChild(w); tr.appendChild(th);
+  });
+  head.appendChild(tr);
+
+  ROWS.forEach(function(R,ri){
+    var row=el('tr');
+    if(R.sec){
+      row.className='sec';
+      var th=el('th','',R.sec); th.setAttribute('scope','colgroup'); th.colSpan=N+1;
+      row.appendChild(th); body.appendChild(row); return;
+    }
+    if(R.net) row.className='net';
+    var th=el('th'); th.setAttribute('scope','row');
+    var lab=R.label;
+    if(R.k==='loaded') lab='Loaded '+u.dl;
+    if(R.k==='dead') lab='Deadhead '+u.dl;
+    if(R.c==='total') lab='Total '+u.dl;
+    if(R.c==='rpm') lab='Revenue / loaded '+(S.units==='met'?'km':'mile');
+    if(R.c==='npm') lab='Net / total '+(S.units==='met'?'km':'mile');
+    th.appendChild(document.createTextNode(lab));
+    if(R.sub){var sp=el('span','u',R.sub); th.appendChild(sp);}
+    if(R.c==='fuel'){var sp2=el('span','u','',''); sp2.id='rowFuelSub'; th.appendChild(sp2);}
+    row.appendChild(th);
+
+    S.loads.forEach(function(L,i){
+      var td=el('td');
+      td.dataset.col=L.id;
+      if(R.k){
+        td.className='cell';
+        if(R.type==='sel'){
+          var s=el('select'); s.dataset.load=L.id; s.dataset.k=R.k;
+          [['mile','Rate per loaded '+(S.units==='met'?'km':'mile')],['flat','Flat rate for the load']].forEach(function(op){
+            var o=el('option',null,op[1]); o.value=op[0]; s.appendChild(o);
+          });
+          s.value=L.basis;
+          s.setAttribute('aria-label',R.label+' — '+loadName(i));
+          td.appendChild(s);
+        } else {
+          var inp=document.createElement('input');
+          inp.type = R.type==='num' ? 'number' : 'text';
+          if(R.type==='num'){inp.step=R.step; inp.min=String(R.min); inp.inputMode='decimal';}
+          inp.dataset.load=L.id; inp.dataset.k=R.k;
+          inp.value=L[R.k]||'';
+          inp.setAttribute('aria-label',R.label+' — '+loadName(i));
+          td.appendChild(inp);
+          if(R.k==='rate'){var cu=el('span','cu',''); cu.dataset.cu=L.id; td.appendChild(cu);}
+          var er=el('span','err',''); er.dataset.err=L.id+'.'+R.k; td.appendChild(er);
+        }
+      } else {
+        td.className='val';
+        td.dataset.calc=R.c; td.dataset.cell=L.id+'.'+R.c;
+        td.textContent='—';
+      }
+      row.appendChild(td);
+    });
+    body.appendChild(row);
+  });
+  buildFocusSeg();
+}
+
+function buildFocusSeg(){
+  var seg=$('segFocus'); seg.textContent='';
+  S.loads.forEach(function(L,i){
+    var b=el('button',null,LET.charAt(i)); b.type='button'; b.dataset.pick=L.id;
+    b.title=(L.cust||loadName(i)); b.setAttribute('aria-label','Show '+loadName(i)+' in the decision panel');
+    b.setAttribute('aria-pressed', L.id===S.focus?'true':'false');
+    seg.appendChild(b);
+  });
+}
+
+/* ── render ────────────────────────────────────────────────────── */
+function setVal(id,txt){var e=$(id); if(e) e.textContent=txt;}
+function setInput(id,v){var e=$(id); if(e && document.activeElement!==e) e.value=(v==null?'':v);}
+
+function render(){
+  var u=U();
+  // assumption labels + values
+  setVal('l-eff',u.eff); setVal('h-eff',u.effH);
+  setVal('l-fuel',u.fuelL); setVal('l-fixed',u.fixedL);
+  setVal('l-payRate', S.payMode==='cpm'?u.payL : (S.payMode==='pct'?'Driver pay (% of revenue)':'Driver pay (per hour)'));
+  setVal('h-payRate', S.payMode==='cpm'?u.payH : (S.payMode==='pct'?'e.g. 27 = 27% of the load revenue.':'Paid on the hours entered for each load.'));
+  setInput('i-eff',S.eff); setInput('i-fuel',S.fuel); setInput('i-fixed',S.fixed);
+  setInput('i-payRate',S.payRate); setInput('i-target',S.target);
+  setInput('i-biz',S.biz); setInput('i-for',S.pfor); setInput('i-ref',S.ref); setInput('i-date',S.date);
+  setInput('i-curc',S.curc);
+  $('i-payMode').value=S.payMode; $('i-cur').value=S.cur;
+  $('curCustomWrap').hidden = S.cur!=='custom';
+  Array.prototype.forEach.call($('segUnits').children,function(b){
+    b.setAttribute('aria-pressed', b.dataset.u===S.units?'true':'false');
+  });
+
+  // per-load results
+  var res=S.loads.map(calc);
+  var symPer=curSym()+u.per;
+
+  S.loads.forEach(function(L,i){
+    var o=res[i];
+    // inputs (keep in sync after unit conversion / import)
+    ROWS.forEach(function(R){
+      if(!R.k) return;
+      var sel='[data-load="'+L.id+'"][data-k="'+R.k+'"]';
+      var f=$('mxBody').querySelector(sel);
+      if(f && document.activeElement!==f && f.value!==String(L[R.k]==null?'':L[R.k])) f.value=(L[R.k]==null?'':L[R.k]);
+    });
+    var cu=$('mxBody').querySelector('[data-cu="'+L.id+'"]');
+    if(cu) cu.textContent = L.basis==='flat' ? curSym()+' total' : symPer;
+
+    function put(c,txt,cls){
+      var td=$('mxBody').querySelector('[data-cell="'+L.id+'.'+c+'"]');
+      if(!td) return;
+      if(c==='verdict'){
+        td.textContent='';
+        var ch=el('span','chip'+(o.verdict==='none'?'':' '+o.verdict), o.verdictTxt);
+        td.appendChild(ch);
+      } else td.textContent=txt;
+      td.classList.remove('pos','neg');
+      if(cls) td.classList.add(cls);
+      td.classList.toggle('foc', L.id===S.focus);
+    }
+    put('total', nm(o.total,0));
+    put('revenue', money(o.revenue));
+    put('fuel', o.fuel===null?'—':'−'+money(o.fuel).replace('−',''));
+    put('driver', o.driver===null?'—':'−'+money(o.driver).replace('−',''));
+    put('fixed', o.fixed===null?'—':'−'+money(o.fixed).replace('−',''));
+    put('extras', '−'+money(o.extras).replace('−',''));
+    put('cost', o.cost===null?'—':'−'+money(o.cost).replace('−',''));
+    put('net', money(o.net), o.net===null?null:(o.net<0?'neg':'pos'));
+    put('margin', pc(o.margin));
+    put('rpm', money3(o.rpm));
+    put('npm', money3(o.npm));
+    put('beRate', money3(o.beRate));
+    put('verdict','');
+    var th=$('mxHead').querySelector('th[data-col="'+L.id+'"]');
+    if(th) th.classList.toggle('foc', L.id===S.focus);
+  });
+
+  // focus buttons
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pick]'),function(b){
+    b.setAttribute('aria-pressed', b.dataset.pick===S.focus?'true':'false');
+    var i=idx(b.dataset.pick); if(i>=0 && S.loads[i].cust) b.title=S.loads[i].cust;
+  });
+
+  // basis footer
+  var eff=n(S.eff), price=n(S.fuel), fx=n(S.fixed);
+  var fuelPerDist=(eff!==null&&eff>0&&price!==null)?(S.units==='met'? eff/100*price : price/eff):null;
+  var drvPerDist=null;
+  if(S.payMode==='cpm'){var c=n(S.payRate); if(c!==null) drvPerDist=c/100;}
+  var runPer=(fuelPerDist!==null&&fx!==null)?(fuelPerDist+fx+(drvPerDist||0)):null;
+  var payTxt = S.payMode==='cpm' ? (n(S.payRate)===null?'—':nm(n(S.payRate),1)+'¢ per loaded '+(S.units==='met'?'km':'mile'))
+             : S.payMode==='pct' ? (n(S.payRate)===null?'—':pc(n(S.payRate))+' of revenue')
+             : (n(S.payRate)===null?'—':money(n(S.payRate))+' per hour');
+  $('ftBasis').innerHTML='Running cost <b>'+money3(runPer)+symPer+'</b> '+
+    (S.payMode==='cpm'?'(fuel + fixed + driver)':'(fuel + fixed; driver pay is per load)')+
+    ' &middot; fuel <b>'+money3(fuelPerDist)+symPer+'</b> &middot; driver <b>'+payTxt+'</b>';
+
+  // best load
+  var bestI=-1;
+  res.forEach(function(o,i){ if(o.net!==null && (bestI<0 || o.net>res[bestI].net)) bestI=i; });
+  if(bestI<0) $('ftBest').innerHTML='Enter loaded '+u.dl+' and a rate to compare loads.';
+  else $('ftBest').innerHTML='Best of '+S.loads.length+': <b>'+loadName(bestI)+'</b>'+
+    (S.loads[bestI].cust?' — '+esc(S.loads[bestI].cust):'')+' at <b>'+money(res[bestI].net)+'</b> net'+
+    (res[bestI].npm===null?'':' ('+money3(res[bestI].npm)+symPer+')');
+  $('loadCount').textContent=S.loads.length+(S.loads.length===1?' load':' loads');
+  $('btnAdd').disabled = S.loads.length>=MAXL;
+  $('btnAdd').title = S.loads.length>=MAXL ? 'This sheet compares up to three loads side by side.' : '';
+
+  // decision panel
+  var f=focusLoad(), o=res[f.i], L=f.L;
+  setVal('heroK','Net profit — '+loadName(f.i)+(L.cust?' · '+L.cust:''));
+  setVal('heroV', money(o.net));
+  var hv=$('heroV'); hv.style.color = (o.net===null)?'' : (o.net<0?'var(--bad)':'');
+  setVal('heroSub', (L.lane?L.lane+' · ':'')+(o.total===null?'—':nm(o.total,0)+' '+u.d+' total ('+nm(o.loaded,0)+' loaded + '+nm(o.dead,0)+' deadhead)'));
+  var vch=$('verdict'); vch.className='chip'+(o.verdict==='none'?'':' '+o.verdict); vch.textContent=o.verdictTxt;
+  var tg=n(S.target);
+  setVal('verdictWhy', o.net===null?'Fill in the load to see a verdict.'
+    : o.net<0 ? 'This load loses money on the costs entered.'
+    : (o.margin!==null&&tg!==null&&o.margin<tg) ? 'Below your '+pc(tg)+' target margin.'
+    : 'At or above your '+pc(tg===null?0:tg)+' target margin.');
+
+  setVal('k-rpm','Revenue / loaded '+u.d);
+  setVal('k-npm','Net / total '+u.d);
+  setVal('v-rpm', money3(o.rpm));
+  setVal('v-npm', money3(o.npm));
+  setVal('v-mar', pc(o.margin));
+  setVal('k-be','Break-even rate needed');
+  setVal('v-be', o.beRate===null?'—':money3(o.beRate)+symPer);
+  setVal('v-beSub', o.beRev===null? 'Enter costs to see the break-even rate.'
+    : 'Load must gross '+money(o.beRev)+' to break even'+(o.revenue!==null? ' — you are quoted '+money(o.revenue)+'.' : '.'));
+
+  setVal('b-rev', money(o.revenue));
+  setVal('b-fuelL','Fuel'+(o.vol===null?'':' ('+nm(o.vol,1)+' '+u.vol+')'));
+  setVal('b-fuel', o.fuel===null?'—':'−'+money(o.fuel).replace('−',''));
+  setVal('b-drvL','Driver pay ('+payTxt+')');
+  setVal('b-drv', o.driver===null?'—':'−'+money(o.driver).replace('−',''));
+  setVal('b-fixL','Fixed cost'+(fx===null?'':' @ '+money3(fx)+symPer));
+  setVal('b-fix', o.fixed===null?'—':'−'+money(o.fixed).replace('−',''));
+  setVal('b-tol','−'+money(o.tolls).replace('−',''));
+  setVal('b-acc','−'+money(o.acc).replace('−',''));
+  setVal('b-cost', o.cost===null?'—':'−'+money(o.cost).replace('−',''));
+  setVal('b-net', money(o.net));
+  var bn=$('b-net'); bn.className='n num'+(o.net===null?'':(o.net<0?' neg':' pos'));
+  setVal('perHour', o.nph===null? 'Enter hours to see net per hour.' : 'Net per hour on '+nm(o.hours,2)+' h: '+money(o.nph)+' · revenue per hour '+(o.revenue===null?'—':money(o.revenue/o.hours)));
+  $('ftDec').innerHTML='Cost per total '+u.d+' <b>'+money3(o.cpm)+'</b> &middot; margin <b>'+pc(o.margin)+'</b>';
+
+  // print header
+  setVal('p-biz',S.biz||'—'); setVal('p-for',S.pfor||'—'); setVal('p-ref',S.ref||'—');
+  setVal('p-date',S.date||'—');
+  setVal('p-units', S.units==='met'?'Metric (km · L/100 km · litres)':'US customary (miles · MPG · US gallons)');
+  setVal('p-cur','Currency '+curSym());
+
+  renderHist();
+  validateAll(false);
+}
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+
+/* ── history ───────────────────────────────────────────────────── */
+function renderHist(){
+  var u=U(), tb=$('histBody'), tf=$('histFoot');
+  tb.textContent=''; tf.textContent='';
+  setVal('hh-mi','Total '+u.d); setVal('hh-npm','Net / '+u.d);
+  $('histCount').textContent=S.hist.length+' saved';
+  if(!S.hist.length){
+    var tr=el('tr'); var td=el('td','empty','No saved loads yet. Price a load, then press “Save to history”.');
+    td.colSpan=10; tr.appendChild(td); tb.appendChild(tr);
+    $('ftHist').innerHTML='Nothing saved yet — press <b>Save to history</b> to keep a record of the loads you priced.';
+    return;
+  }
+  var tNet=0,tRev=0,tMi=0;
+  S.hist.forEach(function(h,i){
+    tNet+=n0(h.net); tRev+=n0(h.revenue); tMi+=n0(h.total);
+    var tr=el('tr');
+    function c(t,cls){var td=el('td',cls||null,t); tr.appendChild(td); return td;}
+    c(h.when||'—'); c((h.name||'—')+(h.cust?' · '+h.cust:'')); c(h.lane||'—');
+    c(nm(n(h.total),0),'n num'); c(money(n(h.revenue)),'n num'); c(money(n(h.cost)),'n num');
+    var tdn=c(money(n(h.net)),'n num'); tdn.style.fontWeight='700';
+    tdn.style.color = n0(h.net)<0?'var(--bad)':'var(--ok)';
+    c(pc(n(h.margin)),'n num'); c(money3(n(h.npm)),'n num');
+    var act=el('td','noprint');
+    var b1=el('button','btn sm ico','↺'); b1.type='button'; b1.title='Copy back into the comparison';
+    b1.setAttribute('aria-label','Restore saved load '+(h.name||'')); b1.dataset.restore=String(i);
+    var b2=el('button','btn sm ico dgr','✕'); b2.type='button'; b2.title='Delete this record';
+    b2.setAttribute('aria-label','Delete saved load '+(h.name||'')); b2.dataset.del=String(i);
+    act.appendChild(b1); act.appendChild(document.createTextNode(' ')); act.appendChild(b2);
+    tr.appendChild(act);
+    tb.appendChild(tr);
+  });
+  var ftr=el('tr');
+  var l=el('td','','Totals — '+S.hist.length+' load'+(S.hist.length===1?'':'s')); l.colSpan=3; ftr.appendChild(l);
+  [nm(tMi,0),money(tRev),'',money(tNet),tRev!==0?pc(tNet/tRev*100):'—',tMi>0?money3(tNet/tMi):'—'].forEach(function(v,ix){
+    var td=el('td','n num',v); if(ix===2) td.textContent='';
+    ftr.appendChild(td);
+  });
+  ftr.appendChild(el('td','noprint',''));
+  tf.appendChild(ftr);
+  $('ftHist').innerHTML='Saved history: <b>'+S.hist.length+'</b> loads &middot; total net <b>'+money(tNet)+'</b>'+
+    (tMi>0?' &middot; <b>'+money3(tNet/tMi)+'</b> per '+u.d:'');
+}
+
+/* ── validation ────────────────────────────────────────────────── */
+var A_RULES={eff:{min:0.1,msg:'Enter a fuel figure greater than zero.'},
+  fuel:{min:0,msg:'Fuel price cannot be negative.'},
+  fixed:{min:0,msg:'Fixed cost cannot be negative.'},
+  payRate:{min:0,msg:'Driver pay cannot be negative.'},
+  target:{min:0,max:100,msg:'Target margin must be between 0 and 100.'}};
+function validateAll(showBlank){
+  var bad=false;
+  for(var k in A_RULES){
+    var inp=$('i-'+k), err=$('e-'+k), rule=A_RULES[k], v=n(S[k]);
+    var m='';
+    if(v===null){ if(showBlank) m='Required.'; }
+    else if(v<rule.min || (rule.max!==undefined && v>rule.max)) m=rule.msg;
+    if(err) err.textContent=m;
+    if(inp) inp.classList.toggle('inv',!!m);
+    if(m) bad=true;
+  }
+  S.loads.forEach(function(L){
+    ['loaded','dead','rate','tolls','acc','hours'].forEach(function(k){
+      var e=$('mxBody').querySelector('[data-err="'+L.id+'.'+k+'"]');
+      var f=$('mxBody').querySelector('[data-load="'+L.id+'"][data-k="'+k+'"]');
+      if(!e||!f) return;
+      var v=n(L[k]), m='';
+      if(v!==null && v<0) m='Cannot be negative.';
+      if(k==='loaded' && v!==null && v===0) m='Loaded distance must be more than zero.';
+      e.textContent=m; f.classList.toggle('inv',!!m);
+      if(m) bad=true;
+    });
+  });
+  return !bad;
+}
+
+/* ── CSV ───────────────────────────────────────────────────────── */
+function q(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function rowCsv(a){return a.map(q).join(',');}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1500);
+    return true;
+  }catch(e){msg('Could not start the download in this browser.',true); return false;}
+}
+function csv(){
+  var u=U(), L=[], res=S.loads.map(calc);
+  L.push(rowCsv(['Solvix Toolkit — Truckload Profit Calculator']));
+  L.push(rowCsv(['Prepared by',S.biz]));
+  L.push(rowCsv(['Prepared for',S.pfor]));
+  L.push(rowCsv(['Reference',S.ref]));
+  L.push(rowCsv(['Date',S.date]));
+  L.push(rowCsv(['Units',S.units==='met'?'Metric (km, L/100km, litres)':'US customary (miles, MPG, US gallons)']));
+  L.push(rowCsv(['Currency',curSym()]));
+  L.push('');
+  L.push(rowCsv(['COST BASIS']));
+  L.push(rowCsv([u.eff,plain(n(S.eff),2)]));
+  L.push(rowCsv([u.fuelL,plain(n(S.fuel),3)]));
+  L.push(rowCsv([u.fixedL,plain(n(S.fixed),3)]));
+  L.push(rowCsv(['Driver pay basis', S.payMode==='cpm'?'Cents per loaded '+u.d:(S.payMode==='pct'?'Percentage of revenue':'Hourly')]));
+  L.push(rowCsv(['Driver pay rate',plain(n(S.payRate),2)]));
+  L.push(rowCsv(['Target net margin (%)',plain(n(S.target),1)]));
+  L.push('');
+  L.push(rowCsv(['LOADS COMPARED']));
+  L.push(rowCsv(['Load','Customer / broker','Lane','Loaded '+u.d,'Deadhead '+u.d,'Total '+u.d,'Rate basis','Rate',
+    'Revenue','Fuel','Driver pay','Fixed cost','Tolls','Accessorials','Total cost','Net profit',
+    'Revenue per loaded '+u.d,'Net per total '+u.d,'Net margin (%)','Break-even rate per loaded '+u.d,
+    'Hours','Net per hour','Verdict']));
+  S.loads.forEach(function(l,i){
+    var o=res[i];
+    L.push(rowCsv([loadName(i),l.cust,l.lane,plain(o.loaded,1),plain(o.dead,1),plain(o.total,1),
+      l.basis==='flat'?'Flat rate':'Per loaded '+u.d, plain(n(l.rate),3),
+      plain(o.revenue,2),plain(o.fuel,2),plain(o.driver,2),plain(o.fixed,2),plain(o.tolls,2),plain(o.acc,2),
+      plain(o.cost,2),plain(o.net,2),plain(o.rpm,3),plain(o.npm,3),plain(o.margin,2),plain(o.beRate,3),
+      plain(o.hours,2),plain(o.nph,2),o.verdictTxt]));
+  });
+  if(S.hist.length){
+    L.push('');
+    L.push(rowCsv(['SAVED LOAD HISTORY']));
+    L.push(rowCsv(['Saved','Load','Customer / broker','Lane','Total distance','Revenue','Total cost','Net','Net margin (%)','Net per distance']));
+    S.hist.forEach(function(h){
+      L.push(rowCsv([h.when,h.name,h.cust,h.lane,plain(n(h.total),1),plain(n(h.revenue),2),plain(n(h.cost),2),
+        plain(n(h.net),2),plain(n(h.margin),2),plain(n(h.npm),3)]));
+    });
+  }
+  L.push('');
+  L.push(rowCsv(['Estimate only. Excludes income tax, IFTA settlement, factoring fees and any cost not entered. Not accounting or tax advice.']));
+  return '﻿'+L.join('\r\n')+'\r\n';
+}
+
+/* ── events ────────────────────────────────────────────────────── */
+function onAssump(e){
+  var t=e.target, k=t.dataset.a;
+  if(!k) return;
+  if(k==='payMode'){
+    S.payMode=t.value;
+    if(S.payMode==='pct' && n(S.payRate)>100) S.payRate='27';
+  } else if(k==='cur'){
+    S.cur=t.value;
+  } else if(k==='biz'||k==='pfor'||k==='ref'||k==='date'||k==='curc'){
+    S[k]=t.value;
+  } else {
+    S[k]=t.value;
+  }
+  S.sample=false; save(); render();
+}
+['input','change'].forEach(function(ev){
+  document.querySelectorAll('[data-a]').forEach(function(f){ f.addEventListener(ev,onAssump); });
+});
+
+$('mxBody').addEventListener('input',function(e){
+  var t=e.target, id=t.dataset.load, k=t.dataset.k;
+  if(!id||!k) return;
+  var i=idx(id); if(i<0) return;
+  S.loads[i][k]=t.value;
+  S.sample=false; save(); render();
+});
+$('mxBody').addEventListener('change',function(e){
+  var t=e.target;
+  if(t.dataset.k==='basis'){ /* handled by input */ }
+});
+$('mxBody').addEventListener('blur',function(e){
+  if(e.target.dataset&&e.target.dataset.k) validateAll(false);
+},true);
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest ? e.target.closest('button') : null;
+  if(!t) return;
+  if(t.dataset.pick){ S.focus=t.dataset.pick; save(); render(); }
+  else if(t.dataset.rm){
+    var i=idx(t.dataset.rm);
+    if(i<0||S.loads.length<2) return;
+    var Lr=S.loads[i];
+    var hasData=['cust','lane','loaded','rate'].some(function(k){return String(Lr[k]||'').trim()!=='';});
+    if(hasData && !confirm('Remove '+loadName(i)+(Lr.cust?' ('+Lr.cust+')':'')+' from the comparison?')) return;
+    S.loads.splice(i,1);
+    if(idx(S.focus)<0) S.focus=S.loads[0].id;
+    S.sample=false; save(); buildMatrix(); render();
+    msg('Load removed.');
+  }
+  else if(t.dataset.del){
+    var di=parseInt(t.dataset.del,10);
+    if(isNaN(di)||!S.hist[di]) return;
+    S.hist.splice(di,1); save(); renderHist(); msg('History record deleted.');
+  }
+  else if(t.dataset.restore){
+    var ri=parseInt(t.dataset.restore,10); var h=S.hist[ri];
+    if(!h) return;
+    if(S.loads.length>=MAXL){ msg('Remove a load first — the sheet compares up to three at a time.',true); return; }
+    var nl=blankLoad();
+    nl.cust=h.cust||''; nl.lane=h.lane||''; nl.loaded=h.loaded||''; nl.dead=h.dead||'0';
+    nl.basis=h.basis||'mile'; nl.rate=h.rate||''; nl.tolls=h.tolls||'0'; nl.acc=h.acc||'0'; nl.hours=h.hours||'';
+    S.loads.push(nl); S.focus=nl.id; S.sample=false; save(); buildMatrix(); render();
+    msg('Restored “'+(h.cust||h.name||'load')+'” into '+loadName(S.loads.length-1)+'.');
+  }
+});
+
+$('segUnits').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b||!b.dataset.u) return;
+  if(b.dataset.u===S.units) return;
+  convState(b.dataset.u);
+  S.sample=false; save(); buildMatrix(); render();
+  msg('Converted to '+(S.units==='met'?'kilometres, litres and L/100 km.':'miles, US gallons and MPG.'));
+});
+
+$('btnAdd').addEventListener('click',function(){
+  if(S.loads.length>=MAXL){ msg('This sheet compares up to three loads side by side.',true); return; }
+  var l=blankLoad(); S.loads.push(l); S.focus=l.id; S.sample=false;
+  save(); buildMatrix(); render();
+  var f=$('mxBody').querySelector('[data-load="'+l.id+'"][data-k="cust"]'); if(f) f.focus();
+});
+
+$('btnSave').addEventListener('click',function(){
+  var res=S.loads.map(calc);
+  var when=new Date().toISOString().slice(0,16).replace('T',' ');
+  var added=0;
+  S.loads.forEach(function(l,i){
+    var o=res[i];
+    if(o.net===null) return;
+    S.hist.unshift({when:when,name:loadName(i),cust:l.cust,lane:l.lane,
+      loaded:l.loaded,dead:l.dead,basis:l.basis,rate:l.rate,tolls:l.tolls,acc:l.acc,hours:l.hours,
+      units:S.units,cur:curSym(),
+      total:plain(o.total,1),revenue:plain(o.revenue,2),cost:plain(o.cost,2),net:plain(o.net,2),
+      margin:plain(o.margin,2),npm:plain(o.npm,3)});
+    added++;
+  });
+  if(S.hist.length>MAXH) S.hist.length=MAXH;
+  save(); renderHist();
+  msg(added? added+' load'+(added===1?'':'s')+' saved to history.' : 'Nothing to save — complete a load first.', !added);
+});
+
+$('btnHistClear').addEventListener('click',function(){
+  if(!S.hist.length){ msg('History is already empty.'); return; }
+  if(!confirm('Delete all '+S.hist.length+' saved history records? This cannot be undone.')) return;
+  S.hist=[]; save(); renderHist(); msg('History cleared.');
+});
+
+$('btnPrint').addEventListener('click',function(){ window.print(); });
+
+$('btnCsv').addEventListener('click',function(){
+  if(download('truckload-profit-'+(S.ref||'sheet').replace(/[^A-Za-z0-9_-]+/g,'-')+'.csv','text/csv;charset=utf-8',csv()))
+    msg('CSV downloaded.');
+});
+
+$('btnJson').addEventListener('click',function(){
+  var payload={tool:'solvix.truckload-profit',version:1,exported:new Date().toISOString(),state:S};
+  if(download('truckload-profit-'+(S.ref||'sheet').replace(/[^A-Za-z0-9_-]+/g,'-')+'.json','application/json',JSON.stringify(payload,null,2)))
+    msg('JSON downloaded — reimport it to restore this sheet exactly.');
+});
+
+$('btnImp').addEventListener('click',function(){ $('fileImp').click(); });
+$('fileImp').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];
+  if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      var st=(o&&o.state)?o.state:o;
+      if(!st||!Array.isArray(st.loads)||!st.loads.length) throw new Error('no loads');
+      var base=sampleState();
+      for(var k in base) if(!(k in st)) st[k]=base[k];
+      if(!Array.isArray(st.hist)) st.hist=[];
+      st.loads=st.loads.slice(0,MAXL).map(function(l,i){
+        var b=blankLoad(); b.id=l.id||('l'+i);
+        ['cust','lane','loaded','dead','basis','rate','tolls','acc','hours'].forEach(function(k2){
+          if(l[k2]!==undefined&&l[k2]!==null) b[k2]=String(l[k2]);
+        });
+        if(b.basis!=='flat') b.basis='mile';
+        return b;
+      });
+      if(st.units!=='met') st.units='imp';
+      S=st;
+      if(idx(S.focus)<0) S.focus=S.loads[0].id;
+      S.sample=false; save(); buildMatrix(); render();
+      msg('Imported “'+f.name+'” — sheet restored.');
+    }catch(err){ msg('That file is not a Truckload Profit export.',true); }
+    e.target.value='';
+  };
+  rd.onerror=function(){ msg('Could not read that file.',true); e.target.value=''; };
+  rd.readAsText(f);
+});
+
+$('btnClear').addEventListener('click',function(){
+  if(!confirm('Clear every load, the cost basis and all '+S.hist.length+' saved history records from this browser?')) return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  S=sampleState();
+  S.loads=[blankLoad()]; S.focus=S.loads[0].id; S.hist=[];
+  S.biz=''; S.pfor=''; S.ref=''; S.eff=''; S.fuel=''; S.fixed=''; S.payRate=''; S.target='12';
+  S.sample=false;
+  save(); buildMatrix(); render();
+  msg('All data cleared. Enter your cost basis to start.');
+});
+
+/* ── boot ──────────────────────────────────────────────────────── */
+if(!restore()){
+  S=sampleState();
+  save();
+}
+buildMatrix();
+render();
+if(S.sample) msg('Loaded with sample data — three real-world loads. Edit any field, or press “Clear all data” to start from scratch.');
+})();
+</script>
+</body>
+</html>
