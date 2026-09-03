@@ -180,6 +180,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .app{padding-top:14px}
 .stack>*{min-width:0}
 .split>*{min-width:0}
+[hidden]{display:none!important}
 .msg{margin:10px 0 0;padding:8px 11px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
   font:600 12.5px/1.4 var(--sans);border-left:3px solid var(--ok)}
 .msg.bad{background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
@@ -236,7 +237,6 @@ table input:focus,table select:focus{background:var(--raise)}
 .brk tr.tot td.neg{color:var(--bad)} .brk tr.tot td.pos{color:var(--ok)}
 .ftline{font:600 11.5px/1.4 var(--sans);color:var(--ink-2)}
 .ftline b{font-family:var(--mono)}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 footer.foot{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
   font:12px/1.55 var(--sans);color:var(--muted)}
@@ -290,7 +290,7 @@ footer.foot b{color:var(--ink-2);font-weight:650}
     </div>
   </div>
   <div class="row noprint">
-    <button type="button" class="btn sm pri" id="btnPrint">Print decision sheet</button>
+    <button type="button" class="btn sm pri" id="btnPrint" title="Print the decision sheet">Print sheet</button>
     <button type="button" class="btn sm" id="btnCsv">CSV</button>
     <button type="button" class="btn sm" id="btnJson">Export JSON</button>
     <button type="button" class="btn sm" id="btnImp">Import JSON</button>
@@ -316,13 +316,11 @@ footer.foot b{color:var(--ink-2);font-weight:650}
   <p class="msg noprint" id="msg" role="status" hidden></p>
 
   <div class="note warn" style="margin:12px 0 14px">
-    <strong>Estimate only — check it against your own books.</strong>
-    This sheet compares the money a load brings in against the operating costs you enter. It does not
-    include income tax, IFTA fuel tax settlement, factoring or quick-pay fees, insurance claims, trailer
-    rental, detention you may never collect, or any cost you have not typed in below. Fuel burn, tolls and
-    hours are estimates and will differ on the road. It is not accounting, tax or legal advice — confirm
-    the rate on the written rate confirmation and review your cost per mile with your accountant or
-    bookkeeper before you commit a truck.
+    <strong>Estimate only &mdash; not accounting or tax advice.</strong>
+    It weighs what a load pays against the costs you type in. It excludes income tax, IFTA fuel-tax
+    settlement, factoring and quick-pay fees, insurance claims, trailer rental, detention you may never
+    collect, and any cost not entered below; fuel burn, tolls and hours are estimates. Confirm the rate on
+    the written rate confirmation and check your cost per mile with your bookkeeper before you commit a truck.
   </div>
 
   <div class="split">
@@ -387,6 +385,7 @@ footer.foot b{color:var(--ink-2);font-weight:650}
         <div class="hd">
           <h2>Loads compared</h2>
           <span class="chip" id="loadCount">3 loads</span>
+          <span class="chip warn" id="sampleChip" hidden>Sample data</span>
           <button type="button" class="btn sm noprint" id="btnAdd">+ Add load</button>
           <button type="button" class="btn sm noprint" id="btnSave">Save to history</button>
         </div>
@@ -420,7 +419,7 @@ footer.foot b{color:var(--ink-2);font-weight:650}
                 <th scope="col" class="n">Net</th>
                 <th scope="col" class="n">Margin</th>
                 <th scope="col" class="n" id="hh-npm">Net / mi</th>
-                <th scope="col" class="noprint"><span class="sr-only">Actions</span></th>
+                <th scope="col" class="noprint">Actions</th>
               </tr>
             </thead>
             <tbody id="histBody"></tbody>
@@ -603,6 +602,11 @@ function nm(v,d){
   if(v===null||v===undefined||!isFinite(v)) return '—';
   var x=r(v,d===undefined?0:d);
   return x.toLocaleString('en-US',{minimumFractionDigits:d||0,maximumFractionDigits:d||0});
+}
+function outflow(v){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=r(v,2);
+  return x===0 ? money(0) : (x<0 ? money(x) : '−'+money(x));
 }
 function pc(v){
   if(v===null||v===undefined||!isFinite(v)) return '—';
@@ -855,7 +859,7 @@ function render(){
 
   // per-load results
   var res=S.loads.map(calc);
-  var symPer=curSym()+u.per;
+  var symPer=u.per;
 
   S.loads.forEach(function(L,i){
     var o=res[i];
@@ -883,11 +887,11 @@ function render(){
     }
     put('total', nm(o.total,0));
     put('revenue', money(o.revenue));
-    put('fuel', o.fuel===null?'—':'−'+money(o.fuel).replace('−',''));
-    put('driver', o.driver===null?'—':'−'+money(o.driver).replace('−',''));
-    put('fixed', o.fixed===null?'—':'−'+money(o.fixed).replace('−',''));
-    put('extras', '−'+money(o.extras).replace('−',''));
-    put('cost', o.cost===null?'—':'−'+money(o.cost).replace('−',''));
+    put('fuel', outflow(o.fuel));
+    put('driver', outflow(o.driver));
+    put('fixed', outflow(o.fixed));
+    put('extras', outflow(o.extras));
+    put('cost', outflow(o.cost));
     put('net', money(o.net), o.net===null?null:(o.net<0?'neg':'pos'));
     put('margin', pc(o.margin));
     put('rpm', money3(o.rpm));
@@ -925,6 +929,7 @@ function render(){
     (S.loads[bestI].cust?' — '+esc(S.loads[bestI].cust):'')+' at <b>'+money(res[bestI].net)+'</b> net'+
     (res[bestI].npm===null?'':' ('+money3(res[bestI].npm)+symPer+')');
   $('loadCount').textContent=S.loads.length+(S.loads.length===1?' load':' loads');
+  $('sampleChip').hidden=!S.sample;
   $('btnAdd').disabled = S.loads.length>=MAXL;
   $('btnAdd').title = S.loads.length>=MAXL ? 'This sheet compares up to three loads side by side.' : '';
 
@@ -953,14 +958,14 @@ function render(){
 
   setVal('b-rev', money(o.revenue));
   setVal('b-fuelL','Fuel'+(o.vol===null?'':' ('+nm(o.vol,1)+' '+u.vol+')'));
-  setVal('b-fuel', o.fuel===null?'—':'−'+money(o.fuel).replace('−',''));
+  setVal('b-fuel', outflow(o.fuel));
   setVal('b-drvL','Driver pay ('+payTxt+')');
-  setVal('b-drv', o.driver===null?'—':'−'+money(o.driver).replace('−',''));
+  setVal('b-drv', outflow(o.driver));
   setVal('b-fixL','Fixed cost'+(fx===null?'':' @ '+money3(fx)+symPer));
-  setVal('b-fix', o.fixed===null?'—':'−'+money(o.fixed).replace('−',''));
-  setVal('b-tol','−'+money(o.tolls).replace('−',''));
-  setVal('b-acc','−'+money(o.acc).replace('−',''));
-  setVal('b-cost', o.cost===null?'—':'−'+money(o.cost).replace('−',''));
+  setVal('b-fix', outflow(o.fixed));
+  setVal('b-tol', outflow(o.tolls));
+  setVal('b-acc', outflow(o.acc));
+  setVal('b-cost', outflow(o.cost));
   setVal('b-net', money(o.net));
   var bn=$('b-net'); bn.className='n num'+(o.net===null?'':(o.net<0?' neg':' pos'));
   setVal('perHour', o.nph===null? 'Enter hours to see net per hour.' : 'Net per hour on '+nm(o.hours,2)+' h: '+money(o.nph)+' · revenue per hour '+(o.revenue===null?'—':money(o.revenue/o.hours)));
@@ -1284,7 +1289,7 @@ if(!restore()){
 }
 buildMatrix();
 render();
-if(S.sample) msg('Loaded with sample data — three real-world loads. Edit any field, or press “Clear all data” to start from scratch.');
+if(S.sample) msg('Sample data loaded — three real loads. Edit any field, or press “Clear all data” to start fresh.');
 })();
 </script>
 </body>
