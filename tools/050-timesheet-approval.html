@@ -791,6 +791,9 @@ function sheetEl(sh){
     var t=ev.target;
     if(t.getAttribute('data-f')==='status'){setStatus(sh,t.value);}
   });
+  el.addEventListener('focusout',function(ev){
+    if(ev.target.getAttribute('data-f')==='rate')refresh();
+  });
   el.addEventListener('click',function(ev){
     var b=ev.target.closest('button');if(!b)return;
     var a=b.getAttribute('data-a');
@@ -844,28 +847,47 @@ function setStatus(sh,st){
     var ta=el.querySelector('[data-f="comment"]');if(ta)ta.focus();
   }
 }
+function flagsHTML(e,cc){
+  var f=cc.flags.map(function(x){return '<span class="chip '+(x.sev==='bad'?'bad':'warn')+'">'+esc(x.label)+'</span>'}).join('');
+  return f+(f&&e.note?' ':'')+esc(e.note||'')+(cc.overnight?' <span class="chip">Overnight</span>':'');
+}
 function rowsHTML(sh,c){
   var out='';
   sh.entries.forEach(function(e,i){
     var cc=c.rows[i];
-    var flags=cc.flags.map(function(f){return '<span class="chip '+(f.sev==='bad'?'bad':'warn')+'">'+esc(f.label)+'</span>'}).join('');
-    var note=e.note?'<span class="scr">'+esc(e.note)+'</span><span class="printonly" style="display:none">'+esc(e.note)+'</span>':'';
-    out+='<tr>'+
-      '<td class="dow">'+esc(dowOf(e.date)||'—')+'</td>'+
+    out+='<tr data-rid="'+e.id+'">'+
+      '<td class="dow" data-c="dow">'+esc(dowOf(e.date)||'—')+'</td>'+
       '<td><input class="scr" type="date" data-e="date" data-eid="'+e.id+'" value="'+esc(e.date)+'" aria-label="Date">'+
-          '<span class="printonly num">'+esc(fmtDate(e.date))+'</span></td>'+
+          '<span class="printonly num" data-c="pdate">'+esc(fmtDate(e.date))+'</span></td>'+
       '<td><input class="scr" type="time" data-e="start" data-eid="'+e.id+'" value="'+esc(e.start)+'" aria-label="Clock in">'+
-          '<span class="printonly num">'+esc(e.start||'—')+'</span></td>'+
+          '<span class="printonly num" data-c="pstart">'+esc(e.start||'—')+'</span></td>'+
       '<td><input class="scr" type="time" data-e="end" data-eid="'+e.id+'" value="'+esc(e.end)+'" aria-label="Clock out">'+
-          '<span class="printonly num">'+esc(e.end||'—')+(cc.overnight?' +1d':'')+'</span></td>'+
+          '<span class="printonly num" data-c="pend">'+esc(e.end||'—')+(cc.overnight?' +1d':'')+'</span></td>'+
       '<td class="n"><input class="scr" type="number" min="0" max="720" step="5" data-e="brk" data-eid="'+e.id+'" value="'+esc(e.brk)+'" aria-label="Unpaid break minutes">'+
-          '<span class="printonly num">'+esc(String(num(e.brk,0)))+'</span></td>'+
-      '<td class="n">'+(cc.ok?hrs(cc.worked):'—')+'</td>'+
-      '<td class="flagcell"><div class="rowend"><span>'+flags+(flags&&e.note?' ':'')+esc(e.note||'')+(cc.overnight?'<span class="chip">Overnight</span>':'')+'</span>'+
-        '<button type="button" class="rm noprint" data-a="delrow" data-eid="'+e.id+'" title="Remove this day" aria-label="Remove entry for '+esc(fmtDate(e.date))+'">✕</button></div></td>'+
+          '<span class="printonly num" data-c="pbrk">'+esc(String(num(e.brk,0)))+'</span></td>'+
+      '<td class="n" data-c="hours">'+(cc.ok?hrs(cc.worked):'—')+'</td>'+
+      '<td class="flagcell"><div class="rowend"><span data-c="flags">'+flagsHTML(e,cc)+'</span>'+
+        '<button type="button" class="rm noprint" data-a="delrow" data-eid="'+e.id+'" title="Remove this day" aria-label="Remove this entry">✕</button></div></td>'+
     '</tr>';
   });
   return out;
+}
+/* update the derived cells in place — never rebuild an input the user may be typing in */
+function syncRows(sh,c,tb){
+  var trs=tb.children,i,rebuild=false;
+  if(trs.length!==sh.entries.length)rebuild=true;
+  else for(i=0;i<sh.entries.length;i++)if(trs[i].getAttribute('data-rid')!==sh.entries[i].id){rebuild=true;break}
+  if(rebuild){tb.innerHTML=rowsHTML(sh,c);return}
+  for(i=0;i<sh.entries.length;i++){
+    var e=sh.entries[i],cc=c.rows[i],tr=trs[i];
+    tr.querySelector('[data-c="dow"]').textContent=dowOf(e.date)||'—';
+    tr.querySelector('[data-c="pdate"]').textContent=fmtDate(e.date);
+    tr.querySelector('[data-c="pstart"]').textContent=e.start||'—';
+    tr.querySelector('[data-c="pend"]').textContent=(e.end||'—')+(cc.overnight?' +1d':'');
+    tr.querySelector('[data-c="pbrk"]').textContent=String(num(e.brk,0));
+    tr.querySelector('[data-c="hours"]').textContent=cc.ok?hrs(cc.worked):'—';
+    tr.querySelector('[data-c="flags"]').innerHTML=flagsHTML(e,cc);
+  }
 }
 
 /* ── rendering: refresh derived output ───────────────────── */
@@ -896,7 +918,7 @@ function refresh(){
       chips+='<span class="chip '+(x.sev==='bad'?'bad':'warn')+'">'+esc(x.label)+'</span>';
     });
     q('chips').innerHTML=chips;
-    q('rows').innerHTML=rowsHTML(sh,c);
+    syncRows(sh,c,q('rows'));
     q('ftHours').textContent=hrs(c.total);
     q('ftNote').innerHTML='<span class="hint">'+c.daysWorked+' day'+(c.daysWorked===1?'':'s')+' · basic '+hrsU(c.basic)+
       ' + overtime '+hrsU(c.ot)+' × '+num(c.mult,1)+' → '+money(c.basicPay)+' + '+money(c.otPay)+' = <strong>'+money(c.cost)+'</strong></span>';
@@ -919,10 +941,12 @@ function refresh(){
     q('reqmark').innerHTML=c.needsReason?'<span class="chip bad">Required</span>':'';
     q('pcmt').textContent=sh.comment||'';
     q('cmtWrap').classList.toggle('nocmt',!String(sh.comment||'').trim());
-    var er=q('errRate');
-    var badRate=!(num(sh.rate,-1)>=0)||String(sh.rate)==='';
-    er.hidden=!badRate;er.textContent=badRate?'Enter an hourly rate of 0 or more.':'';
-    el.querySelector('[data-f="rate"]').classList.toggle('inv',badRate);
+    var er=q('errRate'),rin=el.querySelector('[data-f="rate"]');
+    if(document.activeElement!==rin){
+      var badRate=rin.value.trim()===''||!(num(rin.value,-1)>=0);
+      er.hidden=!badRate;er.textContent=badRate?'Enter an hourly rate of 0 or more — the timesheet is costed at this rate.':'';
+      rin.classList.toggle('inv',badRate);
+    }
   });
 
   // summary
