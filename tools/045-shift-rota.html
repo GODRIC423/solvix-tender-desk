@@ -211,7 +211,6 @@ table input:focus,table select:focus{background:var(--raise)}
 .who .rt{font:11px/1.3 var(--mono);color:var(--faint)}
 td.cell{padding:5px 5px;vertical-align:top;background:var(--surface)}
 td.cell.off{background:var(--sunk)}
-td.cell.short{}
 td.cell.brch{background:var(--bad-wash);box-shadow:inset 3px 0 0 0 var(--bad)}
 td.cell select{width:100%;padding:4px 4px;font-size:12.5px;border-color:var(--line);background:var(--raise);
   font-family:var(--sans);text-align:left}
@@ -254,6 +253,11 @@ td.cell.off select{color:var(--muted)}
 .brlist .note b{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font:11.5px/1.4 var(--sans);color:var(--muted)}
 .legend span b{color:var(--ink-2)}
+
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.split>.rail{min-width:0}
+@media(max-width:900px){.split>.rail{order:-1}}
+.card>.hd .chip{white-space:nowrap}
 
 /* print document */
 .doc{color:#000;font-family:var(--sans)}
@@ -610,10 +614,9 @@ function sampleState(){
            {id:'p2',name:'D. Whelan',role:'Care Assistant',rate:13.85,contract:30},
            {id:'p3',name:'M. Silva',role:'Care Assistant',rate:13.85,contract:37.5},
            {id:'p4',name:'J. Byrne',role:'Night Care Assistant',rate:14.90,contract:33},
-           {id:'p5',name:'P. Grant',role:'Kitchen &amp; Support',rate:12.60,contract:20}],
+           {id:'p5',name:'P. Grant',role:'Kitchen & Support',rate:12.60,contract:20}],
     shifts:{}
   };
-  st.staff[4].name='P. Grant'; st.staff[4].role='Kitchen & Support';
   var plan={p1:['tE','tE','tE','tL','tE','',''],
             p2:['tL','tL','','tE','tL','tL',''],
             p3:['','tE','tE','tE','tE','tL','tL'],
@@ -1216,3 +1219,219 @@ function buildDoc(){
      ' · week commencing '+esc(longDate(M.dates[0]))+' · page 1 of 1</div>';
   $('#printdoc').innerHTML=h;
 }
+
+/* ══ exports ═══════════════════════════════════════════════════ */
+function csvCell(v){ v=(v==null?'':String(v));
+  return /[",\n\r]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
+function csvRow(a){ return a.map(csvCell).join(',')+'\r\n'; }
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },250);
+    return true;
+  }catch(e){ note('Could not start the download in this browser.'); return false; }
+}
+function fileStem(){
+  var base=(S.org.name||'rota').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+  return (base||'rota')+'-week-'+S.cur;
+}
+function buildCsv(){
+  var d=M.dates, out='';
+  out+=csvRow(['Weekly staff rota']);
+  out+=csvRow(['Business',S.org.name]);
+  out+=csvRow(['Site / unit',S.org.unit]);
+  out+=csvRow(['Address',String(S.org.addr||'').replace(/\n/g,'; ')]);
+  out+=csvRow(['Reference',S.org.ref]);
+  out+=csvRow(['Prepared by',S.org.mgr]);
+  out+=csvRow(['Week commencing',longDate(d[0])]);
+  out+=csvRow(['Week ending',longDate(d[6])]);
+  out+=csvRow(['Currency',S.ccy]);
+  out+=csvRow(['Minimum rest (hours)',hrs1(num(S.rules.rest,11))]);
+  out+=csvRow(['Maximum consecutive days',Math.max(1,Math.round(num(S.rules.consec,6)))]);
+  out+=csvRow(['Weekly hours cap',hrs1(num(S.rules.cap,48))]);
+  out+=csvRow(['Exported',longDate(new Date())]);
+  out+=csvRow([]);
+  out+=csvRow(['Staff','Role','Date','Day','Shift code','Shift name','Start','Finish',
+    'Break (min)','Paid hours','Rate ('+S.ccy+')','Cost ('+S.ccy+')','Overnight','Flags']);
+  M.rows.forEach(function(row){
+    row.cells.forEach(function(cl,c){
+      if(!cl.sh)return;
+      out+=csvRow([row.p.name,row.p.role,M.isos[c],DOWL[d[c].getDay()],cl.sh.code,cl.sh.name,
+        cl.sh.s,cl.sh.e,Math.max(0,Math.round(num(cl.sh.b,0))),
+        cl.m.ok?cl.m.hours.toFixed(2):'',r2(num(row.p.rate,0)).toFixed(2),
+        cl.m.ok?cl.cost.toFixed(2):'',cl.m.overnight?'yes':'no',
+        cl.flags.map(function(f){return f.k+': '+f.msg;}).join(' | ')]);
+    });
+  });
+  out+=csvRow([]);
+  out+=csvRow(['Per person','Role','Rate ('+S.ccy+')','Contract hours','Shifts','Paid hours',
+    'Cost ('+S.ccy+')','Variance to contract (h)','Longest run of days','Breaches']);
+  M.rows.forEach(function(row){
+    out+=csvRow([row.p.name,row.p.role,r2(num(row.p.rate,0)).toFixed(2),
+      num(row.p.contract,0)?hrs(num(row.p.contract,0)):'',row.shifts,row.hours.toFixed(2),
+      row.cost.toFixed(2),row.contractVar===null?'':row.contractVar.toFixed(2),
+      row.consecMax,row.flags]);
+  });
+  out+=csvRow([]);
+  out+=csvRow(['Day','Date','On duty','Required cover','Short by','Paid hours','Cost ('+S.ccy+')']);
+  M.days.forEach(function(dd){
+    out+=csvRow([DOWL[dd.date.getDay()],dd.iso,dd.head,dd.req,dd.short,dd.hours.toFixed(2),
+      dd.cost.toFixed(2)]);
+  });
+  out+=csvRow([]);
+  out+=csvRow(['TOTALS','Paid hours','Shifts','Weekly wage cost ('+S.ccy+')',
+    'Average cost per hour ('+S.ccy+')','Rule breaches','Days under cover']);
+  out+=csvRow(['',M.totHours.toFixed(2),M.totShifts,M.totCost.toFixed(2),
+    M.avg===null?'':r2(M.avg).toFixed(2),M.breachCount,M.coverShort]);
+  out+=csvRow([]);
+  out+=csvRow(['Planning aid only. Checked against the thresholds above for this week only; no '+
+    'reference-period averaging, opt-outs, night-work or young-worker rules applied. Not legal advice.']);
+  return out;
+}
+
+/* ══ wiring ════════════════════════════════════════════════════ */
+function bindText(id,get,set){
+  var el=$(id); if(!el)return;
+  el.value=get();
+  el.addEventListener('input',function(){ set(el.value); touched(); save(); buildDoc(); });
+}
+function rebuildAll(){ rebuildStaff(); rebuildTpls(); rebuildCover(); rebuildGrid(); syncForm(); refresh(); }
+function syncForm(){
+  $('#oName').value=S.org.name; $('#oUnit').value=S.org.unit; $('#oAddr').value=S.org.addr;
+  $('#oRef').value=S.org.ref;   $('#oMgr').value=S.org.mgr;
+  $('#rRest').value=S.rules.rest; $('#rConsec').value=S.rules.consec; $('#rCap').value=S.rules.cap;
+  $('#wsd').value=String(S.wsd);
+  var known=(S.ccy==='£'||S.ccy==='$'||S.ccy==='€');
+  $('#ccy').value=known?S.ccy:'custom';
+  $('#ccyCustWrap').hidden=known; $('#ccyCust').value=known?'':S.ccy;
+}
+function wire(){
+  bindText('#oName',function(){return S.org.name;},function(v){S.org.name=v;});
+  bindText('#oUnit',function(){return S.org.unit;},function(v){S.org.unit=v;});
+  bindText('#oAddr',function(){return S.org.addr;},function(v){S.org.addr=v;});
+  bindText('#oRef', function(){return S.org.ref;}, function(v){S.org.ref=v;});
+  bindText('#oMgr', function(){return S.org.mgr;}, function(v){S.org.mgr=v;});
+
+  function ruleField(id,errId,key,min,max,dflt,round){
+    var el=$(id), er=$(errId);
+    el.addEventListener('input',function(){
+      var v=parseFloat(el.value);
+      if(!isFinite(v)){ er.hidden=true; el.classList.remove('inv'); return; }
+      v=round?Math.round(v):v;
+      S.rules[key]=Math.min(max,Math.max(min,v)); touched(); refresh();
+    });
+    el.addEventListener('blur',function(){
+      var v=parseFloat(el.value);
+      if(!isFinite(v)||v<min||v>max){
+        er.textContent='Enter a number between '+min+' and '+max+'. Using '+dflt+'.';
+        er.hidden=false; el.classList.add('inv');
+        S.rules[key]=dflt; el.value=dflt; touched(); refresh();
+      } else { er.hidden=true; el.classList.remove('inv');
+        S.rules[key]=round?Math.round(v):v; el.value=S.rules[key]; refresh(); }
+    });
+  }
+  ruleField('#rRest','#eRest','rest',0,24,11,false);
+  ruleField('#rConsec','#eConsec','consec',1,14,6,true);
+  ruleField('#rCap','#eCap','cap',1,168,48,false);
+
+  $('#ccy').addEventListener('change',function(){
+    var v=$('#ccy').value;
+    if(v==='custom'){ $('#ccyCustWrap').hidden=false; $('#ccyCust').focus();
+      if($('#ccyCust').value) S.ccy=$('#ccyCust').value; }
+    else { $('#ccyCustWrap').hidden=true; S.ccy=v; }
+    touched(); refresh();
+  });
+  $('#ccyCust').addEventListener('input',function(){
+    S.ccy=$('#ccyCust').value.slice(0,4)||'£'; touched(); refresh(); });
+  $('#wsd').addEventListener('change',function(){
+    S.wsd=parseInt($('#wsd').value,10)||0;
+    S.cur=isoOf(weekStartOf(dOf(S.cur),S.wsd));
+    touched(); rebuildCover(); rebuildGrid(); refresh();
+  });
+
+  function moveWeek(n){ S.cur=isoOf(addDays(dOf(S.cur),n*7)); rebuildCover(); rebuildGrid(); refresh(); }
+  $('#bPrev').addEventListener('click',function(){moveWeek(-1);note('');});
+  $('#bNext').addEventListener('click',function(){moveWeek(1);note('');});
+  $('#bThis').addEventListener('click',function(){
+    S.cur=isoOf(weekStartOf(new Date(),S.wsd)); rebuildCover(); rebuildGrid(); refresh(); note('');});
+
+  $('#bCopy').addEventListener('click',function(){
+    var dates=weekDates(), copied=0, existing=0;
+    dates.forEach(function(d){ var iso=isoOf(d); if(S.shifts[iso]&&Object.keys(S.shifts[iso]).length)existing++; });
+    if(existing&&!window.confirm('This week already has shifts on '+existing+' day'+(existing===1?'':'s')+
+      '. Replace them with last week’s rota?')) return;
+    var ids={}; S.staff.forEach(function(p){ids[p.id]=1;});
+    dates.forEach(function(d){
+      var iso=isoOf(d), src=S.shifts[isoOf(addDays(d,-7))];
+      delete S.shifts[iso];
+      if(!src)return; var out={};
+      for(var pid in src){ if(src.hasOwnProperty(pid)&&ids[pid]){
+        out[pid]=JSON.parse(JSON.stringify(src[pid])); copied++; } }
+      if(Object.keys(out).length) S.shifts[iso]=out;
+    });
+    touched(); rebuildGrid(); refresh();
+    note(copied?('Copied '+copied+' shift'+(copied===1?'':'s')+' forward from the previous week.')
+                :'The previous week has no shifts to copy.');
+  });
+  $('#bClearWeek').addEventListener('click',function(){
+    if(!window.confirm('Clear every shift in the week shown? Other weeks are not affected.'))return;
+    weekDates().forEach(function(d){ delete S.shifts[isoOf(d)]; });
+    touched(); rebuildGrid(); refresh(); note('This week has been cleared.');
+  });
+  function addStaff(){
+    S.staff.push({id:uid('p'),name:'',role:'',rate:0,contract:0});
+    touched(); rebuildStaff(); rebuildGrid(); refresh();
+    var rows=$('#staffBody').children; var last=rows[rows.length-1];
+    if(last){ var i=last.querySelector('.f-name'); if(i)i.focus(); }
+  }
+  $('#bAddStaff').addEventListener('click',addStaff);
+  $('#bAddStaff2').addEventListener('click',addStaff);
+  $('#bAddTpl').addEventListener('click',function(){
+    S.tpls.push({id:uid('t'),code:'S'+(S.tpls.length+1),name:'New shift',s:'09:00',e:'17:00',b:30});
+    touched(); rebuildTpls(); rebuildGrid(); refresh();
+  });
+  $('#bSample').addEventListener('click',function(){
+    if(!window.confirm('Replace everything on screen with the sample rota?'))return;
+    S=sampleState(); rebuildAll(); note('Sample rota loaded.');
+  });
+  $('#bClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all data? Every week, every person and all rota details stored in this browser will be deleted.'))return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    S=blankState(); rebuildAll(); note('All data cleared. Start typing, or press “Load sample”.');
+  });
+  $('#bPrint').addEventListener('click',function(){ buildDoc(); window.print(); });
+  $('#bCsv').addEventListener('click',function(){
+    download(fileStem()+'.csv','text/csv;charset=utf-8','﻿'+buildCsv());
+    note('CSV exported.');
+  });
+  $('#bJson').addEventListener('click',function(){
+    download(fileStem()+'.json','application/json',JSON.stringify(S,null,2));
+    note('JSON backup exported.');
+  });
+  $('#bImport').addEventListener('click',function(){ $('#fImport').click(); });
+  $('#fImport').addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0]; if(!f)return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{
+        var o=JSON.parse(String(fr.result));
+        if(!o||typeof o!=='object')throw new Error('bad');
+        S=normalise(o); rebuildAll(); note('Rota imported from '+f.name+'.');
+      }catch(err){ note('That file could not be read as a rota backup.'); }
+      $('#fImport').value='';
+    };
+    fr.onerror=function(){ note('That file could not be read.'); $('#fImport').value=''; };
+    fr.readAsText(f);
+  });
+}
+
+/* ══ init ══════════════════════════════════════════════════════ */
+S=load(); if(!S) S=sampleState();
+wire(); rebuildAll();
+})();
+</script>
+</body>
+</html>
