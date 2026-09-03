@@ -1,0 +1,1292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Excavation Cut &amp; Fill — Solvix Toolkit</title>
+<meta name="description" content="Excavation take-off: bank volume for vertical, trenched and battered digs by the prismoidal formula, bulking to loose volume (sand 1.10, gravel 1.12, clay 1.30, rock 1.50), truck loads by ceiling division, compacted fill from the shrink factor, and cost from per-load haul and per-hour plant rates. Works offline, prints a clean disposal and haulage sheet, exports CSV and JSON.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23B45309'/%3E%3Cpath d='M3 11 H10 L14 22 H19 L23 11 H29' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Tool 008 — Excavation Cut & Fill · Trades & Construction ══════ */
+:root{--accent:#B45309;--accent-ink:#8F4207;--accent-wash:#FBF0DC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E08B3D;--accent-ink:#F2A85F;--accent-wash:#2E1F0D;--on-accent:#1A1206}}
+:root[data-theme="dark"]{--accent:#E08B3D;--accent-ink:#F2A85F;--accent-wash:#2E1F0D;--on-accent:#1A1206}
+
+.split>*,.stack>*,.grid>*{min-width:0}
+[hidden]{display:none!important}
+.app{max-width:1290px}
+#topGap{height:14px}
+.stack.gap{gap:14px}
+.grid.tight{grid-template-columns:repeat(auto-fit,minmax(184px,1fr))}
+.tiny{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.right{margin-left:auto}
+.vh{position:absolute!important;left:0;top:0;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden!important;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.appbar .acts{display:flex;flex-wrap:wrap;gap:7px}
+
+/* hero + stats */
+.stat.hero .v{font-size:38px;line-height:1.04}
+.stat.hero .u{margin-top:5px;display:block;color:var(--accent-ink);opacity:.94;line-height:1.4}
+.stat .v.sm{font-size:18.5px}
+.stat .u{display:block;margin-top:2px;line-height:1.35}
+.statgrid{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+.kv{display:flex;gap:10px;align-items:baseline;font-size:13.5px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .v{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.kv.tot{font-weight:650;font-size:15px;border-top:1px solid var(--line-hard);border-bottom:0;padding-top:8px;margin-top:2px}
+.ftot{display:flex;align-items:baseline;gap:10px;width:100%}
+.ftot .k{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.ftot .v{margin-left:auto;font:700 21px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+
+/* excavation table */
+#excTbl th{font-size:9.5px;letter-spacing:0;white-space:normal;line-height:1.25;min-width:34px;vertical-align:bottom}
+#excTbl td,#excTbl th{padding:6px 3px}
+#excTbl td:first-child,#excTbl th:first-child{min-width:104px;width:16%}
+#excTbl td.nm input{text-align:left;font-family:var(--sans);min-width:96px}
+#excTbl input[type=number]{min-width:44px;padding:5px 3px}
+#excTbl select{padding:5px 3px;font-size:12.5px;min-width:64px}
+#excTbl td.n{white-space:nowrap;font-size:13px}
+#excTbl td.bx{font-weight:650;color:var(--accent-ink);white-space:nowrap}
+td.act{width:32px;text-align:center}
+tr.erow td{padding:0 6px 7px;border-bottom:1px solid var(--line)}
+tr.erow .err{display:block}
+tr.cutrow td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tr.fillrow td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
+.mini th,.mini td{padding:7px 8px;font-size:13.5px}
+.mini th{font-size:9.5px}
+#soilTbl td:first-child,#soilTbl th:first-child{min-width:132px}
+#soilTbl input{min-width:56px}
+#schedTbl td,#schedTbl th{padding:6px 8px}
+#schedTbl td:first-child{min-width:130px}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.f.inline{flex-direction:row;align-items:center;gap:8px}
+.f.inline>label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+
+#sampleBar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:12px}
+#sampleBar .btn{margin-left:auto}
+#warnBar{margin-bottom:14px}
+footer{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.6}
+footer b{color:var(--ink-2);font-weight:650}
+.spec dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:13px;line-height:1.45}
+.spec dt{font-weight:650;color:var(--muted);white-space:nowrap}
+.spec dd{margin:0;color:var(--ink-2)}
+.fx{font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--sunk);border:1px solid var(--line);border-radius:3px;padding:6px 8px;line-height:1.6}
+
+/* printed document */
+.doc{margin-bottom:5mm}
+.doc .top{display:flex;justify-content:space-between;gap:12mm;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:2.5mm}
+.doc .biz{font:700 15.5pt/1.12 var(--sans)}
+.doc .bizc{font-size:9.5pt;color:#333;margin-top:1.5mm}
+.doc .ttl{text-align:right;font:700 12pt/1.2 var(--sans);text-transform:uppercase;letter-spacing:.06em}
+.doc .ref{text-align:right;font:10pt/1.5 var(--mono);margin-top:1.5mm}
+.doc dl{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:1.2mm 4mm;margin:3mm 0 0;font-size:9.5pt}
+.doc dt{font-weight:700;color:#333}
+.doc dd{margin:0}
+.doc .nt{margin-top:2.5mm;font-size:9pt;line-height:1.4}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:10mm;margin-top:6mm;font-size:9pt}
+.sign .ln{border-top:1px solid #000;padding-top:1.5mm;margin-top:9mm}
+
+@media print{
+  .split{display:block!important}
+  #inCol{display:none!important}
+  #resCol{display:block!important}
+  .sticky{position:static}
+  #topGap,#sampleBar{display:none!important}
+  .card{margin-bottom:6mm}
+  .card>.bd{padding:8px 10px}
+  .card>.hd{padding:7px 11px}
+  .card>.ft{padding:7px 11px}
+  .stat{padding:5px 8px}
+  .stat .k{font-size:7.5pt}
+  .stat .v.sm{font-size:12pt}
+  .stat .u{font-size:8pt}
+  .stat.hero{padding:6px 10px}
+  .stat.hero .v{font-size:19pt}
+  .stat.hero .u{margin-top:2px;font-size:8.5pt}
+  .statgrid{display:grid!important;grid-template-columns:1fr 1fr 1fr;gap:3mm}
+  .ftot .v{font-size:13pt}
+  .note{font-size:8.4pt;line-height:1.42;border-left:3px solid #000;background:#fff!important;padding:2mm 3mm}
+  .note.warn,.note.bad{border-left:3px solid #000}
+  #warnBar{margin-bottom:5mm}
+  .kv{font-size:8.8pt;padding:2px 0}
+  .kv.tot{font-size:10pt;padding-top:4px}
+  .tw{overflow:visible!important}
+  #schedTbl,#soilPrint{font-size:9pt}
+  #schedTbl td,#schedTbl th{padding:2.5px 5px}
+  #schedTbl thead{display:table-header-group}
+  .card>.bd.stack{display:block}
+  .card>.bd.stack>*{margin-bottom:4mm}
+  .card>.bd.stack>*:last-child{margin-bottom:0}
+  .stat,.note,.kv,.card>.ft,.card>.hd{break-inside:avoid}
+  #resCol>.card,#resCol>.card>.bd{break-inside:auto}
+  #costCard,#specCard{break-inside:avoid}
+  .spec dl{grid-template-columns:auto 1fr auto 1fr;gap:1.5mm 4mm;font-size:9.5pt}
+  .spec dt{color:#333}
+  .fx{background:#fff;border:1px solid #bbb;font-size:8.5pt}
+  footer{font-size:8.5pt;color:#333}
+}
+@media(max-width:900px){
+  #resCol{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:520px){
+  .stat.hero .v{font-size:31px}
+  .appbar .acts .btn{flex:1 1 auto;justify-content:center}
+  .statgrid{gap:7px}
+  .stat{padding:9px 10px}
+  .stat .v.sm{font-size:17px}
+}
+@media(max-width:339px){.statgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<main class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">EX</div>
+    <div style="min-width:0">
+      <h1>Excavation Cut &amp; Fill</h1>
+      <div class="sub">SOLVIX TOOLKIT · 008</div>
+    </div>
+  </div>
+  <div class="acts noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Save .json</button>
+    <button type="button" class="btn" id="btnImport">Load .json</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept="application/json,.json" class="vh" tabindex="-1" aria-hidden="true">
+  </div>
+</header>
+<div id="topGap"></div>
+
+<!-- ── printed document header ───────────────────────────────── -->
+<section class="printonly doc">
+  <div class="top">
+    <div>
+      <div class="biz" id="dBiz"></div>
+      <div class="bizc" id="dContact"></div>
+    </div>
+    <div>
+      <div class="ttl">Excavation take-off<br>cut, fill &amp; disposal</div>
+      <div class="ref" id="dRef"></div>
+    </div>
+  </div>
+  <dl>
+    <dt>Project</dt><dd id="dProject"></dd>
+    <dt>Client</dt><dd id="dClient"></dd>
+    <dt>Site</dt><dd id="dSite"></dd>
+    <dt>Date</dt><dd id="dDate"></dd>
+    <dt>Prepared by</dt><dd id="dBy"></dd>
+    <dt>Units</dt><dd id="dUnits"></dd>
+  </dl>
+  <div class="nt" id="dNotes"></div>
+</section>
+
+<div class="note noprint" id="sampleBar">
+  <strong>Sample take-off loaded.</strong> Foundations, drainage and a driveway on one plot — so every figure works end to end. Type straight over it, or start clean.
+  <button type="button" class="btn sm" id="btnBlank">Start a blank take-off</button>
+</div>
+
+<div class="note warn" id="warnBar">
+  <strong>Estimate only — not an excavation design.</strong> This sheet converts the dimensions you enter into bank, loose and compacted volumes using the bulking and shrinkage factors shown. It is <strong>not</strong> a temporary-works design and it does not tell you whether a face is safe. Battering, benching, shoring and trench support must be designed by a competent person to the rules that apply on your site — in Great Britain CDM 2015 with HSG185, in the United States OSHA 29 CFR 1926 Subpart P. Bulking and shrinkage vary widely with moisture, plant and compaction effort: confirm against the geotechnical report or a site trial before you commit to haulage rates or a disposal price. Check for buried services and contaminated ground before any dig.
+</div>
+
+<div class="split">
+
+  <!-- ── inputs ─────────────────────────────────────────────── -->
+  <div class="stack gap" id="inCol">
+
+    <section class="card">
+      <div class="hd">
+        <h2>Job &amp; document details</h2>
+        <span class="tiny right">Printed at the top of the sheet</span>
+      </div>
+      <div class="bd stack">
+        <div class="grid cols-2 tight">
+          <div class="f"><label for="mBiz">Your business</label><input id="mBiz" autocomplete="organization"></div>
+          <div class="f"><label for="mContact">Phone / email</label><input id="mContact"></div>
+          <div class="f"><label for="mProject">Project</label><input id="mProject"></div>
+          <div class="f"><label for="mClient">Client</label><input id="mClient"></div>
+          <div class="f"><label for="mSite">Site address</label><input id="mSite"></div>
+          <div class="f"><label for="mRef">Take-off ref.</label><input id="mRef"></div>
+          <div class="f"><label for="mDate">Date</label><input id="mDate" type="date"></div>
+          <div class="f"><label for="mBy">Prepared by</label><input id="mBy"></div>
+        </div>
+        <div class="f"><label for="mNotes">Notes shown on the printed sheet</label><textarea id="mNotes"></textarea></div>
+        <div class="row">
+          <div class="f inline"><label for="curSel">Currency</label>
+            <select id="curSel" style="width:auto">
+              <option value="&#163;">&#163; GBP</option>
+              <option value="$">$ USD</option>
+              <option value="&#8364;">&#8364; EUR</option>
+              <option value="custom">Other…</option>
+            </select></div>
+          <div class="f inline" id="curCustomWrap" hidden><label for="curCustom">Symbol</label>
+            <input id="curCustom" maxlength="4" style="width:70px;text-align:center"></div>
+          <div class="row right" role="group" aria-label="Measurement units">
+            <span class="lbl">Units</span>
+            <span class="seg">
+              <button type="button" id="uMet" data-units="met" aria-pressed="true">Metric · m³</button>
+              <button type="button" id="uImp" data-units="imp" aria-pressed="false">Imperial · yd³</button>
+            </span>
+          </div>
+        </div>
+        <p class="tiny">Switching units converts every measurement, capacity, density and production rate below — it does not just relabel them.</p>
+      </div>
+    </section>
+
+    <section class="card" id="excCard">
+      <div class="hd">
+        <h2>Excavation &amp; fill areas</h2>
+        <span class="chip" id="rowChip">0 areas</span>
+        <span class="right row noprint">
+          <button type="button" class="btn sm" id="btnAddCut">+ Add cut</button>
+          <button type="button" class="btn sm" id="btnAddFill">+ Add fill</button>
+        </span>
+      </div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table id="excTbl">
+            <caption class="vh">Each row is one excavation or fill area. Cut rows give a bank (in-situ) volume; fill rows give a compacted volume.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Area</th>
+                <th scope="col">Cut / fill</th>
+                <th scope="col">Sides</th>
+                <th scope="col" class="n">No.</th>
+                <th scope="col" class="n">Length<br><span class="uLen">m</span></th>
+                <th scope="col" class="n">Width<br><span class="uLen">m</span></th>
+                <th scope="col" class="n">Depth<br>start <span class="uLen">m</span></th>
+                <th scope="col" class="n">Depth<br>end <span class="uLen">m</span></th>
+                <th scope="col" class="n">Batter<br>H per 1 V</th>
+                <th scope="col">Material</th>
+                <th scope="col" class="n">Volume<br><span class="uVol">m³</span></th>
+                <th scope="col" class="act noprint"><span class="vh">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="excBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ft">
+        <span class="tiny">Leave <b>depth end</b> blank for a level dig. Volume shown is <b>bank</b> (in-situ) on cut rows and <b>compacted</b> on fill rows.</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Bulking, shrinkage &amp; density</h2>
+        <span class="tiny right">Every figure editable</span></div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table class="mini" id="soilTbl">
+            <caption class="vh">Bulking (swell) factor, shrink factor and loose density for each material.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Material</th>
+                <th scope="col" class="n">Bulking factor<br>loose ÷ bank</th>
+                <th scope="col" class="n">Shrink factor<br>loose ÷ compacted</th>
+                <th scope="col" class="n">Loose density<br><span class="uDens">kg/m³</span></th>
+              </tr>
+            </thead>
+            <tbody id="soilBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ft"><span class="tiny">Trade defaults: sand 1.10, gravel 1.12, clay 1.30, rock 1.50. Overwrite any of them with your own site figures.</span></div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Haulage, plant &amp; re-use</h2></div>
+      <div class="bd stack">
+        <div class="grid cols-3 tight">
+          <div class="f"><label for="cCap">Truck capacity (<span class="uVol">m³</span> loose)</label>
+            <input id="cCap" type="number" min="0" step="0.1" inputmode="decimal"><span class="err" id="eCap"></span></div>
+          <div class="f"><label for="cPay">Truck payload (<span class="uWt">t</span>)</label>
+            <input id="cPay" type="number" min="0" step="0.1" inputmode="decimal"></div>
+          <div class="f"><label for="cReuse">Spoil re-usable as fill (%)</label>
+            <input id="cReuse" type="number" min="0" max="100" step="1" inputmode="decimal"><span class="err" id="eReuse"></span></div>
+          <div class="f"><label for="cHaul">Haul rate (per load)</label>
+            <input id="cHaul" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="f"><label for="cTip">Tipping / disposal (per load)</label>
+            <input id="cTip" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="f"><label for="cImp">Imported fill delivered (per load)</label>
+            <input id="cImp" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="f"><label for="cMach">Machine + operator (per hour)</label>
+            <input id="cMach" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="f"><label for="cProd">Dig rate (bank <span class="uVol">m³</span>/hr)</label>
+            <input id="cProd" type="number" min="0" step="0.1" inputmode="decimal"><span class="err" id="eProd"></span></div>
+          <div class="f"><label for="cBat">Default batter (H per 1 V)</label>
+            <input id="cBat" type="number" min="0" step="0.05" inputmode="decimal"></div>
+        </div>
+        <p class="tiny">Loads are whole trucks: any part load is rounded <b>up</b>. Spoil is re-used before anything is imported, and only up to the percentage you allow above.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── results ────────────────────────────────────────────── -->
+  <div class="stack gap" id="resCol">
+
+    <section class="card sticky" id="resCard">
+      <div class="hd"><h2>Result</h2><span class="chip" id="unitChip">metric</span></div>
+      <div class="bd stack">
+        <div class="stat hero">
+          <div class="k">Loads of spoil off site</div>
+          <div class="v" id="hHero">—</div>
+          <span class="u" id="hHeroSub">—</span>
+        </div>
+        <div class="statgrid">
+          <div class="stat"><div class="k">Cut — bank volume</div><div class="v sm" id="sBank">—</div><span class="u" id="uBank">in situ</span></div>
+          <div class="stat"><div class="k">Loose spoil (bulked)</div><div class="v sm" id="sLoose">—</div><span class="u" id="uLoose">after swell</span></div>
+          <div class="stat"><div class="k">Fill — compacted</div><div class="v sm" id="sComp">—</div><span class="u">as placed</span></div>
+          <div class="stat"><div class="k">Loose fill needed</div><div class="v sm" id="sLooseFill">—</div><span class="u">before compaction</span></div>
+          <div class="stat"><div class="k">Re-used on site</div><div class="v sm" id="sReuse">—</div><span class="u" id="uReuse">loose</span></div>
+          <div class="stat"><div class="k">Surplus to remove</div><div class="v sm" id="sSurplus">—</div><span class="u">loose</span></div>
+        </div>
+        <div>
+          <div class="kv"><span class="k">Truck capacity</span><span class="v" id="kCap">—</span></div>
+          <div class="kv"><span class="k">Loads off site (surplus ÷ capacity, rounded up)</span><span class="v" id="kOff">—</span></div>
+          <div class="kv"><span class="k">Loads of imported fill</span><span class="v" id="kIn">—</span></div>
+          <div class="kv"><span class="k">Loose spoil weight</span><span class="v" id="kWt">—</span></div>
+          <div class="kv"><span class="k">Weight per full load</span><span class="v" id="kLoadWt">—</span></div>
+        </div>
+        <div class="note bad" id="payNote" hidden><strong>Weight-limited.</strong> <span id="payTxt"></span></div>
+      </div>
+      <div class="ft"><span class="ftot"><span class="k">Estimated cost</span><span class="v" id="fTotal">—</span></span></div>
+    </section>
+
+    <section class="card" id="costCard">
+      <div class="hd"><h2>Cost breakdown</h2></div>
+      <div class="bd">
+        <div class="kv"><span class="k" id="kMachK">Machine + operator</span><span class="v" id="kMach">—</span></div>
+        <div class="kv"><span class="k" id="kHaulK">Haulage off site</span><span class="v" id="kHaul">—</span></div>
+        <div class="kv"><span class="k" id="kTipK">Tipping / disposal</span><span class="v" id="kTip">—</span></div>
+        <div class="kv"><span class="k" id="kImpK">Imported fill delivered</span><span class="v" id="kImp">—</span></div>
+        <div class="kv tot"><span class="k">Estimated total</span><span class="v" id="kTotal">—</span></div>
+        <div class="kv"><span class="k">Cost per bank <span class="uVol">m³</span> excavated</span><span class="v" id="kPer">—</span></div>
+      </div>
+    </section>
+
+    <section class="card" id="schedCard">
+      <div class="hd"><h2>Excavation &amp; fill schedule</h2><span class="chip" id="schedChip">0 areas</span></div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table class="mini" id="schedTbl">
+            <caption class="vh">Every area with its dimensions, bank or compacted volume, factor applied and resulting loose volume.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Area</th>
+                <th scope="col">Type</th>
+                <th scope="col">Sides</th>
+                <th scope="col" class="n">No.</th>
+                <th scope="col" class="n">L × W × avg d (<span class="uLen">m</span>)</th>
+                <th scope="col">Material</th>
+                <th scope="col" class="n">Bank / comp.<br><span class="uVol">m³</span></th>
+                <th scope="col" class="n">Factor</th>
+                <th scope="col" class="n">Loose<br><span class="uVol">m³</span></th>
+              </tr>
+            </thead>
+            <tbody id="schedBody"></tbody>
+            <tfoot id="schedFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="specCard">
+      <div class="hd"><h2>Basis of estimate</h2></div>
+      <div class="bd stack spec">
+        <div class="fx" id="fxBox"></div>
+        <dl>
+          <dt>Volume method</dt><dd>Average depth d = (start + end) ÷ 2. Battered pits use the prismoidal formula for a rectangular frustum; battered trenches use a trapezoidal cross-section.</dd>
+          <dt>Bulking</dt><dd id="dFactors">—</dd>
+          <dt>Re-use allowance</dt><dd id="dReuse">—</dd>
+          <dt>Truck capacity</dt><dd id="dCap">—</dd>
+          <dt>Dig rate</dt><dd id="dProd">—</dd>
+          <dt>Rates</dt><dd id="dRates">—</dd>
+          <dt>Rounding</dt><dd>Loads always round up to a whole truck. Volumes shown to 2 dp; money to 2 dp.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="printonly">
+      <div class="sign">
+        <div><div class="ln">Prepared by — signature &amp; date</div></div>
+        <div><div class="ln">Accepted by — signature &amp; date</div></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<footer>
+  <b>Solvix Toolkit · 008 — Excavation Cut &amp; Fill.</b>
+  Bank volume from the dimensions entered: vertical sides L×W×d, battered trench L×d×(W+s·d), battered pit d×(L·W+s·d·(L+W)+⁴⁄₃·s²·d²) — the prismoidal formula for a rectangular frustum. Loose volume = bank × bulking factor; compacted fill = loose ÷ shrink factor; loads = ⌈loose ÷ truck capacity⌉. Default bulking factors are the customary trade values (sand 1.10, gravel 1.12, clay 1.30, rock 1.50) and every one of them is editable.
+  Excavation support and slope stability are outside this tool: see HSE HSG185 and CDM 2015 (GB) or OSHA 29 CFR 1926 Subpart P (US).
+  Works offline; your data stays in this browser.
+</footer>
+</main>
+
+<script>
+'use strict';
+/* ── Solvix 008 · Excavation Cut & Fill ────────────────────────────
+   All measurements are held canonically in metric: metres, cubic
+   metres, kilograms. The unit toggle converts on the way in and on
+   the way out — it never merely relabels a figure.                */
+
+var KEY = 'solvix.excavation-calculator.v1';
+
+var UNITS = {
+  met:{ name:'Metric (m, m³, tonnes)', len:'m', vol:'m³', dens:'kg/m³', wt:'t', wtLong:'tonnes',
+        L:1, V:1, D:1, W:1/1000 },
+  imp:{ name:'Imperial (ft, yd³, short tons)', len:'ft', vol:'yd³', dens:'lb/yd³', wt:'tn', wtLong:'short tons',
+        L:1/0.3048, V:1/0.764554857984, D:2.20462262185/1.30795061931, W:1/907.18474 }
+};
+function U(){ return UNITS[S.units] || UNITS.met; }
+function dLen(m){ return m * U().L; }        function cLen(v){ return v / U().L; }
+function dVol(m3){ return m3 * U().V; }      function cVol(v){ return v / U().V; }
+function dDens(k){ return k * U().D; }       function cDens(v){ return v / U().D; }
+function dWt(kg){ return kg * U().W; }       function cWt(v){ return v / U().W; }
+
+/* ── number helpers — never render NaN, Infinity or -0 ─────────── */
+function isNum(x){ return typeof x === 'number' && isFinite(x); }
+function grp(s){
+  var p = String(s).split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return p.join('.');
+}
+function nf(x, dp){
+  if (!isNum(x)) return '—';
+  var d = dp === undefined ? 0 : dp;
+  var v = x.toFixed(d);
+  if (parseFloat(v) === 0) v = (0).toFixed(d);
+  return grp(v);
+}
+function money(x){ return isNum(x) ? cur() + nf(x, 2) : '—'; }
+function trimN(x, dp){
+  if (!isNum(x)) return '';
+  return String(parseFloat(x.toFixed(dp === undefined ? 4 : dp)));
+}
+function num(v){ var n = parseFloat(v); return isFinite(n) ? n : 0; }
+function esc(s){
+  return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function cur(){ return S.cur === 'custom' ? (S.curCustom || '¤') : S.cur; }
+function ceilTo(x){ return isNum(x) ? (x > 0 ? Math.ceil(x - 1e-9) : 0) : null; }
+function today(){
+  var d = new Date(), p = function(n){ return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function el(id){ return document.getElementById(id); }
+
+/* ── state ─────────────────────────────────────────────────────── */
+var SHAPES = { vert:'Vertical', trench:'Trench, 2 sides', pit:'Pit, 4 sides' };
+var uid = 1;
+function mkRow(name, kind, shape, n, L, W, d1, d2, s, soil){
+  return { id:'x' + (uid++), name:name, kind:kind, shape:shape, n:n,
+           L:L, W:W, d1:d1, d2:(d2 === null || d2 === undefined || d2 === '') ? null : d2,
+           s:s, soil:soil };
+}
+function blankRow(kind){
+  return mkRow('', kind || 'cut', 'vert', 1, 0, 0, 0, null,
+               S ? num(S.cfg.batter) : 0.5, kind === 'fill' ? 'mixed' : 'clay');
+}
+function defaultSoils(){
+  return [
+    { id:'sand',    name:'Sand',              bulk:1.10, shrink:1.16, dens:1450 },
+    { id:'gravel',  name:'Gravel',            bulk:1.12, shrink:1.15, dens:1600 },
+    { id:'clay',    name:'Clay',              bulk:1.30, shrink:1.44, dens:1300 },
+    { id:'rock',    name:'Rock (broken)',     bulk:1.50, shrink:1.15, dens:1600 },
+    { id:'topsoil', name:'Topsoil',           bulk:1.25, shrink:1.39, dens:950  },
+    { id:'mixed',   name:'Mixed made ground', bulk:1.20, shrink:1.26, dens:1400 }
+  ];
+}
+function baseState(){
+  return {
+    v: 1, sample: false, units: 'met', cur: '£', curCustom: '',
+    meta: { biz:'', contact:'', project:'', client:'', site:'', ref:'', date: today(), by:'', notes:'' },
+    cfg: { cap:8, payload:16000, reuse:60, haul:145, tip:48, imp:190, mach:45, prod:18, batter:0.5 },
+    soils: defaultSoils(),
+    rows: []
+  };
+}
+function sampleState(){
+  var s = baseState();
+  s.sample = true;
+  s.meta = {
+    biz: 'Marden Groundworks Ltd', contact: '01622 774 118 · estimating@mardengw.co.uk',
+    project: 'Foundations, drainage & driveway — 12 Beckett Rise', client: 'Ashfold Homes (South) Ltd',
+    site: '12 Beckett Rise, Maidstone ME15 9RT', ref: 'EX-3271', date: today(),
+    by: 'D. Marden',
+    notes: 'Muck-away to licensed inert tip, duty-of-care notes to follow. Trench support priced separately by others. Rates held 30 days from the date above.'
+  };
+  s.rows = [
+    mkRow('Foundation trench',   'cut',  'vert',   1, 42, 0.60, 1.00, 1.20, 0,    'clay'),
+    mkRow('Pad footings',        'cut',  'pit',    6,  1.8, 1.8, 0.90, null, 0.25, 'clay'),
+    mkRow('Foul drainage run',   'cut',  'trench', 1, 28, 0.50, 0.90, 1.40, 0,    'clay'),
+    mkRow('Topsoil strip — drive','cut', 'vert',   1, 18, 6.00, 0.25, null, 0,    'topsoil'),
+    mkRow('Backfill to trenches','fill', 'vert',   1, 42, 0.40, 0.70, null, 0,    'clay'),
+    mkRow('Type 1 sub-base',     'fill', 'vert',   1, 18, 6.00, 0.15, null, 0,    'gravel')
+  ];
+  return s;
+}
+var S = null;
+
+/* ── the maths ─────────────────────────────────────────────────── */
+function soilOf(id){
+  for (var i = 0; i < S.soils.length; i++) if (S.soils[i].id === id) return S.soils[i];
+  return S.soils[0] || { id:'', name:'—', bulk:1, shrink:1, dens:0 };
+}
+function rowGeom(r){
+  var n  = Math.max(0, Math.floor(num(r.n)));
+  var L  = Math.max(0, num(r.L));
+  var W  = Math.max(0, num(r.W));
+  var d1 = Math.max(0, num(r.d1));
+  var hasD2 = !(r.d2 === null || r.d2 === undefined || r.d2 === '');
+  var d2 = hasD2 ? Math.max(0, num(r.d2)) : d1;
+  var d  = (d1 + d2) / 2;
+  var s  = r.shape === 'vert' ? 0 : Math.max(0, num(r.s));
+  var one;
+  if (r.shape === 'trench')   one = L * d * (W + s * d);              /* trapezoidal section  */
+  else if (r.shape === 'pit') one = d * (L * W + s * d * (L + W) + (4 / 3) * s * s * d * d); /* prismoidal frustum */
+  else                        one = L * W * d;                        /* vertical sides       */
+  return { n:n, L:L, W:W, d1:d1, d2:d2, hasD2:hasD2, d:d, s:s, one:one, vol:one * n };
+}
+function calc(){
+  var c = S.cfg, rows = [];
+  var T = { bank:0, looseCut:0, comp:0, looseFill:0, kg:0, nCut:0, nFill:0 };
+
+  S.rows.forEach(function(r){
+    var g = rowGeom(r), sd = soilOf(r.soil);
+    var o = { id:r.id, name:r.name, kind:r.kind, shape:r.shape, soil:sd,
+              n:g.n, L:g.L, W:g.W, d1:g.d1, d2:g.d2, hasD2:g.hasD2, d:g.d, s:g.s, vol:g.vol };
+    if (r.kind === 'fill') {
+      o.factor = num(sd.shrink) > 0 ? num(sd.shrink) : null;
+      o.loose  = o.factor === null ? null : g.vol * o.factor;   /* loose = compacted × shrink */
+      T.comp += g.vol;
+      if (o.loose !== null) T.looseFill += o.loose;
+      if (g.vol > 0) T.nFill++;
+    } else {
+      o.factor = num(sd.bulk) > 0 ? num(sd.bulk) : null;
+      o.loose  = o.factor === null ? null : g.vol * o.factor;   /* loose = bank × bulking     */
+      T.bank += g.vol;
+      if (o.loose !== null) { T.looseCut += o.loose; T.kg += o.loose * Math.max(0, num(sd.dens)); }
+      if (g.vol > 0) T.nCut++;
+    }
+    rows.push(o);
+  });
+
+  T.any = (T.bank > 0 || T.comp > 0);
+
+  var reuse = Math.min(100, Math.max(0, num(c.reuse))) / 100;
+  T.avail    = T.looseCut * reuse;
+  T.reused   = Math.min(T.avail, T.looseFill);
+  T.surplus  = Math.max(0, T.looseCut - T.reused);
+  T.impLoose = Math.max(0, T.looseFill - T.reused);
+
+  var cap = num(c.cap);
+  T.cap      = cap > 0 ? cap : null;
+  T.loadsOff = T.cap === null ? null : ceilTo(T.surplus / cap);
+  T.loadsIn  = T.cap === null ? null : ceilTo(T.impLoose / cap);
+
+  var prod = num(c.prod);
+  T.hours = prod > 0 ? T.bank / prod : null;
+
+  T.meanDens = T.looseCut > 0 ? T.kg / T.looseCut : null;
+  T.loadKg   = (T.meanDens !== null && T.cap !== null) ? T.cap * T.meanDens : null;
+  T.payload  = Math.max(0, num(c.payload));
+  T.overload = (T.payload > 0 && T.loadKg !== null && T.loadKg > T.payload + 1e-9);
+
+  T.costMach = T.hours === null ? null : T.hours * Math.max(0, num(c.mach));
+  T.costHaul = T.loadsOff === null ? null : T.loadsOff * Math.max(0, num(c.haul));
+  T.costTip  = T.loadsOff === null ? null : T.loadsOff * Math.max(0, num(c.tip));
+  T.costImp  = T.loadsIn  === null ? null : T.loadsIn  * Math.max(0, num(c.imp));
+  var parts = [T.costMach, T.costHaul, T.costTip, T.costImp];
+  T.cost = parts.indexOf(null) === -1 ? parts[0] + parts[1] + parts[2] + parts[3] : null;
+  T.per  = (T.cost !== null && T.bank > 0) ? T.cost / T.bank : null;
+
+  return { rows: rows, T: T };
+}
+
+/* ── validation ────────────────────────────────────────────────── */
+function rowErrors(r){
+  var e = [], g = rowGeom(r);
+  if (g.n < 1) e.push('Number of areas must be at least 1.');
+  if (g.L <= 0) e.push('Length must be greater than 0.');
+  if (g.W <= 0) e.push('Width must be greater than 0.');
+  if (g.d1 <= 0 && g.d2 <= 0) e.push('Enter a depth greater than 0.');
+  if (r.shape !== 'vert' && num(r.s) < 0) e.push('Batter cannot be negative.');
+  return e;
+}
+function paintRowErrors(){
+  S.rows.forEach(function(r){
+    var e = rowErrors(r), tr = document.querySelector('tr.erow[data-err="' + r.id + '"]');
+    var main = document.querySelector('tr[data-row="' + r.id + '"]');
+    if (!tr || !main) return;
+    var blank = !num(r.L) && !num(r.W) && !num(r.d1) && !r.name;
+    var show = e.length && !blank;
+    tr.hidden = !show;
+    tr.querySelector('.err').textContent = show ? e.join(' ') : '';
+    ['L','W','d1'].forEach(function(k){
+      var i = main.querySelector('input[data-k="' + k + '"]');
+      if (i) i.classList.toggle('inv', show && num(r[k]) <= 0 && !(k === 'd1' && num(r.d2) > 0));
+    });
+  });
+  var cap = num(S.cfg.cap), prod = num(S.cfg.prod), re = num(S.cfg.reuse);
+  el('eCap').textContent  = cap > 0 ? '' : 'Enter a capacity greater than 0 to get a load count.';
+  el('cCap').classList.toggle('inv', !(cap > 0));
+  el('eProd').textContent = prod > 0 ? '' : 'Enter a dig rate greater than 0 to price the machine.';
+  el('cProd').classList.toggle('inv', !(prod > 0));
+  var reBad = re < 0 || re > 100;
+  el('eReuse').textContent = reBad ? 'Use a value between 0 and 100.' : '';
+  el('cReuse').classList.toggle('inv', reBad);
+}
+
+/* ── rendering ─────────────────────────────────────────────────── */
+function shapeOptions(sel){
+  var h = '';
+  Object.keys(SHAPES).forEach(function(k){
+    h += '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + esc(SHAPES[k]) + '</option>';
+  });
+  return h;
+}
+function soilOptions(sel){
+  return S.soils.map(function(s){
+    return '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+  }).join('');
+}
+function renderRows(){
+  var b = el('excBody'), h = '';
+  S.rows.forEach(function(r, i){
+    var vert = r.shape === 'vert';
+    h += '<tr data-row="' + r.id + '" class="' + (r.kind === 'fill' ? 'fillrow' : 'cutrow') + '">' +
+      '<td class="nm"><input data-k="name" value="' + esc(r.name) + '" aria-label="Area ' + (i + 1) + ' description" placeholder="Area ' + (i + 1) + '"></td>' +
+      '<td><select data-k="kind" aria-label="Cut or fill"><option value="cut"' + (r.kind !== 'fill' ? ' selected' : '') + '>Cut</option><option value="fill"' + (r.kind === 'fill' ? ' selected' : '') + '>Fill</option></select></td>' +
+      '<td><select data-k="shape" aria-label="Side treatment">' + shapeOptions(r.shape) + '</select></td>' +
+      '<td class="n"><input data-k="n" type="number" min="1" step="1" inputmode="numeric" value="' + esc(r.n) + '" aria-label="Number of identical areas"></td>' +
+      '<td class="n"><input data-k="L" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(trimN(dLen(num(r.L)), 3)) + '" aria-label="Length"></td>' +
+      '<td class="n"><input data-k="W" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(trimN(dLen(num(r.W)), 3)) + '" aria-label="Width"></td>' +
+      '<td class="n"><input data-k="d1" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(trimN(dLen(num(r.d1)), 3)) + '" aria-label="Depth at start"></td>' +
+      '<td class="n"><input data-k="d2" type="number" min="0" step="0.01" inputmode="decimal" value="' + (r.d2 === null ? '' : esc(trimN(dLen(num(r.d2)), 3))) + '" placeholder="—" aria-label="Depth at end"></td>' +
+      '<td class="n"><input data-k="s" type="number" min="0" step="0.05" inputmode="decimal" value="' + esc(trimN(num(r.s), 3)) + '"' + (vert ? ' disabled' : '') + ' aria-label="Side batter, horizontal per 1 vertical"></td>' +
+      '<td><select data-k="soil" aria-label="Material">' + soilOptions(r.soil) + '</select></td>' +
+      '<td class="n bx" data-out="vol">—</td>' +
+      '<td class="act noprint"><button type="button" class="btn ico sm rm" data-rm="' + r.id + '" aria-label="Remove area ' + (i + 1) + '">✕</button></td>' +
+      '</tr>' +
+      '<tr class="erow" data-err="' + r.id + '" hidden><td colspan="12"><span class="err"></span></td></tr>';
+  });
+  if (!S.rows.length) h = '<tr><td colspan="12"><div class="empty">No areas yet — add a cut or a fill to start.</div></td></tr>';
+  b.innerHTML = h;
+}
+function renderSoils(){
+  var b = el('soilBody');
+  b.innerHTML = S.soils.map(function(s){
+    return '<tr><th scope="row" style="font:600 13.5px/1.3 var(--sans);text-transform:none;letter-spacing:0;color:var(--ink);background:none;border-bottom:1px solid var(--line)">' + esc(s.name) + '</th>' +
+      '<td class="n"><input data-soil="' + esc(s.id) + '" data-k="bulk" type="number" min="0.5" step="0.01" inputmode="decimal" value="' + esc(trimN(num(s.bulk), 3)) + '" aria-label="' + esc(s.name) + ' bulking factor"></td>' +
+      '<td class="n"><input data-soil="' + esc(s.id) + '" data-k="shrink" type="number" min="0.5" step="0.01" inputmode="decimal" value="' + esc(trimN(num(s.shrink), 3)) + '" aria-label="' + esc(s.name) + ' shrink factor"></td>' +
+      '<td class="n"><input data-soil="' + esc(s.id) + '" data-k="dens" type="number" min="0" step="1" inputmode="decimal" value="' + esc(trimN(dDens(num(s.dens)), 1)) + '" aria-label="' + esc(s.name) + ' loose density"></td></tr>';
+  }).join('');
+}
+function syncUnitLabels(){
+  var u = U();
+  [].forEach.call(document.querySelectorAll('.uLen'),  function(n){ n.textContent = u.len; });
+  [].forEach.call(document.querySelectorAll('.uVol'),  function(n){ n.textContent = u.vol; });
+  [].forEach.call(document.querySelectorAll('.uDens'), function(n){ n.textContent = u.dens; });
+  [].forEach.call(document.querySelectorAll('.uWt'),   function(n){ n.textContent = u.wt; });
+  el('uMet').setAttribute('aria-pressed', S.units === 'met' ? 'true' : 'false');
+  el('uImp').setAttribute('aria-pressed', S.units === 'imp' ? 'true' : 'false');
+  el('unitChip').textContent = S.units === 'met' ? 'metric' : 'imperial';
+}
+function renderInputs(){
+  Object.keys(S.meta).forEach(function(k){
+    var n = el('m' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (n) n.value = S.meta[k];
+  });
+  el('curSel').value = (S.cur === '£' || S.cur === '$' || S.cur === '€' || S.cur === 'custom') ? S.cur : 'custom';
+  el('curCustomWrap').hidden = el('curSel').value !== 'custom';
+  el('curCustom').value = S.curCustom;
+  var c = S.cfg;
+  el('cCap').value   = trimN(dVol(num(c.cap)), 3);
+  el('cPay').value   = trimN(dWt(num(c.payload)), 3);
+  el('cReuse').value = trimN(num(c.reuse), 2);
+  el('cHaul').value  = trimN(num(c.haul), 2);
+  el('cTip').value   = trimN(num(c.tip), 2);
+  el('cImp').value   = trimN(num(c.imp), 2);
+  el('cMach').value  = trimN(num(c.mach), 2);
+  el('cProd').value  = trimN(dVol(num(c.prod)), 3);
+  el('cBat').value   = trimN(num(c.batter), 3);
+  syncUnitLabels();
+  renderSoils();
+}
+
+function recalc(){
+  var R = calc(), T = R.T, u = U(), c = S.cfg;
+  var V = function(x, dp){ return T.any && isNum(x) ? nf(dVol(x), dp === undefined ? 2 : dp) + ' ' + u.vol : '—'; };
+
+  /* live volume in each input row */
+  R.rows.forEach(function(r){
+    var td = document.querySelector('tr[data-row="' + r.id + '"] td[data-out="vol"]');
+    if (td) td.textContent = r.vol > 0 ? nf(dVol(r.vol), 2) : '—';
+  });
+
+  /* hero */
+  var loads = T.any ? T.loadsOff : null;
+  el('hHero').textContent = loads === null ? '—' : nf(loads) + (loads === 1 ? ' load' : ' loads');
+  el('hHeroSub').textContent = !T.any ? 'Enter an area below to see the answer.'
+    : (T.cap === null ? 'Set a truck capacity to turn ' + nf(dVol(T.surplus), 2) + ' ' + u.vol + ' of loose spoil into loads.'
+      : nf(dVol(T.surplus), 2) + ' ' + u.vol + ' loose surplus ÷ ' + nf(dVol(T.cap), 2) + ' ' + u.vol +
+        ' per truck, rounded up' + (T.loadsIn ? ' · plus ' + nf(T.loadsIn) + ' load' + (T.loadsIn === 1 ? '' : 's') + ' of fill in' : ''));
+
+  el('sBank').textContent      = V(T.bank);
+  el('sLoose').textContent     = V(T.looseCut);
+  el('sComp').textContent      = V(T.comp);
+  el('sLooseFill').textContent = V(T.looseFill);
+  el('sReuse').textContent     = V(T.reused);
+  el('sSurplus').textContent   = V(T.surplus);
+  el('uBank').textContent      = T.nCut + (T.nCut === 1 ? ' cut area' : ' cut areas');
+  el('uLoose').textContent     = T.any && T.bank > 0 ? '× ' + trimN(T.looseCut / T.bank, 3) + ' average swell' : 'after swell';
+  el('uReuse').textContent     = 'up to ' + trimN(num(c.reuse), 1) + '% of spoil';
+
+  el('kCap').textContent   = T.cap === null ? '—' : nf(dVol(T.cap), 2) + ' ' + u.vol + ' loose';
+  el('kOff').textContent   = (T.any && T.loadsOff !== null) ? nf(T.loadsOff) : '—';
+  el('kIn').textContent    = (T.any && T.loadsIn !== null) ? nf(T.loadsIn) : '—';
+  el('kWt').textContent    = T.any && T.looseCut > 0 ? nf(dWt(T.kg), 2) + ' ' + u.wt : '—';
+  el('kLoadWt').textContent = (T.any && T.loadKg !== null && T.loadKg > 0) ? nf(dWt(T.loadKg), 2) + ' ' + u.wt : '—';
+
+  var over = T.any && T.overload;
+  el('payNote').hidden = !over;
+  if (over) el('payTxt').textContent = 'A full ' + nf(dVol(T.cap), 2) + ' ' + u.vol + ' of this spoil weighs about ' +
+    nf(dWt(T.loadKg), 2) + ' ' + u.wt + ', over the ' + nf(dWt(T.payload), 2) + ' ' + u.wt +
+    ' payload you entered. The load count above is by volume — for a weight-limited truck, reduce the capacity to about ' +
+    nf(dVol(T.payload / T.meanDens), 2) + ' ' + u.vol + '.';
+
+  var m = function(x){ return T.any && isNum(x) ? money(x) : '—'; };
+  el('kMachK').textContent = 'Machine + operator' + (T.hours !== null && T.any ? ' — ' + nf(T.hours, 1) + ' hr × ' + money(num(c.mach)) + '/hr' : '');
+  el('kHaulK').textContent = 'Haulage off site' + (T.any && T.loadsOff !== null ? ' — ' + nf(T.loadsOff) + ' × ' + money(num(c.haul)) : '');
+  el('kTipK').textContent  = 'Tipping / disposal' + (T.any && T.loadsOff !== null ? ' — ' + nf(T.loadsOff) + ' × ' + money(num(c.tip)) : '');
+  el('kImpK').textContent  = 'Imported fill delivered' + (T.any && T.loadsIn !== null ? ' — ' + nf(T.loadsIn) + ' × ' + money(num(c.imp)) : '');
+  el('kMach').textContent  = m(T.costMach);
+  el('kHaul').textContent  = m(T.costHaul);
+  el('kTip').textContent   = m(T.costTip);
+  el('kImp').textContent   = m(T.costImp);
+  el('kTotal').textContent = m(T.cost);
+  el('fTotal').textContent = m(T.cost);
+  el('kPer').textContent   = T.any && T.per !== null ? money(T.per) : '—';
+
+  /* schedule */
+  var sb = el('schedBody'), rowsHtml = '';
+  R.rows.forEach(function(r){
+    if (r.vol <= 0) return;
+    rowsHtml += '<tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);background:none;border-bottom:1px solid var(--line);font-weight:600">' +
+      esc(r.name || 'Untitled area') + '</th>' +
+      '<td>' + (r.kind === 'fill' ? 'Fill' : 'Cut') + '</td>' +
+      '<td>' + esc(SHAPES[r.shape] || '') + (r.s > 0 ? ' · 1:' + trimN(r.s, 2) : '') + '</td>' +
+      '<td class="n">' + nf(r.n) + '</td>' +
+      '<td class="n">' + nf(dLen(r.L), 2) + ' × ' + nf(dLen(r.W), 2) + ' × ' + nf(dLen(r.d), 2) + '</td>' +
+      '<td>' + esc(r.soil.name) + '</td>' +
+      '<td class="n">' + nf(dVol(r.vol), 2) + '</td>' +
+      '<td class="n">' + (r.factor === null ? '—' : '× ' + trimN(r.factor, 3)) + '</td>' +
+      '<td class="n">' + (r.loose === null ? '—' : nf(dVol(r.loose), 2)) + '</td></tr>';
+  });
+  sb.innerHTML = rowsHtml || '<tr><td colspan="9"><div class="empty">No measured areas yet.</div></td></tr>';
+  el('schedFoot').innerHTML = !T.any ? '' :
+    '<tr><td colspan="6">Cut — bank volume</td><td class="n">' + nf(dVol(T.bank), 2) + '</td><td class="n"></td><td class="n">' + nf(dVol(T.looseCut), 2) + '</td></tr>' +
+    '<tr><td colspan="6">Fill — compacted volume</td><td class="n">' + nf(dVol(T.comp), 2) + '</td><td class="n"></td><td class="n">' + nf(dVol(T.looseFill), 2) + '</td></tr>';
+  var nA = R.rows.filter(function(r){ return r.vol > 0; }).length;
+  el('schedChip').textContent = nA + (nA === 1 ? ' area' : ' areas');
+  el('rowChip').textContent = S.rows.length + (S.rows.length === 1 ? ' area' : ' areas');
+
+  /* basis of estimate */
+  el('fxBox').innerHTML =
+    'Vertical sides &nbsp;V = L × W × d<br>' +
+    'Trench, 2 sides battered &nbsp;V = L × d × (W + s·d)<br>' +
+    'Pit, 4 sides battered &nbsp;V = d × (L·W + s·d·(L+W) + 4/3·s²·d²)<br>' +
+    'Loose = bank × bulking &nbsp;·&nbsp; Compacted = loose ÷ shrink &nbsp;·&nbsp; Loads = ⌈loose ÷ capacity⌉';
+  el('dFactors').textContent = S.soils.map(function(s){
+    return s.name + ' ' + trimN(num(s.bulk), 3) + ' / ' + trimN(num(s.shrink), 3);
+  }).join(' · ') + '  (bulking / shrink)';
+  el('dReuse').textContent = trimN(num(c.reuse), 1) + '% of loose spoil re-used as fill before anything is imported' +
+    (T.any ? ' — ' + nf(dVol(T.reused), 2) + ' ' + u.vol + ' of the ' + nf(dVol(T.avail), 2) + ' ' + u.vol + ' available was needed' : '');
+  el('dCap').textContent = T.cap === null ? 'not set' : nf(dVol(T.cap), 2) + ' ' + u.vol + ' loose per load, payload ' + nf(dWt(T.payload), 2) + ' ' + u.wt;
+  el('dProd').textContent = num(c.prod) > 0
+    ? nf(dVol(num(c.prod)), 2) + ' bank ' + u.vol + ' per hour' + (T.hours !== null && T.any ? ' → ' + nf(T.hours, 1) + ' machine hours' : '')
+    : 'not set';
+  el('dRates').textContent = 'Haul ' + money(num(c.haul)) + '/load · tipping ' + money(num(c.tip)) + '/load · imported fill ' +
+    money(num(c.imp)) + '/load · machine ' + money(num(c.mach)) + '/hr';
+
+  /* printed header */
+  el('dBiz').textContent     = S.meta.biz || 'Excavation take-off';
+  el('dContact').textContent = S.meta.contact;
+  el('dRef').textContent     = S.meta.ref ? 'Ref. ' + S.meta.ref : '';
+  el('dProject').textContent = S.meta.project || '—';
+  el('dClient').textContent  = S.meta.client || '—';
+  el('dSite').textContent    = S.meta.site || '—';
+  el('dDate').textContent    = S.meta.date || '—';
+  el('dBy').textContent      = S.meta.by || '—';
+  el('dUnits').textContent   = u.name;
+  el('dNotes').textContent   = S.meta.notes;
+
+  el('sampleBar').hidden = !S.sample;
+  paintRowErrors();
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage blocked — the tool still works */ }
+}
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    var d = JSON.parse(raw);
+    if (!d || typeof d !== 'object') return false;
+    S = merge(d);
+    return true;
+  } catch (e) { return false; }
+}
+function merge(d){
+  var b = baseState(), out = baseState();
+  out.sample = !!d.sample;
+  out.units = (d.units === 'imp') ? 'imp' : 'met';
+  out.cur = typeof d.cur === 'string' ? d.cur : b.cur;
+  out.curCustom = typeof d.curCustom === 'string' ? d.curCustom : '';
+  Object.keys(b.meta).forEach(function(k){
+    out.meta[k] = (d.meta && typeof d.meta[k] === 'string') ? d.meta[k] : b.meta[k];
+  });
+  Object.keys(b.cfg).forEach(function(k){
+    var v = d.cfg ? d.cfg[k] : undefined;
+    out.cfg[k] = isFinite(parseFloat(v)) ? Math.max(0, parseFloat(v)) : b.cfg[k];
+  });
+  out.soils = defaultSoils();
+  if (Array.isArray(d.soils)) d.soils.forEach(function(s){
+    if (!s || typeof s !== 'object') return;
+    for (var i = 0; i < out.soils.length; i++) if (out.soils[i].id === s.id) {
+      ['bulk','shrink','dens'].forEach(function(k){
+        if (isFinite(parseFloat(s[k]))) out.soils[i][k] = Math.max(0, parseFloat(s[k]));
+      });
+      if (typeof s.name === 'string' && s.name) out.soils[i].name = s.name;
+    }
+  });
+  out.rows = [];
+  if (Array.isArray(d.rows)) d.rows.forEach(function(r){
+    if (!r || typeof r !== 'object') return;
+    var shape = SHAPES[r.shape] ? r.shape : 'vert';
+    var soil = 'clay';
+    for (var i = 0; i < out.soils.length; i++) if (out.soils[i].id === r.soil) soil = r.soil;
+    var d2 = (r.d2 === null || r.d2 === undefined || r.d2 === '' || !isFinite(parseFloat(r.d2))) ? null : Math.max(0, parseFloat(r.d2));
+    out.rows.push(mkRow(typeof r.name === 'string' ? r.name : '',
+      r.kind === 'fill' ? 'fill' : 'cut', shape,
+      Math.max(0, Math.floor(num(r.n))) || 1,
+      Math.max(0, num(r.L)), Math.max(0, num(r.W)), Math.max(0, num(r.d1)), d2,
+      Math.max(0, num(r.s)), soil));
+  });
+  return out;
+}
+
+/* ── export ────────────────────────────────────────────────────── */
+function csvCell(v){
+  var s = String(v === null || v === undefined ? '' : v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvRow(a){ return a.map(csvCell).join(','); }
+function download(name, mime, text){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 800);
+  } catch (e) { /* offline, nothing else to try */ }
+}
+function slug(){
+  var s = (S.meta.ref || S.meta.project || 'excavation-takeoff').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return s || 'excavation-takeoff';
+}
+var DISCLAIMER = 'Estimate only — not an excavation design. Volumes come from the dimensions entered and the bulking and shrinkage factors listed. Excavation support and slope stability must be designed by a competent person (GB: CDM 2015 / HSE HSG185; US: OSHA 29 CFR 1926 Subpart P). Bulking and shrinkage vary with moisture, plant and compaction — confirm against the geotechnical report or a site trial before committing to haulage or disposal prices. Check for buried services and contaminated ground before any dig.';
+
+function buildCsv(){
+  var R = calc(), T = R.T, u = U(), c = S.cfg, rows = [];
+  rows.push(['Solvix Toolkit — Excavation Cut & Fill']);
+  rows.push(['Business', S.meta.biz]);   rows.push(['Contact', S.meta.contact]);
+  rows.push(['Project', S.meta.project]); rows.push(['Client', S.meta.client]);
+  rows.push(['Site', S.meta.site]);       rows.push(['Reference', S.meta.ref]);
+  rows.push(['Date', S.meta.date]);       rows.push(['Prepared by', S.meta.by]);
+  rows.push(['Units', u.name]);           rows.push(['Currency', cur()]);
+  rows.push([]);
+  rows.push(['EXCAVATION & FILL SCHEDULE']);
+  rows.push(['Area', 'Cut/Fill', 'Sides', 'Batter (H per 1 V)', 'No.',
+    'Length (' + u.len + ')', 'Width (' + u.len + ')', 'Depth start (' + u.len + ')',
+    'Depth end (' + u.len + ')', 'Average depth (' + u.len + ')', 'Material',
+    'Bank or compacted volume (' + u.vol + ')', 'Factor', 'Loose volume (' + u.vol + ')']);
+  R.rows.forEach(function(r){
+    rows.push([r.name, r.kind === 'fill' ? 'Fill' : 'Cut', SHAPES[r.shape] || '', trimN(r.s, 3), r.n,
+      trimN(dLen(r.L), 3), trimN(dLen(r.W), 3), trimN(dLen(r.d1), 3),
+      r.hasD2 ? trimN(dLen(r.d2), 3) : '', trimN(dLen(r.d), 4), r.soil.name,
+      dVol(r.vol).toFixed(3), r.factor === null ? '' : trimN(r.factor, 3),
+      r.loose === null ? '' : dVol(r.loose).toFixed(3)]);
+  });
+  rows.push([]);
+  rows.push(['VOLUME SUMMARY (' + u.vol + ')']);
+  rows.push(['Cut — bank (in situ)', dVol(T.bank).toFixed(3)]);
+  rows.push(['Cut — loose after bulking', dVol(T.looseCut).toFixed(3)]);
+  rows.push(['Fill — compacted as placed', dVol(T.comp).toFixed(3)]);
+  rows.push(['Fill — loose required', dVol(T.looseFill).toFixed(3)]);
+  rows.push(['Re-usable spoil available (' + trimN(num(c.reuse), 2) + '%)', dVol(T.avail).toFixed(3)]);
+  rows.push(['Re-used on site', dVol(T.reused).toFixed(3)]);
+  rows.push(['Surplus loose to remove', dVol(T.surplus).toFixed(3)]);
+  rows.push(['Loose fill to import', dVol(T.impLoose).toFixed(3)]);
+  rows.push(['Loose spoil weight (' + u.wtLong + ')', dWt(T.kg).toFixed(3)]);
+  rows.push([]);
+  rows.push(['HAULAGE']);
+  rows.push(['Truck capacity (' + u.vol + ' loose)', T.cap === null ? '' : trimN(dVol(T.cap), 3)]);
+  rows.push(['Truck payload (' + u.wtLong + ')', trimN(dWt(T.payload), 3)]);
+  rows.push(['Weight per full load (' + u.wtLong + ')', T.loadKg === null ? '' : dWt(T.loadKg).toFixed(3)]);
+  rows.push(['Loads off site', T.loadsOff === null ? '' : T.loadsOff]);
+  rows.push(['Loads of imported fill', T.loadsIn === null ? '' : T.loadsIn]);
+  rows.push([]);
+  rows.push(['COST', 'Quantity', 'Rate (' + cur() + ')', 'Amount (' + cur() + ')']);
+  rows.push(['Machine + operator', T.hours === null ? '' : T.hours.toFixed(2) + ' hr', num(c.mach).toFixed(2), T.costMach === null ? '' : T.costMach.toFixed(2)]);
+  rows.push(['Haulage off site', T.loadsOff === null ? '' : T.loadsOff + ' loads', num(c.haul).toFixed(2), T.costHaul === null ? '' : T.costHaul.toFixed(2)]);
+  rows.push(['Tipping / disposal', T.loadsOff === null ? '' : T.loadsOff + ' loads', num(c.tip).toFixed(2), T.costTip === null ? '' : T.costTip.toFixed(2)]);
+  rows.push(['Imported fill delivered', T.loadsIn === null ? '' : T.loadsIn + ' loads', num(c.imp).toFixed(2), T.costImp === null ? '' : T.costImp.toFixed(2)]);
+  rows.push(['Estimated total', '', '', T.cost === null ? '' : T.cost.toFixed(2)]);
+  rows.push(['Cost per bank ' + u.vol, '', '', T.per === null ? '' : T.per.toFixed(2)]);
+  rows.push([]);
+  rows.push(['BASIS OF ESTIMATE']);
+  rows.push(['Vertical sides', 'V = L x W x d']);
+  rows.push(['Trench, 2 sides battered', 'V = L x d x (W + s*d)']);
+  rows.push(['Pit, 4 sides battered', 'V = d x (L*W + s*d*(L+W) + 4/3*s^2*d^2)']);
+  rows.push(['Bulking / shrinkage', 'loose = bank x bulking; compacted = loose / shrink']);
+  rows.push(['Loads', 'ceil(loose / truck capacity)']);
+  rows.push(['Material', 'Bulking factor', 'Shrink factor', 'Loose density (' + u.dens + ')']);
+  S.soils.forEach(function(s){
+    rows.push([s.name, trimN(num(s.bulk), 3), trimN(num(s.shrink), 3), trimN(dDens(num(s.dens)), 2)]);
+  });
+  rows.push(['Dig rate (bank ' + u.vol + '/hr)', trimN(dVol(num(c.prod)), 3)]);
+  rows.push(['Notes', S.meta.notes]);
+  rows.push(['Disclaimer', DISCLAIMER]);
+  return '﻿' + rows.map(csvRow).join('\r\n') + '\r\n';
+}
+
+/* ── events ────────────────────────────────────────────────────── */
+function bindText(id, fn){
+  var n = el(id);
+  if (n) n.addEventListener('input', function(){ fn(this.value); save(); recalc(); });
+}
+function findRow(id){
+  for (var i = 0; i < S.rows.length; i++) if (S.rows[i].id === id) return S.rows[i];
+  return null;
+}
+function wire(){
+  Object.keys(S.meta).forEach(function(k){
+    bindText('m' + k.charAt(0).toUpperCase() + k.slice(1), function(v){ S.meta[k] = v; });
+  });
+  el('curSel').addEventListener('change', function(){
+    S.cur = this.value; el('curCustomWrap').hidden = this.value !== 'custom';
+    save(); recalc();
+  });
+  bindText('curCustom', function(v){ S.curCustom = v; });
+
+  var cfgFields = [
+    ['cCap',  'cap',     cVol],
+    ['cPay',  'payload', cWt],
+    ['cReuse','reuse',   null],
+    ['cHaul', 'haul',    null],
+    ['cTip',  'tip',     null],
+    ['cImp',  'imp',     null],
+    ['cMach', 'mach',    null],
+    ['cProd', 'prod',    cVol],
+    ['cBat',  'batter',  null]
+  ];
+  cfgFields.forEach(function(f){
+    el(f[0]).addEventListener('input', function(){
+      var v = this.value === '' ? 0 : num(this.value);
+      S.cfg[f[1]] = f[2] ? f[2](v) : v;
+      save(); recalc();
+    });
+  });
+
+  el('soilBody').addEventListener('input', function(e){
+    var t = e.target; if (!t.dataset || !t.dataset.soil) return;
+    var s = null;
+    for (var i = 0; i < S.soils.length; i++) if (S.soils[i].id === t.dataset.soil) s = S.soils[i];
+    if (!s) return;
+    var v = num(t.value);
+    s[t.dataset.k] = t.dataset.k === 'dens' ? cDens(v) : v;
+    save(); recalc();
+  });
+
+  el('excBody').addEventListener('input', function(e){
+    var t = e.target, tr = t.closest ? t.closest('tr[data-row]') : null;
+    if (!tr || !t.dataset || !t.dataset.k) return;
+    var r = findRow(tr.getAttribute('data-row')); if (!r) return;
+    var k = t.dataset.k;
+    if (k === 'name') r.name = t.value;
+    else if (k === 'n') r.n = Math.max(0, Math.floor(num(t.value)));
+    else if (k === 'd2') r.d2 = t.value === '' ? null : cLen(num(t.value));
+    else if (k === 's') r.s = Math.max(0, num(t.value));
+    else if (k === 'L' || k === 'W' || k === 'd1') r[k] = Math.max(0, cLen(num(t.value)));
+    save(); recalc();
+  });
+  el('excBody').addEventListener('change', function(e){
+    var t = e.target, tr = t.closest ? t.closest('tr[data-row]') : null;
+    if (!tr || !t.dataset || !t.dataset.k) return;
+    var r = findRow(tr.getAttribute('data-row')); if (!r) return;
+    if (t.dataset.k === 'kind')  { r.kind = t.value === 'fill' ? 'fill' : 'cut'; tr.className = r.kind === 'fill' ? 'fillrow' : 'cutrow'; }
+    if (t.dataset.k === 'shape') {
+      r.shape = SHAPES[t.value] ? t.value : 'vert';
+      var si = tr.querySelector('input[data-k="s"]');
+      if (si) si.disabled = r.shape === 'vert';
+    }
+    if (t.dataset.k === 'soil')  r.soil = t.value;
+    save(); recalc();
+  });
+  el('excBody').addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button[data-rm]') : null;
+    if (!b) return;
+    var id = b.getAttribute('data-rm');
+    S.rows = S.rows.filter(function(r){ return r.id !== id; });
+    S.sample = false;
+    save(); renderRows(); recalc();
+  });
+
+  function addRow(kind){
+    S.rows.push(blankRow(kind));
+    S.sample = false;
+    save(); renderRows(); recalc();
+    var tr = el('excBody').querySelector('tr[data-row]:nth-last-of-type(1)');
+    var rows = el('excBody').querySelectorAll('tr[data-row] input[data-k="name"]');
+    if (rows.length) rows[rows.length - 1].focus();
+  }
+  el('btnAddCut').addEventListener('click', function(){ addRow('cut'); });
+  el('btnAddFill').addEventListener('click', function(){ addRow('fill'); });
+
+  [].forEach.call(document.querySelectorAll('.seg button[data-units]'), function(b){
+    b.addEventListener('click', function(){
+      S.units = this.getAttribute('data-units') === 'imp' ? 'imp' : 'met';
+      save(); renderInputs(); renderRows(); recalc();
+    });
+  });
+
+  el('btnBlank').addEventListener('click', function(){
+    var keep = S.units, k2 = S.cur, k3 = S.curCustom;
+    S = baseState(); S.units = keep; S.cur = k2; S.curCustom = k3;
+    S.rows = [blankRow('cut')];
+    save(); renderInputs(); renderRows(); recalc();
+    el('mProject').focus();
+  });
+  el('btnPrint').addEventListener('click', function(){ window.print(); });
+  el('btnCsv').addEventListener('click', function(){
+    download(slug() + '-excavation.csv', 'text/csv;charset=utf-8', buildCsv());
+  });
+  el('btnJson').addEventListener('click', function(){
+    download(slug() + '-excavation.json', 'application/json', JSON.stringify(S, null, 2));
+  });
+  el('btnImport').addEventListener('click', function(){ el('fileIn').click(); });
+  el('fileIn').addEventListener('change', function(){
+    var f = this.files && this.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      try {
+        var d = JSON.parse(String(rd.result));
+        S = merge(d);
+        save(); renderInputs(); renderRows(); recalc();
+      } catch (e) {
+        el('eCap').textContent = 'That file could not be read as a Solvix excavation take-off.';
+      }
+    };
+    rd.readAsText(f);
+    this.value = '';
+  });
+  el('btnClear').addEventListener('click', function(){
+    if (!window.confirm('Clear every figure in this take-off and remove the saved copy from this browser?')) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    S = baseState();
+    S.rows = [blankRow('cut')];
+    save(); renderInputs(); renderRows(); recalc();
+  });
+}
+
+/* ── boot ──────────────────────────────────────────────────────── */
+(function(){
+  if (!load()) S = sampleState();
+  if (!S.rows.length) S.rows = [blankRow('cut')];
+  renderInputs();
+  renderRows();
+  wire();
+  recalc();
+})();
+</script>
+</body>
+</html>

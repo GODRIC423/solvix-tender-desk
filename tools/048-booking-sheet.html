@@ -200,9 +200,14 @@ table input:focus,table select:focus{background:var(--raise)}
 .stat.flagbad{background:var(--bad-wash);border-color:var(--bad)}
 .stat.flagbad .v{color:var(--bad)}
 
+/* the kit's mobile .split rule drops minmax(0,…), which lets a wide table push the page */
+.split>*{min-width:0}
+.pagestack>*{min-width:0}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+
 /* day book grid */
 .gridwrap{overflow:auto;-webkit-overflow-scrolling:touch;max-height:none}
-table.bk{border-collapse:collapse;table-layout:fixed;font-size:13px}
+table.bk{border-collapse:collapse;table-layout:fixed;font-size:13px;width:100%}
 table.bk tbody tr:hover{background:transparent}
 table.bk thead th{position:sticky;top:0;z-index:2;background:var(--sunk);padding:7px 8px;white-space:normal;
   border-bottom:1px solid var(--line-hard);text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink)}
@@ -414,6 +419,8 @@ td.tm .d2{font:11px/1.3 var(--mono);color:var(--muted);white-space:nowrap}
           <input id="iPhone" type="text" placeholder="Phone or email"></div>
         <div class="f"><label for="iRef">Sheet reference</label>
           <input id="iRef" type="text" placeholder="e.g. DAY-2026-09-03"></div>
+        <div class="f"><label for="iPrep">Note printed on the day sheet</label>
+          <input id="iPrep" type="text" placeholder="e.g. Amara finishes at 17:00 — no late bookings"></div>
       </div>
       <div class="fgrid">
         <div class="f"><label for="iDate">Date of day book</label>
@@ -722,7 +729,7 @@ function sample(){
       bk(r3,'11:00',60,s5,'Facial — deep cleanse',55,'Ben Osei','07700 900710','cancelled','Cancelled 48h ahead — no fee'),
       bk(r3,'13:00',60,s5,'Facial — deep cleanse',55,'Kim Ho','07700 900265','booked','')
     ],
-    prep:'',
+    prep:'Amara finishes at 17:00 — no late bookings. Card machine 2 is out of service.',
     sample:true
   };
 }
@@ -935,9 +942,12 @@ function buildGrid(C){
 /* ── render ────────────────────────────────────────────────────── */
 var C=null,G=null;
 
-function renderAll(){
+/* renderAll(skip) can skip a table that is being typed into, so focus is kept */
+function renderAll(skip){
   C=compute(); G=buildGrid(C);
-  renderStats(); renderGrid(); renderBookings(); renderRes(); renderSvc();
+  renderStats(); renderGrid(); renderBookings();
+  if(skip!=='res')renderRes();
+  if(skip!=='svc')renderSvc();
   renderSummary(); renderGaps(); renderSelects(); renderDoc(); renderNotes();
   $('#sampleBanner').hidden=!S.sample;
 }
@@ -1342,3 +1352,357 @@ function importJson(file){
   fr.onerror=function(){msg('Could not read that file.',true);};
   fr.readAsText(file);
 }
+
+/* ── messages & field errors ───────────────────────────────────── */
+function msg(text,bad){
+  var el=$('#formMsg');
+  el.textContent=text; el.className='msg'+(bad?' bad':'');
+  if(msgTimer)clearTimeout(msgTimer);
+  msgTimer=setTimeout(function(){el.textContent='';el.className='msg';},6000);
+}
+function fieldErr(inputSel,errSel,text){
+  var i=$(inputSel),e=$(errSel);
+  if(text){i.classList.add('inv');e.textContent=text;e.hidden=false;}
+  else{i.classList.remove('inv');e.textContent='';e.hidden=true;}
+}
+function formErr(text){
+  var e=$('#eForm');
+  if(text){e.innerHTML=text;e.hidden=false;}else{e.textContent='';e.hidden=true;}
+}
+
+/* ── the editor ────────────────────────────────────────────────── */
+function clearEditor(){
+  editId=null;
+  $('#edTitle').textContent='New appointment';
+  $('#edChip').hidden=true;
+  $('#btnDelete').hidden=true;
+  $('#iClient').value=''; $('#iContact').value=''; $('#iNotes').value='';
+  $('#iStatus').value='booked';
+  var sv=svcById($('#iSvcSel').value);
+  if(sv){$('#iDur').value=sv.dur;$('#iPrice').value=sv.price;}
+  formErr('');
+  ['#iClient','#iStart','#iDur','#iPrice'].forEach(function(s){$(s).classList.remove('inv');});
+}
+function fillEditor(b){
+  editId=b.id;
+  $('#edTitle').textContent='Edit appointment';
+  $('#edChip').hidden=false;
+  $('#btnDelete').hidden=false;
+  $('#iResSel').value=b.res;
+  $('#iStart').value=min2hm(b.start);
+  if(b.svc&&svcById(b.svc)){$('#iSvcSel').value=b.svc;$('#svcNameWrap').hidden=true;}
+  else{$('#iSvcSel').value='__custom';$('#svcNameWrap').hidden=false;$('#iSvcName').value=b.svcName||'';}
+  $('#iDur').value=b.dur; $('#iPrice').value=b.price;
+  $('#iClient').value=b.name; $('#iContact').value=b.contact;
+  $('#iStatus').value=b.status; $('#iNotes').value=b.note;
+  formErr('');
+}
+function focusEditor(){
+  var card=$('#editorCard');
+  if(card&&card.scrollIntoView)card.scrollIntoView({block:'nearest'});
+}
+function clashWith(resId,start,dur,status,ignoreId){
+  if(!ST[status]||!ST[status].blocks)return null;
+  var buf=C?C.buffer:clamp(intv(S.buffer,0),0,120);
+  var end=start+dur,hit=null;
+  S.bk.forEach(function(b){
+    if(hit||b.id===ignoreId||b.res!==resId||!ST[b.status].blocks)return;
+    if(start<bkEnd(b)+buf&&b.start<end+buf)hit=b;
+  });
+  return hit;
+}
+function nextFree(resId,from,dur,ignoreId){
+  var buf=C?C.buffer:0,cur=from,guard=0,moved=true;
+  var iv=S.bk.filter(function(b){return b.res===resId&&b.id!==ignoreId&&ST[b.status].blocks;})
+             .sort(function(a,b){return a.start-b.start;});
+  while(moved&&guard++<300){
+    moved=false;
+    for(var i=0;i<iv.length;i++){
+      var b=iv[i];
+      if(cur<bkEnd(b)+buf&&b.start<cur+dur+buf){cur=bkEnd(b)+buf;moved=true;}
+    }
+  }
+  return (cur+dur<=1440)?cur:null;
+}
+function saveBooking(){
+  formErr('');
+  var resId=$('#iResSel').value, r=resById(resId);
+  var start=hm2min($('#iStart').value);
+  var dur=intv($('#iDur').value,NaN);
+  var price=num($('#iPrice').value,NaN);
+  var name=$('#iClient').value.trim();
+  var status=$('#iStatus').value; if(!ST[status])status='booked';
+  var svcSel=$('#iSvcSel').value, sv=svcById(svcSel);
+  var svcName=sv?sv.name:($('#iSvcName').value.trim()||'One-off appointment');
+  var problems=[];
+  if(!r)problems.push('Choose which staff member, room, chair or bay this is for.');
+  if(start==null)problems.push('Enter a start time as HH:MM.');
+  if(!isFinite(dur)||dur<1||dur>720)problems.push('Duration must be between 1 and 720 minutes.');
+  if(!isFinite(price)||price<0)problems.push('Price must be zero or more.');
+  if(!name)problems.push('Enter the client’s name so the sheet is usable at the desk.');
+  $('#iClient').classList.toggle('inv',!name);
+  $('#iStart').classList.toggle('inv',start==null);
+  $('#iDur').classList.toggle('inv',!(isFinite(dur)&&dur>=1&&dur<=720));
+  $('#iPrice').classList.toggle('inv',!(isFinite(price)&&price>=0));
+  if(problems.length){formErr(problems.map(esc).join('<br>'));return;}
+  if(start+dur>1440){formErr('That appointment would run past midnight. Shorten it or start it earlier.');
+    $('#iStart').classList.add('inv');return;}
+  var hit=clashWith(resId,start,dur,status,editId);
+  if(hit){
+    var nf=nextFree(resId,start,dur,editId);
+    formErr('<strong>Clash refused.</strong> '+esc(resName(r))+' already has '+esc(hit.name||'an appointment')+
+      ' from '+fmtT(hit.start)+' to '+fmtT(bkEnd(hit))+' ('+esc(bkSvcName(hit))+')'+
+      (C.buffer?', and a '+C.buffer+'-minute buffer is required either side':'')+'. '+
+      (nf!=null?'Next free start on '+esc(resName(r))+' is <strong>'+fmtT(nf)+'</strong>.'
+              :'There is no free run of '+dur+' minutes left today.')+
+      ' Move the time, shorten it, or pick another resource.');
+    $('#iStart').classList.add('inv');
+    return;
+  }
+  if(editId){
+    var b=null; S.bk.forEach(function(x){if(x.id===editId)b=x;});
+    if(!b){editId=null;}
+    else{
+      b.res=resId;b.start=start;b.dur=dur;b.price=price;b.name=name;
+      b.contact=$('#iContact').value.trim();b.status=status;b.note=$('#iNotes').value.trim();
+      b.svc=sv?sv.id:'';b.svcName=svcName;
+      S.sample=false; save(); renderAll();
+      msg('Appointment updated — '+name+' at '+fmtT(start)+'.');
+      clearEditor(); renderAll();
+      return;
+    }
+  }
+  S.bk.push({id:uid('b'),res:resId,start:start,dur:dur,svc:sv?sv.id:'',svcName:svcName,price:price,
+    name:name,contact:$('#iContact').value.trim(),status:status,note:$('#iNotes').value.trim()});
+  S.sample=false; save(); clearEditor(); renderAll();
+  msg('Booked '+name+' with '+resName(r)+' at '+fmtT(start)+' for '+durTxt(dur)+'.');
+}
+function deleteBooking(id){
+  var b=null; S.bk.forEach(function(x){if(x.id===id)b=x;});
+  if(!b)return;
+  if(!window.confirm('Remove the '+fmtT(b.start)+' appointment for '+(b.name||'this client')+'?'))return;
+  S.bk=S.bk.filter(function(x){return x.id!==id;});
+  if(editId===id)clearEditor();
+  S.sample=false; save(); renderAll();
+  msg('Appointment removed.');
+}
+
+/* ── wiring ────────────────────────────────────────────────────── */
+function bindText(sel,key){
+  var el=$(sel);
+  el.addEventListener('input',function(){S[key]=el.value;S.sample=false;save();renderAll();});
+}
+function wire(){
+  bindText('#iOrg','org'); bindText('#iAddr','addr'); bindText('#iPhone','phone');
+  bindText('#iRef','ref'); bindText('#iPrep','prep');
+
+  $('#iDate').addEventListener('input',function(){
+    var v=this.value;
+    if(dparse(v)){S.date=v;fieldErr('#iDate','#eDate',null);}
+    else fieldErr('#iDate','#eDate','Enter a valid date.');
+    S.sample=false;save();renderAll();
+  });
+  $('#iOpen').addEventListener('input',function(){
+    if(hm2min(this.value)!=null){S.open=this.value;fieldErr('#iOpen','#eOpen',null);}
+    else fieldErr('#iOpen','#eOpen','Enter a time as HH:MM.');
+    validateDay();S.sample=false;save();renderAll();
+  });
+  $('#iClose').addEventListener('input',function(){
+    if(hm2min(this.value)!=null){S.close=this.value;fieldErr('#iClose','#eClose',null);}
+    else fieldErr('#iClose','#eClose','Enter a time as HH:MM.');
+    validateDay();S.sample=false;save();renderAll();
+  });
+  $('#iSlot').addEventListener('change',function(){S.slot=intv(this.value,15);S.sample=false;save();renderAll();});
+  $('#iBuffer').addEventListener('input',function(){
+    var v=intv(this.value,NaN);
+    if(!isFinite(v)||v<0||v>120){fieldErr('#iBuffer','#eBuffer','0 to 120 minutes.');}
+    else{fieldErr('#iBuffer','#eBuffer',null);S.buffer=v;}
+    S.sample=false;save();renderAll();
+  });
+  $('#iGapMin').addEventListener('input',function(){
+    var v=intv(this.value,NaN);
+    if(!isFinite(v)||v<1||v>480){fieldErr('#iGapMin','#eGapMin','1 to 480 minutes.');}
+    else{fieldErr('#iGapMin','#eGapMin',null);S.gapMin=v;}
+    S.sample=false;save();renderAll();
+  });
+  $('#iCur').addEventListener('change',function(){
+    S.cur=this.value;$('#curCustWrap').hidden=(this.value!=='custom');
+    S.sample=false;save();renderAll();
+  });
+  $('#iCurCust').addEventListener('input',function(){S.curCust=this.value.slice(0,4);save();renderAll();});
+  $('#iTf').addEventListener('change',function(){S.tf=this.value==='12'?'12':'24';save();renderAll();});
+
+  $('#iSvcSel').addEventListener('change',function(){
+    var sv=svcById(this.value);
+    $('#svcNameWrap').hidden=(this.value!=='__custom');
+    if(sv){$('#iDur').value=sv.dur;$('#iPrice').value=sv.price;}
+    else $('#iSvcName').focus();
+  });
+  $('#btnSave').addEventListener('click',saveBooking);
+  $('#btnNew').addEventListener('click',function(){clearEditor();renderAll();msg('Form cleared.');});
+  $('#btnDelete').addEventListener('click',function(){if(editId)deleteBooking(editId);});
+  $('#iClient').addEventListener('blur',function(){
+    if(!this.value.trim()){this.classList.add('inv');formErr('Enter the client’s name.');}
+    else{this.classList.remove('inv');formErr('');}
+  });
+
+  /* day book clicks */
+  $('#gridHost').addEventListener('click',function(e){
+    var slot=e.target.closest('.slotbtn');
+    if(slot){
+      clearEditor();
+      $('#iResSel').value=slot.getAttribute('data-res');
+      $('#iStart').value=min2hm(intv(slot.getAttribute('data-slot'),0));
+      renderAll(); focusEditor(); $('#iClient').focus();
+      msg('Slot picked — add the client and save.');
+      return;
+    }
+    var bk=e.target.closest('.bkbtn');
+    if(bk){
+      var id=bk.getAttribute('data-bk'),b=null;
+      S.bk.forEach(function(x){if(x.id===id)b=x;});
+      if(b){fillEditor(b);renderAll();focusEditor();$('#iClient').focus();}
+    }
+  });
+
+  /* appointment table */
+  $('#bkBody').addEventListener('click',function(e){
+    var ed=e.target.closest('[data-edit]');
+    if(ed){var id=ed.getAttribute('data-edit'),b=null;S.bk.forEach(function(x){if(x.id===id)b=x;});
+      if(b){fillEditor(b);renderAll();focusEditor();}return;}
+    var rm=e.target.closest('[data-del]');
+    if(rm)deleteBooking(rm.getAttribute('data-del'));
+  });
+  $('#bkBody').addEventListener('change',function(e){
+    var sel=e.target.closest('.stsel'); if(!sel)return;
+    var id=sel.getAttribute('data-st'),b=null;
+    S.bk.forEach(function(x){if(x.id===id)b=x;});
+    if(!b)return;
+    var old=b.status,nw=sel.value;
+    if(ST[nw]&&ST[nw].blocks&&!ST[old].blocks){
+      var hit=clashWith(b.res,b.start,b.dur,nw,b.id);
+      if(hit){sel.value=old;msg('Cannot reinstate — '+(hit.name||'another appointment')+' now holds '+
+        fmtT(hit.start)+'–'+fmtT(bkEnd(hit))+' on that resource.',true);return;}
+    }
+    b.status=nw;S.sample=false;save();renderAll();
+  });
+
+  /* resources */
+  $('#resBody').addEventListener('input',function(e){
+    var tr=e.target.closest('tr[data-r]'); if(!tr)return;
+    var r=resById(tr.getAttribute('data-r')); if(!r)return;
+    var f=e.target.getAttribute('data-f'); if(!f)return;
+    if(f==='on')r.on=e.target.checked;
+    else if(f==='start'||f==='end'){if(hm2min(e.target.value)!=null)r[f]=e.target.value;}
+    else r[f]=e.target.value;
+    S.sample=false;save();renderAll('res');
+  });
+  $('#resBody').addEventListener('change',function(e){
+    if(e.target.getAttribute&&e.target.getAttribute('data-f')==='on'){
+      var tr=e.target.closest('tr[data-r]'),r=tr&&resById(tr.getAttribute('data-r'));
+      if(r){r.on=e.target.checked;S.sample=false;save();renderAll('res');}
+    }
+  });
+  $('#resBody').addEventListener('click',function(e){
+    var rm=e.target.closest('[data-rmres]'); if(!rm)return;
+    var id=rm.getAttribute('data-rmres'),r=resById(id);
+    var held=S.bk.filter(function(b){return b.res===id;}).length;
+    if(!window.confirm('Remove '+resName(r)+(held?' and its '+held+' appointment(s)':'')+'?'))return;
+    S.res=S.res.filter(function(x){return x.id!==id;});
+    S.bk=S.bk.filter(function(b){return b.res!==id;});
+    S.sample=false;save();renderAll();msg('Resource removed.');
+  });
+  $('#btnAddRes').addEventListener('click',function(){
+    S.res.push({id:uid('r'),name:'Resource '+(S.res.length+1),role:'',start:S.open,end:S.close,on:true});
+    S.sample=false;save();renderAll();
+    var last=$('#resBody').lastElementChild;
+    if(last){var inp=last.querySelector('input[data-f="name"]');if(inp){inp.focus();inp.select();}}
+  });
+
+  /* services */
+  $('#svcBody').addEventListener('input',function(e){
+    var tr=e.target.closest('tr[data-s]'); if(!tr)return;
+    var v=svcById(tr.getAttribute('data-s')); if(!v)return;
+    var f=e.target.getAttribute('data-f'); if(!f)return;
+    if(f==='dur'){var d=intv(e.target.value,NaN);e.target.classList.toggle('inv',!(isFinite(d)&&d>=1&&d<=720));
+      if(isFinite(d)&&d>=1&&d<=720)v.dur=d;}
+    else if(f==='price'){var p=num(e.target.value,NaN);e.target.classList.toggle('inv',!(isFinite(p)&&p>=0));
+      if(isFinite(p)&&p>=0)v.price=p;}
+    else v.name=e.target.value;
+    S.sample=false;save();renderAll('svc');
+  });
+  $('#svcBody').addEventListener('click',function(e){
+    var rm=e.target.closest('[data-rmsvc]'); if(!rm)return;
+    var id=rm.getAttribute('data-rmsvc'),v=svcById(id);
+    if(!window.confirm('Remove “'+(v?v.name:'this service')+'” from the price list? Appointments already booked keep their own price.'))return;
+    S.svc=S.svc.filter(function(x){return x.id!==id;});
+    S.sample=false;save();renderAll();msg('Service removed.');
+  });
+  $('#btnAddSvc').addEventListener('click',function(){
+    S.svc.push({id:uid('s'),name:'New service',dur:30,price:0});
+    S.sample=false;save();renderAll();
+    var last=$('#svcBody').lastElementChild;
+    if(last){var inp=last.querySelector('input[data-f="name"]');if(inp){inp.focus();inp.select();}}
+  });
+
+  /* gap shortcut */
+  $('#gapList').addEventListener('click',function(e){
+    var b=e.target.closest('[data-fill]'); if(!b)return;
+    clearEditor();
+    $('#iResSel').value=b.getAttribute('data-fill');
+    $('#iStart').value=min2hm(intv(b.getAttribute('data-at'),0));
+    renderAll(); focusEditor(); $('#iClient').focus();
+    msg('Gap picked — choose the service and add the client.');
+  });
+
+  /* toolbar */
+  $('#btnPrint').addEventListener('click',function(){renderDoc();window.print();});
+  $('#btnCsv').addEventListener('click',exportCsv);
+  $('#btnJson').addEventListener('click',exportJson);
+  $('#btnImport').addEventListener('click',function(){$('#fileIn').click();});
+  $('#fileIn').addEventListener('change',function(){
+    if(this.files&&this.files[0])importJson(this.files[0]);
+    this.value='';
+  });
+  $('#btnSample').addEventListener('click',function(){
+    if(!window.confirm('Replace the current day with the sample day?'))return;
+    S=sample();editId=null;clearEditor();save();fill();renderAll();msg('Sample day loaded.');
+  });
+  $('#btnBlank').addEventListener('click',function(){
+    S=blank();editId=null;clearEditor();save();fill();renderAll();msg('Empty day ready — add your resources and book the first slot.');
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all saved data and start from an empty day? This cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blank();editId=null;clearEditor();save();fill();renderAll();msg('All data cleared.');
+  });
+}
+function validateDay(){
+  var o=hm2min(S.open),c=hm2min(S.close);
+  if(o!=null&&c!=null&&c<=o)fieldErr('#iClose','#eClose','Closing time must be after opening time.');
+  else if(hm2min($('#iClose').value)!=null)fieldErr('#iClose','#eClose',null);
+}
+
+/* ── boot ──────────────────────────────────────────────────────── */
+function fill(){
+  $('#iOrg').value=S.org; $('#iAddr').value=S.addr; $('#iPhone').value=S.phone; $('#iRef').value=S.ref;
+  $('#iPrep').value=S.prep;
+  $('#iDate').value=S.date; $('#iOpen').value=S.open; $('#iClose').value=S.close;
+  $('#iSlot').value=String(S.slot); $('#iBuffer').value=S.buffer; $('#iGapMin').value=S.gapMin;
+  $('#iCur').value=S.cur; $('#curCustWrap').hidden=(S.cur!=='custom'); $('#iCurCust').value=S.curCust;
+  $('#iTf').value=S.tf;
+  $('#iStart').value=S.open;
+  $('#iStatus').value='booked';
+}
+function boot(){
+  S=load(); if(!S){S=sample();}
+  fill(); wire(); renderAll();
+  var sv=svcById($('#iSvcSel').value);
+  if(sv){$('#iDur').value=sv.dur;$('#iPrice').value=sv.price;}
+  save();
+}
+boot();
+})();
+</script>
+</body>
+</html>

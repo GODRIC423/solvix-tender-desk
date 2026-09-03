@@ -1087,3 +1087,154 @@ function noteSample(){
   n.innerHTML='<strong>Sample data loaded.</strong> A demonstration detention claim on load '+
     esc(S.loadNo||'—')+'. Type over any value, or use <em>Start blank invoice</em> in the first card.';
 }
+
+/* ── validation ──────────────────────────────────────────── */
+var LIMITS={freeHours:{max:48,label:'Free time'},rate:{label:'Rate'},dailyMax:{label:'Daily maximum'},
+  terms:{max:365,label:'Terms'},layNights:{max:60,label:'Nights'},layRate:{label:'Rate'},
+  tonuQty:{max:60,label:'TONU events'},tonuRate:{label:'Rate'},taxRate:{max:100,label:'Tax rate'}};
+function setErr(key,text){
+  var e=$('[data-err="'+key+'"]');if(!e)return;
+  var input=document.getElementById(key);
+  if(text){e.hidden=false;e.textContent=text;if(input)input.classList.add('inv');}
+  else{e.hidden=true;e.textContent='';if(input)input.classList.remove('inv');}
+}
+function validate(el){
+  var n=el.getAttribute('data-n');
+  if(n){
+    var raw=String(el.value).trim(),lim=LIMITS[n]||{};
+    if(raw===''){setErr(n,'');return;}
+    var v=parseFloat(raw);
+    if(!isFinite(v)){setErr(n,'Enter a number.');return;}
+    if(v<0){setErr(n,(lim.label||'Value')+' cannot be negative.');return;}
+    if(lim.max!=null&&v>lim.max){setErr(n,(lim.label||'Value')+' looks wrong — the limit here is '+lim.max+'.');return;}
+    setErr(n,'');return;
+  }
+  if(el.id==='invNo'){
+    setErr('invNo',String(el.value).trim()?'':'Add an invoice number before you send this document.');
+  }
+}
+function validateAll(){$$('[data-n]').forEach(validate);validate($('#invNo'));}
+
+/* ── events ──────────────────────────────────────────────── */
+function byId(arr,id){for(var i=0;i<arr.length;i++)if(arr[i].id===id)return arr[i];return null;}
+function onField(e){
+  var t=e.target;if(!t||!t.getAttribute)return;
+  var h=t.getAttribute('data-h'),n=t.getAttribute('data-n'),
+      r=t.getAttribute('data-r'),l=t.getAttribute('data-l'),touched=false;
+  if(h){S[h]=t.value;touched=true;}
+  else if(n){S[n]=String(t.value).trim()===''?'':num(t.value);touched=true;}
+  else if(r){
+    var st=byId(S.stops,t.getAttribute('data-id'));
+    if(st){
+      if(r==='bill')st.bill=t.checked;
+      else if(r==='free')st.free=String(t.value).trim()===''?'':num(t.value);
+      else st[r]=t.value;
+      touched=true;
+    }
+  }
+  else if(l){
+    var ln=byId(S.lines,t.getAttribute('data-id'));
+    if(ln){
+      if(l==='on')ln.on=t.checked;
+      else if(l==='qty'||l==='rate')ln[l]=String(t.value).trim()===''?'':num(t.value);
+      else ln[l]=t.value;
+      touched=true;
+    }
+  }
+  else if(t.id==='cur'){S.cur=t.value;$('#curCustomWrap').hidden=(S.cur!=='custom');touched=true;}
+  else if(t.id==='curCustom'){S.curCustom=t.value;touched=true;}
+  if(!touched)return;
+  if(S.sample){S.sample=false;$('#sampleNote').hidden=true;}
+  if(n==='freeHours'){
+    var ph=nf(Math.max(0,num(S.freeHours)),2);
+    $$('#stopsB input[data-r="free"]').forEach(function(el){el.placeholder=ph;});
+  }
+  save();paint();
+}
+document.addEventListener('input',onField);
+document.addEventListener('change',onField);
+document.addEventListener('blur',function(e){
+  var t=e.target;if(t&&t.getAttribute&&(t.getAttribute('data-n')||t.id==='invNo'))validate(t);
+},true);
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest?e.target.closest('button'):null;
+  if(!t)return;
+  var del=t.getAttribute('data-del'),ldel=t.getAttribute('data-ldel');
+  if(del){
+    S.stops=S.stops.filter(function(s){return s.id!==del;});
+    if(S.sample){S.sample=false;}
+    save();stopRows();noteSample();paint();return;
+  }
+  if(ldel){
+    S.lines=S.lines.filter(function(l){return l.id!==ldel;});
+    if(S.sample){S.sample=false;}
+    save();accRows();noteSample();paint();return;
+  }
+  if(t.id==='bUseStops'){
+    var extra=Math.max(0,S.stops.length-2),line=null;
+    S.lines.forEach(function(l){if(l.code==='stopoff')line=l;});
+    if(!line){line={id:uid(),code:'stopoff',desc:'Stop-off charge (per extra stop)',qty:'',unit:'stop',rate:'',on:false};S.lines.push(line);}
+    line.qty=extra;line.on=extra>0;
+    save();accRows();paint();
+    var f=$('#accB input[data-l="rate"][data-id="'+line.id+'"]');if(f)f.focus();
+    return;
+  }
+  switch(t.id){
+    case 'bAddStop':
+      S.stops.push(newStop({type:S.stops.length?'Delivery':'Pickup'}));
+      save();stopRows();paint();
+      var last=$$('#stopsB input[data-r="loc"]').pop();if(last)last.focus();
+      break;
+    case 'bAddLine':
+      S.lines.push({id:uid(),code:'',desc:'',qty:'',unit:'each',rate:'',on:true});
+      save();accRows();paint();
+      var lastL=$$('#accB input[data-l="desc"]').pop();if(lastL)lastL.focus();
+      break;
+    case 'bCatalogue':
+      var have={};S.lines.forEach(function(l){if(l.code)have[l.code]=1;});
+      catalogue().forEach(function(l){if(!have[l.code])S.lines.push(l);});
+      save();accRows();paint();
+      break;
+    case 'bSample':
+      S=sampleState();save();renderAll();noteSample();validateAll();break;
+    case 'bBlank':
+      S=blankState();save();renderAll();noteSample();validateAll();break;
+    case 'bPrint':window.print();break;
+    case 'bCsv':
+      download('accessorial-invoice-'+slug(S.invNo||S.loadNo)+'.csv','text/csv;charset=utf-8;',toCSV());break;
+    case 'bJson':
+      download('accessorial-invoice-'+slug(S.invNo||S.loadNo)+'.json','application/json',JSON.stringify(S,null,2));break;
+    case 'bImport':$('#fileIn').click();break;
+    case 'bClear':
+      if(window.confirm('Delete this invoice and everything this tool has saved in the browser? This cannot be undone.')){
+        try{localStorage.removeItem(KEY);}catch(err){}
+        S=blankState();save();renderAll();
+        msg('All data cleared. A blank invoice is ready — or press Load sample to see a worked example.');
+      }
+      break;
+  }
+});
+$('#fileIn').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object'||Array.isArray(o))throw new Error('not an invoice file');
+      S=adopt(o);save();renderAll();validateAll();
+      msg('Imported '+f.name+' — '+S.stops.length+' stops and '+S.lines.length+' charge lines restored.');
+    }catch(err){msg('That file could not be read as a saved invoice: '+err.message,true);}
+    $('#fileIn').value='';
+  };
+  fr.onerror=function(){msg('That file could not be read.',true);$('#fileIn').value='';};
+  fr.readAsText(f);
+});
+
+/* ── boot ────────────────────────────────────────────────── */
+if(!load()){S=sampleState();save();}
+renderAll();noteSample();validateAll();
+})();
+</script>
+</body>
+</html>

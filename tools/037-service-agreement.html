@@ -185,6 +185,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .togs .check b{display:block;font-weight:650}
 .togs .check i{display:block;font-style:normal;font-size:11.5px;color:var(--muted);line-height:1.35}
 .mini{font-size:12px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .tot{font-family:var(--mono);font-variant-numeric:tabular-nums}
 td .due{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
 .xbtn{font:600 12px/1 var(--mono);padding:5px 8px;border:1px solid var(--line-hard);background:var(--raise);
@@ -1363,3 +1364,367 @@ function buildClauses(K){
 
   return C;
 }
+
+/* ── numbering + cross references ─────────────────────────────── */
+function numberClauses(C){
+  var live=C.filter(function(c){return c.on&&c.paras.length}),map={},i;
+  live.forEach(function(c,ix){c.num=ix+1;map[c.id]=c});
+  return {live:live,map:map};
+}
+function resolve(txt,map){
+  return String(txt).replace(/\{(c|C):([a-zA-Z]+)(?:\.(\d+))?\}/g,function(_,cap,id,sub){
+    var c=map[id];
+    if(!c)return '<span class="xref">'+(cap==='C'?'The':'the')+' relevant clause</span>';
+    return '<span class="xref">'+(cap==='C'?'Clause ':'clause ')+c.num+(sub?'.'+sub:'')+'</span>';
+  });
+}
+function survivalText(map){
+  var ids=['effect','ip','conf','dp','warr','liab','nonsol','notices','entire','law','disp'];
+  var nums=ids.map(function(id){return map[id]?map[id].num:null}).filter(function(x){return x!==null})
+    .sort(function(a,b){return a-b});
+  if(!nums.length)return 'No clause is expressed to survive termination.';
+  var list=nums.length===1?('clause '+nums[0])
+    :('clauses '+nums.slice(0,-1).join(', ')+' and '+nums[nums.length-1]);
+  return 'The following survive termination or expiry and stay in force: '+list+
+    ', together with any other provision that by its nature is intended to continue.';
+}
+
+/* ── the document ─────────────────────────────────────────────── */
+function renderDoc(K){
+  var C=buildClauses(K),nc=numberClauses(C),live=nc.live,map=nc.map,h=[];
+  live.forEach(function(c){
+    if(c.id==='effect'){c.paras=c.paras.map(function(p){return p==='SURVIVAL'?survivalText(map):p})}
+  });
+  var titleSub=[S.agRef?'Ref '+esc(S.agRef):'',K.agDate?'Dated '+fd(K.agDate):'',
+    'Draft for legal review'].filter(Boolean).join(' · ');
+  h.push('<div class="doctitle"><div class="t">Agreement for Services</div><div class="s">'+titleSub+'</div></div>');
+  h.push('<div class="rec"><p><strong>Between</strong> '+v(S.clientName,'Client name')+' of '+
+    v(S.clientAddr,'client address')+' (the Client) <strong>and</strong> '+v(S.provName,'Service provider name')+
+    ' of '+v(S.provAddr,'provider address')+' (the Service Provider).</p>'+
+    '<p><strong>Background.</strong> The Client wishes to engage the Service Provider to provide '+
+    v(S.svcTitle,'describe the services')+'. The Service Provider has agreed to provide those services on the terms '+
+    'set out below. The parties agree as follows.</p></div>');
+
+  live.forEach(function(c){
+    var b='<div class="cl"><h3>'+c.num+'. '+esc(c.title)+'</h3>';
+    c.paras.forEach(function(p,ix){
+      b+='<p><span class="pn">'+c.num+'.'+(ix+1)+'</span>&nbsp; '+resolve(p,map)+'</p>';
+    });
+    h.push(b+'</div>');
+  });
+
+  /* Schedule 1 */
+  var s1='<div class="sch"><h3>Schedule 1 — Services, deliverables and target dates</h3>';
+  var sd=lines(S.svcDesc);
+  s1+='<p><strong>The Services.</strong> '+v(S.svcTitle,'describe the services')+'</p>'+
+    (sd.length?ul(sd):'<p>'+blank('list what is included')+'</p>');
+  var sx=lines(S.svcExcl); if(sx.length)s1+='<p><strong>Not included.</strong></p>'+ul(sx);
+  var co=lines(S.clientObl); if(co.length)s1+='<p><strong>The Client will.</strong></p>'+ul(co);
+  s1+='<div class="tw"><table><thead><tr><th scope="col" style="width:30px">#</th>'+
+    '<th scope="col">Deliverable / milestone</th><th scope="col" style="width:120px">Target date</th>'+
+    '<th scope="col" class="r" style="width:120px">Invoiced amount</th></tr></thead><tbody>';
+  var anyD=false;
+  K.ms.forEach(function(r,ix){
+    if(!r.d&&!r.dt&&r.amt===null)return; anyD=true;
+    s1+='<tr><td class="n">'+(ix+1)+'</td><td class="d">'+(r.d?esc(r.d):'—')+'</td><td class="n">'+
+      (r.date?fds(r.date):'—')+'</td><td class="n">'+(r.amt===null?'—':m(r.amt))+'</td></tr>';
+  });
+  if(!anyD)s1+='<tr><td colspan="4" class="mini">No deliverables listed.</td></tr>';
+  s1+='</tbody></table></div></div>';
+  h.push(s1);
+
+  /* Schedule 2 */
+  var s2='<div class="sch"><h3>Schedule 2 — Payment schedule</h3>'+
+    '<div class="tw"><table><thead><tr><th scope="col" style="width:30px">#</th>'+
+    '<th scope="col">Invoice</th><th scope="col" style="width:104px">Invoice date</th>'+
+    '<th scope="col" class="r" style="width:96px">Net</th>'+
+    (S.taxOn?'<th scope="col" class="r" style="width:88px">'+esc(K.taxLabel)+'</th><th scope="col" class="r" style="width:100px">Total</th>':'')+
+    '<th scope="col" class="r" style="width:104px">Payment due</th></tr></thead><tbody>';
+  if(!K.rows.length){
+    s2+='<tr><td colspan="'+(S.taxOn?7:5)+'" class="mini">Enter the fees to build the payment schedule.</td></tr>';
+  }else{
+    K.rows.forEach(function(r,ix){
+      s2+='<tr><td class="n">'+(r.credit?'':ix+1)+'</td><td class="d">'+esc(r.d)+'</td><td class="n">'+
+        (r.date?fds(r.date):'—')+'</td><td class="n">'+m(r.amt)+'</td>'+
+        (S.taxOn?'<td class="n">'+m(r.tax)+'</td><td class="n">'+m(r.gross)+'</td>':'')+
+        '<td class="n">'+(r.due?fds(r.due):'—')+'</td></tr>';
+    });
+  }
+  var totTax=r2(K.rows.reduce(function(t,r){return t+r.tax},0));
+  s2+='</tbody><tfoot><tr><td></td><td>Total payable</td><td></td><td class="n">'+m(K.rowTotal)+'</td>'+
+    (S.taxOn?'<td class="n">'+m(totTax)+'</td><td class="n">'+m(r2(K.rowTotal+totTax))+'</td>':'')+
+    '<td></td></tr></tfoot></table></div>'+
+    '<p class="mini" style="margin-top:6px">Payment dates are the invoice date plus '+K.payTerms+
+    ' days, as required by '+(map.payment?'clause '+map.payment.num:'the payment clause')+
+    '. Dates falling on a non-working day move to the next working day.</p></div>';
+  h.push(s2);
+
+  /* notes for the lawyer */
+  if(lines(S.notes).length){
+    h.push('<div class="sch"><h3>Notes for the reviewing lawyer</h3>'+ul(lines(S.notes))+'</div>');
+  }
+
+  /* signatures */
+  h.push('<div class="sigs">'+
+    sigBlock('Signed for and on behalf of the Client',S.clientName,S.sigClientName,S.sigClientTitle)+
+    sigBlock('Signed for and on behalf of the Service Provider',S.provName,S.sigProvName,S.sigProvTitle)+
+    '</div>');
+  h.push('<p class="mini" style="margin-top:14px;border-top:1px solid var(--line);padding-top:8px">'+
+    '<strong>Draft only — not legal advice.</strong> This document was assembled by a software tool from the '+
+    'answers given above. It has not been reviewed by a lawyer, it may not reflect the law where either party is '+
+    'based, and it must be checked and adapted by a qualified lawyer in '+(S.law?esc(S.law):'the relevant jurisdiction')+
+    ' before it is signed. Figures shown are calculated from the inputs and are not tax advice.</p>');
+  $('doc').innerHTML=h.join('');
+  return live.length;
+}
+function sigBlock(head,party,name,title){
+  return '<div class="sig"><div class="who">'+esc(head)+'</div><div class="cap">'+
+    (party?esc(party):'—')+'</div>'+
+    '<div class="sigline"></div><div class="cap">Signature</div>'+
+    '<div class="sigline"></div><div class="cap">Name: '+(name?esc(name):'')+'</div>'+
+    '<div class="sigline"></div><div class="cap">Position: '+(title?esc(title):'')+'</div>'+
+    '<div class="sigline"></div><div class="cap">Date</div></div>';
+}
+
+/* ── milestone table ──────────────────────────────────────────── */
+function renderRows(){
+  var b=$('msBody'),h='';
+  S.ms.forEach(function(r,i){
+    h+='<tr><td class="n">'+(i+1)+'</td>'+
+      '<td><label class="sr" for="d'+i+'">Deliverable '+(i+1)+'</label><input id="d'+i+'" data-i="'+i+'" data-f="d" value="'+esc(r.d).replace(/"/g,'&quot;')+'" placeholder="Deliverable or milestone"></td>'+
+      '<td><label class="sr" for="dt'+i+'">Target date '+(i+1)+'</label><input id="dt'+i+'" data-i="'+i+'" data-f="dt" type="date" value="'+esc(r.dt)+'"></td>'+
+      '<td><label class="sr" for="a'+i+'">Amount '+(i+1)+'</label><input id="a'+i+'" data-i="'+i+'" data-f="a" type="number" min="0" step="0.01" inputmode="decimal" value="'+esc(r.a)+'" placeholder="0.00"></td>'+
+      '<td class="n"><span class="due" data-due="'+i+'">—</span></td>'+
+      '<td><button type="button" class="xbtn" data-del="'+i+'" aria-label="Remove row '+(i+1)+'">✕</button></td></tr>';
+  });
+  if(!S.ms.length)h='<tr><td colspan="6" class="empty">No deliverables yet — add a row.</td></tr>';
+  b.innerHTML=h;
+}
+function syncRows(K){
+  K.ms.forEach(function(r,i){
+    var el=document.querySelector('[data-due="'+i+'"]');
+    if(el)el.textContent=r.date?fds(addD(r.date,K.payTerms)):'—';
+  });
+}
+
+/* ── screen results ───────────────────────────────────────────── */
+function render(){
+  var K=compute();
+  toggleFields();
+  syncRows(K);
+
+  $('hVal').textContent=(K.fees===null)?'—':m(K.fees);
+  $('hSub').textContent=(K.fees===null)?'Enter the fees to see the contract value'
+    :(K.feeBasis+(S.taxOn?' · '+m(K.gross)+' incl. '+K.taxLabel+' at '+n(S.taxRate)+'%':' · tax inclusive'));
+  $('sCap').textContent=(K.cap===null)?'—':m(K.cap);
+  $('sCapBasis').textContent=K.capNote;
+  $('sPay').textContent=K.payTerms+' days';
+  $('sPaySub').textContent={milestone:'Invoiced on each milestone',monthly:'Invoiced monthly in arrears',
+    completion:'Invoiced on completion',advance:'Invoiced monthly in advance'}[S.invoiceFreq]||'—';
+  $('sDep').textContent=(K.deposit===null||K.deposit===0)?'—':m(K.deposit);
+  $('sDepSub').textContent=(K.depPct>0)?(K.depPct+'% on signature · balance '+m(K.balance)):'No deposit';
+  $('sExp').textContent=S.expOn?((S.expMode==='included')?'In the fee':(K.expCap===null?'At cost':m(K.expCap))):'—';
+  $('sExpSub').textContent=!S.expOn?'No expenses clause'
+    :(S.expMode==='included'?'Nothing extra payable'
+      :(S.expMode==='capped'?(S.expCapMode==='pct'?n(S.expCapPct)+'% of fees, cap':'Fixed cap')
+        :'Pre-approval over '+m(K.expThreshold)));
+  $('sEnd').textContent=K.end?fds(K.end):'—';
+  $('sEndSub').textContent=K.end
+    ?(S.renewMode==='auto'?('Notice by '+(K.noticeBy?fds(K.noticeBy):'—')+' to stop renewal')
+      :(S.renewMode==='agree'?'Extends only by written agreement':'No renewal'))
+    :'Set the start date and term';
+  $('sLate').textContent=S.lateOn?m(K.late1000):'—';
+  $('sLateSub').textContent=S.lateOn?('per '+m(1000)+' overdue, 30 days, at '+n(S.lateRate)+'%/yr'):'No interest clause';
+
+  var count=renderDoc(K);
+  $('chipClauses').textContent=count+' numbered clauses';
+
+  /* checks */
+  var out=[];
+  if(!S.clientName||!S.provName)out.push(['warn','Both party names are needed before this can be signed.']);
+  if(S.feeModel==='fixed'&&K.fees!==null&&K.msSum>0){
+    var diff=r2(K.fees-K.msSum);
+    if(Math.abs(diff)<0.005)out.push(['ok','The milestone amounts allocate 100% of the '+m(K.fees)+' fee.']);
+    else if(diff>0)out.push(['warn',m(diff)+' of the fixed fee is not yet allocated to a milestone.']);
+    else out.push(['bad','The milestones total '+m(K.msSum)+', which is '+m(-diff)+' more than the fixed fee.']);
+  }
+  if(K.fees===null)out.push(['warn','No fee figure yet — the value, tax, deposit and liability cap cannot be worked out.']);
+  if(K.start&&K.agDate&&K.start.getTime()<K.agDate.getTime())out.push(['warn','The start date is before the date of the agreement.']);
+  if(S.renewMode==='auto'&&K.termMonths>0&&K.nonRenewNotice>K.termMonths*30)
+    out.push(['bad','The non-renewal notice period is longer than the initial term, so the term would renew before notice could be given.']);
+  if(S.convOn&&K.termMonths>0&&K.convNotice>K.termMonths*30)
+    out.push(['warn','The convenience notice period is longer than the whole term.']);
+  if(S.capBasis==='fixed'&&K.cap!==null&&K.fees!==null&&K.cap>K.fees*3)
+    out.push(['warn','The fixed liability cap is more than three times the contract value — check the provider can insure it.']);
+  if(S.insMode==='on'&&K.cap!==null&&has(S.insPI)&&n(S.insPI)>0&&n(S.insPI)<K.cap)
+    out.push(['warn','The liability cap ('+m(K.cap)+') is above the professional indemnity cover ('+m(r2(n(S.insPI)))+').']);
+  K.ms.forEach(function(r,i){if(r.dt&&!r.date)out.push(['bad','Row '+(i+1)+' has an invalid target date.'])});
+  var ch=$('checks');
+  ch.innerHTML=out.length
+    ?out.map(function(o){return '<div class="row" style="gap:7px;flex-wrap:nowrap;align-items:flex-start">'+
+      '<span class="chip '+o[0]+'">'+(o[0]==='ok'?'OK':o[0]==='bad'?'Fix':'Check')+'</span>'+
+      '<span style="font-size:12.5px;line-height:1.4">'+o[1]+'</span></div>'}).join('')
+    :'<div class="row" style="gap:7px"><span class="chip ok">OK</span><span style="font-size:12.5px">Nothing outstanding — have a lawyer review the draft before signing.</span></div>';
+
+  /* printed letterhead */
+  $('pfRef').textContent=S.agRef||'—';
+  $('pfClient').textContent=S.clientName||'—';
+  $('pfProv').textContent=S.provName||'—';
+  $('pfVal').textContent=(K.fees===null)?'—':m(K.fees);
+  $('pfTerm').textContent=(K.start&&K.end)?(fds(K.start)+' to '+fds(K.end)):'—';
+  $('pfPrep').textContent=fd(new Date())+' — draft for legal review';
+  $('chipSample').hidden=!S.sample;
+  return K;
+}
+
+function toggleFields(){
+  $('wrapCurCustom').hidden=S.cur!=='custom';
+  $('wrapFixed').hidden=S.feeModel!=='fixed';
+  var t=(S.feeModel==='hourly'||S.feeModel==='daily');
+  $('wrapRate').hidden=!t; $('wrapUnits').hidden=!t; $('wrapTmCap').hidden=!t;
+  $('wrapTmCapAmt').hidden=!(t&&S.tmCapOn);
+  $('wrapRet').hidden=S.feeModel!=='retainer';
+  $('labRate').textContent=S.feeModel==='daily'?'Day rate':'Hourly rate';
+  $('labUnits').textContent=S.feeModel==='daily'?'Estimated days':'Estimated hours';
+  $('wrapThr').hidden=!(S.expOn&&S.expMode!=='included');
+  $('wrapExpCap').hidden=!(S.expOn&&S.expMode==='capped');
+  $('wrapExpPct').hidden=S.expCapMode!=='pct'; $('wrapExpAmt').hidden=S.expCapMode!=='amt';
+  $('wrapRenewM').hidden=S.renewMode!=='auto'; $('wrapRenewN').hidden=S.renewMode!=='auto';
+  $('wrapConvWho').hidden=!S.convOn; $('wrapConvN').hidden=!S.convOn;
+  $('wrapLic').hidden=S.ipMode!=='licence';
+  $('wrapCapMul').hidden=S.capBasis!=='multiple'; $('wrapCapFix').hidden=S.capBasis!=='fixed';
+  $('wrapIns').hidden=S.insMode!=='on';
+  $('wrapNonSol').hidden=!S.nonSolOn;
+  $('wrapDisp').hidden=!S.dispOn;
+  $('wrapMediator').hidden=S.disputeMode==='talk-courts';
+  $('wrapArb').hidden=S.disputeMode!=='mediate-arb';
+}
+
+/* ── binding ──────────────────────────────────────────────────── */
+function fill(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-k]'),function(el){
+    var k=el.getAttribute('data-k'),val=S[k];
+    if(el.type==='checkbox')el.checked=!!val; else el.value=(val===undefined||val===null)?'':val;
+  });
+  renderRows();
+}
+document.addEventListener('input',onEdit);
+document.addEventListener('change',onEdit);
+function onEdit(e){
+  var el=e.target;if(!el)return;
+  if(el.hasAttribute&&el.hasAttribute('data-k')){
+    var k=el.getAttribute('data-k');
+    S[k]=(el.type==='checkbox')?el.checked:el.value;
+    S.sample=false; save(); render(); return;
+  }
+  if(el.hasAttribute&&el.hasAttribute('data-i')){
+    var i=+el.getAttribute('data-i'),f=el.getAttribute('data-f');
+    if(S.ms[i]){S.ms[i][f]=el.value;S.sample=false;save();render()}
+  }
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('[data-del]'):null;
+  if(b){var i=+b.getAttribute('data-del');S.ms.splice(i,1);S.sample=false;save();renderRows();render()}
+});
+document.addEventListener('blur',function(e){
+  var el=e.target;if(!el||!el.hasAttribute||!el.hasAttribute('data-k'))return;
+  var k=el.getAttribute('data-k');
+  function bad(id,cond){var er=$(id);if(er)er.hidden=!cond;el.classList.toggle('inv',!!cond)}
+  if(k==='clientEmail')bad('errClientEmail',el.value!==''&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(el.value));
+  if(k==='provEmail')bad('errProvEmail',el.value!==''&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(el.value));
+  if(k==='depositPct')bad('errDeposit',el.value!==''&&(n(el.value)<0||n(el.value)>100));
+  if(k==='termMonths')bad('errTerm',el.value!==''&&(n(el.value)<1||n(el.value)>240));
+},true);
+
+$('btnAdd').addEventListener('click',function(){
+  S.ms.push({d:'',dt:'',a:''});S.sample=false;save();renderRows();render();
+  var last=document.querySelector('#msBody tr:last-child input');if(last)last.focus();
+});
+
+/* ── exports ──────────────────────────────────────────────────── */
+function flash(msg){var f=$('ftSaved'),o=f.textContent;f.textContent=msg;
+  setTimeout(function(){f.textContent=o},2600)}
+function dl(blob,name){var u=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},400)}
+function q(x){var s=(x===null||x===undefined)?'':String(x);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function slug(){return (S.agRef||S.clientName||'service-agreement').toLowerCase()
+  .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'service-agreement'}
+
+$('btnCsv').addEventListener('click',function(){
+  var K=compute(),L=[];
+  function kv(a,b){L.push(q(a)+','+q(b))}
+  kv('Service agreement — summary','');
+  kv('Agreement reference',S.agRef);kv('Date of agreement',iso(K.agDate));
+  kv('Client',S.clientName);kv('Service provider',S.provName);
+  kv('Services',S.svcTitle);
+  kv('Currency',K.cur);kv('Fee basis',K.feeBasis.replace(/<[^>]*>/g,''));
+  kv('Contract value excl tax',K.fees===null?'':K.fees.toFixed(2));
+  kv(K.taxLabel+' at '+n(S.taxRate)+'%',K.tax===null?'':K.tax.toFixed(2));
+  kv('Contract value incl tax',K.gross===null?'':K.gross.toFixed(2));
+  kv('Deposit on signature',K.deposit===null?'':K.deposit.toFixed(2));
+  kv('Expenses cap',K.expCap===null?'':K.expCap.toFixed(2));
+  kv('Liability cap',K.cap===null?'':K.cap.toFixed(2));kv('Liability cap basis',K.capNote);
+  kv('Payment terms (days)',K.payTerms);kv('Start date',iso(K.start));
+  kv('Initial term (months)',K.termMonths);kv('End of initial term',iso(K.end));
+  kv('Non-renewal notice by',iso(K.noticeBy));
+  kv('Governing law',S.law);kv('Clauses in the draft',numberClauses(buildClauses(K)).live.length);
+  L.push('');
+  L.push(['No.','Invoice','Invoice date','Net','Tax','Total','Payment due'].map(q).join(','));
+  K.rows.forEach(function(r,i){
+    L.push([r.credit?'':i+1,r.d,iso(r.date),r.amt.toFixed(2),r.tax.toFixed(2),r.gross.toFixed(2),iso(r.due)].map(q).join(','));
+  });
+  var tt=r2(K.rows.reduce(function(t,r){return t+r.tax},0));
+  L.push(['','Total payable','',K.rowTotal.toFixed(2),tt.toFixed(2),r2(K.rowTotal+tt).toFixed(2),''].map(q).join(','));
+  dl(new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'}),slug()+'-payment-schedule.csv');
+  flash('CSV downloaded.');
+});
+
+$('btnJson').addEventListener('click',function(){
+  var out={tool:'solvix.service-agreement',version:1,exported:new Date().toISOString(),state:S};
+  dl(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}),slug()+'-agreement.json');
+  flash('JSON saved.');
+});
+$('btnImport').addEventListener('click',function(){$('fileJson').click()});
+$('fileJson').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(fr.result);var st=(o&&o.state&&typeof o.state==='object')?o.state:o;
+      if(!st||typeof st!=='object')throw 0;
+      merge(st);save();fill();render();flash('Draft loaded from file.');
+    }catch(err){flash('That file could not be read as a saved draft.')}
+    e.target.value='';
+  };
+  fr.readAsText(f);
+});
+$('btnPrint').addEventListener('click',function(){window.print()});
+$('btnCopy').addEventListener('click',function(){
+  var t=$('doc').innerText.replace(/\n{3,}/g,'\n\n');
+  function fallback(){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';
+    ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');flash('Agreement text copied.')}catch(e){flash('Copy is blocked in this browser.')}
+    document.body.removeChild(ta)}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){flash('Agreement text copied.')},fallback);
+  }else fallback();
+});
+$('btnSample').addEventListener('click',function(){
+  if(!confirm('Replace the current draft with the sample agreement?'))return;
+  S=clone(SAMPLE);save();fill();render();flash('Sample draft loaded.');
+});
+$('btnClear').addEventListener('click',function(){
+  if(!confirm('Clear all data and start a blank agreement? This cannot be undone.'))return;
+  S=clone(BLANK);try{localStorage.removeItem(KEY)}catch(e){}
+  save();fill();render();flash('Cleared — blank draft.');
+});
+
+/* ── init ─────────────────────────────────────────────────────── */
+if(!load())S=clone(SAMPLE);
+fill();render();
+})();
+</script>
+</body>
+</html>
