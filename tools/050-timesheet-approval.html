@@ -175,7 +175,7 @@ table input:focus,table select:focus{background:var(--raise)}
 /* the appbar sits outside .app, so it aligns itself to the same 1180px measure */
 .appbar{margin:0;padding-inline:max(clamp(10px,2vw,22px),calc((100% - 1180px)/2 + clamp(10px,2vw,22px)))}
 .app{padding-top:14px}
-@media(min-width:901px){.split{grid-template-columns:minmax(0,1fr) minmax(300px,.66fr)}}
+@media(min-width:901px){.split{grid-template-columns:minmax(0,1fr) minmax(296px,.55fr)}}
 [hidden]{display:none!important}
 .ts-bd>*{min-width:0}
 .tw{max-width:100%}
@@ -213,8 +213,8 @@ table input:focus,table select:focus{background:var(--raise)}
 .ts-bd{padding:12px;border-top:1px solid var(--line);display:grid;gap:12px}
 .ts.closed .ts-bd{display:none}
 .etab{min-width:548px}
-.etab input[type=date]{width:100%;max-width:150px}
-.etab input[type=time]{width:100%;max-width:112px}
+.etab input[type=date]{width:100%;max-width:138px}
+.etab input[type=time]{width:100%;max-width:116px}
 .etab td:nth-child(5) input{max-width:66px}
 .flagcell{min-width:96px}
 .rowend{display:flex;gap:4px;align-items:center;justify-content:space-between}
@@ -281,6 +281,9 @@ footer.foot{margin-top:16px;font:11.5px/1.6 var(--sans);color:var(--muted);borde
   .stat.hero{border:2px solid #000}
   textarea{min-height:0}
   .exlist{page-break-inside:avoid}
+  .etab td:nth-child(2),.etab td:nth-child(2) .num{white-space:nowrap}
+  .cmt.nocmt{display:none!important}
+  .cmt .printonly{border-bottom:1px solid #ccc;padding-bottom:2px;min-height:14pt}
 }
 </style>
 </head>
@@ -352,11 +355,11 @@ footer.foot{margin-top:16px;font:11.5px/1.6 var(--sans);color:var(--muted);borde
             <div class="f"><label for="rContract">Contracted h/week</label><input id="rContract" type="number" min="0" max="168" step="0.25"><div class="err" id="errRContract" hidden></div></div>
             <div class="f"><label for="rDays">Expected days</label><input id="rDays" type="number" min="0" max="7" step="1"><div class="err" id="errRDays" hidden></div></div>
             <div class="f"><label for="rMinShift">Min shift (h)</label><input id="rMinShift" type="number" min="0" max="24" step="0.25"></div>
-            <div class="f"><label for="rLongShift">Break needed after (h)</label><input id="rLongShift" type="number" min="0" max="24" step="0.25"></div>
+            <div class="f"><label for="rLongShift">Break after (h)</label><input id="rLongShift" type="number" min="0" max="24" step="0.25"></div>
             <div class="f"><label for="rMinBreak">Min break (min)</label><input id="rMinBreak" type="number" min="0" max="480" step="5"></div>
             <div class="f"><label for="rOtMult">Overtime multiplier</label><input id="rOtMult" type="number" min="1" max="5" step="0.05"><div class="err" id="errOtMult" hidden></div></div>
-            <div class="f"><label for="rOtBasis">Overtime after</label>
-              <select id="rOtBasis"><option value="contract">Contracted hours</option><option value="fixed">Fixed weekly hours</option></select></div>
+            <div class="f"><label for="rOtBasis">OT after</label>
+              <select id="rOtBasis"><option value="contract">Contracted</option><option value="fixed">Fixed weekly</option></select></div>
             <div class="f" id="otFixedWrap" hidden><label for="rOtFixed">Fixed threshold (h)</label><input id="rOtFixed" type="number" min="0" max="168" step="0.25"></div>
           </div>
           <p class="hint">Hours = clock-out − clock-in − unpaid break. A shift ending before it starts is treated as running overnight.</p>
@@ -412,7 +415,6 @@ footer.foot{margin-top:16px;font:11.5px/1.6 var(--sans);color:var(--muted);borde
           <div class="lbl printonly" id="deptScopeLbl">By department</div>
           <div class="tw">
             <table class="sumtab">
-              <caption class="printonly lbl" style="text-align:left;padding:4px 0">Hours and cost by department</caption>
               <thead><tr><th scope="col">Department</th><th scope="col" class="n">TS</th><th scope="col" class="n">Hours</th><th scope="col" class="n">OT</th><th scope="col" class="n">Cost</th></tr></thead>
               <tbody id="deptBody"></tbody>
               <tfoot><tr><td>Total</td><td class="n" id="dfTs">—</td><td class="n" id="dfHours">—</td><td class="n" id="dfOt">—</td><td class="n" id="dfCost">—</td></tr></tfoot>
@@ -737,18 +739,20 @@ function sheetEl(sh){
        '<div class="f"><label>Status</label><select data-f="status">'+STATUSES.map(function(s){return '<option value="'+s.k+'">'+s.label+'</option>'}).join('')+'</select></div>'+
      '</div>'+
      '<div class="printonly tsprint" data-o="pmeta"></div>'+
+     '<div class="printonly lbl" style="padding:2px 0 4px">Daily entries</div>'+
      '<div class="tw"><table class="etab">'+
-       '<caption class="printonly lbl" style="text-align:left;padding:3px 0">Daily entries</caption>'+
        '<thead><tr><th scope="col">Day</th><th scope="col">Date</th><th scope="col">In</th><th scope="col">Out</th>'+
        '<th scope="col" class="n">Break min</th><th scope="col" class="n">Hours</th><th scope="col">Notes / flags</th></tr></thead>'+
        '<tbody data-o="rows"></tbody>'+
-       '<tfoot><tr><td colspan="5">Total worked</td><td class="n" data-o="ftHours">—</td><td data-o="ftNote"></td></tr></tfoot>'+
+       '<tfoot><tr><td colspan="5">Total worked</td><td class="n" data-o="ftHours">—</td><td></td></tr>'+
+       '<tr><td colspan="7" data-o="ftNote" style="font-weight:400"></td></tr></tfoot>'+
      '</table></div>'+
      '<div class="row noprint"><button type="button" class="btn sm" data-a="addrow">+ Day</button>'+
        '<span class="hint" data-o="rowHint"></span></div>'+
      '<div data-o="excWrap"></div>'+
-     '<div class="f"><label>Manager comment <span data-o="reqmark"></span></label>'+
-       '<textarea data-f="comment" rows="2" placeholder="Reason for rejection, or any note to keep with this approval"></textarea>'+
+     '<div class="f cmt" data-o="cmtWrap"><label>Manager comment <span data-o="reqmark"></span></label>'+
+       '<textarea class="scr" data-f="comment" rows="2" placeholder="Reason for rejection, or any note to keep with this approval"></textarea>'+
+       '<div class="printonly pline" data-o="pcmt"></div>'+
        '<div class="err" data-o="errComment" hidden>A reason is required before a rejection can be recorded.</div></div>'+
    '</div>';
 
@@ -911,6 +915,8 @@ function refresh(){
     ta.classList.toggle('inv',c.needsReason);
     ta.setAttribute('aria-invalid',c.needsReason?'true':'false');
     q('reqmark').innerHTML=c.needsReason?'<span class="chip bad">Required</span>':'';
+    q('pcmt').textContent=sh.comment||'';
+    q('cmtWrap').classList.toggle('nocmt',!String(sh.comment||'').trim());
     var er=q('errRate');
     var badRate=!(num(sh.rate,-1)>=0)||String(sh.rate)==='';
     er.hidden=!badRate;er.textContent=badRate?'Enter an hourly rate of 0 or more.':'';
