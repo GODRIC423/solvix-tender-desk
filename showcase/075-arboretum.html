@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arboretum — an L-system tree garden</title>
+<meta name="description" content="A generative garden of Lindenmayer-system trees: edit the rewriting rules, watch trees grow on canvas, lean them in the wind and turn the seasons. With notes on L-systems and turtle interpretation.">
+<meta name="theme-color" content="#F4EFE3">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23F4EFE3'/%3E%3Cpath d='M16 29V15' stroke='%233B2A20' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='12' r='8' fill='%235C8A4B'/%3E%3Ccircle cx='11' cy='15' r='5' fill='%235C8A4B'/%3E%3Ccircle cx='21' cy='15' r='5' fill='%23D2691E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gilda+Display&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bark:#3B2A20; --bark-2:#5A4536; --bark-3:#7A6353;
+  --leaf:#5C8A4B; --leaf-light:#9DBE84; --leaf-pale:#C9D9A8;
+  --autumn:#D2691E; --autumn-light:#E4934F; --autumn-pale:#F2C9A6;
+  --cream:#F4EFE3; --cream-2:#EAE2CF; --cream-3:#DDD2B9;
+  --ground:#1C2E1C; --ground-2:#152415; --ground-3:#2A452E;
+  --display:'Gilda Display', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --text:'Lora', Georgia, 'Times New Roman', serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0; font-family:var(--text); color:var(--bark); background:var(--ground); line-height:1.65; overflow-x:clip}
+h1,h2,h3{font-family:var(--display); font-weight:400; margin:0; letter-spacing:-.005em}
+p{margin:0 0 1.25em}
+a{color:inherit}
+button,input,textarea{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--autumn); outline-offset:3px; border-radius:2px}
+.sr-only{position:absolute!important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+
+/* ---------- HERO / GARDEN ---------- */
+#hero{position:relative; height:100svh; min-height:620px; background:var(--cream); overflow:hidden; isolation:isolate}
+#garden{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:manipulation}
+.hero-text{position:absolute; left:clamp(1.25rem,4vw,4rem); top:clamp(1.25rem,4vw,3.5rem); pointer-events:none; max-width:min(62vw,40rem); z-index:2}
+.eyebrow{font-style:italic; font-size:clamp(.9rem,1.1vw,1.05rem); color:var(--bark-2); letter-spacing:.02em; margin:0 0 .35rem}
+.title{font-size:clamp(3.6rem,9.2vw,9.5rem); line-height:.88; color:var(--bark); margin-left:-.04em}
+.title .a{color:var(--leaf)}
+.title .u{color:var(--autumn)}
+.lede{margin-top:1.25rem; max-width:32rem; font-size:clamp(1rem,1.2vw,1.2rem); color:var(--bark-2); line-height:1.55}
+.lede em{color:var(--bark)}
+.hint{margin-top:1rem; font-size:.8rem; letter-spacing:.14em; text-transform:uppercase; color:var(--bark-3)}
+.hint::before{content:""; display:inline-block; width:1.75rem; height:1px; background:var(--bark-3); vertical-align:middle; margin-right:.6rem}
+.stats{position:absolute; left:clamp(1.25rem,4vw,4rem); bottom:clamp(1rem,3vw,2.5rem); z-index:2; color:var(--cream); font-size:.82rem; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; opacity:.85}
+.stats b{font-weight:500; color:var(--autumn-pale)}
+
+/* ---------- RULE BOOK PANEL ---------- */
+.panel{position:absolute; right:clamp(1rem,2.5vw,2.5rem); top:50%; transform:translateY(-50%); width:min(22.5rem,calc(100% - 2rem)); max-height:calc(100svh - 3rem); overflow:auto; z-index:3;
+  background:linear-gradient(180deg,var(--cream) 0%,var(--cream-2) 100%); color:var(--bark);
+  border:1px solid rgba(59,42,32,.22); box-shadow:0 30px 60px -30px rgba(20,30,20,.55), 0 1px 0 rgba(255,255,255,.6) inset; border-radius:6px; scrollbar-width:thin; scrollbar-color:rgba(59,42,32,.35) transparent}
+.panel::before{content:""; position:absolute; left:1.1rem; top:0; bottom:0; width:1px; background:rgba(210,105,30,.35)}
+.panel-head{display:flex; align-items:baseline; justify-content:space-between; padding:1.1rem 1.25rem .6rem 1.9rem; border-bottom:1px solid rgba(59,42,32,.15)}
+.panel-head h2{font-size:1.5rem; line-height:1}
+.panel-head small{font-style:italic; color:var(--bark-3); font-size:.8rem}
+.panel-toggle{display:none}
+.panel-body{padding:.5rem 1.25rem 1.1rem 1.9rem}
+.field{margin:.7rem 0}
+.label{display:flex; justify-content:space-between; align-items:baseline; font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; color:var(--bark-2); margin-bottom:.3rem}
+.label output{font-family:var(--display); font-size:1rem; letter-spacing:0; text-transform:none; color:var(--bark)}
+.presets{display:flex; flex-wrap:wrap; gap:.4rem .35rem; margin-top:.4rem}
+.chip{background:transparent; border:1px solid rgba(59,42,32,.4); color:var(--bark); border-radius:999px; padding:.28rem .7rem; font-size:.8rem; cursor:pointer; transition:background .2s,color .2s,transform .15s}
+.chip:hover{background:rgba(92,138,75,.18)}
+.chip:active{transform:scale(.96)}
+.chip[aria-pressed="true"]{background:var(--bark); color:var(--cream); border-color:var(--bark)}
+.txt{width:100%; background:transparent; border:0; border-bottom:1px solid rgba(59,42,32,.35); padding:.3rem 0; font-size:.98rem; letter-spacing:.06em; color:var(--bark); resize:vertical; line-height:1.5}
+.txt:focus{border-bottom-color:var(--autumn)}
+textarea.txt{min-height:3.6em; font-size:.92rem}
+.range{-webkit-appearance:none; appearance:none; width:100%; height:1.6rem; background:transparent; margin:0; cursor:pointer}
+.range::-webkit-slider-runnable-track{height:2px; background:linear-gradient(90deg,var(--leaf-pale),var(--leaf) 33%,var(--autumn) 66%,var(--cream-3)); border-radius:2px}
+.range::-moz-range-track{height:2px; background:linear-gradient(90deg,var(--leaf-pale),var(--leaf) 33%,var(--autumn) 66%,var(--cream-3)); border-radius:2px}
+.range.plain::-webkit-slider-runnable-track{background:rgba(59,42,32,.3)}
+.range.plain::-moz-range-track{background:rgba(59,42,32,.3)}
+.range::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:1.1rem; height:1.1rem; border-radius:50%; background:var(--cream); border:2px solid var(--bark); margin-top:calc(-.55rem + 1px); box-shadow:0 2px 6px rgba(0,0,0,.25); transition:transform .15s}
+.range::-moz-range-thumb{width:1.1rem; height:1.1rem; border-radius:50%; background:var(--cream); border:2px solid var(--bark); box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.range:hover::-webkit-slider-thumb{transform:scale(1.12)}
+.actions{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:1rem}
+.btn{border:1px solid var(--bark); background:var(--bark); color:var(--cream); border-radius:999px; padding:.55rem 1.1rem; font-size:.9rem; cursor:pointer; transition:transform .15s, background .2s; letter-spacing:.01em}
+.btn:hover{background:var(--leaf); border-color:var(--leaf)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent; color:var(--bark)}
+.btn.ghost:hover{background:rgba(59,42,32,.08); border-color:var(--bark)}
+.compile{font-size:.78rem; color:var(--bark-3); font-style:italic; margin-top:.6rem; min-height:1.2em}
+.compile.warn{color:var(--autumn)}
+
+/* ---------- NOTES ---------- */
+#notes{background:var(--ground); color:var(--cream); position:relative; padding:clamp(4rem,9vw,8.5rem) 0 clamp(3rem,7vw,6rem)}
+#notes::before{content:""; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(90deg,transparent,rgba(244,239,227,.35),transparent)}
+.measure{width:min(100% - 2.5rem, 42rem); margin-left:clamp(1.25rem,12vw,16rem)}
+.section-kicker{font-size:.72rem; letter-spacing:.2em; text-transform:uppercase; color:var(--autumn-light); margin-bottom:1rem}
+.section-kicker::before{content:"§ "; color:var(--leaf-light)}
+#notes h2{font-size:clamp(2.4rem,5vw,4.5rem); line-height:1; color:var(--cream); margin-bottom:1.5rem; max-width:22ch}
+#notes h3{font-size:clamp(1.5rem,2.4vw,2rem); line-height:1.15; margin:2.75rem 0 .75rem; color:var(--autumn-pale)}
+#notes p{font-size:clamp(1.02rem,1.15vw,1.14rem); color:rgba(244,239,227,.88)}
+#notes p.big{font-size:clamp(1.2rem,1.6vw,1.5rem); line-height:1.45; color:var(--cream); font-style:italic}
+#notes strong{font-weight:600; color:var(--cream)}
+.ladder{list-style:none; padding:0; margin:1.5rem 0 2rem; border-left:1px solid rgba(210,105,30,.5)}
+.ladder li{display:flex; align-items:baseline; gap:1.25rem; padding:.35rem 0 .35rem 1.25rem; font-size:1rem}
+.ladder .n{font-family:var(--display); color:var(--autumn-light); width:2.4rem; flex:none; font-size:1.1rem}
+.ladder .s{letter-spacing:.22em; color:var(--cream); word-break:break-all}
+.ladder .len{margin-left:auto; color:var(--leaf-light); font-style:italic; font-size:.85rem; flex:none}
+.rule{display:inline-block; padding:.05em .5em; border:1px solid rgba(244,239,227,.3); border-radius:4px; letter-spacing:.12em; font-style:normal; white-space:nowrap}
+figure{margin:2.5rem 0}
+figure svg{width:100%; height:auto; display:block; overflow:visible}
+figcaption{font-size:.85rem; font-style:italic; color:rgba(244,239,227,.7); margin-top:.6rem}
+.aside{float:right; width:min(18rem,42%); margin:.4rem -12rem 1.5rem 2rem; padding:1.25rem 1.25rem 1rem; border-top:1px solid var(--autumn); font-size:.9rem; color:rgba(244,239,227,.8); line-height:1.5}
+.aside b{display:block; font-family:var(--display); font-weight:400; font-size:1.2rem; color:var(--cream); margin-bottom:.4rem}
+.aside p{font-size:.9rem!important; margin-bottom:.6em}
+
+/* ---------- HERBARIUM ---------- */
+#herbarium{background:var(--cream); color:var(--bark); padding:clamp(3.5rem,8vw,7rem) 0 clamp(3.5rem,8vw,6rem); position:relative}
+#herbarium .head{width:min(100% - 2.5rem, 62rem); margin:0 auto 2rem; display:flex; flex-wrap:wrap; gap:1rem 3rem; align-items:flex-end; justify-content:space-between}
+#herbarium h2{font-size:clamp(2.4rem,5vw,4.5rem); line-height:1}
+#herbarium .head p{max-width:30rem; color:var(--bark-2); font-size:1rem; margin:0}
+.strip{overflow-x:auto; overflow-y:hidden; padding:2.5rem clamp(1.25rem,6vw,8rem) 3rem; display:flex; gap:clamp(1.25rem,3vw,2.75rem); scroll-snap-type:x proximity; scrollbar-width:thin; scrollbar-color:rgba(59,42,32,.4) transparent; -webkit-overflow-scrolling:touch}
+.strip::after{content:""; flex:none; width:1px}
+.specimen{flex:none; width:15.5rem; scroll-snap-align:center; background:linear-gradient(180deg,#F8F4EA,var(--cream-2)); border:1px solid rgba(59,42,32,.25); border-radius:4px; padding:1.1rem 1.1rem 1rem; box-shadow:0 18px 40px -22px rgba(59,42,32,.6); position:relative; transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.specimen:nth-child(odd){transform:rotate(-1.4deg) translateY(1.2rem)}
+.specimen:nth-child(even){transform:rotate(1.1deg) translateY(-.6rem)}
+.specimen:nth-child(3n){transform:rotate(.4deg) translateY(2rem)}
+.specimen:hover{transform:rotate(0) translateY(-.4rem)}
+.specimen::before{content:""; position:absolute; left:50%; top:-.6rem; width:2.6rem; height:1.1rem; transform:translateX(-50%) rotate(-3deg); background:rgba(210,105,30,.45); border:1px solid rgba(210,105,30,.5)}
+.specimen svg{width:100%; height:auto; display:block; margin-bottom:.6rem}
+.specimen h3{font-size:1.45rem; line-height:1.1}
+.specimen .latin{font-style:italic; color:var(--bark-3); font-size:.82rem; margin:0 0 .5rem}
+.specimen .grammar{font-size:.78rem; letter-spacing:.06em; color:var(--bark-2); margin:0 0 .35rem; word-break:break-all; line-height:1.5}
+.specimen .grammar span{display:block}
+.specimen .desc{font-size:.86rem; color:var(--bark-2); margin:0 0 .8rem; line-height:1.5}
+.specimen .btn{padding:.4rem .9rem; font-size:.82rem}
+
+/* ---------- COLOPHON ---------- */
+.colophon{background:var(--ground-2); color:rgba(244,239,227,.7); padding:2.25rem clamp(1.25rem,6vw,8rem); font-size:.82rem; display:flex; flex-wrap:wrap; gap:.5rem 2.5rem; justify-content:space-between; letter-spacing:.04em}
+.colophon b{font-family:var(--display); font-weight:400; color:var(--cream); font-size:1rem}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:820px){
+  .hero-text{max-width:calc(100% - 2.5rem)}
+  .title{font-size:clamp(3.4rem,17vw,5.5rem)}
+  .lede{font-size:1rem; max-width:24rem}
+  .hint{display:none}
+  .stats{bottom:5.25rem; font-size:.72rem; max-width:60%}
+  .panel{right:0; left:0; top:auto; bottom:0; transform:none; width:auto; max-height:70svh; border-radius:16px 16px 0 0; border-bottom:0}
+  .panel::before{display:none}
+  .panel-head{padding:.85rem 1.1rem .7rem 1.25rem; align-items:center; position:sticky; top:0; background:var(--cream); z-index:1}
+  .panel-toggle{display:inline-flex; align-items:center; gap:.5rem; background:var(--bark); color:var(--cream); border:0; border-radius:999px; padding:.45rem .9rem; font-size:.82rem; cursor:pointer}
+  .panel-toggle::after{content:"▴"; font-size:.7rem; transition:transform .25s}
+  .panel[data-open="true"] .panel-toggle::after{transform:rotate(180deg)}
+  .panel-head small{display:none}
+  .panel-body{padding:.3rem 1.25rem 1.25rem}
+  .panel[data-open="false"] .panel-body{display:none}
+  .measure{margin-left:1.25rem}
+  .aside{float:none; width:auto; margin:1.5rem 0}
+  .ladder .len{display:none}
+}
+@media (max-width:1180px) and (min-width:821px){
+  .aside{margin-right:-4rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .chip,.btn,.specimen,.range::-webkit-slider-thumb,.panel-toggle::after{transition:none}
+}
+</style>
+</head>
+<body>
+
+<main>
+<section id="hero" aria-labelledby="site-title">
+  <canvas id="garden" role="img" aria-label="A generative garden: Lindenmayer-system trees growing from a dark green ground under a cream sky, swaying in the wind. Click the ground to plant a tree."></canvas>
+
+  <header class="hero-text">
+    <p class="eyebrow">Page 75 · a garden of Lindenmayer systems</p>
+    <h1 id="site-title" class="title">Arb<span class="a">o</span>ret<span class="u">u</span>m</h1>
+    <p class="lede">Every tree here is a <em>sentence</em> — a few letters rewritten by a handful of rules, then read aloud by a turtle. Change the rules and a different species grows.</p>
+    <p class="hint">Click the ground to plant · scroll for notes</p>
+  </header>
+
+  <p class="stats" id="stats" aria-live="polite">Planting…</p>
+
+  <aside class="panel" id="panel" data-open="false" aria-label="Rule book: L-system editor and garden controls">
+    <div class="panel-head">
+      <h2>Rule book</h2>
+      <small>bracketed L-system</small>
+      <button class="panel-toggle" id="panelToggle" aria-expanded="false" aria-controls="panelBody">Rules &amp; seasons</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+      <div class="field">
+        <div class="label"><span>Species</span></div>
+        <div class="presets" id="presets" role="group" aria-label="Preset species"></div>
+      </div>
+      <div class="field">
+        <label class="label" for="axiom"><span>Axiom</span></label>
+        <input class="txt" id="axiom" type="text" spellcheck="false" autocomplete="off" aria-describedby="compile">
+      </div>
+      <div class="field">
+        <label class="label" for="rules"><span>Production rules</span><output>one per line</output></label>
+        <textarea class="txt" id="rules" rows="2" spellcheck="false" aria-describedby="compile"></textarea>
+      </div>
+      <div class="field">
+        <label class="label" for="angle"><span>Turn angle δ</span><output id="angleOut">22.5°</output></label>
+        <input class="range plain" id="angle" type="range" min="5" max="90" step="0.5" value="22.5">
+      </div>
+      <div class="field">
+        <label class="label" for="iter"><span>Iterations n</span><output id="iterOut">4</output></label>
+        <input class="range plain" id="iter" type="range" min="1" max="7" step="1" value="4">
+      </div>
+      <p class="compile" id="compile"></p>
+      <div class="actions">
+        <button class="btn" id="plantBtn" type="button">Plant a tree</button>
+        <button class="btn ghost" id="regrowBtn" type="button">Regrow all</button>
+        <button class="btn ghost" id="clearBtn" type="button">Clear</button>
+      </div>
+      <div class="field" style="margin-top:1.2rem">
+        <label class="label" for="season"><span>Season</span><output id="seasonOut">High summer</output></label>
+        <input class="range" id="season" type="range" min="0" max="1000" step="1" value="380" aria-valuetext="High summer">
+      </div>
+      <div class="field">
+        <label class="label" for="wind"><span>Wind</span><output id="windOut">light breeze</output></label>
+        <input class="range plain" id="wind" type="range" min="0" max="100" step="1" value="35" aria-valuetext="light breeze">
+      </div>
+    </div>
+  </aside>
+</section>
+
+<section id="notes" aria-labelledby="notes-title">
+  <div class="measure">
+    <p class="section-kicker">Notes</p>
+    <h2 id="notes-title">On Lindenmayer systems, and why a grammar can look like a tree</h2>
+    <p class="big">In 1968 the Hungarian-born biologist Aristid Lindenmayer, working in Utrecht, wanted a way to describe how filamentous algae develop — cell by cell, all at once.</p>
+    <p>He borrowed the idea of a formal grammar and made one decisive change. Where a Chomsky grammar rewrites one symbol at a time, an <strong>L-system rewrites every symbol in the string simultaneously</strong>, in parallel. Biology forced the choice: in a growing organism every cell divides on its own schedule, and nobody waits their turn.</p>
+
+    <h3>The smallest garden: algae</h3>
+    <p>An L-system is three things — an alphabet, a starting string called the <em>axiom</em>, and a set of <em>production rules</em> that say what each letter becomes. Lindenmayer's first model of the alga <em>Anabaena catenula</em> used two cell types and two rules: <span class="rule">A → AB</span> and <span class="rule">B → A</span>. Start from a single A and apply the rules to every letter at once:</p>
+    <ol class="ladder" aria-label="Derivation of the algae L-system">
+      <li><span class="n">n=0</span><span class="s">A</span><span class="len">1 cell</span></li>
+      <li><span class="n">n=1</span><span class="s">AB</span><span class="len">2</span></li>
+      <li><span class="n">n=2</span><span class="s">ABA</span><span class="len">3</span></li>
+      <li><span class="n">n=3</span><span class="s">ABAAB</span><span class="len">5</span></li>
+      <li><span class="n">n=4</span><span class="s">ABAABABA</span><span class="len">8</span></li>
+      <li><span class="n">n=5</span><span class="s">ABAABABAABAAB</span><span class="len">13</span></li>
+    </ol>
+    <p>The lengths run 1, 2, 3, 5, 8, 13 — Fibonacci numbers. That is no coincidence: <span class="rule">A → AB</span> is the Fibonacci recurrence itself, written as a growth process rather than an equation. A mature cell (A) makes a young one (B) and stays; the young one matures. Rabbits, sunflowers, algae: the same rule.</p>
+
+    <h3>Reading the string with a turtle</h3>
+    <div class="aside">
+      <b>The turtle alphabet</b>
+      <p><span class="rule">F</span> step forward, drawing a line.<br><span class="rule">f</span> step forward without drawing.</p>
+      <p><span class="rule">+</span> and <span class="rule">−</span> turn by the angle δ.</p>
+      <p><span class="rule">[</span> remember where the turtle is and which way it faces; <span class="rule">]</span> go back there. Any other letter is silent — a placeholder that shapes the grammar without leaving a mark.</p>
+    </div>
+    <p>A string is only a drawing once something interprets it. Przemysław Prusinkiewicz and Lindenmayer, in <em>The Algorithmic Beauty of Plants</em> (1990), used a <strong>turtle</strong>: a pen that walks forward on <span class="rule">F</span> and rotates on <span class="rule">+</span> and <span class="rule">−</span>. Without brackets this produces curves — the Koch snowflake, the dragon, the Hilbert curve. The brackets are what turn a curve into a tree. Each <span class="rule">[</span> opens a branch that will return to its parent when the matching <span class="rule">]</span> closes it, so the whole plant can be spoken in one breath, left to right, with no separate notion of a tree at all.</p>
+    <figure aria-labelledby="fig1cap">
+      <svg id="figDerive" viewBox="0 0 960 320" role="img" aria-label="Four generations of the L-system F to F[+F]F[-F]F, drawn with a turtle, growing larger and bushier from left to right"></svg>
+      <figcaption id="fig1cap">The rule <span class="rule">F → F[+F]F[−F]F</span> with δ = 25.7°, read by a turtle after n = 0, 1, 2 and 3 rewrites. The same rule at every scale is what gives the plant its self-similar silhouette.</figcaption>
+    </figure>
+
+    <h3>Why they look alive</h3>
+    <p>Two things make these drawings read as botany rather than geometry. The first is <strong>self-similarity</strong>: a branch is a smaller copy of the whole, because the rule that made the trunk also made every twig. Real plants are only roughly self-similar, but our eye forgives the roughness and recognises the pattern. The second is <strong>apical growth</strong>: plants extend at their tips, everywhere at once, and an L-system's parallel rewriting reproduces exactly that. Change δ by a few degrees and the species changes — 22.5° gives an oak, 20° a fern, 25.7° a hedgerow shrub — which is also how it works in the field, where a single growth-regulating gene can turn a spreading crown into a spire.</p>
+
+    <h3>What this garden actually does</h3>
+    <p>Each tree in the canvas above is expanded from its axiom up to a budget of about twenty thousand symbols, then compiled into a flat instruction list. Alongside every <span class="rule">F</span> the compiler records its <strong>bracket depth</strong> and its <strong>distance from the root</strong> along the path. Depth drives the taper — deeper branches are drawn thinner — and how far each segment bends in the wind, since thin wood swings more than thick. Distance from the root drives the growth animation: on each frame only segments below a rising threshold are drawn, so every tip extends together, the way a real crown fills out, instead of the string being traced from left to right.</p>
+    <p>Wind is a small, slowly oscillating angle added at every step and scaled by depth, so it accumulates along a branch into a lean that recovers when the gust passes. The season slider interpolates leaf colour from the pale greens of spring through summer into rust and ochre, then thins the canopy by a deterministic hash — the same leaves fall first every year — and drops them as particles that drift downwind before winter leaves only the bare grammar behind.</p>
+  </div>
+</section>
+
+<section id="herbarium" aria-labelledby="herb-title">
+  <div class="head">
+    <div>
+      <p class="section-kicker" style="color:var(--autumn)">Herbarium</p>
+      <h2 id="herb-title">Pressed specimens</h2>
+    </div>
+    <p>Six grammars from the classic literature, each pressed flat at its full iteration count. Choose one to load its rules into the book and plant it in the garden.</p>
+  </div>
+  <div class="strip" id="strip" aria-label="Preset species specimens, scrolls horizontally"></div>
+</section>
+</main>
+
+<footer class="colophon">
+  <span><b>Arboretum</b> · showcase page 75 of 100</span>
+  <span>Gilda Display &amp; Lora · canvas 2D · no libraries</span>
+  <span>Bark #3B2A20 · leaf #5C8A4B · autumn #D2691E · cream #F4EFE3</span>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- presets ---------- */
+const PRESETS = [
+  {id:'oak', name:'Oak', latin:'Quercus grammatica', axiom:'F', rules:'F=FF+[+F-F-F]-[-F+F+F]', angle:22.5, iter:4, len:1.0,
+   desc:'A dense, rounded crown. Every segment doubles and throws two three-jointed branches, one to each side.'},
+  {id:'birch', name:'Birch', latin:'Betula recursiva', axiom:'X', rules:'X=F[+X][-X]FX\nF=FF', angle:25.7, iter:6, len:1.15,
+   desc:'Tall and open. The silent letter X carries the branching pattern while F only lengthens.'},
+  {id:'bracken', name:'Bracken', latin:'Pteridium iterans', axiom:'X', rules:'X=F[+X]F[-X]+X\nF=FF', angle:20, iter:6, len:.95,
+   desc:'A fern frond leaning to one side. The trailing +X curls each tip the same way, like a sprouting fiddlehead.'},
+  {id:'hawthorn', name:'Hawthorn', latin:'Crataegus bracteata', axiom:'F', rules:'F=F[+F]F[-F]F', angle:25.7, iter:4, len:.85,
+   desc:'A tidy hedgerow shrub and the textbook first tree: two side shoots per segment, strictly alternating.'},
+  {id:'aspen', name:'Aspen', latin:'Populus asymmetrica', axiom:'X', rules:'X=F-[[X]+X]+F[+FX]-X\nF=FF', angle:22.5, iter:5, len:1.05,
+   desc:'The famous lopsided sapling from The Algorithmic Beauty of Plants — nested brackets give it a windswept lean before any wind.'},
+  {id:'rose', name:'Wild rose', latin:'Rosa ternata', axiom:'F', rules:'F=F[+F]F[-F][F]', angle:20, iter:4, len:.8,
+   desc:'A third, straight shoot at every node makes a bushy, upright tangle that flowers pale in spring.'}
+];
+
+/* ---------- L-system core ---------- */
+const SYMBOL_CAP = 22000;
+function parseRules(txt){
+  const rules = {};
+  String(txt).split(/\n|;/).forEach(line => {
+    const m = line.trim().match(/^(\S)\s*(?:=|->|→|:)\s*(.*)$/);
+    if (m) rules[m[1]] = m[2].replace(/\s+/g, '');
+  });
+  return rules;
+}
+function expand(axiom, rules, iters){
+  let s = String(axiom).replace(/\s+/g, '') || 'F', used = 0, pruned = false;
+  for (let i = 0; i < iters; i++){
+    let out = '';
+    for (const ch of s) out += (rules[ch] !== undefined ? rules[ch] : ch);
+    if (out.length > SYMBOL_CAP){ pruned = true; break; }
+    s = out; used++;
+    if (!out.length) break;
+  }
+  return {s, iters: used, pruned};
+}
+function compile(str){
+  const n = str.length;
+  const op = new Uint8Array(n), depth = new Uint8Array(n), dist = new Float32Array(n), term = new Uint8Array(n);
+  let d = 0, cur = 0, m = 0, count = 0, maxDist = 0, maxDepth = 0;
+  const stack = [];
+  for (let i = 0; i < n; i++){
+    const c = str[i]; let o;
+    switch (c){ case 'F': o = 0; break; case 'f': o = 1; break; case '+': o = 2; break; case '-': o = 3; break; case '[': o = 4; break; case ']': o = 5; break; default: continue; }
+    if (o === 5){ if (!stack.length) continue; cur = stack.pop(); d--; }
+    op[m] = o; depth[m] = d;
+    if (o < 2){ dist[m] = cur; cur += 1; if (cur > maxDist) maxDist = cur; if (o === 0) count++; }
+    else if (o === 4){ stack.push(cur); d++; if (d > maxDepth) maxDepth = d; if (d > 250) d = 250; }
+    m++;
+  }
+  for (let i = 0; i < m; i++){
+    if (op[i] !== 0) continue;
+    let j = i + 1; while (j < m && (op[j] === 2 || op[j] === 3)) j++;
+    if (j >= m || op[j] === 5) term[i] = 1;
+  }
+  return {op: op.subarray(0, m), depth: depth.subarray(0, m), dist: dist.subarray(0, m), term: term.subarray(0, m), n: m, count, maxDist, maxDepth};
+}
+/* walk without wind at unit length; returns bounds and optional segment/leaf lists */
+function walk(prog, ang, collect){
+  const {op, term} = prog;
+  let x = 0, y = 0, a = -Math.PI / 2, minX = 0, maxX = 0, minY = 0, maxY = 0;
+  const sx = [], sy = [], sa = [];
+  const segs = collect ? [] : null, leaves = collect ? [] : null;
+  for (let i = 0; i < prog.n; i++){
+    const o = op[i];
+    if (o < 2){
+      const nx = x + Math.cos(a), ny = y + Math.sin(a);
+      if (o === 0 && collect){ segs.push(x, y, nx, ny, prog.depth[i]); if (term[i]) leaves.push(nx, ny, a, i); }
+      x = nx; y = ny;
+      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+    } else if (o === 2) a += ang; else if (o === 3) a -= ang;
+    else if (o === 4){ sx.push(x); sy.push(y); sa.push(a); }
+    else { x = sx.pop(); y = sy.pop(); a = sa.pop(); }
+  }
+  return {minX, maxX, minY, maxY, segs, leaves};
+}
+function build(spec){
+  const ex = expand(spec.axiom, parseRules(spec.rules), spec.iter);
+  const prog = compile(ex.s);
+  const ang = spec.angle * Math.PI / 180;
+  const bb = walk(prog, ang, false);
+  return {prog, ang, bb, hUnit: Math.max(0.5, -bb.minY), ex};
+}
+
+/* ---------- season ---------- */
+const SPRING = [[185,207,158],[157,190,132],[236,201,168]];
+const SUMMER = [[92,138,75],[76,120,62],[118,164,98]];
+const AUTUMN = [[210,105,30],[182,88,24],[230,150,82]];
+const mix = (A, B, t) => A.map((c, i) => c.map((v, k) => Math.round(v + (B[i][k] - v) * t)));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+function seasonInfo(s){
+  let cols;
+  if (s < 1/3) cols = mix(SPRING, SUMMER, s * 3);
+  else if (s < 2/3) cols = mix(SUMMER, AUTUMN, (s - 1/3) * 3);
+  else cols = AUTUMN;
+  const alpha = s < .8 ? 1 : Math.max(0, 1 - (s - .8) / .15);
+  const fallFrac = s < .66 ? 0 : Math.min(1, (s - .66) / .29);
+  const fallRate = (s > .6 && s < .96) ? Math.sin((s - .6) / .36 * Math.PI) : 0;
+  const snow = s > .88 ? Math.min(1, (s - .88) / .12) : 0;
+  const warm = (s > .5 && s < .92) ? Math.sin((s - .5) / .42 * Math.PI) : 0;
+  const leafScale = .55 + .45 * Math.min(1, s * 4);
+  const label = s < .09 ? 'Early spring' : s < .24 ? 'Spring' : s < .4 ? 'Early summer' : s < .58 ? 'High summer' : s < .7 ? 'Early autumn' : s < .84 ? 'Autumn' : s < .94 ? 'Late autumn' : 'Winter';
+  return {cols: cols.map(rgb), alpha, fallFrac, fallRate, snow, warm, leafScale, label};
+}
+function windLabel(w){ return w === 0 ? 'still air' : w < .2 ? 'a breath' : w < .45 ? 'light breeze' : w < .7 ? 'fresh breeze' : w < .9 ? 'strong wind' : 'gale'; }
+
+/* ---------- garden state ---------- */
+const canvas = $('#garden'), ctx = canvas.getContext('2d');
+const hero = $('#hero');
+const S = { W: 0, H: 0, dpr: 1, horizon: 0, time: 0, season: .38, wind: .35, trees: [], particles: [], samples: [], bg: null, dirty: true };
+const buckets = []; for (let i = 0; i < 260; i++) buckets.push([]);
+const leafBk = [[], [], []];
+
+function resize(){
+  const r = hero.getBoundingClientRect();
+  S.W = Math.max(1, Math.round(r.width)); S.H = Math.max(1, Math.round(r.height));
+  S.dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(S.W * S.dpr); canvas.height = Math.round(S.H * S.dpr);
+  ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+  S.horizon = Math.round(S.H * (S.W < 821 ? .56 : .6));
+  drawBackground();
+  S.trees.forEach(layoutTree);
+  S.dirty = true;
+}
+function drawBackground(){
+  const bg = document.createElement('canvas');
+  bg.width = canvas.width; bg.height = canvas.height;
+  const g = bg.getContext('2d'); g.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+  const W = S.W, H = S.H, hz = S.horizon;
+  const sky = g.createLinearGradient(0, 0, 0, hz);
+  sky.addColorStop(0, '#F4EFE3'); sky.addColorStop(.7, '#F1E9D8'); sky.addColorStop(1, '#EADFC6');
+  g.fillStyle = sky; g.fillRect(0, 0, W, hz + 2);
+  const sun = g.createRadialGradient(W * .7, hz * .28, 0, W * .7, hz * .28, Math.max(W, H) * .32);
+  sun.addColorStop(0, 'rgba(210,105,30,.16)'); sun.addColorStop(.5, 'rgba(228,150,82,.06)'); sun.addColorStop(1, 'rgba(228,150,82,0)');
+  g.fillStyle = sun; g.fillRect(0, 0, W, hz + 2);
+  // distant treeline
+  const rnd = seeded(7);
+  for (let layer = 0; layer < 2; layer++){
+    g.beginPath(); g.moveTo(0, hz + 2);
+    const base = hz - (layer ? 10 : 22) * (H / 900), amp = (layer ? 8 : 16) * (H / 900);
+    for (let x = 0; x <= W; x += 6){
+      const y = base - amp * (0.5 + 0.5 * Math.sin(x * 0.011 + layer * 3) * Math.sin(x * 0.037 + layer)) - amp * 0.6 * Math.abs(Math.sin(x * 0.09 + layer * 7)) * rnd();
+      g.lineTo(x, y);
+    }
+    g.lineTo(W, hz + 2); g.closePath();
+    g.fillStyle = layer ? 'rgba(42,69,46,.9)' : 'rgba(58,92,62,.55)'; g.fill();
+  }
+  // ground
+  const gr = g.createLinearGradient(0, hz, 0, H);
+  gr.addColorStop(0, '#294630'); gr.addColorStop(.18, '#1F361F'); gr.addColorStop(.6, '#172A1A'); gr.addColorStop(1, '#111F13');
+  g.fillStyle = gr; g.fillRect(0, hz, W, H - hz);
+  // grass tufts
+  g.lineCap = 'round';
+  const tufts = Math.round(W * (H - hz) / 1600);
+  for (let i = 0; i < tufts; i++){
+    const x = rnd() * W, y = hz + Math.pow(rnd(), .7) * (H - hz), p = (y - hz) / (H - hz);
+    const len = 2 + p * 9 * rnd(), lean = (rnd() - .5) * .8;
+    g.strokeStyle = rnd() < .5 ? `rgba(92,138,75,${.12 + p * .25})` : `rgba(60,100,58,${.2 + p * .3})`;
+    g.lineWidth = .6 + p * 1.1;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + lean * len, y - len); g.stroke();
+  }
+  S.bg = bg;
+}
+function seeded(seed){ let t = seed >>> 0; return () => { t = (t + 0x6D2B79F5) | 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
+
+function layoutTree(t){
+  const gh = S.H - S.horizon;
+  t.x = t.fx * S.W; t.y = S.horizon + 6 + t.fy * (gh - 30);
+  const sizeF = .55 + .6 * t.fy;
+  const targetH = S.H * (S.W < 821 ? .42 : .43) * sizeF * t.len;
+  t.segPx = targetH / t.hUnit;
+  t.baseW = Math.max(1.1, targetH * .016);
+}
+function plant(spec, fx, fy, delay){
+  const b = build(spec);
+  if (!b.prog.count) return null;
+  const t = { name: spec.name, prog: b.prog, ang: b.ang, hUnit: b.hUnit, len: spec.len || 1, fx, fy, growth: 0, delay: delay || 0,
+    phase: Math.random() * 6.28, seed: (Math.random() * 1e9) >>> 0, sx: new Float64Array(b.prog.maxDepth + 3), sy: new Float64Array(b.prog.maxDepth + 3), sa: new Float64Array(b.prog.maxDepth + 3) };
+  layoutTree(t);
+  S.trees.push(t);
+  while (S.trees.length > 9) S.trees.shift();
+  S.trees.sort((p, q) => p.fy - q.fy);
+  S.dirty = true; updateStats();
+  return t;
+}
+const ease = g => 1 - Math.pow(1 - g, 3);
+
+function drawTree(t, sea, gust){
+  const P = t.prog, op = P.op, depth = P.depth, dist = P.dist, term = P.term;
+  const limit = ease(t.growth) * P.maxDist;
+  const L = t.segPx, ang = t.ang, tm = S.time, wind = S.wind;
+  const swayK = wind * L * .0011, osc = reduce ? 0 : .6, lean = .45 * gust;
+  const leafOn = sea.alpha > 0, fallFrac = sea.fallFrac, seed = t.seed;
+  let x = t.x, y = t.y, a = -Math.PI / 2, sp = 0;
+  const sx = t.sx, sy = t.sy, sa = t.sa;
+  const samples = S.samples;
+  for (let i = 0; i < P.n; i++){
+    const o = op[i];
+    if (o < 2){
+      const d = dist[i];
+      if (d >= limit) continue;
+      const frac = Math.min(1, limit - d), dp = depth[i];
+      if (swayK > 0) a += swayK * (osc * Math.sin(tm * 1.35 + t.phase + d * .21 - dp * .5) + lean) * (.3 + dp * .55);
+      const nx = x + Math.cos(a) * L * frac, ny = y + Math.sin(a) * L * frac;
+      if (o === 0){
+        buckets[dp].push(x, y, nx, ny);
+        if (term[i] && frac >= 1 && leafOn){
+          const h = (Math.imul(i + 1, 2654435761) ^ seed) >>> 0;
+          if (fallFrac === 0 || (h % 1000) / 1000 >= fallFrac){
+            leafBk[h % 3].push(nx, ny, a + ((h >>> 8) % 100 - 50) * .006);
+            if ((h & 31) === 5){ if (samples.length < 96) samples.push(nx, ny); else { const k = (h >>> 5) % 48 * 2; samples[k] = nx; samples[k + 1] = ny; } }
+          }
+        }
+      }
+      x = nx; y = ny;
+    } else if (o === 2) a += ang;
+    else if (o === 3) a -= ang;
+    else if (o === 4){ sx[sp] = x; sy[sp] = y; sa[sp] = a; sp++; }
+    else { sp--; x = sx[sp]; y = sy[sp]; a = sa[sp]; }
+  }
+  ctx.lineCap = 'round';
+  for (let dp = 0; dp <= P.maxDepth && dp < 260; dp++){
+    const b = buckets[dp]; if (!b.length) continue;
+    ctx.lineWidth = Math.max(.7, t.baseW * Math.pow(.66, dp));
+    const k = Math.min(1, dp / 6);
+    ctx.strokeStyle = `rgb(${Math.round(59 + 31 * k)},${Math.round(42 + 27 * k)},${Math.round(32 + 22 * k)})`;
+    ctx.beginPath();
+    for (let j = 0; j < b.length; j += 4){ ctx.moveTo(b[j], b[j + 1]); ctx.lineTo(b[j + 2], b[j + 3]); }
+    ctx.stroke(); b.length = 0;
+  }
+  if (leafOn){
+    const rx = Math.min(7, Math.max(2.2, L * .8)) * sea.leafScale, ry = rx * .55;
+    ctx.globalAlpha = sea.alpha;
+    for (let v = 0; v < 3; v++){
+      const b = leafBk[v]; if (!b.length) continue;
+      ctx.fillStyle = sea.cols[v]; ctx.beginPath();
+      for (let j = 0; j < b.length; j += 3){
+        const lx = b[j], ly = b[j + 1], r = b[j + 2];
+        ctx.moveTo(lx + rx * Math.cos(r), ly + rx * Math.sin(r));
+        ctx.ellipse(lx, ly, rx, ry, r, 0, 6.2832);
+      }
+      ctx.fill(); b.length = 0;
+    }
+    ctx.globalAlpha = 1;
+  } else { leafBk[0].length = leafBk[1].length = leafBk[2].length = 0; }
+}
+
+/* particles: falling leaves */
+function updateParticles(dt, sea){
+  const ps = S.particles;
+  if (sea.fallRate > 0 && S.samples.length && !reduce){
+    const rate = sea.fallRate * (2.5 + S.wind * 10) * dt;
+    if (Math.random() < rate && ps.length < 90){
+      const k = ((Math.random() * S.samples.length / 2) | 0) * 2;
+      ps.push({ x: S.samples[k], y: S.samples[k + 1], ph: Math.random() * 6.28, sp: 20 + Math.random() * 30, rot: Math.random() * 6.28, vr: (Math.random() - .5) * 6, c: sea.cols[(Math.random() * 3) | 0], end: S.horizon + 20 + Math.random() * (S.H - S.horizon - 30), r: 2.2 + Math.random() * 2.5 });
+    }
+  }
+  for (let i = ps.length - 1; i >= 0; i--){
+    const p = ps[i];
+    p.x += (S.wind * 75 + Math.sin(S.time * 2.6 + p.ph) * 22) * dt;
+    p.y += (p.sp + Math.sin(S.time * 3.1 + p.ph) * 8) * dt;
+    p.rot += p.vr * dt;
+    if (p.y > p.end || p.x > S.W + 20) ps.splice(i, 1);
+  }
+}
+function drawParticles(){
+  ctx.globalAlpha = .9;
+  for (const p of S.particles){
+    ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r, p.r * .5, p.rot, 0, 6.2832); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function render(){
+  const sea = seasonInfo(S.season);
+  ctx.drawImage(S.bg, 0, 0, S.W, S.H);
+  if (sea.warm > 0){ ctx.fillStyle = `rgba(210,105,30,${(.13 * sea.warm).toFixed(3)})`; ctx.fillRect(0, 0, S.W, S.horizon); }
+  if (sea.snow > 0){
+    const gr = ctx.createLinearGradient(0, S.horizon, 0, S.H);
+    gr.addColorStop(0, `rgba(244,239,227,${(.55 * sea.snow).toFixed(3)})`); gr.addColorStop(.35, `rgba(244,239,227,${(.18 * sea.snow).toFixed(3)})`); gr.addColorStop(1, 'rgba(244,239,227,0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, S.horizon, S.W, S.H - S.horizon);
+    ctx.fillStyle = `rgba(200,205,210,${(.1 * sea.snow).toFixed(3)})`; ctx.fillRect(0, 0, S.W, S.horizon);
+  }
+  const gust = .5 + .5 * Math.sin(S.time * .43) * Math.sin(S.time * .17 + 1.3);
+  for (const t of S.trees) drawTree(t, sea, gust);
+  drawParticles();
+}
+
+let raf = 0, last = 0;
+function frame(now){
+  raf = requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000) || 0; last = now; S.time += dt;
+  const sea = seasonInfo(S.season);
+  let moving = S.wind > 0 || S.particles.length > 0;
+  for (const t of S.trees){
+    if (t.growth < 1){
+      if (t.delay > 0) t.delay -= dt;
+      else t.growth = Math.min(1, t.growth + dt / (reduce ? .001 : 3.4 + t.len));
+      moving = true;
+    }
+  }
+  updateParticles(dt, sea);
+  if (moving || S.dirty){ render(); S.dirty = false; }
+}
+function start(){ if (!raf){ last = performance.now(); raf = requestAnimationFrame(frame); } }
+document.addEventListener('visibilitychange', () => { if (document.hidden){ cancelAnimationFrame(raf); raf = 0; } else start(); });
+
+/* ---------- editor ---------- */
+const el = { axiom: $('#axiom'), rules: $('#rules'), angle: $('#angle'), iter: $('#iter'), angleOut: $('#angleOut'), iterOut: $('#iterOut'),
+  season: $('#season'), wind: $('#wind'), seasonOut: $('#seasonOut'), windOut: $('#windOut'), compile: $('#compile'), presets: $('#presets'), stats: $('#stats') };
+let activePreset = 'oak';
+function currentSpec(){
+  return { name: el.presets.querySelector('[aria-pressed="true"]')?.textContent || 'Custom', axiom: el.axiom.value || 'F', rules: el.rules.value, angle: parseFloat(el.angle.value) || 22.5, iter: parseInt(el.iter.value, 10) || 1, len: (PRESETS.find(p => p.id === activePreset) || {}).len || 1 };
+}
+function loadPreset(p){
+  activePreset = p.id;
+  el.axiom.value = p.axiom; el.rules.value = p.rules; el.angle.value = p.angle; el.iter.value = p.iter;
+  el.angleOut.textContent = p.angle + '°'; el.iterOut.textContent = p.iter;
+  el.presets.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.id === p.id ? 'true' : 'false'));
+  previewCompile();
+}
+function markCustom(){
+  el.presets.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', 'false'));
+  previewCompile();
+}
+let compileTimer = 0;
+function previewCompile(){
+  clearTimeout(compileTimer);
+  compileTimer = setTimeout(() => {
+    const spec = currentSpec();
+    const ex = expand(spec.axiom, parseRules(spec.rules), spec.iter);
+    const prog = compile(ex.s);
+    const fmt = n => n.toLocaleString('en-US');
+    if (!prog.count){ el.compile.textContent = 'No F in the result — nothing would be drawn.'; el.compile.classList.add('warn'); return; }
+    el.compile.classList.toggle('warn', ex.pruned);
+    el.compile.textContent = (ex.pruned ? `Pruned to n=${ex.iters} to stay under ${fmt(SYMBOL_CAP)} symbols · ` : '') + `${fmt(ex.s.length)} symbols · ${fmt(prog.count)} segments · depth ${prog.maxDepth}`;
+  }, 60);
+}
+function updateStats(){
+  const segs = S.trees.reduce((n, t) => n + t.prog.count, 0);
+  const sea = seasonInfo(S.season);
+  el.stats.innerHTML = `<b>${S.trees.length}</b> tree${S.trees.length === 1 ? '' : 's'} · <b>${segs.toLocaleString('en-US')}</b> segments · <b>${sea.label}</b> · ${windLabel(S.wind)}`;
+}
+PRESETS.forEach(p => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip'; b.dataset.id = p.id; b.textContent = p.name; b.setAttribute('aria-pressed', 'false');
+  b.addEventListener('click', () => loadPreset(p));
+  el.presets.appendChild(b);
+});
+el.axiom.addEventListener('input', markCustom);
+el.rules.addEventListener('input', markCustom);
+el.angle.addEventListener('input', () => { el.angleOut.textContent = el.angle.value + '°'; markCustom(); });
+el.iter.addEventListener('input', () => { el.iterOut.textContent = el.iter.value; markCustom(); });
+function setSeason(v){
+  S.season = v; const sea = seasonInfo(v);
+  el.seasonOut.textContent = sea.label; el.season.setAttribute('aria-valuetext', sea.label);
+  S.dirty = true; updateStats();
+}
+el.season.addEventListener('input', () => setSeason(el.season.value / 1000));
+el.wind.addEventListener('input', () => { S.wind = el.wind.value / 100; el.windOut.textContent = windLabel(S.wind); el.wind.setAttribute('aria-valuetext', windLabel(S.wind)); S.dirty = true; updateStats(); });
+
+function plantRandom(){
+  const pad = S.W < 821 ? .1 : .08;
+  const fx = pad + Math.random() * (S.W < 821 ? .8 : .58), fy = .15 + Math.random() * .8;
+  const t = plant(currentSpec(), fx, fy, 0);
+  if (!t) flashCompile();
+}
+function flashCompile(){ el.compile.textContent = 'Nothing to plant: the rules produce no F.'; el.compile.classList.add('warn'); }
+$('#plantBtn').addEventListener('click', plantRandom);
+$('#regrowBtn').addEventListener('click', () => { S.trees.forEach((t, i) => { t.growth = 0; t.delay = i * .18; }); S.dirty = true; });
+$('#clearBtn').addEventListener('click', () => { S.trees.length = 0; S.particles.length = 0; S.samples.length = 0; S.dirty = true; updateStats(); });
+
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const gh = S.H - S.horizon;
+  const fy = Math.min(1, Math.max(0, (py - S.horizon - 6) / (gh - 30)));
+  const fx = px / S.W;
+  const t = plant(currentSpec(), fx, py < S.horizon ? .05 : fy, 0);
+  if (!t) flashCompile();
+});
+
+/* panel toggle (mobile) */
+const panel = $('#panel'), toggle = $('#panelToggle');
+toggle.addEventListener('click', () => {
+  const open = panel.dataset.open !== 'true';
+  panel.dataset.open = String(open); toggle.setAttribute('aria-expanded', String(open));
+});
+const mq = matchMedia('(min-width: 821px)');
+function syncPanel(){ if (mq.matches){ panel.dataset.open = 'true'; } else if (toggle.getAttribute('aria-expanded') !== 'true'){ panel.dataset.open = 'false'; } }
+mq.addEventListener('change', syncPanel);
+
+/* ---------- static SVG renderings (figure + herbarium) ---------- */
+function svgPath(prog, ang, scale, ox, oy){
+  const w = walk(prog, ang, true);
+  const byDepth = {};
+  const s = w.segs;
+  for (let j = 0; j < s.length; j += 5){
+    const d = Math.min(5, s[j + 4]);
+    (byDepth[d] = byDepth[d] || []).push(`M${(ox + s[j] * scale).toFixed(1)} ${(oy + s[j + 1] * scale).toFixed(1)}L${(ox + s[j + 2] * scale).toFixed(1)} ${(oy + s[j + 3] * scale).toFixed(1)}`);
+  }
+  const leaves = [];
+  for (let j = 0; j < w.leaves.length; j += 4) leaves.push([ox + w.leaves[j] * scale, oy + w.leaves[j + 1] * scale]);
+  return {byDepth, leaves, bb: w};
+}
+function renderFigure(){
+  const svg = $('#figDerive');
+  const xs = [95, 285, 530, 800], hs = [36, 78, 138, 215];
+  let out = `<line x1="20" y1="300" x2="940" y2="300" stroke="rgba(244,239,227,.35)" stroke-width="1"/>`;
+  for (let n = 0; n < 4; n++){
+    const b = build({axiom: 'F', rules: 'F=F[+F]F[-F]F', angle: 25.7, iter: n});
+    const scale = hs[n] / b.hUnit;
+    const p = svgPath(b.prog, b.ang, scale, xs[n], 300);
+    Object.keys(p.byDepth).forEach(d => {
+      out += `<path d="${p.byDepth[d].join('')}" fill="none" stroke="#F4EFE3" stroke-width="${(Math.max(.9, 4.5 * Math.pow(.62, +d)) * (0.5 + n * .18)).toFixed(2)}" stroke-linecap="round" opacity="${(1 - d * .08).toFixed(2)}"/>`;
+    });
+    if (n > 0) for (const l of p.leaves) out += `<circle cx="${l[0].toFixed(1)}" cy="${l[1].toFixed(1)}" r="${(2.6 + n * .4).toFixed(1)}" fill="#5C8A4B"/>`;
+    out += `<text x="${xs[n]}" y="318" text-anchor="middle" font-family="Gilda Display, Georgia, serif" font-size="15" fill="#E4934F">n = ${n}</text>`;
+  }
+  svg.innerHTML = out;
+}
+function renderHerbarium(){
+  const strip = $('#strip');
+  PRESETS.forEach((p, idx) => {
+    const b = build(p);
+    const bb = b.bb, w = bb.maxX - bb.minX || 1, h = -bb.minY || 1;
+    const scale = Math.min(150 / w, 165 / h);
+    const cx = 100 - ((bb.minX + bb.maxX) / 2) * scale;
+    const sp = svgPath(b.prog, b.ang, scale, cx, 200);
+    let inner = '';
+    Object.keys(sp.byDepth).forEach(d => { inner += `<path d="${sp.byDepth[d].join('')}" fill="none" stroke="#3B2A20" stroke-width="${Math.max(.6, 3.2 * Math.pow(.62, +d)).toFixed(2)}" stroke-linecap="round"/>`; });
+    const lc = p.id === 'rose' ? '#F2C9A6' : idx % 2 ? '#D2691E' : '#5C8A4B';
+    for (const l of sp.leaves) inner += `<circle cx="${l[0].toFixed(1)}" cy="${l[1].toFixed(1)}" r="1.9" fill="${lc}" opacity=".85"/>`;
+    const art = document.createElement('article');
+    art.className = 'specimen';
+    art.innerHTML = `<svg viewBox="0 0 200 215" role="img" aria-label="Pressed ${p.name}: the L-system drawn at n=${p.iter}">${inner}</svg>
+      <h3>${p.name}</h3><p class="latin">${p.latin}</p>
+      <p class="grammar"><span>ω: ${p.axiom}</span>${p.rules.split('\n').map(r => `<span>${r.replace('=', ' → ')}</span>`).join('')}<span>δ = ${p.angle}°, n = ${p.iter}</span></p>
+      <p class="desc">${p.desc}</p>
+      <button class="btn" type="button">Plant in garden</button>`;
+    art.querySelector('button').addEventListener('click', () => {
+      loadPreset(p);
+      plant(currentSpec(), .18 + Math.random() * .5, .3 + Math.random() * .6, 0);
+      if (!mq.matches){ panel.dataset.open = 'true'; toggle.setAttribute('aria-expanded', 'true'); }
+      hero.scrollIntoView({behavior: reduce ? 'auto' : 'smooth'});
+    });
+    strip.appendChild(art);
+  });
+}
+
+/* ---------- boot ---------- */
+loadPreset(PRESETS[0]);
+syncPanel();
+resize();
+window.addEventListener('resize', resize);
+const mobile = S.W < 821;
+const first = mobile
+  ? [['oak', .3, .62, .1], ['birch', .76, .26, .5], ['hawthorn', .84, .66, 1.1]]
+  : [['oak', .36, .62, .1], ['birch', .62, .26, .5], ['hawthorn', .13, .9, 1.1], ['bracken', .68, .92, 1.6]];
+first.forEach(([id, fx, fy, delay]) => plant(PRESETS.find(p => p.id === id), fx, fy, delay));
+setSeason(.38); el.windOut.textContent = windLabel(S.wind);
+renderFigure(); renderHerbarium();
+start();
+})();
+</script>
+</body>
+</html>

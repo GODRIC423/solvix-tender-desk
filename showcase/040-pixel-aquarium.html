@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Aquarium — a tank you can feed</title>
+<meta name="description" content="A living pixel-art aquarium: five fish species with their own wander-and-chase behaviour, swaying kelp, bubbles, and a species guide. Click anywhere in the tank to drop food.">
+<meta name="theme-color" content="#0B1E3F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' shape-rendering='crispEdges'%3E%3Crect width='12' height='8' fill='%230B1E3F'/%3E%3Cpath fill='%23FF8C42' d='M4 2h5v1h1v2H9v1H4V5H3V4h1V3zM1 2h1v1h1v2H2v1H1z'/%3E%3Cpath fill='%23FFF' d='M5 2h1v4H5zM8 2h1v4H8z'/%3E%3Cpath fill='%230B1E3F' d='M9 3h1v1H9z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0B1E3F; --navy-2:#0F2E58; --navy-3:#071227; --navy-4:#13396A;
+  --teal:#1B6F8A; --teal-2:#0E4A5E; --teal-l:#8FDDF0;
+  --sand:#E5C07B; --sand-2:#B8955A;
+  --orange:#FF8C42; --yellow:#FFD23F; --white:#FFF;
+  --px:3px;
+  --font:"Silkscreen","Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--navy);scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;font-family:var(--font);color:var(--white);background:var(--navy);line-height:1.8;font-size:13px;-webkit-font-smoothing:none;overflow-x:hidden}
+h1,h2,h3{margin:0;line-height:1.15;text-transform:uppercase}
+p{margin:0}
+a{color:var(--yellow)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:var(--px) solid var(--yellow);outline-offset:3px}
+
+/* pixel-cornered panel: chamfer = one "pixel" */
+.px{
+  clip-path:polygon(var(--px) 0,calc(100% - var(--px)) 0,calc(100% - var(--px)) var(--px),100% var(--px),100% calc(100% - var(--px)),calc(100% - var(--px)) calc(100% - var(--px)),calc(100% - var(--px)) 100%,var(--px) 100%,var(--px) calc(100% - var(--px)),0 calc(100% - var(--px)),0 var(--px),var(--px) var(--px));
+}
+
+/* ---------- TANK ---------- */
+.tank{
+  position:relative;height:100vh;height:100svh;min-height:520px;overflow:hidden;
+  background:var(--navy-4);cursor:crosshair;
+}
+.tank canvas{
+  position:absolute;left:0;top:0;display:block;
+  image-rendering:pixelated;image-rendering:crisp-edges;
+}
+.tank canvas:focus-visible{outline:var(--px) solid var(--yellow);outline-offset:calc(-2 * var(--px))}
+.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(14px,2.2vw,28px)}
+.hud > *{pointer-events:none}
+.hud button,.hud a,.hud .stats{pointer-events:auto}
+.hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.title{background:var(--navy);border:var(--px) solid var(--teal);padding:10px 14px 8px;display:inline-block}
+.title h1{font-weight:700;font-size:clamp(20px,2.4vw,30px);letter-spacing:.02em;color:var(--white)}
+.title h1 span{color:var(--orange)}
+.title .sub{display:block;margin-top:6px;font-size:11px;color:var(--sand);letter-spacing:.08em}
+.title .sub b{color:var(--yellow);font-weight:400;animation:blink 1.2s steps(1) infinite}
+.stats{display:flex;gap:var(--px);margin:0}
+.stats div{background:var(--navy);border:var(--px) solid var(--teal);padding:8px 12px 6px;min-width:76px;text-align:center}
+.stats dt{font-size:10px;color:var(--teal-l);letter-spacing:.1em}
+.stats dd{margin:0;font-size:22px;font-weight:700;color:var(--yellow);line-height:1.1}
+.stats div:nth-child(2) dd{color:var(--sand)}
+.stats div:nth-child(3) dd{color:var(--orange)}
+.hud-mid{flex:1;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px}
+.hint{background:rgba(11,30,63,.85);border:var(--px) solid var(--sand);color:var(--sand);padding:8px 14px 6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;transition:opacity .4s steps(4)}
+.hint.gone{opacity:0}
+.hud-bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column-reverse;gap:var(--px);max-width:min(48ch,60vw)}
+.log li{background:rgba(7,18,39,.85);border-left:var(--px) solid var(--teal);padding:4px 10px 2px;font-size:11px;color:var(--teal-l);letter-spacing:.04em;animation:fadein .3s steps(3)}
+.log li:first-child{color:var(--white);border-left-color:var(--yellow)}
+.controls{display:flex;gap:var(--px);flex-wrap:wrap;justify-content:flex-end}
+.btn{
+  font-family:var(--font);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;
+  background:var(--sand);color:var(--navy);border:0;padding:10px 16px 8px;
+  box-shadow:var(--px) var(--px) 0 var(--teal);position:relative;
+  transition:transform .08s steps(2),box-shadow .08s steps(2);display:inline-block;line-height:1.2;
+}
+.btn:hover{background:var(--yellow)}
+.btn:active,.btn[aria-pressed="true"]{transform:translate(var(--px),var(--px));box-shadow:0 0 0 var(--teal)}
+.btn.alt{background:var(--navy);color:var(--sand);box-shadow:var(--px) var(--px) 0 var(--sand),inset 0 0 0 var(--px) var(--sand)}
+.btn.alt:hover{color:var(--yellow);box-shadow:var(--px) var(--px) 0 var(--yellow),inset 0 0 0 var(--px) var(--yellow)}
+.btn.alt[aria-pressed="true"]{background:var(--sand);color:var(--navy);box-shadow:inset 0 0 0 var(--px) var(--sand)}
+
+/* ---------- GUIDE ---------- */
+.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(16px,4vw,48px)}
+.strip{
+  background:var(--navy);
+  background-image:linear-gradient(var(--navy-2) 1px,transparent 1px),linear-gradient(90deg,var(--navy-2) 1px,transparent 1px);
+  background-size:24px 24px;
+  border-top:var(--px) solid var(--teal);
+}
+.sandline{height:12px;background:
+  repeating-linear-gradient(90deg,var(--sand) 0 6px,var(--sand-2) 6px 9px,var(--sand) 9px 18px,var(--sand-2) 18px 21px);
+}
+.sandline.dots{height:6px;background:repeating-linear-gradient(90deg,var(--sand-2) 0 6px,transparent 6px 30px);background-color:var(--navy-3)}
+.sec{padding:clamp(48px,7vw,88px) 0}
+.sec-head{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:clamp(28px,4vw,44px)}
+.sec-head h2{font-weight:700;font-size:clamp(22px,3vw,36px);color:var(--yellow)}
+.sec-head .k{font-size:12px;color:var(--teal-l);letter-spacing:.14em}
+.sec-head .rule{flex:1;height:var(--px);min-width:60px;background:repeating-linear-gradient(90deg,var(--teal) 0 var(--px),transparent var(--px) calc(3 * var(--px)))}
+.lede{max-width:64ch;color:var(--white);font-size:14px;margin-bottom:clamp(28px,4vw,44px)}
+.lede em{font-style:normal;color:var(--sand)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:calc(3 * var(--px))}
+.card{
+  background:var(--navy-2);border:var(--px) solid var(--teal);padding:var(--px);display:flex;flex-direction:column;
+  transition:border-color .12s steps(2);
+}
+.card.on{border-color:var(--yellow)}
+.card:hover{border-color:var(--sand)}
+.card .win{
+  background:var(--navy);height:118px;display:grid;place-items:center;position:relative;overflow:hidden;
+  background-image:linear-gradient(var(--navy-2) 1px,transparent 1px),linear-gradient(90deg,var(--navy-2) 1px,transparent 1px);
+  background-size:12px 12px;
+}
+.card .win canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+.card .win .tag{position:absolute;left:8px;top:6px;font-size:10px;color:var(--teal-l);letter-spacing:.1em}
+.card .body{padding:14px 12px 12px;display:flex;flex-direction:column;gap:10px;flex:1}
+.card h3{font-weight:700;font-size:15px;color:var(--white)}
+.card .latin{font-size:11px;color:var(--sand);letter-spacing:.06em;margin-top:2px}
+.card p{font-size:12px;line-height:1.75;color:#DDE6F2}
+.meters{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;margin:2px 0}
+.meters span{font-size:10px;color:var(--teal-l);letter-spacing:.1em}
+.meters i{display:flex;gap:var(--px)}
+.meters i b{width:12px;height:8px;background:var(--navy);border:1px solid var(--teal)}
+.meters i b.f{background:var(--sand);border-color:var(--sand)}
+.card .acts{display:flex;gap:var(--px);margin-top:auto;padding-top:6px}
+.card .btn{font-size:11px;padding:8px 10px 6px;flex:1;text-align:center}
+
+/* ---------- HOW ---------- */
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:calc(3 * var(--px))}
+.state{background:var(--navy-3);border:var(--px) solid var(--teal-2);padding:18px 18px 20px;display:flex;flex-direction:column;gap:12px}
+.state svg{width:56px;height:56px;display:block}
+.state h3{font-weight:700;font-size:14px;color:var(--orange);letter-spacing:.06em}
+.state h3 small{color:var(--teal-l);font-weight:400;font-size:10px;margin-right:8px}
+.state p{font-size:12px;color:#DDE6F2}
+.note{margin-top:calc(3 * var(--px));background:var(--navy-2);border:var(--px) solid var(--sand);padding:20px 22px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start}
+.note .n{font-weight:700;font-size:36px;color:var(--sand);line-height:1}
+.note .n small{display:block;font-size:10px;color:var(--teal-l);font-weight:400;letter-spacing:.14em}
+.note p{font-size:12px;color:#DDE6F2}
+.note code{font-family:inherit;color:var(--yellow)}
+
+footer{padding:26px 0 34px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--teal-l);letter-spacing:.1em;text-transform:uppercase}
+footer b{color:var(--sand);font-weight:400}
+
+@keyframes blink{50%{opacity:0}}
+@keyframes fadein{from{opacity:0;transform:translateX(-4px)}}
+
+@media (max-width:720px){
+  .hud{padding:12px}
+  .hud-top{flex-direction:column}
+  .stats div{min-width:64px;padding:6px 8px 4px}
+  .stats dd{font-size:18px}
+  .title h1{font-size:20px}
+  .hud-bottom{flex-direction:column;align-items:stretch}
+  .log{max-width:none}
+  .log li:nth-child(n+3){display:none}
+  .controls{justify-content:stretch}
+  .controls .btn{flex:1;text-align:center;padding:12px 8px 10px}
+  .hint{font-size:11px;text-align:center}
+  .note{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  .title .sub b,.log li{animation:none}
+  .btn,.card,.hint{transition:none}
+}
+</style>
+</head>
+<body>
+<main>
+<section class="tank" id="tank" aria-label="Live pixel aquarium">
+  <canvas id="sea" tabindex="0" role="button" aria-label="Aquarium tank. Press Enter or Space to drop a pellet of food; click or tap anywhere to drop food where you point."></canvas>
+  <div class="hud">
+    <header class="hud-top">
+      <div class="title px">
+        <h1>Pixel <span>Aquarium</span></h1>
+        <span class="sub">Tank 040 · <b>●</b> live · <span id="res">240 × 150</span> px</span>
+      </div>
+      <dl class="stats" aria-label="Tank statistics">
+        <div class="px"><dt>Fish</dt><dd id="sFish">0</dd></div>
+        <div class="px"><dt>Pellets</dt><dd id="sFood">0</dd></div>
+        <div class="px"><dt>Eaten</dt><dd id="sFed">0</dd></div>
+      </dl>
+    </header>
+    <div class="hud-mid"><p class="hint px" id="hint">▼ Click anywhere to drop food ▼</p></div>
+    <div class="hud-bottom">
+      <ol class="log" id="log" aria-live="polite" aria-label="Tank log"></ol>
+      <nav class="controls" aria-label="Tank controls">
+        <button class="btn" id="feed" type="button">Feed</button>
+        <button class="btn alt" id="pause" type="button" aria-pressed="false">Pause</button>
+        <a class="btn alt" href="#guide">Guide ▼</a>
+      </nav>
+    </div>
+  </div>
+</section>
+
+<div class="sandline" role="presentation"></div>
+<div class="sandline dots" role="presentation"></div>
+
+<section class="strip" id="guide">
+  <div class="wrap sec">
+    <div class="sec-head">
+      <span class="k">01 / Species</span>
+      <h2>Species Guide</h2>
+      <span class="rule" role="presentation"></span>
+      <span class="k" id="popCount">16 fish in tank</span>
+    </div>
+    <p class="lede">Five species share the water, and none of them behave the same way. Each one is a handful of pixels with its own <em>depth band</em>, <em>speed</em>, <em>sense radius</em> and <em>appetite</em>. Press <em>Highlight</em> to pick one out of the crowd, or <em>Add</em> to drop another into the tank.</p>
+    <div class="cards" id="cards"></div>
+  </div>
+</section>
+
+<section class="strip" id="how" style="border-top-color:var(--teal-2)">
+  <div class="wrap sec">
+    <div class="sec-head">
+      <span class="k">02 / Behaviour</span>
+      <h2>How the tank thinks</h2>
+      <span class="rule" role="presentation"></span>
+    </div>
+    <div class="how">
+      <article class="state px">
+        <svg viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1B6F8A" d="M0 5h1v1H0zM1 4h1v1H1zM2 3h1v1H2zM3 2h1v1H3zM4 3h1v1H4zM5 4h1v1H5zM6 3h1v1H6z"/><path fill="#FFD23F" d="M3 1h1v1H3z"/></svg>
+        <h3><small>State 1</small>Wander</h3>
+        <p>Every fish picks a point inside its preferred depth band, swims toward it, pauses, and picks another. Speed and pause length are tuned per species, so a tang loafs while a tetra flits and a goby simply sits.</p>
+      </article>
+      <article class="state px">
+        <svg viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1B6F8A" d="M2 0h3v1H2zM1 1h1v1H1zM5 1h1v1H5zM0 2h1v3H0zM6 2h1v3H6zM1 5h1v1H1zM5 5h1v1H5zM2 6h3v1H2z"/><path fill="#FF8C42" d="M3 3h1v1H3z"/></svg>
+        <h3><small>State 2</small>Sense</h3>
+        <p>Each species has a sense radius measured in tank pixels. When a pellet enters it, and the fish is hungry enough to care, it switches state. Tetras effectively sense together, because the shoal shares one centre.</p>
+      </article>
+      <article class="state px">
+        <svg viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path fill="#FF8C42" d="M0 3h5v1H0zM3 1h1v1H3zM4 2h1v1H4zM4 4h1v1H4zM3 5h1v1H3z"/><path fill="#E5C07B" d="M6 3h1v1H6z"/></svg>
+        <h3><small>State 3</small>Chase</h3>
+        <p>The fish steers toward where the pellet will be, a little below where it is, because pellets sink. Faster species arrive first; hungrier fish arrive faster. A goby ignores anything that has not yet touched the sand.</p>
+      </article>
+      <article class="state px">
+        <svg viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path fill="#FFD23F" d="M1 2h4v3H1zM5 3h1v1H5z"/><path fill="#0B1E3F" d="M4 3h1v1H4z"/><path fill="#8FDDF0" d="M6 0h1v1H6zM5 1h1v1H5z"/><path fill="#E5C07B" d="M2 6h1v1H2z"/></svg>
+        <h3><small>State 4</small>Eat &amp; rest</h3>
+        <p>The first mouth to touch the pellet takes it. Hunger resets, a few bubbles escape, and that fish ignores food for a while, so the whole tank does not become a feeding frenzy every time you click.</p>
+      </article>
+    </div>
+    <aside class="note px" aria-label="Rendering note">
+      <div class="n">1/5<small>scale</small></div>
+      <p>The tank is drawn at roughly one fifth of screen resolution — <code id="resNote">240 × 150</code> internal pixels on this screen, about <code>130 × 280</code> on a phone — then stretched with <code>image-rendering: pixelated</code>, so every square you see is a real square. No sprite sheet is loaded: each fish is a string of seven to twelve characters painted with <code>fillRect</code> every frame. Kelp sways on a sine wave keyed to its own height, bubbles wobble on a private phase, and the three light shafts are drifting quadrilaterals at five percent white. Uneaten pellets dissolve into the sand after twenty-five seconds.</p>
+    </aside>
+    <footer>
+      <span><b>040</b> / 100 · Pixel Aquarium</span>
+      <span>Every square is a square</span>
+    </footer>
+  </div>
+</section>
+</main>
+
+<script>
+(() => {
+'use strict';
+const PAL = {o:'#FF8C42', y:'#FFD23F', w:'#FFFFFF', n:'#0B1E3F', t:'#1B6F8A', s:'#E5C07B', d:'#B8955A', l:'#8FDDF0', k:'#0E4A5E', m:'#C99A2E'};
+const SPECIES = [
+  { id:'clown', name:'Ember Clownfish', latin:'Amphiprion ignis', count:3,
+    band:[0.22,0.72], speed:14, turn:2.2, pause:[0.6,2.2], sense:46, hungerRate:0.09, tail:3,
+    meters:{speed:3, depth:3, appetite:4},
+    desc:'Bold, curious and first to the surface when a pellet lands. Clownfish patrol the mid-water in loose pairs and rarely stray far from the kelp they consider home. Watch the white bands flicker as they turn.',
+    rows:[
+      '....ooooo...',
+      'o..oowooowo.',
+      'oo.oowooowoo',
+      'oooooowooown',
+      'oo.oowooowoo',
+      'o..oowooowo.',
+      '....ooooo...'] },
+  { id:'tang', name:'Sunfin Tang', latin:'Zebrasoma solaris', count:2,
+    band:[0.10,0.45], speed:11, turn:1.4, pause:[1.5,4], sense:34, hungerRate:0.06, tail:2,
+    meters:{speed:2, depth:1, appetite:3},
+    desc:'A disc of pure yellow that grazes the upper water in long, lazy arcs. Tangs are slow to notice food but stubborn once they have. They will out-wait a clownfish at a sinking pellet every time.',
+    rows:[
+      '....yyyyy..',
+      'y..yyyyyyy.',
+      'yy.yyyyyyyy',
+      'yyywyyyyyny',
+      'yyywyyyyyyy',
+      'yy.yyyyyyy.',
+      'y..yyyyyy..',
+      '....yyyy...'] },
+  { id:'tetra', name:'Glass Tetra', latin:'Paracheirodon vitrum', count:7,
+    band:[0.30,0.68], speed:22, turn:4, pause:[0.2,0.9], sense:30, hungerRate:0.08, tail:2, school:true,
+    meters:{speed:5, depth:3, appetite:2},
+    desc:'Barely three pixels tall, tetras never travel alone. The shoal turns as one, drifts as one, and scatters when a pellet drops among them, only to regroup a moment later. The white stripe is how they keep sight of each other.',
+    rows:[
+      '..tttt.',
+      't.wwwwn',
+      'tttttt.'] },
+  { id:'goby', name:'Dune Goby', latin:'Gobius arenarius', count:2,
+    band:[0.985,0.985], speed:44, turn:6, pause:[3,8], sense:80, hungerRate:0.07, tail:2, floor:true,
+    meters:{speed:5, depth:5, appetite:3},
+    desc:'A bottom-dweller the colour of the sand it rests on. The goby waits, motionless, for whole minutes, then darts a tank-length in a second to take a pellet that has landed on the floor. It never chases anything still sinking.',
+    rows:[
+      '....ss...',
+      's.ssssssn',
+      'sssssssd.',
+      '..d.d.d..'] },
+  { id:'angel', name:'Moon Angel', latin:'Pterophyllum lunaris', count:2,
+    band:[0.40,0.80], speed:7, turn:1, pause:[2,5], sense:18, hungerRate:0.04, tail:2,
+    meters:{speed:1, depth:4, appetite:2},
+    desc:'The tallest fish in the tank and the least hurried. Angels hang almost still in the lower water, navy stripes breaking up their outline against the kelp. They eat last, and only what drifts within a fin’s length.',
+    rows:[
+      '.....w...',
+      '....www..',
+      '...wwnww.',
+      'w.wwwnwww',
+      'wwwnwwnwn',
+      'w.wwwnwww',
+      '...wwnww.',
+      '....www..',
+      '.....w...'] },
+];
+const BANDS = ['#15407A','#12386A','#0F2E58','#0C2449','#0B1E3F','#091833'];
+const rnd = (a,b) => a + Math.random()*(b-a);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const tank = document.getElementById('tank');
+const cv = document.getElementById('sea');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, scale = 4, sandY = 0;
+let fish = [], food = [], bubbles = [], kelp = [], rings = [];
+let fed = 0, time = 0, paused = reduced, highlight = null, hintShown = true;
+const bubblers = [];
+
+function resize(){
+  const w = tank.clientWidth, h = tank.clientHeight;
+  scale = Math.max(3, Math.floor(Math.min(w, h) / 150));
+  const nW = Math.ceil(w / scale), nH = Math.ceil(h / scale);
+  const rx = W ? nW / W : 1, ry = H ? nH / H : 1;
+  W = nW; H = nH;
+  cv.width = W; cv.height = H;
+  cv.style.width = (W * scale) + 'px'; cv.style.height = (H * scale) + 'px';
+  ctx.imageSmoothingEnabled = false;
+  sandY = H - Math.max(8, Math.round(H * 0.11));
+  for (const f of fish){ f.x *= rx; f.y *= ry; f.tx *= rx; f.ty *= ry; if (f.sp.floor) f.y = sandY - 2; }
+  for (const p of food){ p.x *= rx; p.y = Math.min(p.y * ry, sandY - 1); }
+  kelp = []; const n = Math.max(3, Math.floor(W / 30));
+  for (let i = 0; i < n; i++) kelp.push({ x: Math.round((i + 0.5) * W / n + rnd(-6, 6)), h: Math.round(rnd(H*0.18, H*0.42)), phase: rnd(0, 6.28), w: Math.random() < 0.4 ? 2 : 1 });
+  bubblers.length = 0; bubblers.push({x: Math.round(W*0.18), t: 0}, {x: Math.round(W*0.74), t: 0.3});
+  if (!fish.length) populate();
+  document.getElementById('res').textContent = W + ' × ' + H;
+  document.getElementById('resNote').textContent = W + ' × ' + H;
+}
+
+function spawn(sp, x){
+  const [a, b] = sp.band;
+  const f = { sp, x: x ?? rnd(6, W - 6), y: sp.floor ? sandY - 2 : rnd(a*sandY, b*sandY), vx: 0, vy: 0, dir: Math.random() < 0.5 ? 1 : -1,
+    tx: 0, ty: 0, state: 'wander', t: 0, hunger: rnd(0.4, 1), phase: rnd(0, 6.28), target: null };
+  newTarget(f); fish.push(f); return f;
+}
+function populate(){ for (const sp of SPECIES) for (let i = 0; i < sp.count; i++) spawn(sp); }
+function newTarget(f){
+  const [a, b] = f.sp.band;
+  f.tx = rnd(5, W - 5);
+  f.ty = f.sp.floor ? sandY - 2 : Math.max(4, Math.min(sandY - 4, rnd(a*sandY, b*sandY)));
+  if (f.sp.school){ // tetras aim near the shoal's centre
+    const c = centroid(f.sp); f.tx = Math.max(5, Math.min(W-5, c.x + rnd(-18, 18))); f.ty = Math.max(4, Math.min(sandY-4, c.y + rnd(-8, 8)));
+  }
+}
+function centroid(sp){
+  let x = 0, y = 0, n = 0; for (const f of fish) if (f.sp === sp){ x += f.x; y += f.y; n++; }
+  return n ? {x: x/n, y: y/n} : {x: W/2, y: sandY/2};
+}
+
+const logEl = document.getElementById('log');
+function log(msg){
+  const li = document.createElement('li'); li.textContent = msg; logEl.appendChild(li);
+  while (logEl.children.length > 3) logEl.removeChild(logEl.firstChild);
+}
+
+function dropFood(x, y){
+  if (paused) setPaused(false);
+  x = Math.max(2, Math.min(W - 3, Math.round(x)));
+  y = Math.max(2, Math.min(sandY - 2, Math.round(y)));
+  food.push({ x, y, vy: 0, landed: false, life: 25 });
+  rings.push({ x, y, t: 0 });
+  if (hintShown){ hintShown = false; document.getElementById('hint').classList.add('gone'); }
+}
+function eat(f, p){
+  food.splice(food.indexOf(p), 1); fed++; f.hunger = 0; f.state = 'pause'; f.t = 1.4; f.target = null;
+  for (let i = 0; i < 3; i++) bubbles.push({ x: f.x + f.dir * 3, y: f.y - 1, r: 1, vy: -rnd(9, 15), phase: rnd(0, 6.28), fromFish: true });
+  log(f.sp.name + ' took a pellet');
+}
+
+function updateFish(f, dt){
+  const sp = f.sp;
+  f.hunger = Math.min(1, f.hunger + dt * sp.hungerRate);
+  // sense
+  let best = null, bd = 1e9;
+  if (f.hunger > 0.35 && !(f.state === 'pause' && f.t > 0.6 && f.target === null && f.hunger < 0.5)){
+    for (const p of food){
+      if (sp.floor && !p.landed) continue;
+      const d = Math.hypot(p.x - f.x, p.y - f.y);
+      if (d < sp.sense && d < bd){ bd = d; best = p; }
+    }
+  }
+  if (best){ if (f.state !== 'chase') f.state = 'chase'; f.target = best; }
+  else if (f.state === 'chase'){ f.state = 'wander'; f.target = null; newTarget(f); }
+
+  let sx = f.tx, sy = f.ty, spd = sp.speed;
+  if (f.state === 'chase'){
+    sx = best.x; sy = best.landed ? best.y - 1 : best.y + 3;
+    spd = sp.speed * (sp.floor ? 1 : 1.7) * (0.7 + f.hunger * 0.6);
+    if (bd < 2.6){ eat(f, best); spd = 0; }
+  } else if (f.state === 'wander'){
+    if (Math.hypot(sx - f.x, sy - f.y) < 3){ f.state = 'pause'; f.t = rnd(sp.pause[0], sp.pause[1]); spd = 0; }
+    else if (sp.floor) spd = sp.speed * 0.5;
+  } else { // pause
+    f.t -= dt; spd = 0;
+    if (f.t <= 0){ f.state = 'wander'; newTarget(f); }
+  }
+  if (spd > 0){
+    const dx = sx - f.x, dy = sy - f.y, len = Math.hypot(dx, dy) || 1;
+    const dvx = dx / len * spd, dvy = dy / len * spd, k = Math.min(1, sp.turn * dt);
+    f.vx += (dvx - f.vx) * k; f.vy += (dvy - f.vy) * k;
+  } else {
+    const k = Math.min(1, 4 * dt); f.vx -= f.vx * k; f.vy -= f.vy * k;
+  }
+  if (sp.school && f.state !== 'chase'){
+    const c = centroid(sp); f.vx += (c.x - f.x) * 0.25 * dt; f.vy += (c.y - f.y) * 0.25 * dt;
+  }
+  f.x += f.vx * dt; f.y += f.vy * dt;
+  if (f.x < 3){ f.x = 3; f.vx = Math.abs(f.vx); } if (f.x > W - 3){ f.x = W - 3; f.vx = -Math.abs(f.vx); }
+  const top = 3, bot = sp.floor ? sandY - 2 : sandY - 3;
+  if (f.y < top){ f.y = top; f.vy = Math.abs(f.vy); } if (f.y > bot){ f.y = bot; f.vy = sp.floor ? 0 : -Math.abs(f.vy); }
+  if (Math.abs(f.vx) > 1.2) f.dir = f.vx > 0 ? 1 : -1;
+}
+
+function update(dt){
+  time += dt;
+  // food
+  for (let i = food.length - 1; i >= 0; i--){
+    const p = food[i];
+    if (!p.landed){ p.vy = Math.min(7, p.vy + 10 * dt); p.y += p.vy * dt; if (p.y >= sandY - 1){ p.y = sandY - 1; p.landed = true; } }
+    else { p.life -= dt; if (p.life <= 0){ food.splice(i, 1); log('A pellet dissolved into the sand'); } }
+  }
+  for (const f of fish) updateFish(f, dt);
+  // bubbles
+  for (const b of bubblers){ b.t -= dt; if (b.t <= 0){ b.t = rnd(0.35, 1.1); bubbles.push({ x: b.x + (Math.random() < 0.5 ? 0 : 1), y: sandY - 2, r: Math.random() < 0.3 ? 2 : 1, vy: -rnd(8, 14), phase: rnd(0, 6.28) }); } }
+  for (let i = bubbles.length - 1; i >= 0; i--){ const b = bubbles[i]; b.y += b.vy * dt; b.phase += dt * 4; if (b.y < 2) bubbles.splice(i, 1); }
+  for (let i = rings.length - 1; i >= 0; i--){ rings[i].t += dt; if (rings[i].t > 0.45) rings.splice(i, 1); }
+}
+
+function drawSprite(rows, x, y, dir, wag, alpha, outline){
+  const h = rows.length, w = rows[0].length, ox = Math.round(x - w / 2), oy = Math.round(y - h / 2);
+  ctx.globalAlpha = alpha;
+  if (outline){
+    ctx.fillStyle = PAL.w;
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++){
+      if (rows[r][c] === '.') continue;
+      const cx = dir > 0 ? c : w - 1 - c;
+      ctx.fillRect(ox + cx - 1, oy + r, 3, 1); ctx.fillRect(ox + cx, oy + r - 1, 1, 3);
+    }
+  }
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++){
+    const ch = rows[r][c]; if (ch === '.') continue;
+    const cx = dir > 0 ? c : w - 1 - c;
+    ctx.fillStyle = PAL[ch];
+    ctx.fillRect(ox + cx, oy + r + (c < wag.cols ? wag.off : 0), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function draw(){
+  // water bands
+  const bh = Math.ceil(sandY / BANDS.length);
+  for (let i = 0; i < BANDS.length; i++){ ctx.fillStyle = BANDS[i]; ctx.fillRect(0, i * bh, W, bh); }
+  // light shafts
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let i = 0; i < 3; i++){
+    const period = W + 80, cx = ((i * period / 3 + time * (3 + i * 1.5)) % period) - 40, hw = 5 + i * 3;
+    ctx.beginPath(); ctx.moveTo(cx - hw, 0); ctx.lineTo(cx + hw, 0); ctx.lineTo(cx + hw + sandY * 0.4, sandY); ctx.lineTo(cx - hw + sandY * 0.4, sandY); ctx.fill();
+  }
+  // surface
+  const sh = Math.floor(time * 5);
+  for (let x = 0; x < W; x++){ if ((x + sh) % 9 < 4){ ctx.fillStyle = PAL.l; ctx.globalAlpha = 0.55; ctx.fillRect(x, 0, 1, 1); } else { ctx.fillStyle = PAL.t; ctx.globalAlpha = 0.6; ctx.fillRect(x, 0, 1, 1); } }
+  ctx.globalAlpha = 1;
+  // kelp (behind)
+  for (const k of kelp){
+    for (let i = 0; i < k.h; i++){
+      const sway = Math.sin(time * 1.3 + k.phase + i * 0.28) * (i / k.h) * 3;
+      const sx = k.x + Math.round(sway);
+      ctx.fillStyle = (i % 4 < 2) ? PAL.k : PAL.t; ctx.fillRect(sx, sandY - 1 - i, k.w, 1);
+      if (i % 5 === 2){ ctx.fillStyle = PAL.t; ctx.fillRect(sx + ((i % 10 === 2) ? -1 : k.w), sandY - 1 - i, 1, 1); }
+    }
+  }
+  // sand
+  ctx.fillStyle = '#C9A25F'; ctx.fillRect(0, sandY, W, H - sandY);
+  ctx.fillStyle = PAL.s; ctx.fillRect(0, sandY, W, 1);
+  ctx.fillStyle = '#A8834A';
+  for (let i = 0; i < W * 0.6; i++){ const x = (i * 37 + 11) % W, y = sandY + 2 + ((i * 13 + 5) % Math.max(1, H - sandY - 2)); ctx.fillRect(x, y, 1, 1); }
+  for (const b of bubblers){ ctx.fillStyle = PAL.t; ctx.fillRect(b.x, sandY - 1, 2, 1); }
+  // food
+  for (const p of food){
+    const blinkOut = p.landed && p.life < 3 && Math.floor(time * 6) % 2 === 0;
+    if (blinkOut) continue;
+    ctx.fillStyle = PAL.s; ctx.fillRect(Math.round(p.x), Math.round(p.y) - 1, 2, 2);
+    ctx.fillStyle = PAL.d; ctx.fillRect(Math.round(p.x) + 1, Math.round(p.y), 1, 1);
+  }
+  // fish (sorted so tall angels sit behind small tetras)
+  const order = fish.slice().sort((a, b) => b.sp.rows.length - a.sp.rows.length);
+  for (const f of order){
+    const speed = Math.hypot(f.vx, f.vy);
+    const wagOff = speed > 0.8 ? Math.round(Math.sin(time * (6 + speed * 0.4) + f.phase)) : 0;
+    const bob = f.sp.floor ? 0 : Math.sin(time * 1.6 + f.phase) * 0.6;
+    const hl = highlight ? (f.sp.id === highlight) : null;
+    drawSprite(f.sp.rows, f.x, f.y + bob, f.dir, { cols: f.sp.tail, off: wagOff }, hl === false ? 0.3 : 1, hl === true && Math.floor(time * 4) % 2 === 0);
+  }
+  // bubbles
+  for (const b of bubbles){
+    const x = Math.round(b.x + Math.sin(b.phase) * 1.2), y = Math.round(b.y);
+    ctx.fillStyle = PAL.l; ctx.globalAlpha = b.fromFish ? 0.9 : 0.75;
+    if (b.r === 2){ ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); ctx.fillRect(x, y + 1, 1, 1); ctx.fillStyle = PAL.w; ctx.fillRect(x - 1, y - 1, 1, 1); }
+    else ctx.fillRect(x, y, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+  // splash rings
+  for (const r of rings){
+    const rad = Math.round(r.t * 14) + 1; ctx.fillStyle = PAL.w; ctx.globalAlpha = 1 - r.t / 0.45;
+    ctx.fillRect(r.x - rad, r.y, 1, 1); ctx.fillRect(r.x + rad, r.y, 1, 1); ctx.fillRect(r.x, r.y - rad, 1, 1); ctx.fillRect(r.x, r.y + rad, 1, 1);
+    const d = Math.round(rad * 0.7); ctx.fillRect(r.x - d, r.y - d, 1, 1); ctx.fillRect(r.x + d, r.y - d, 1, 1); ctx.fillRect(r.x - d, r.y + d, 1, 1); ctx.fillRect(r.x + d, r.y + d, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// stats
+const sFish = document.getElementById('sFish'), sFood = document.getElementById('sFood'), sFed = document.getElementById('sFed'), pop = document.getElementById('popCount');
+let statT = 0;
+function stats(){ sFish.textContent = fish.length; sFood.textContent = food.length; sFed.textContent = fed; pop.textContent = fish.length + ' fish in tank'; }
+
+// loop
+let last = 0, raf = 0;
+function frame(ts){
+  raf = 0;
+  if (paused || document.hidden) return;
+  const dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts;
+  update(dt); draw();
+  statT += dt; if (statT > 0.25){ statT = 0; stats(); }
+  raf = requestAnimationFrame(frame);
+}
+function start(){ if (!raf && !paused && !document.hidden){ last = performance.now(); raf = requestAnimationFrame(frame); } }
+document.addEventListener('visibilitychange', start);
+
+const pauseBtn = document.getElementById('pause');
+function setPaused(p){
+  paused = p; pauseBtn.textContent = p ? 'Play' : 'Pause'; pauseBtn.setAttribute('aria-pressed', String(p));
+  document.querySelector('.title .sub b').style.animationPlayState = p ? 'paused' : '';
+  if (!p) start(); else draw();
+}
+pauseBtn.addEventListener('click', () => setPaused(!paused));
+
+// input
+tank.addEventListener('pointerdown', e => {
+  if (e.target.closest('button, a, .stats')) return;
+  const r = cv.getBoundingClientRect();
+  dropFood((e.clientX - r.left) / scale, (e.clientY - r.top) / scale);
+});
+cv.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); dropFood(rnd(10, W - 10), rnd(4, sandY * 0.4)); }
+});
+document.getElementById('feed').addEventListener('click', () => { dropFood(rnd(10, W - 10), rnd(4, sandY * 0.4)); });
+
+// guide cards
+const cards = document.getElementById('cards');
+for (const sp of SPECIES){
+  const card = document.createElement('article'); card.className = 'card px'; card.dataset.id = sp.id;
+  const win = document.createElement('div'); win.className = 'win';
+  const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = sp.rows[0].length + ' × ' + sp.rows.length + ' px'; win.appendChild(tag);
+  const c = document.createElement('canvas'); const s = sp.rows.length <= 4 ? 11 : 7;
+  c.width = sp.rows[0].length + 2; c.height = sp.rows.length + 2;
+  c.style.width = c.width * s + 'px'; c.style.height = c.height * s + 'px';
+  c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Pixel sprite of ' + sp.name);
+  const cc = c.getContext('2d'); cc.imageSmoothingEnabled = false;
+  sp.rows.forEach((row, r) => { for (let i = 0; i < row.length; i++){ if (row[i] === '.') continue; cc.fillStyle = PAL[row[i]]; cc.fillRect(i + 1, r + 1, 1, 1); } });
+  win.appendChild(c); card.appendChild(win);
+  const body = document.createElement('div'); body.className = 'body';
+  const meters = ['speed', 'depth', 'appetite'].map(k => `<span>${k}</span><i aria-label="${k} ${sp.meters[k]} of 5">${[1,2,3,4,5].map(n => `<b class="${n <= sp.meters[k] ? 'f' : ''}"></b>`).join('')}</i>`).join('');
+  body.innerHTML = `<div><h3>${sp.name}</h3><div class="latin">${sp.latin}</div></div><div class="meters">${meters}</div><p>${sp.desc}</p>
+    <div class="acts"><button class="btn alt" type="button" data-act="hl" aria-pressed="false">Highlight</button><button class="btn" type="button" data-act="add">+ Add</button></div>`;
+  card.appendChild(body); cards.appendChild(card);
+}
+cards.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const card = btn.closest('.card'), sp = SPECIES.find(s => s.id === card.dataset.id);
+  if (btn.dataset.act === 'add'){
+    if (fish.length >= 32){ log('The tank is full (32 fish)'); return; }
+    spawn(sp, sp.floor ? rnd(6, W - 6) : W / 2); log('A new ' + sp.name + ' joined the tank'); stats();
+    if (paused) draw();
+  } else {
+    const on = highlight !== sp.id; highlight = on ? sp.id : null;
+    cards.querySelectorAll('.card').forEach(cd => { const b = cd.querySelector('[data-act="hl"]'); const active = on && cd === card; cd.classList.toggle('on', active); b.setAttribute('aria-pressed', String(active)); });
+    log(on ? 'Highlighting ' + sp.name : 'Highlight off');
+    if (paused) draw();
+  }
+});
+
+// boot
+let rt = 0;
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { resize(); if (paused) draw(); }, 120); });
+resize(); stats();
+log('Sixteen fish, two air stones, ' + kelp.length + ' stalks of kelp');
+if (reduced){ setPaused(true); log('Reduced motion on — press Play to start the water'); }
+else start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMX - Stock Exchange of Emotions</title>
+<meta name="description" content="A live LED ticker board where feelings trade like stocks: JOY, DREAD, CALM and friends, quoted, repriced every few hundred milliseconds, with a full trading-floor summary.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg fill='%2321FF52'%3E%3Ccircle cx='6' cy='22' r='2.4'/%3E%3Ccircle cx='12' cy='17' r='2.4'/%3E%3Ccircle cx='18' cy='20' r='2.4'/%3E%3Ccircle cx='24' cy='11' r='2.4'/%3E%3C/g%3E%3Cg fill='%23FFB000'%3E%3Ccircle cx='6' cy='6' r='1.6'/%3E%3Ccircle cx='11' cy='6' r='1.6'/%3E%3Ccircle cx='16' cy='6' r='1.6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:ROND,wght@0..100,100..900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000;
+  --g:#21FF52; --r:#FF3B3B; --a:#FFB000;
+  --g-rgb:33,255,82; --r-rgb:255,59,59; --a-rgb:255,176,0;
+  --a-dim:rgba(255,176,0,.72); --g-dim:rgba(33,255,82,.5);
+  --rule:rgba(255,176,0,.28);
+  --tape:clamp(1.55rem,3.3vw,2.9rem);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);color-scheme:dark}
+body{
+  background:var(--bg);color:var(--g);
+  font-family:'Doto','Courier New',ui-monospace,monospace;
+  font-variation-settings:"ROND" 100;
+  font-weight:700;font-size:1.0625rem;line-height:1.6;
+  overflow-x:hidden;min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{ /* LED pixel grid */
+  content:"";position:fixed;inset:0;z-index:50;pointer-events:none;
+  background-image:radial-gradient(rgba(0,0,0,.72) .7px,transparent 1.1px);
+  background-size:3px 3px;opacity:.55;
+}
+body::after{ /* tube vignette */
+  content:"";position:fixed;inset:0;z-index:51;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%);
+}
+::selection{background:var(--a);color:#000}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--a);outline-offset:4px;box-shadow:0 0 12px rgba(var(--a-rgb),.6)}
+.glow-g{color:var(--g);text-shadow:0 0 3px rgba(var(--g-rgb),.9),0 0 12px rgba(var(--g-rgb),.45),0 0 28px rgba(var(--g-rgb),.2)}
+.glow-r{color:var(--r);text-shadow:0 0 3px rgba(var(--r-rgb),.9),0 0 12px rgba(var(--r-rgb),.45),0 0 28px rgba(var(--r-rgb),.2)}
+.glow-a{color:var(--a);text-shadow:0 0 3px rgba(var(--a-rgb),.9),0 0 12px rgba(var(--a-rgb),.45),0 0 28px rgba(var(--a-rgb),.2)}
+.up{color:var(--g);text-shadow:0 0 3px rgba(var(--g-rgb),.9),0 0 12px rgba(var(--g-rgb),.45)}
+.dn{color:var(--r);text-shadow:0 0 3px rgba(var(--r-rgb),.9),0 0 12px rgba(var(--r-rgb),.45)}
+.fl{color:var(--a);text-shadow:0 0 3px rgba(var(--a-rgb),.9),0 0 12px rgba(var(--a-rgb),.45)}
+.dim{opacity:.7}
+.wrap{padding-inline:clamp(1rem,4vw,4rem)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- top bar ---------- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+  padding-block:.9rem;border-bottom:2px dotted var(--rule);
+  font-size:.95rem;letter-spacing:.08em;text-transform:uppercase;
+}
+.brand{display:flex;align-items:center;gap:.7rem;font-weight:900}
+.brand .led{display:inline-grid;grid-template-columns:repeat(3,5px);gap:3px}
+.brand .led i{width:5px;height:5px;border-radius:50%;background:var(--a);box-shadow:0 0 6px var(--a)}
+.brand .led i:nth-child(2n){background:var(--g);box-shadow:0 0 6px var(--g)}
+.clock{display:flex;align-items:center;gap:.6rem}
+.blink{width:9px;height:9px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);animation:blink 1.2s steps(1) infinite}
+@keyframes blink{50%{opacity:.15}}
+.halt-btn{
+  font:inherit;font-weight:900;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  color:var(--r);background:transparent;border:2px dotted rgba(var(--r-rgb),.6);
+  padding:.45rem .9rem;text-shadow:0 0 8px rgba(var(--r-rgb),.6);transition:background .15s,color .15s;
+}
+.halt-btn:hover{background:var(--r);color:#000;text-shadow:none}
+.halt-btn[aria-pressed="true"]{background:var(--a);border-color:var(--a);color:#000;text-shadow:none}
+
+/* ---------- masthead ---------- */
+.mast{
+  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:clamp(1.5rem,4vw,4rem);
+  align-items:end;padding-block:clamp(1.6rem,3.5vw,3.4rem) clamp(1.4rem,2.6vw,2.6rem);
+}
+.mast h1{
+  font-size:clamp(2.7rem,7vw,7.2rem);font-weight:900;line-height:.92;letter-spacing:.01em;
+  color:var(--a);text-transform:uppercase;
+  text-shadow:0 0 4px rgba(var(--a-rgb),.9),0 0 18px rgba(var(--a-rgb),.5),0 0 48px rgba(var(--a-rgb),.25);
+  animation:warm 6s ease-in-out infinite alternate;
+}
+@keyframes warm{to{text-shadow:0 0 4px rgba(var(--a-rgb),1),0 0 22px rgba(var(--a-rgb),.65),0 0 60px rgba(var(--a-rgb),.35)}}
+.mast .kicker{font-size:clamp(.9rem,1.2vw,1.1rem);letter-spacing:.22em;text-transform:uppercase;color:var(--g);margin-bottom:1.2rem;text-shadow:0 0 10px rgba(var(--g-rgb),.5)}
+.mast .kicker b{color:var(--a);font-weight:900}
+.indices{display:grid;gap:1rem;border-left:2px dotted var(--rule);padding-left:clamp(1rem,2.5vw,2rem)}
+.idx{display:grid;grid-template-columns:auto 1fr;gap:.2rem 1rem;align-items:baseline}
+.idx .name{grid-column:1/-1;font-size:.85rem;letter-spacing:.2em;text-transform:uppercase;color:var(--a-dim)}
+.idx .val{font-size:clamp(1.8rem,3vw,2.9rem);font-weight:900;line-height:1;color:var(--a);text-shadow:0 0 12px rgba(var(--a-rgb),.55)}
+.idx .delta{font-size:clamp(1rem,1.3vw,1.25rem);font-weight:900;white-space:nowrap}
+.tri{display:inline-block;width:.62em;height:.55em;vertical-align:baseline;fill:currentColor;margin-right:.18em;filter:drop-shadow(0 0 4px currentColor)}
+.tri.down{transform:scaleY(-1)}
+
+/* ---------- tape ---------- */
+.tape{border-top:2px dotted var(--rule)}
+.lane{border-bottom:2px dotted var(--rule);position:relative}
+.lane-head{
+  display:flex;justify-content:space-between;align-items:center;gap:1rem;
+  padding:.55rem clamp(1rem,4vw,4rem) .2rem;font-size:.8rem;letter-spacing:.22em;text-transform:uppercase;color:var(--a-dim);
+}
+.lane-head .status{color:var(--g);opacity:.7;transition:opacity .2s}
+.lane:hover .lane-head .status,.lane:focus-within .lane-head .status,body.halted .lane-head .status{color:var(--r);opacity:1;text-shadow:0 0 8px rgba(var(--r-rgb),.6)}
+.lane-head .status::before{content:"RUNNING"}
+.lane:hover .lane-head .status::before,.lane:focus-within .lane-head .status::before,body.halted .lane-head .status::before{content:"HALTED"}
+.row{overflow:hidden;position:relative;padding-block:.55rem .85rem;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);}
+.track{display:flex;width:max-content;will-change:transform;animation:scroll var(--dur,60s) linear infinite}
+.track.rev{animation-direction:reverse}
+@keyframes scroll{to{transform:translateX(-50%)}}
+.lane:hover .track,.lane:focus-within .track,body.halted .track{animation-play-state:paused}
+.tk{
+  display:inline-flex;align-items:baseline;gap:.55em;white-space:nowrap;
+  font-size:var(--tape);font-weight:900;line-height:1.1;padding-inline:.9em;
+  border-right:3px dotted var(--rule);
+}
+.tk .sym{color:var(--a);text-shadow:0 0 3px rgba(var(--a-rgb),.9),0 0 12px rgba(var(--a-rgb),.45)}
+.tk .px{min-width:5ch;text-align:right}
+.tk .chg{font-size:.6em;letter-spacing:.02em}
+.tk .unit{font-size:.45em;letter-spacing:.15em;color:var(--a-dim);align-self:center}
+.tk:hover .sym{color:#fff0c0}
+.tk .px.flash,.cell.flash{animation:flash .5s steps(2,jump-none)}
+@keyframes flash{0%{filter:brightness(2.2)}100%{filter:brightness(1)}}
+
+/* ---------- summary ---------- */
+section.block{padding-block:clamp(2.5rem,5vw,5rem)}
+h2{
+  font-size:clamp(1.6rem,3.2vw,2.8rem);font-weight:900;letter-spacing:.06em;text-transform:uppercase;line-height:1;
+  color:var(--a);text-shadow:0 0 4px rgba(var(--a-rgb),.9),0 0 16px rgba(var(--a-rgb),.45);margin-bottom:.5rem;
+}
+.sub{font-size:.85rem;letter-spacing:.2em;text-transform:uppercase;color:var(--a-dim);margin-bottom:2rem}
+.tablewrap{overflow-x:auto;border:2px dotted var(--rule);scrollbar-color:var(--a) #000}
+table{border-collapse:collapse;width:100%;min-width:900px;font-size:1.05rem}
+thead th{
+  text-align:left;font-size:.78rem;letter-spacing:.22em;text-transform:uppercase;color:var(--a-dim);
+  padding:.9rem .9rem .7rem;border-bottom:2px dotted var(--rule);white-space:nowrap;font-weight:700;
+}
+tbody td{padding:.75rem .9rem;border-bottom:1px dotted rgba(255,176,0,.16);white-space:nowrap;vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,176,0,.05)}
+tbody tr:target td{background:rgba(var(--a-rgb),.12);box-shadow:inset 3px 0 0 var(--a)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td .symc{font-weight:900;font-size:1.25rem;color:var(--a);text-shadow:0 0 10px rgba(var(--a-rgb),.5)}
+td.name{color:var(--g);opacity:.9}
+.sector{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;padding:.18rem .5rem;border:1px dotted currentColor}
+.sec-warm{color:var(--a)} .sec-cold{color:var(--g)} .sec-sharp{color:var(--r)} .sec-slow{color:var(--a-dim)}
+.spark{display:block;width:120px;height:30px;overflow:visible}
+.spark polyline{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;stroke:currentColor;filter:drop-shadow(0 0 3px currentColor)}
+.spark circle{fill:currentColor}
+.legend{display:flex;flex-wrap:wrap;gap:1rem 2rem;margin-top:1.2rem;font-size:.85rem;letter-spacing:.14em;text-transform:uppercase}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;margin-right:.6rem;vertical-align:middle}
+
+/* ---------- report ---------- */
+.report{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:clamp(1.5rem,3vw,3rem)}
+.report p,.notes li{font-size:1.0625rem;line-height:1.7;color:var(--g);text-shadow:0 0 6px rgba(var(--g-rgb),.25);margin-bottom:1.1rem;font-weight:700}
+.report p b,.notes b{color:var(--a);font-weight:900}
+.report p .neg{color:var(--r)}
+h3{font-size:1.05rem;letter-spacing:.24em;text-transform:uppercase;color:var(--a-dim);margin-bottom:1rem;font-weight:900}
+.notes{list-style:none}
+.notes li{padding-left:1.6rem;position:relative}
+.notes li::before{content:"";position:absolute;left:0;top:.65em;width:8px;height:8px;border-radius:50%;background:var(--a);box-shadow:0 0 8px var(--a)}
+.stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem;margin-top:2rem}
+.stat{border:2px dotted var(--rule);padding:1rem 1.1rem}
+.stat .k{font-size:.75rem;letter-spacing:.22em;text-transform:uppercase;color:var(--a-dim)}
+.stat .v{font-size:clamp(1.5rem,2.4vw,2.2rem);font-weight:900;line-height:1.1;margin-top:.3rem}
+
+/* ---------- footer ---------- */
+footer{border-top:2px dotted var(--rule);padding-block:1.5rem 3rem;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--a-dim);display:flex;flex-wrap:wrap;gap:.8rem 2.5rem;justify-content:space-between}
+footer a{color:var(--g);text-shadow:0 0 8px rgba(var(--g-rgb),.4)}
+footer a:hover{color:var(--a)}
+
+@media (max-width:760px){
+  .mast{grid-template-columns:1fr;align-items:start}
+  .indices{border-left:0;padding-left:0;border-top:2px dotted var(--rule);padding-top:1.2rem;grid-template-columns:1fr}
+  .idx{grid-template-columns:1fr auto}
+  .topbar{font-size:.8rem;gap:.6rem 1rem}
+  .clock time{display:none}
+  .tk{padding-inline:.7em}
+  .lane-head{font-size:.72rem;letter-spacing:.16em}
+  .lane-head .opt{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .track{animation:none}
+  .row{overflow-x:auto;mask-image:none;-webkit-mask-image:none}
+  .blink,.mast h1{animation:none}
+  .tk .px.flash,.cell.flash{animation:none}
+  .lane-head .status::before{content:"STATIC"!important}
+}
+</style>
+</head>
+<body>
+<header class="head wrap">
+  <div class="topbar">
+    <span class="brand"><span class="led" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="glow-a">EMX</span><span class="dim">/</span><span>Emotions Exchange</span></span>
+    <span class="clock"><i class="blink" aria-hidden="true"></i><span id="sess" class="glow-g">Session open</span><time id="clock" datetime="">--:--:--</time></span>
+    <button class="halt-btn" id="halt" type="button" aria-pressed="false">Halt tape</button>
+  </div>
+  <div class="mast">
+    <div>
+      <p class="kicker">Board 93 <b>/</b> Live quotes <b>/</b> Repriced every 600 ms</p>
+      <h1>Stock<br>Exchange<br>of Emotions</h1>
+    </div>
+    <div class="indices" id="indices" aria-label="Headline indices"></div>
+  </div>
+</header>
+
+<main>
+  <section class="tape" aria-labelledby="tape-h">
+    <h2 id="tape-h" class="sr">Live tape</h2>
+    <div class="lane">
+      <div class="lane-head"><span>Lane A / Majors<span class="opt"> / 8 listed</span></span><span class="status" aria-hidden="true"></span></div>
+      <div class="row"><div class="track" data-lane="0" data-speed="95"></div></div>
+    </div>
+    <div class="lane">
+      <div class="lane-head"><span>Lane B / Small caps<span class="opt"> / Volatile / 8 listed</span></span><span class="status" aria-hidden="true"></span></div>
+      <div class="row"><div class="track rev" data-lane="1" data-speed="70"></div></div>
+    </div>
+    <div class="lane">
+      <div class="lane-head"><span>Lane C / Indices<span class="opt"> and commodities</span></span><span class="status" aria-hidden="true"></span></div>
+      <div class="row"><div class="track" data-lane="2" data-speed="120"></div></div>
+    </div>
+    <p class="sr">Hover or focus a lane to halt it. Use the Halt tape button to stop all lanes.</p>
+  </section>
+
+  <section class="block wrap" id="summary" aria-labelledby="summary-h">
+    <h2 id="summary-h">Trading floor summary</h2>
+    <p class="sub">All 16 listings / previous close vs last / 30-minute trend</p>
+    <div class="tablewrap" tabindex="0" aria-label="Summary table, scrolls horizontally">
+      <table>
+        <thead><tr>
+          <th scope="col">Sym</th><th scope="col">Emotion</th><th scope="col">Sector</th>
+          <th scope="col" class="num">Last</th><th scope="col" class="num">Chg</th><th scope="col" class="num">Chg %</th>
+          <th scope="col" class="num">Volume</th><th scope="col" class="num">Day lo / hi</th><th scope="col">Trend</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span class="up">Above previous close</span><span class="dn">Below previous close</span><span class="fl">Index or commodity</span>
+    </div>
+  </section>
+
+  <section class="block wrap" id="floor" aria-labelledby="floor-h" style="border-top:2px dotted var(--rule)">
+    <h2 id="floor-h">Floor report</h2>
+    <p class="sub">Closing commentary / Wednesday 3 September 2026</p>
+    <div class="report">
+      <div>
+        <h3>The session</h3>
+        <p>The tape opened heavy. <b>DREAD</b> gapped up at the bell on overnight news flow and held its gains through the morning, dragging <b>CALM</b> to a three-week low before a midday reversal. Buyers stepped into <b>JOY</b> after lunch, volume ran at 1.6 times its thirty-day average, and the <b>MOOD 30</b> finished in the green for a fourth consecutive session. Volatility, measured by the <b>TREMOR</b> index, cooled to the low twenties from an intraday high above 27.</p>
+        <p>Sector picture: Warm names (JOY, HOPE, TNDR, RELF) led with an aggregate gain of 1.4 percent. Cold names (DREAD, GRIEF, ANGST) were mixed. <b>GRIEF</b> drifted lower on thin volume, which the floor tends to read as acceptance rather than capitulation. Sharp names (RAGE, ENVY, SPITE) spiked on the open and faded, a pattern traders here call the hot take: <span class="neg">quick to price, quick to reverse</span>. Slow names (BORE, NOSTL) were unchanged, as they usually are.</p>
+        <p>Commodities: <b>SILENCE</b> rallied into the evening. <b>SLEEP</b> remains in short supply with the futures curve in steep backwardation, meaning tonight is worth more than next week. <b>SUNLIGHT</b> is weakening seasonally. <b>CAFFEINE</b> fell on profit-taking after its 07:40 surge.</p>
+      </div>
+      <div>
+        <h3>How the tape is priced</h3>
+        <p>Prices on this board are not measured. They are felt. Each listing is a random walk bounded by that emotion's daily volatility band, and the board reprices a handful of names roughly every 600 milliseconds. Green means the last print is above the previous close, red means below, amber marks indices and commodities. Hover or focus any lane to halt it, or use the Halt tape button to stop the whole floor. Nothing here is financial advice, and nothing here is for sale.</p>
+        <h3>Session notes</h3>
+        <ul class="notes">
+          <li>Opening bell 06:30, closing bell 23:00 local. Overnight, the board runs a thin after-hours book in which only <b>ANGST</b> and <b>NOSTL</b> trade.</li>
+          <li>Circuit breaker: a listing halts for 90 seconds if it moves more than 8 percent in either direction. <b>FOMO</b> has been halted twice today.</li>
+          <li>Corporate action: <b>NOSTL</b> declared a special dividend, payable in old photographs, record date to be confirmed.</li>
+          <li>New listing pending: <b>AWE</b> is expected to price at the top of its range after strong demand from long-only holders.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stat-strip" aria-label="Session statistics">
+      <div class="stat"><div class="k">Advancers</div><div class="v up" id="st-adv">-</div></div>
+      <div class="stat"><div class="k">Decliners</div><div class="v dn" id="st-dec">-</div></div>
+      <div class="stat"><div class="k">Top gainer</div><div class="v up" id="st-gain">-</div></div>
+      <div class="stat"><div class="k">Top loser</div><div class="v dn" id="st-lose">-</div></div>
+      <div class="stat"><div class="k">Reprices this visit</div><div class="v fl" id="st-ticks">0</div></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>EMX / Emotions Exchange / Board 93 of 100</span>
+  <span>Quotes delayed by exactly one feeling</span>
+  <a href="#summary">Back to summary</a>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  // deterministic RNG so the first screen is stable between loads
+  let seed=930093;function rnd(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
+  const rr=(a,b)=>a+(b-a)*rnd();
+
+  const STOCKS=[
+    {sym:'JOY',name:'Joy',sec:'warm',prev:139.68,vol:0.018,lane:0},
+    {sym:'DREAD',name:'Dread',sec:'cold',prev:87.10,vol:0.032,lane:0},
+    {sym:'CALM',name:'Calm',sec:'cold',prev:212.40,vol:0.010,lane:0},
+    {sym:'RAGE',name:'Rage',sec:'sharp',prev:64.25,vol:0.045,lane:0},
+    {sym:'HOPE',name:'Hope',sec:'warm',prev:118.90,vol:0.020,lane:0},
+    {sym:'GRIEF',name:'Grief',sec:'cold',prev:73.55,vol:0.014,lane:0},
+    {sym:'ENVY',name:'Envy',sec:'sharp',prev:41.80,vol:0.038,lane:0},
+    {sym:'BORE',name:'Boredom',sec:'slow',prev:19.00,vol:0.003,lane:0},
+    {sym:'FOMO',name:'Fear of missing out',sec:'sharp',prev:33.20,vol:0.060,lane:1},
+    {sym:'ANGST',name:'Angst',sec:'cold',prev:58.70,vol:0.035,lane:1},
+    {sym:'SPITE',name:'Spite',sec:'sharp',prev:12.45,vol:0.055,lane:1},
+    {sym:'TNDR',name:'Tenderness',sec:'warm',prev:96.30,vol:0.016,lane:1},
+    {sym:'RELF',name:'Relief',sec:'warm',prev:77.15,vol:0.028,lane:1},
+    {sym:'NOSTL',name:'Nostalgia',sec:'slow',prev:151.00,vol:0.004,lane:1},
+    {sym:'GUILT',name:'Guilt',sec:'cold',prev:44.60,vol:0.030,lane:1},
+    {sym:'WNDR',name:'Wonder',sec:'warm',prev:128.75,vol:0.024,lane:1}
+  ];
+  const INDICES=[
+    {sym:'MOOD 30',prev:1272.21,vol:0.006,unit:'PTS',head:true},
+    {sym:'TREMOR',prev:24.9,vol:0.03,unit:'VOL',head:true,inv:true},
+    {sym:'SERENITY COMP',prev:4410.5,vol:0.005,unit:'PTS',head:true},
+    {sym:'SLEEP',prev:6.4,vol:0.02,unit:'HRS'},
+    {sym:'CAFFEINE',prev:184.0,vol:0.03,unit:'MG'},
+    {sym:'SUNLIGHT',prev:13.2,vol:0.01,unit:'HRS'},
+    {sym:'SILENCE',prev:41.0,vol:0.025,unit:'MIN'}
+  ];
+  const openDrift={JOY:.022,DREAD:.031,CALM:-.018,RAGE:.006,HOPE:.014,GRIEF:-.012,ENVY:-.021,BORE:0,FOMO:-.067,ANGST:.019,SPITE:-.034,TNDR:.011,RELF:.017,NOSTL:.001,GUILT:.009,WNDR:.026,
+    'MOOD 30':.0097,TREMOR:-.14,'SERENITY COMP':.0042,SLEEP:-.06,CAFFEINE:-.028,SUNLIGHT:-.012,SILENCE:.041};
+  const ALL=STOCKS.concat(INDICES);
+  ALL.forEach(s=>{
+    s.px=s.prev*(1+(openDrift[s.sym]||0));
+    // synthetic 30-minute history ending at current price
+    const pts=[];let p=s.prev;for(let i=0;i<14;i++){p*=1+rr(-s.vol,s.vol)*.6;pts.push(p);}pts.push(s.px);
+    s.hist=pts;s.lo=Math.min(...pts,s.prev*(1-s.vol*.8));s.hi=Math.max(...pts,s.prev*(1+s.vol*.8));
+    s.dec=s.px<20?2:2;s.volume=s.head?null:Math.round(rr(4,60)*10)/10;
+  });
+  const fmt=(n,d)=>n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const tri=d=>`<svg class="tri${d?' down':''}" viewBox="0 0 10 8" aria-hidden="true"><path d="M5 0 10 8H0z"/></svg>`;
+  function chgCls(s){const c=s.px-s.prev;if(Math.abs(c)<1e-9)return 'fl';return (s.inv?c>0:c<0)?'dn':'up';}
+  function chgHTML(s){const c=s.px-s.prev,pc=c/s.prev*100;const d=s.head||s.unit?(Math.abs(s.prev)<50?2:1):2;
+    return `${tri(c<0)}${fmt(Math.abs(c),d)} (${fmt(Math.abs(pc),2)}%)`;}
+  function arrowWord(s){const c=s.px-s.prev;return c<0?'down':c>0?'up':'unchanged';}
+
+  // ---- tape ----
+  const lanes=[...document.querySelectorAll('.track')];
+  function tkHTML(s){
+    const d=s.unit?(s.prev<50?2:1):2;
+    const id=s.head||s.unit?'':` href="#row-${s.sym}"`;
+    const tag=id?'a':'span';
+    return `<${tag} class="tk"${id} data-sym="${s.sym}" aria-label="${s.sym} ${fmt(s.px,d)} ${arrowWord(s)} ${fmt(Math.abs(s.px-s.prev),d)}">`+
+      `<span class="sym">${s.sym}</span>`+(s.unit?`<span class="unit">${s.unit}</span>`:'')+
+      `<span class="px ${chgCls(s)}">${fmt(s.px,d)}</span><span class="chg ${chgCls(s)}">${chgHTML(s)}</span></${tag}>`;
+  }
+  lanes.forEach((tr,i)=>{
+    const list=i<2?STOCKS.filter(s=>s.lane===i):INDICES;
+    const html=list.map(tkHTML).join('');
+    tr.innerHTML=html+html; // duplicated for a seamless loop
+  });
+  function sizeLanes(){
+    lanes.forEach(tr=>{const w=tr.scrollWidth/2;const sp=+tr.dataset.speed;tr.style.setProperty('--dur',(w/sp).toFixed(2)+'s');});
+  }
+  sizeLanes();
+  let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(sizeLanes,150);});
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(sizeLanes);
+
+  // ---- headline indices ----
+  const idxEl=document.getElementById('indices');
+  idxEl.innerHTML=INDICES.filter(s=>s.head).map(s=>`<div class="idx" data-sym="${s.sym}"><span class="name">${s.sym}${s.inv?' (volatility, inverted)':''}</span>`+
+    `<span class="val cell" data-f="px">${fmt(s.px,s.prev<50?2:1)}</span><span class="delta cell ${chgCls(s)}" data-f="chg">${chgHTML(s)}</span></div>`).join('');
+
+  // ---- table ----
+  const tb=document.getElementById('tbody');
+  function spark(s){
+    const w=120,h=30,min=Math.min(...s.hist),max=Math.max(...s.hist),rng=(max-min)||1;
+    const pts=s.hist.map((v,i)=>`${(i/(s.hist.length-1)*w).toFixed(1)},${(h-3-(v-min)/rng*(h-6)).toFixed(1)}`);
+    const last=pts[pts.length-1].split(',');
+    return `<svg class="spark ${chgCls(s)}" viewBox="0 0 ${w} ${h}" role="img" aria-label="30 minute trend for ${s.sym}, ${arrowWord(s)}"><polyline points="${pts.join(' ')}"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6"/></svg>`;
+  }
+  tb.innerHTML=STOCKS.map(s=>`<tr id="row-${s.sym}" data-sym="${s.sym}">`+
+    `<td><span class="symc">${s.sym}</span></td><td class="name">${s.name}</td><td><span class="sector sec-${s.sec}">${s.sec}</span></td>`+
+    `<td class="num cell ${chgCls(s)}" data-f="px">${fmt(s.px,2)}</td>`+
+    `<td class="num cell ${chgCls(s)}" data-f="chgabs">${(s.px<s.prev?'-':'+')}${fmt(Math.abs(s.px-s.prev),2)}</td>`+
+    `<td class="num cell ${chgCls(s)}" data-f="pct">${(s.px<s.prev?'-':'+')}${fmt(Math.abs((s.px-s.prev)/s.prev*100),2)}%</td>`+
+    `<td class="num dim">${fmt(s.volume,1)}M</td><td class="num dim" data-f="range">${fmt(s.lo,2)} / ${fmt(s.hi,2)}</td><td data-f="spark">${spark(s)}</td></tr>`).join('');
+
+  // ---- stats ----
+  const stAdv=document.getElementById('st-adv'),stDec=document.getElementById('st-dec'),stGain=document.getElementById('st-gain'),stLose=document.getElementById('st-lose'),stTicks=document.getElementById('st-ticks');
+  let ticks=0;
+  function stats(){
+    let adv=0,dec=0,g=null,l=null;
+    STOCKS.forEach(s=>{const pc=(s.px-s.prev)/s.prev;if(pc>0)adv++;else if(pc<0)dec++;if(!g||pc>g.pc)g={s,pc};if(!l||pc<l.pc)l={s,pc};});
+    stAdv.textContent=adv;stDec.textContent=dec;
+    stGain.textContent=`${g.s.sym} +${fmt(g.pc*100,2)}%`;stLose.textContent=`${l.s.sym} ${fmt(l.pc*100,2)}%`;
+    stTicks.textContent=ticks;
+  }
+  stats();
+
+  // ---- live repricing ----
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const INTERVAL=reduce?3000:600;
+  let halted=false;
+  function flash(el){el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}
+  function reprice(s){
+    const step=s.px*rr(-s.vol,s.vol)*.35;
+    let np=s.px+step;
+    const lo=s.prev*(1-s.vol*3),hi=s.prev*(1+s.vol*3);
+    if(np<lo||np>hi)np=s.px-step; // bounce off the band
+    s.px=Math.max(0.01,np);s.lo=Math.min(s.lo,s.px);s.hi=Math.max(s.hi,s.px);
+    s.hist.push(s.px);if(s.hist.length>15)s.hist.shift();
+    const d=s.unit?(s.prev<50?2:1):2,cls=chgCls(s);
+    document.querySelectorAll(`.tk[data-sym="${s.sym}"]`).forEach(el=>{
+      const px=el.querySelector('.px'),ch=el.querySelector('.chg');
+      px.textContent=fmt(s.px,d);px.className='px '+cls;ch.className='chg '+cls;ch.innerHTML=chgHTML(s);flash(px);
+      el.setAttribute('aria-label',`${s.sym} ${fmt(s.px,d)} ${arrowWord(s)} ${fmt(Math.abs(s.px-s.prev),d)}`);
+    });
+    document.querySelectorAll(`.idx[data-sym="${s.sym}"]`).forEach(el=>{
+      const v=el.querySelector('[data-f="px"]'),c=el.querySelector('[data-f="chg"]');
+      v.textContent=fmt(s.px,d);c.className='delta cell '+cls;c.innerHTML=chgHTML(s);flash(v);
+    });
+    const tr=document.getElementById('row-'+s.sym);
+    if(tr){
+      const sign=s.px<s.prev?'-':'+';
+      const a=tr.querySelector('[data-f="px"]'),b=tr.querySelector('[data-f="chgabs"]'),c=tr.querySelector('[data-f="pct"]');
+      a.textContent=fmt(s.px,2);b.textContent=sign+fmt(Math.abs(s.px-s.prev),2);c.textContent=sign+fmt(Math.abs((s.px-s.prev)/s.prev*100),2)+'%';
+      [a,b,c].forEach(x=>{x.className='num cell '+cls;});flash(a);
+      tr.querySelector('[data-f="range"]').textContent=`${fmt(s.lo,2)} / ${fmt(s.hi,2)}`;
+      tr.querySelector('[data-f="spark"]').innerHTML=spark(s);
+    }
+  }
+  function tick(){
+    const n=reduce?1:3;
+    for(let i=0;i<n;i++){reprice(ALL[Math.floor(Math.random()*ALL.length)]);}
+    ticks+=n;stats();
+  }
+  let raf=0,last=0;
+  function loop(t){
+    if(!halted&&t-last>=INTERVAL){last=t;tick();}
+    raf=requestAnimationFrame(loop);
+  }
+  function start(){cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);}
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelAnimationFrame(raf);else start();});
+  start();
+
+  // ---- halt button ----
+  const btn=document.getElementById('halt'),sess=document.getElementById('sess');
+  btn.addEventListener('click',()=>{
+    halted=!halted;document.body.classList.toggle('halted',halted);
+    btn.setAttribute('aria-pressed',String(halted));btn.textContent=halted?'Resume tape':'Halt tape';
+    sess.textContent=halted?'Trading halted':'Session open';sess.className=halted?'glow-r':'glow-g';
+  });
+
+  // ---- clock ----
+  const clk=document.getElementById('clock');
+  function clock(){const d=new Date();clk.textContent=d.toTimeString().slice(0,8);clk.setAttribute('datetime',d.toISOString());}
+  clock();setInterval(clock,1000);
+})();
+</script>
+</body>
+</html>
