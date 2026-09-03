@@ -1211,6 +1211,7 @@ function hydrate(){
   renderRows(); renderCats(); renderDenoms(); renderHistory(); lockUI(); validateAll(); paint();
 }
 
+function relock(){ lockUI(); renderRows(); renderCats(); renderDenoms(); paint(); }
 function lockUI(){
   var c=S.close.closed;
   $('#closedChip').hidden=!c;
@@ -1277,10 +1278,16 @@ function wireFields(){
     $('#curCustWrap').hidden=(S.currency!=='custom');
     /* swap the denomination set when it is still the standard one for the old currency */
     if(isStdSet(prev)){
-      var qty={}; S.denoms.forEach(function(d){ qty[d.cents]=d.qty; });
+      var qty={}, lost=0;
+      S.denoms.forEach(function(d){ qty[d.cents]=d.qty; });
       S.denoms=stdDen(S.currency);
-      S.denoms.forEach(function(d){ if(qty[d.cents]!==undefined) d.qty=qty[d.cents]; });
+      var kept={};
+      S.denoms.forEach(function(d){ if(qty[d.cents]!==undefined){ d.qty=qty[d.cents]; kept[d.cents]=1; } });
+      Object.keys(qty).forEach(function(c){ if(!kept[c]&&Math.round(n0(qty[c]))>0) lost++; });
       renderDenoms();
+      if(lost) flash('Denominations switched to '+sym()+'. '+lost+
+        (lost===1?' counted denomination has':' counted denominations have')+
+        ' no equivalent in this currency and was cleared — recount the tin.',true);
     }
     S.sample=false; $('#sampleChip').hidden=true; $('#bSample').hidden=false;
     save(); paint();
@@ -1468,10 +1475,10 @@ function wireButtons(){
     if(!S.close.closedOn) S.close.closedOn=todayISO();
     if(String(S.close.reimb).trim()==='') S.close.reimb=(Math.max(0,t.topUpCounted)/100).toFixed(2);
     $('#closedOn').value=S.close.closedOn; $('#reimb').value=S.close.reimb;
-    dirty(); lockUI(); paint(); flash('Period closed and locked.');
+    dirty(); relock(); flash('Period closed and locked.');
   });
   $('#bReopen').addEventListener('click',function(){
-    S.close.closed=false; dirty(); lockUI(); paint(); flash('Period reopened.');
+    S.close.closed=false; dirty(); relock(); flash('Period reopened.');
   });
   $('#bNext').addEventListener('click',function(){
     var t=calc();
