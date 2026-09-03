@@ -690,14 +690,15 @@ function calc(){
 
 /* ── persistence ───────────────────────────────────────────────── */
 var saveT=null;
-function save(){
-  try{
-    clearTimeout(saveT);
-    saveT=setTimeout(function(){
-      try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
-    },120);
-  }catch(e){}
+function saveNow(){
+  clearTimeout(saveT); saveT=null;
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
 }
+function save(){
+  try{ clearTimeout(saveT); saveT=setTimeout(saveNow,120); }catch(e){ saveNow() }
+}
+window.addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') saveNow() });
 function load(){
   try{
     var raw=localStorage.getItem(KEY); if(!raw) return false;
@@ -853,7 +854,7 @@ function paint(){
     rows[i].querySelector('[data-c="dv"]').textContent = money(rr.dv);
   }
   el('loadCount').textContent = S.loads.length;
-  el('tDist').textContent = fin(c.tDist)? nf(c.tDist,1)+' '+L.dist() : '—';
+  el('tDist').textContent = fin(c.tDist)? nf(c.tDist,1) : '—';
   el('tLine').textContent = money(c.tLine);
   el('tM1').textContent = S.loads.length? money(c.t1):'—';
   el('tM2').textContent = S.loads.length? money(c.t2):'—';
@@ -1069,7 +1070,7 @@ on('presetSave','click',function(){
   S.presets[name]={peg:S.peg, mpg:S.mpg, prec:S.prec, floor:S.floor,
     gen:{width:S.gen.width,step:S.gen.step,start:S.gen.start,max:S.gen.max},
     bands:S.bands.map(function(b){return {from:b.from,pct:b.pct}})};
-  renderPresets(); el('presetSel').value=name; el('presetName').value=''; save();
+  renderPresets(); el('presetSel').value=name; el('presetName').value=''; saveNow();
   flash('Saved rate table "'+name+'"');
 });
 on('presetApply','click',function(){
@@ -1079,12 +1080,12 @@ on('presetApply','click',function(){
   S.peg=p.peg; S.mpg=p.mpg; S.prec=p.prec; S.floor=p.floor;
   S.gen={width:p.gen.width,step:p.gen.step,start:p.gen.start,max:p.gen.max};
   S.bands=p.bands.map(function(b){return {from:b.from,pct:b.pct}});
-  renderAll(); validate(); save(); flash('Applied "'+k+'"');
+  renderAll(); validate(); saveNow(); flash('Applied "'+k+'"');
 });
 on('presetDel','click',function(){
   var k=el('presetSel').value;
   if(!k||!S.presets[k]){ flash('Select a saved table first', true); return }
-  delete S.presets[k]; renderPresets(); save(); flash('Deleted "'+k+'"');
+  delete S.presets[k]; renderPresets(); saveNow(); flash('Deleted "'+k+'"');
 });
 
 /* ── exports ───────────────────────────────────────────────────── */
@@ -1158,7 +1159,7 @@ on('fileJson','change',function(){
   rd.onload=function(){
     try{
       var o=JSON.parse(String(rd.result));
-      hydrate(o); renderAll(); validate(); save(); flash('Imported '+S.loads.length+' load(s)');
+      hydrate(o); renderAll(); validate(); saveNow(); flash('Imported '+S.loads.length+' load(s)');
     }catch(e){ flash('That file is not a valid saved schedule', true) }
   };
   rd.onerror=function(){ flash('Could not read that file', true) };
@@ -1184,14 +1185,14 @@ on('btnClear','click',function(){
   S.doc={carrier:'',cust:'',ref:'',by:'',from:'',to:'',notes:''};
   S.loads=[{id:uid++,ref:'',lane:'',miles:NaN,line:NaN}];
   S.idxDate=''; S.price=NaN;
-  renderAll(); validate(); save(); flash('Cleared — saved rate tables kept');
+  renderAll(); validate(); saveNow(); flash('Cleared — saved rate tables kept');
 });
 
 /* ── boot ──────────────────────────────────────────────────────── */
 if(!load()){ S=sample(); S.bands=buildBands(S.peg,S.gen); }
 renderAll();
 validate();
-save();
+saveNow();
 window.addEventListener('beforeprint', paint);
 })();
 </script>
