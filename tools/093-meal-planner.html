@@ -560,3 +560,303 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
 </footer>
 
 </div>
+
+<script>
+(function(){
+'use strict';
+
+/* ══ constants ═════════════════════════════════════════════════════ */
+var KEY='solvix.meal-planner.v1';
+var AISLES=['Fruit & Veg','Bakery','Meat & Fish','Dairy & Eggs','Chilled & Deli','Frozen','Tins & Jars',
+            'Dry Goods, Rice & Pasta','Herbs, Spices & Oils','Sauces & Condiments','Snacks & Baking',
+            'Drinks','Household & Other'];
+var A=AISLES;
+/* unit -> {d:dimension, f:factor to base (g / ml / 1 item), l:label} */
+var UNITS={
+  g   :{d:'mass',f:1,               l:'g'},
+  kg  :{d:'mass',f:1000,            l:'kg'},
+  oz  :{d:'mass',f:28.349523125,    l:'oz'},
+  lb  :{d:'mass',f:453.59237,       l:'lb'},
+  ml  :{d:'vol', f:1,               l:'ml'},
+  l   :{d:'vol', f:1000,            l:'L'},
+  tsp :{d:'vol', f:5,               l:'tsp'},
+  tbsp:{d:'vol', f:15,              l:'tbsp'},
+  cup :{d:'vol', f:240,             l:'cup'},
+  floz:{d:'vol', f:29.5735295625,   l:'fl oz'},
+  qt  :{d:'vol', f:946.352946,      l:'qt'},
+  ea  :{d:'ct:ea',    f:1,l:'item'},
+  clove:{d:'ct:clove',f:1,l:'clove'},
+  slice:{d:'ct:slice',f:1,l:'slice'},
+  tin :{d:'ct:tin',   f:1,l:'tin'},
+  pack:{d:'ct:pack',  f:1,l:'pack'},
+  bunch:{d:'ct:bunch',f:1,l:'bunch'}
+};
+var UNIT_ORDER=['g','kg','oz','lb','ml','l','floz','qt','tsp','tbsp','cup','ea','clove','slice','tin','pack','bunch'];
+var MEALS=['Breakfast','Lunch','Dinner'];
+var MEALTAG=['b','l','d'];
+var DOWS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var DOWL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var OZ=28.349523125, LB=453.59237, FLOZ=29.5735295625, QT=946.352946;
+
+/* ══ tiny helpers ══════════════════════════════════════════════════ */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function nz(v){v=typeof v==='number'?v:parseFloat(v);return Number.isFinite(v)?v:0;}
+function uid(p){return p+Math.random().toString(36).slice(2,8)+(Date.now()%100000).toString(36);}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function trimNum(v,dp){
+  if(!Number.isFinite(v))return '—';
+  if(Math.abs(v)<5e-10)v=0;
+  var s=v.toFixed(dp);
+  if(s.indexOf('.')>=0)s=s.replace(/0+$/,'').replace(/\.$/,'');
+  if(s==='-0')s='0';
+  return s;
+}
+function grp(s){var p=s.split('.');p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');return p.join('.');}
+
+/* ══ state ═════════════════════════════════════════════════════════ */
+var S=null, dirtyTimer=null;
+
+function nextMonday(){
+  var d=new Date();d.setHours(12,0,0,0);
+  var add=(8-d.getDay())%7; if(add===0)add=7;
+  d.setDate(d.getDate()+add);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function mkRecipe(id,name,serves,tags,rows){
+  return {id:id,name:name,serves:serves,tags:tags,ings:rows.map(function(r,i){
+    return {id:id+'i'+i,name:r[0],qty:r[1],unit:r[2],aisle:r[3],price:r[4],staple:!!r[5]};
+  })};
+}
+function sampleState(){
+  var R=[
+    mkRecipe('r1','Porridge with Banana & Honey',2,'b',[
+      ['Porridge oats',100,'g',A[7],1.80,true],['Whole milk',0.4,'l',A[3],1.20,false],
+      ['Banana',2,'ea',A[0],0.22,false],['Honey',20,'g',A[10],6.50,true]]),
+    mkRecipe('r2','Scrambled Eggs on Toast',2,'b',[
+      ['Eggs',4,'ea',A[3],0.38,false],['Whole milk',30,'ml',A[3],1.20,false],
+      ['Butter',20,'g',A[3],8.00,true],['Wholemeal bread',4,'slice',A[1],0.09,false]]),
+    mkRecipe('r3','Greek Yoghurt, Berries & Granola',2,'b',[
+      ['Greek yoghurt',300,'g',A[3],3.20,false],['Blueberries',150,'g',A[0],9.00,false],
+      ['Granola',80,'g',A[7],5.50,false]]),
+    mkRecipe('r4','Chicken & Vegetable Traybake',4,'d',[
+      ['Chicken thighs',800,'g',A[2],6.20,false],['Potatoes',800,'g',A[0],1.10,false],
+      ['Red onion',2,'ea',A[0],0.35,false],['Bell pepper',2,'ea',A[0],0.75,false],
+      ['Olive oil',30,'ml',A[8],7.50,true],['Dried oregano',5,'g',A[8],22.00,true]]),
+    mkRecipe('r5','Spaghetti Bolognese',4,'d',[
+      ['Beef mince',500,'g',A[2],7.80,false],['Spaghetti',400,'g',A[7],1.40,false],
+      ['Chopped tomatoes',2,'tin',A[6],0.75,false],['Onion',1,'ea',A[0],0.28,false],
+      ['Garlic',3,'clove',A[0],0.06,false],['Carrot',2,'ea',A[0],0.15,false],
+      ['Tomato purée',30,'g',A[6],4.00,true],['Olive oil',15,'ml',A[8],7.50,true]]),
+    mkRecipe('r6','Lentil & Tomato Soup',4,'ld',[
+      ['Red lentils',250,'g',A[7],2.40,false],['Chopped tomatoes',1,'tin',A[6],0.75,false],
+      ['Onion',1,'ea',A[0],0.28,false],['Carrot',2,'ea',A[0],0.15,false],
+      ['Vegetable stock cube',2,'ea',A[9],0.12,true],['Olive oil',15,'ml',A[8],7.50,true]]),
+    mkRecipe('r7','Tuna Pasta Salad',2,'l',[
+      ['Tuna',2,'tin',A[6],1.15,false],['Pasta',200,'g',A[7],1.40,false],
+      ['Sweetcorn',1,'tin',A[6],0.65,false],['Mayonnaise',40,'g',A[9],3.50,true],
+      ['Cucumber',0.5,'ea',A[0],0.80,false]]),
+    mkRecipe('r8','Chilli Con Carne',4,'d',[
+      ['Beef mince',500,'g',A[2],7.80,false],['Kidney beans',2,'tin',A[6],0.65,false],
+      ['Chopped tomatoes',1,'tin',A[6],0.75,false],['Onion',1,'ea',A[0],0.28,false],
+      ['Garlic',2,'clove',A[0],0.06,false],['Long grain rice',300,'g',A[7],1.60,false],
+      ['Chilli powder',8,'g',A[8],18.00,true]]),
+    mkRecipe('r9','Salmon, New Potatoes & Broccoli',2,'d',[
+      ['Salmon fillet',260,'g',A[2],19.50,false],['New potatoes',400,'g',A[0],1.60,false],
+      ['Broccoli',1,'ea',A[0],0.85,false],['Butter',15,'g',A[3],8.00,true],
+      ['Lemon',1,'ea',A[0],0.35,false]]),
+    mkRecipe('r10','Cheese & Ham Sandwiches',2,'l',[
+      ['Wholemeal bread',4,'slice',A[1],0.09,false],['Cheddar',80,'g',A[3],8.50,false],
+      ['Cooked ham',60,'g',A[4],12.00,false],['Butter',15,'g',A[3],8.00,true],
+      ['Lettuce',40,'g',A[0],6.00,false]]),
+    mkRecipe('r11','Veg Stir-Fry with Noodles',3,'ld',[
+      ['Egg noodles',300,'g',A[7],2.20,false],['Stir-fry vegetable mix',400,'g',A[0],3.20,false],
+      ['Soy sauce',30,'ml',A[9],4.50,true],['Garlic',2,'clove',A[0],0.06,false],
+      ['Sesame oil',10,'ml',A[8],12.00,true]])
+  ];
+  var P={};
+  function set(d,m,r,src){P['d'+d+'m'+m]={r:r,p:null,src:src||null};}
+  set(0,0,'r1');   set(0,1,'r10');  set(0,2,'r5');
+  set(1,0,'r2');   set(1,1,'LO','d0m2'); set(1,2,'r4');
+  set(2,0,'r1');   set(2,1,'r7');   set(2,2,'r6');
+  set(3,0,'r3');   set(3,1,'LO','d2m2'); set(3,2,'r8');
+  set(4,0,'r1');   set(4,1,'r10');  set(4,2,'r9');
+  set(5,0,'r2');   set(5,1,'LO','d3m2'); set(5,2,'r11');
+  set(6,0,'r3');   set(6,1,'r7');   set(6,2,'r4');
+  return {
+    v:1, sample:true, sel:'r5',
+    meta:{house:'The Hartley household',start:nextMonday(),days:7,adults:2,kids:2,kidPct:60,
+          cur:'£',curCustom:'',units:'metric'},
+    recipes:R, plan:P, pantry:{}, bought:{}
+  };
+}
+function blankState(){
+  var r=mkRecipe(uid('r'),'New recipe',2,'bld',[['',0,'g',A[0],0,false]]);
+  return {v:1,sample:false,sel:r.id,
+    meta:{house:'',start:nextMonday(),days:7,adults:2,kids:0,kidPct:60,cur:'£',curCustom:'',units:'metric'},
+    recipes:[r],plan:{},pantry:{},bought:{}};
+}
+function normalise(o){
+  var b=blankState();
+  if(!o||typeof o!=='object')return sampleState();
+  var s={v:1,sample:!!o.sample,sel:o.sel||null,
+    meta:Object.assign({},b.meta,o.meta||{}),
+    recipes:Array.isArray(o.recipes)?o.recipes:[],
+    plan:(o.plan&&typeof o.plan==='object')?o.plan:{},
+    pantry:(o.pantry&&typeof o.pantry==='object')?o.pantry:{},
+    bought:(o.bought&&typeof o.bought==='object')?o.bought:{}};
+  s.meta.days=Math.max(1,Math.min(14,Math.round(nz(s.meta.days)||7)));
+  s.recipes=s.recipes.map(function(r){
+    return {id:r.id||uid('r'),name:String(r.name==null?'':r.name),serves:nz(r.serves),
+      tags:String(r.tags==null?'':r.tags),
+      ings:(Array.isArray(r.ings)?r.ings:[]).map(function(i){
+        return {id:i.id||uid('i'),name:String(i.name==null?'':i.name),qty:nz(i.qty),
+          unit:UNITS[i.unit]?i.unit:'g',aisle:AISLES.indexOf(i.aisle)>=0?i.aisle:A[12],
+          price:nz(i.price),staple:!!i.staple};})};
+  });
+  if(!s.recipes.length)s.recipes=b.recipes;
+  if(!s.recipes.some(function(r){return r.id===s.sel;}))s.sel=s.recipes[0].id;
+  return s;
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+}
+function load(){
+  try{var raw=localStorage.getItem(KEY);if(raw)return normalise(JSON.parse(raw));}catch(e){}
+  return null;
+}
+function touch(){ if(S.sample){S.sample=false;$('sampleBanner').hidden=true;} }
+
+/* ══ maths ═════════════════════════════════════════════════════════ */
+function sym(){return S.meta.cur==='custom'?(S.meta.curCustom||'¤'):S.meta.cur;}
+function imperial(){return S.meta.units==='imperial';}
+function money(v){
+  if(!Number.isFinite(v))return '—';
+  if(Math.abs(v)<0.005)v=0;
+  return sym()+grp(v.toFixed(2));
+}
+function portionsDefault(){return nz(S.meta.adults)+nz(S.meta.kids)*nz(S.meta.kidPct)/100;}
+function recipeById(id){for(var i=0;i<S.recipes.length;i++)if(S.recipes[i].id===id)return S.recipes[i];return null;}
+function slotKey(d,m){return 'd'+d+'m'+m;}
+function slotIdx(k){var m=/^d(\d+)m(\d+)$/.exec(k);return m?(+m[1])*3+(+m[2]):-1;}
+function dateFor(d){
+  var p=String(S.meta.start||'').split('-');
+  if(p.length!==3)return null;
+  var dt=new Date(+p[0],(+p[1])-1,+p[2],12,0,0);
+  if(isNaN(dt.getTime()))return null;
+  dt.setDate(dt.getDate()+d);
+  return dt;
+}
+function dayShort(d){var t=dateFor(d);return t?DOWS[t.getDay()]:'Day '+(d+1);}
+function dayLong(d){var t=dateFor(d);return t?DOWL[t.getDay()]:'Day '+(d+1);}
+function dayDate(d){var t=dateFor(d);return t?t.getDate()+' '+MON[t.getMonth()]:'';}
+function fullDate(t){return t?(t.getDate()+' '+MON[t.getMonth()]+' '+t.getFullYear()):'—';}
+
+function priceFactor(dim){ if(!imperial()||dim.indexOf('ct:')===0)return 1; return dim==='mass'?LB/1000:QT/1000; }
+function priceBasis(dim){
+  if(dim.indexOf('ct:')===0){var u=dim.slice(3);return 'per '+(UNITS[u]?UNITS[u].l:u);}
+  if(dim==='mass')return imperial()?'per lb':'per kg';
+  return imperial()?'per qt':'per L';
+}
+function baseDivisor(dim){return (dim==='mass'||dim==='vol')?1000:1;}
+
+function qtyDisp(base,dim){
+  if(dim.indexOf('ct:')===0){var u=dim.slice(3);return {v:base,u:(UNITS[u]?UNITS[u].l:u)};}
+  if(dim==='mass'){
+    if(imperial()){var o=base/OZ;return o<16?{v:o,u:'oz'}:{v:o/16,u:'lb'};}
+    return base<1000?{v:base,u:'g'}:{v:base/1000,u:'kg'};
+  }
+  if(imperial()){var f=base/FLOZ;return f<32?{v:f,u:'fl oz'}:{v:f/32,u:'qt'};}
+  return base<1000?{v:base,u:'ml'}:{v:base/1000,u:'L'};
+}
+function qtyStr(base,dim,whole){
+  if(!Number.isFinite(base))return '—';
+  var q=qtyDisp(base,dim),dp;
+  if(q.u==='kg'||q.u==='L'||q.u==='lb'||q.u==='qt')dp=2;
+  else if(q.u==='g'||q.u==='ml')dp=(q.v<10?1:0);
+  else dp=whole?0:1;
+  return trimNum(q.v,dp)+' '+q.u;
+}
+function buyStep(base,dim){
+  if(dim.indexOf('ct:')===0)return 1;
+  if(base<100)return 5;
+  if(base<1000)return 10;
+  return 50;
+}
+function roundUp(base,dim){
+  var st=buyStep(base,dim);
+  return Math.ceil(base/st-1e-9)*st;
+}
+
+/* the whole calculation: plan -> cooked portions -> aggregated list */
+function calc(){
+  var def=portionsDefault(), days=S.meta.days;
+  var cooked={}, order=[], warn=[], meals=0, loMeals=0, orphan=0, portionsTotal=0;
+  var d,m,k,s,p,r;
+  for(d=0;d<days;d++)for(m=0;m<3;m++){
+    k=slotKey(d,m); s=S.plan[k];
+    if(!s||!s.r)continue;
+    p=(s.p==null||!Number.isFinite(s.p))?def:s.p;
+    if(s.r==='LO')continue;
+    r=recipeById(s.r);
+    if(!r){warn.push(dayShort(d)+' '+MEALS[m].toLowerCase()+': recipe no longer in the library');continue;}
+    cooked[k]={key:k,d:d,m:m,rid:s.r,own:p,portions:p};
+    order.push(k); meals++; portionsTotal+=p;
+  }
+  for(d=0;d<days;d++)for(m=0;m<3;m++){
+    k=slotKey(d,m); s=S.plan[k];
+    if(!s||s.r!=='LO')continue;
+    p=(s.p==null||!Number.isFinite(s.p))?def:s.p;
+    meals++; loMeals++; portionsTotal+=p;
+    if(s.src&&cooked[s.src]){cooked[s.src].portions+=p;}
+    else{orphan++;warn.push(dayShort(d)+' '+MEALS[m].toLowerCase()+': leftovers have no source meal — nothing bought for it');}
+  }
+  var items={}, seq=0;
+  order.forEach(function(kk){
+    var c=cooked[kk], rr=recipeById(c.rid);
+    if(!rr)return;
+    var serves=nz(rr.serves);
+    if(!(serves>0)){warn.push('“'+rr.name+'” has no serving size — its ingredients are not counted');c.factor=null;return;}
+    var f=c.portions/serves; c.factor=f;
+    rr.ings.forEach(function(ing){
+      var nm=String(ing.name||'').trim(); if(!nm)return;
+      var u=UNITS[ing.unit]||UNITS.g;
+      var key=nm.toLowerCase().replace(/\s+/g,' ')+'|'+u.d;
+      var base=nz(ing.qty)*u.f*f;
+      if(!(base>0))return;
+      if(!items[key]){items[key]={key:key,name:nm,dim:u.d,aisle:ing.aisle||A[12],price:nz(ing.price),
+        staple:!!ing.staple,need:0,seq:seq++,used:[]};}
+      var it=items[key];
+      it.need+=base;
+      if(!(it.price>0)&&nz(ing.price)>0)it.price=nz(ing.price);
+      if(ing.staple)it.staple=true;
+      if(it.used.indexOf(rr.name)<0)it.used.push(rr.name);
+    });
+  });
+  var list=Object.keys(items).map(function(kk){
+    var it=items[kk];
+    it.buy=roundUp(it.need,it.dim);
+    it.held=!!(it.staple&&S.pantry[it.key]);
+    it.cost=it.buy/baseDivisor(it.dim)*it.price;
+    if(!Number.isFinite(it.cost))it.cost=0;
+    return it;
+  });
+  list.sort(function(a,b){
+    var x=AISLES.indexOf(a.aisle),y=AISLES.indexOf(b.aisle);
+    if(x<0)x=99; if(y<0)y=99;
+    if(x!==y)return x-y;
+    return a.name.toLowerCase()<b.name.toLowerCase()?-1:(a.name.toLowerCase()>b.name.toLowerCase()?1:0);
+  });
+  var buyList=list.filter(function(i){return !i.held;});
+  var heldList=list.filter(function(i){return i.held;});
+  var total=0; buyList.forEach(function(i){total+=i.cost;});
+  var heldVal=0; heldList.forEach(function(i){heldVal+=i.cost;});
+  var people=nz(S.meta.adults)+nz(S.meta.kids);
+  return {def:def,days:days,cooked:cooked,order:order,list:list,buyList:buyList,heldList:heldList,
+          total:total,heldVal:heldVal,meals:meals,loMeals:loMeals,orphan:orphan,warn:warn,
+          people:people,portionsTotal:portionsTotal,
+          perPersonDay:(people>0&&days>0)?total/(people*days):null,
+          perPortion:(portionsTotal>0)?total/portionsTotal:null,
+          slotsTotal:days*3};
+}
