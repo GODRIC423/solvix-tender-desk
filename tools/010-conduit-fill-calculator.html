@@ -222,7 +222,9 @@ tbody tr.hit:hover td{background:var(--accent-wash)}
 .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 [hidden]{display:none!important}
 .jg{grid-template-columns:repeat(auto-fit,minmax(176px,1fr))}
-.rt td:first-child{min-width:200px}
+.rt.amp td:first-child{min-width:166px}
+.rt td,.rt th{padding:5px 6px;font-size:12.5px}
+.rt th{font-size:9.5px;letter-spacing:.04em}
 .rt .chip{white-space:nowrap}
 .rt td.n{white-space:nowrap}
 .cx td:first-child input{min-width:150px}
@@ -409,7 +411,7 @@ tbody tr.hit:hover td{background:var(--accent-wash)}
               <td>Totals</td>
               <td class="n" id="tQty">&mdash;</td>
               <td colspan="3" style="color:var(--muted);font-weight:400">current-carrying <span class="mono" id="tCcc">&mdash;</span></td>
-              <td class="n" id="tLoad">&mdash;</td>
+              <td class="n" id="tLoad" title="Highest load current entered">&mdash;</td>
               <td></td>
               <td class="n" id="tArea">&mdash;</td>
               <td></td>
@@ -427,15 +429,15 @@ tbody tr.hit:hover td{background:var(--accent-wash)}
       <section class="card">
         <div class="hd"><h2>Ampacity — Table 310.16 with derating</h2><span class="chip" id="ampChip">&mdash;</span></div>
         <div class="tw">
-          <table class="rt">
+          <table class="rt amp">
             <caption class="sr">Ampacity by conductor with ambient correction and adjustment</caption>
             <thead><tr>
               <th scope="col">Conductor</th>
-              <th scope="col" class="n">Table 310.16</th>
-              <th scope="col" class="n">&times; Ambient</th>
-              <th scope="col" class="n">&times; Adjust</th>
+              <th scope="col" class="n" title="Table 310.16 base ampacity">310.16</th>
+              <th scope="col" class="n" title="Table 310.15(B)(1) ambient correction">Amb.</th>
+              <th scope="col" class="n" title="Table 310.15(C)(1) adjustment">Adj.</th>
               <th scope="col" class="n">Corrected</th>
-              <th scope="col" class="n">Terminal limit</th>
+              <th scope="col" class="n" title="110.14(C) termination limit">Terminal</th>
               <th scope="col" class="n">Allowable</th>
               <th scope="col" class="n">Load</th>
               <th scope="col">Result</th>
@@ -497,6 +499,17 @@ tbody tr.hit:hover td{background:var(--accent-wash)}
         </div>
         <div class="ft">
           <span class="hint" id="ftLine">&mdash;</span>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>Same pull, other raceways</h2><span class="hint">smallest size that fits</span></div>
+        <div class="tw">
+          <table class="rt">
+            <caption class="sr">Smallest trade size of each raceway type that accepts this bundle</caption>
+            <thead><tr><th scope="col">Raceway</th><th scope="col" class="n">Fits at</th><th scope="col" class="n">Fill there</th><th scope="col" class="n" id="cmpNow">Fill now</th></tr></thead>
+            <tbody id="cmpBody"></tbody>
+          </table>
         </div>
       </section>
 
@@ -643,9 +656,9 @@ function sample(){
     notes:"Surface EMT above suspended ceiling, ambient raised by roof-space heat gain."};
   s.sys={type:"EMT",size:"1/2",nipple:false,insul:"90",term:"75",ambient:40,tunit:"C",units:"imp"};
   s.rows=[
-    {id:uid(),desc:"Circuits 1, 3, 5 — ungrounded",qty:3,size:"12",mat:"CU",role:"hot",load:16},
-    {id:uid(),desc:"Circuits 1, 3, 5 — neutrals",qty:3,size:"12",mat:"CU",role:"nc",load:16},
-    {id:uid(),desc:"Equipment grounding conductor",qty:1,size:"12",mat:"CU",role:"egc",load:""}
+    {id:uid(),desc:"Ckts 1,3,5 hots",qty:3,size:"12",mat:"CU",role:"hot",load:16},
+    {id:uid(),desc:"Ckts 1,3,5 neutrals",qty:3,size:"12",mat:"CU",role:"nc",load:16},
+    {id:uid(),desc:"Equipment ground",qty:1,size:"12",mat:"CU",role:"egc",load:""}
   ];
   return s;
 }
@@ -999,6 +1012,25 @@ function render(){
   });
   $("annexBody").innerHTML=body;
   $("annexFt").textContent=c.type.name+" · THHN/THWN · at "+c.limit+" % fill";
+
+  /* raceway comparison */
+  var CB=[],tkey;
+  for(tkey in T4){
+    (function(k){
+      var t=T4[k], best=null, bfill=NaN, cur=NaN, i,tt,ar;
+      for(i=0;i<TRADE.length;i++){
+        tt=TRADE[i]; if(!t.d[tt]) continue;
+        ar=t.d[tt][1];
+        if(c.count>0 && c.used<=ar*c.limit/100+1e-12){ best=tt; bfill=c.used/ar*100; break; }
+      }
+      if(c.size&&t.d[c.size]) cur=c.used/t.d[c.size][1]*100;
+      CB.push('<tr'+(k===S.sys.type?' class="hit"':'')+'><td class="lbl2">'+esc(t.name)+'</td>'+
+        '<td class="n">'+(best?esc(tradeTxt(best)):"—")+'</td>'+
+        '<td class="n">'+(fin(bfill)?f(bfill,1)+" %":"—")+'</td>'+
+        '<td class="n">'+(fin(cur)?f(cur,1)+" %":"—")+'</td></tr>');
+    })(tkey);
+  }
+  $("cmpBody").innerHTML=c.count?CB.join(""):'<tr><td colspan="4"><div class="empty">Add conductors to compare.</div></td></tr>';
 
   buildDoc(c);
   return c;
