@@ -677,7 +677,7 @@ function sample(){ return {
   start:"2026-01-12", finish:"2026-08-14", dlpMonths:12,
   hours:"07:30–17:00 Monday to Friday and 08:00–13:00 Saturday. No working outside these hours without the Contractor's prior written consent.",
   ladWeek:1750, ladCapPct:10, varQuoteDays:7,
-  basis:"fixed", fixedSum:486500, costEst:0, costFeePct:12,
+  basis:"fixed", fixedSum:486500, costEst:434375, costFeePct:12,
   rates:[
     {d:"LTHW pipework, 15–54 mm, installed and tested", u:"m",  q:2400, r:38.5},
     {d:"MVHR unit, supplied and commissioned",              u:"nr", q:48,   r:1240},
@@ -776,7 +776,7 @@ function calc(){
   var retR = clamp(num(S.retPct),0,100)/100;
   var cr = cisRate(), vr = vatRate();
   var dueD = clamp(Math.round(num(S.dueDays)),0,365), finD = clamp(Math.round(num(S.finalDays)),0,365);
-  var rows = [], T = {g:0,m:0,ret:0,due:0,cis:0,vat:0,net:0};
+  var rows = [], T = {g:0,m:0,ret:0,due:0,lab:0,cis:0,vat:0,net:0};
 
   (S.sched||[]).forEach(function(r,i){
     var g = Math.max(0, num(r.g));
@@ -793,9 +793,9 @@ function calc(){
     rows.push({i:i, d:r.d, date:r.date, vd:vd, dueDate:dd, finalDate:fdp,
       g:g, m:m, mOver:(mRaw > due + 0.005), ret:ret, due:due, lab:lab, cis:cis, vat:vat, net:net,
       notice:addD(dd,5), payless:addD(fdp,-7)});
-    T.g += g; T.m += m; T.ret += ret; T.due += due; T.cis += cis; T.vat += vat; T.net += net;
+    T.g += g; T.m += m; T.ret += ret; T.due += due; T.lab += lab; T.cis += cis; T.vat += vat; T.net += net;
   });
-  ["g","m","ret","due","cis","vat","net"].forEach(function(k){ T[k] = r2(T[k]); });
+  ["g","m","ret","due","lab","cis","vat","net"].forEach(function(k){ T[k] = r2(T[k]); });
 
   // labour share of the amounts due, used to apportion CIS on retention release
   var labShare = T.due > 0 ? (T.due - T.m) / T.due : 0;
@@ -812,13 +812,13 @@ function calc(){
     var cis = r2(amt * labShare * cr);
     var vat = r2(amt * vr);
     rel.push({d:label, vd:when, dueDate:addD(when,dueD), finalDate:addD(addD(when,dueD),finD),
-      g:0, m:0, ret:-amt, due:amt, cis:cis, vat:vat, net:r2(amt + vat - cis)});
+      g:0, m:0, ret:-amt, due:amt, lab:r2(amt * labShare), cis:cis, vat:vat, net:r2(amt + vat - cis)});
   }
   mkRel("Retention release — practical completion", relPC, finish);
   mkRel("Retention release — end of defects period", relFin, dlpEnd);
 
-  var G = {g:T.g, m:T.m, ret:T.ret, due:r2(T.due), cis:T.cis, vat:T.vat, net:T.net, relRet:0};
-  rel.forEach(function(r){ G.due = r2(G.due + r.due); G.cis = r2(G.cis + r.cis);
+  var G = {g:T.g, m:T.m, ret:T.ret, due:r2(T.due), lab:T.lab, cis:T.cis, vat:T.vat, net:T.net, relRet:0};
+  rel.forEach(function(r){ G.due = r2(G.due + r.due); G.lab = r2(G.lab + r.lab); G.cis = r2(G.cis + r.cis);
     G.vat = r2(G.vat + r.vat); G.net = r2(G.net + r.net); G.relRet = r2(G.relRet + r.due); });
 
   var sum = contractSum();
@@ -1244,14 +1244,14 @@ function update(){
     rb.appendChild(tr);
   });
 
-  var any = (S.sched||[]).length > 0;
-  $("tGross").textContent = any ? money(C.T.g) : "—";
-  $("tMat").textContent   = any ? money(C.T.m) : "—";
-  $("tRet").textContent   = any ? money(r2(C.T.ret - C.G.relRet)) : "—";
-  $("tDue").textContent   = any ? money(C.G.due) : "—";
-  $("tCis").textContent   = any ? (C.cr ? money(C.G.cis) : (S.cis==="na"?"n/a":money(0))) : "—";
-  $("tVat").textContent   = any ? (S.revCharge ? "RC" : money(C.G.vat)) : "—";
-  $("tNet").textContent   = any ? money(C.G.net) : "—";
+  var any = (S.sched||[]).length > 0, on = any && C.T.g > 0;
+  $("tGross").textContent = on ? money(C.T.g) : "—";
+  $("tMat").textContent   = on ? money(C.T.m) : "—";
+  $("tRet").textContent   = on ? money(r2(C.T.ret - C.G.relRet)) : "—";
+  $("tDue").textContent   = on ? money(C.G.due) : "—";
+  $("tCis").textContent   = on ? (C.cr ? money(C.G.cis) : (S.cis==="na"?"n/a":money(0))) : "—";
+  $("tVat").textContent   = on ? (S.revCharge ? "RC" : money(C.G.vat)) : "—";
+  $("tNet").textContent   = on ? money(C.G.net) : "—";
   $("schedEmpty").hidden  = any;
 
   // rates
@@ -1264,7 +1264,7 @@ function update(){
   $("ratesTotal").textContent = (S.rates||[]).length ? money(r2(rt)) : "—";
 
   // hero + stats
-  var live = any && C.T.g > 0;
+  var live = on;
   $("heroNet").textContent = live ? money(C.G.net) : "—";
   $("heroSub").textContent = live
     ? ((S.sched||[]).length + " valuation" + ((S.sched||[]).length===1?"":"s") + " + " + C.rel.length +
@@ -1518,11 +1518,16 @@ function buildCsv(){
   C.rel.forEach(function(r){
     t += csvRow(["", r.d, iso(r.vd), iso(r.dueDate), iso(addD(r.dueDate,5)), iso(addD(r.finalDate,-7)),
       iso(r.finalDate), "0.00", "0.00", (-r.due).toFixed(2), r.due.toFixed(2),
-      r2(r.due * C.labShare).toFixed(2), r.cis.toFixed(2), r.vat.toFixed(2), r.net.toFixed(2)]);
+      r.lab.toFixed(2), r.cis.toFixed(2), r.vat.toFixed(2), r.net.toFixed(2)]);
   });
-  t += csvRow(["","TOTAL","","","","","", C.T.g.toFixed(2), C.T.m.toFixed(2), "0.00",
-    C.G.due.toFixed(2), r2(C.G.due - C.T.m).toFixed(2), C.G.cis.toFixed(2), C.G.vat.toFixed(2),
-    C.G.net.toFixed(2)]);
+  t += csvRow(["","TOTAL","","","","","", C.T.g.toFixed(2), C.T.m.toFixed(2),
+    r2(C.T.ret - C.G.relRet).toFixed(2), C.G.due.toFixed(2), C.G.lab.toFixed(2),
+    C.G.cis.toFixed(2), C.G.vat.toFixed(2), C.G.net.toFixed(2)]);
+  t += "\r\n";
+  t += csvRow(["Retention withheld across valuations", C.T.ret.toFixed(2)]);
+  t += csvRow(["Released at practical completion", C.relPC.toFixed(2), iso(C.finish)]);
+  t += csvRow(["Released at end of defects period", C.relFin.toFixed(2), iso(C.dlpEnd)]);
+  t += csvRow(["Net payable to sub-contractor", C.G.net.toFixed(2)]);
   return "﻿" + t;
 }
 function doCsv(){ download(slug(S.projRef) + "-payment-schedule.csv", "text/csv;charset=utf-8", buildCsv()); }
