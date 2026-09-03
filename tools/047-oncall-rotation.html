@@ -1220,3 +1220,286 @@ function renderMisc(){
     ' with no daylight-saving conversion applied. Data is saved only in this browser. '+
     'Not legal, employment or working-time advice.';
 }
+
+/* ══ printed document ═════════════════════════════════════════════ */
+function buildPrintDoc(){
+  var host=$('#printdoc');
+  var now=new Date(),p=positions(M,asAtDate()),h=[];
+  var team=S.org.team||'On-call rotation';
+  var ref='ONCALL-'+slug(team).toUpperCase().slice(0,16)+'-'+String(S.rot.start||'').replace(/-/g,'');
+  var range=(M.shifts.length&&M.startDT)?(fmtD(M.startDT)+' to '+fmtD(M.shifts[M.shifts.length-1].end)):'—';
+
+  h.push('<div class="lh"><div><div class="org">'+esc(S.org.business||'On-call rota')+'</div>'+
+    '<div class="oaddr">'+esc(team)+(S.org.contact?'\n'+esc(S.org.contact):'')+
+    (S.org.esc?'\n'+esc(S.org.esc):'')+'</div></div>'+
+    '<div class="ttl"><h2>ON-CALL ROTA</h2><div class="wk">'+esc(range)+'</div>'+
+    '<div class="ref">Ref '+esc(ref)+'<br>Issued '+esc(fmtD(now))+' '+fmtT(now)+'</div></div></div>');
+
+  /* who is on now */
+  var curName='—',curContact='',nextWhen='—',nextWho='';
+  if(M.shifts.length&&M.rota.length){
+    if(p.state==='in'&&p.cur>=0){
+      var c=M.shifts[p.cur];
+      curName=c.fin>=0?nameOf(M,c.fin):'Not covered';
+      curContact=c.fin>=0?M.rota[c.fin].contact:'';
+      nextWhen=fmtDT(c.end);
+      nextWho=p.next>=0?(M.shifts[p.next].fin>=0?nameOf(M,M.shifts[p.next].fin):'not covered'):'end of rota';
+    }else if(p.state==='before'){
+      curName='Rota not yet started';
+      nextWhen=fmtDT(M.shifts[0].start);
+      nextWho=M.shifts[0].fin>=0?nameOf(M,M.shifts[0].fin):'not covered';
+    }else{curName='Rota ended';}
+  }
+  h.push('<div class="now"><div><div class="lab">On call when issued</div>'+
+    '<div class="big">'+esc(curName)+'</div><div class="sm">'+esc(curContact||'—')+'</div></div>'+
+    '<div><div class="lab">Next handover</div><div class="big" style="font-size:11pt">'+esc(nextWhen)+'</div>'+
+    '<div class="sm">then '+esc(nextWho||'—')+'</div></div>'+
+    '<div><div class="lab">Escalation</div><div class="big" style="font-size:10pt">'+
+    esc(S.org.esc||'Not set')+'</div><div class="sm">'+esc(S.rot.tz||'local time')+'</div></div></div>');
+
+  h.push('<div class="meta">'+
+    cell('Rota',team)+cell('First handover',M.startDT?fmtDT(M.startDT):'—')+
+    cell('Handover every',M.step+' day'+(M.step===1?'':'s')+' at '+(S.rot.time||'—'))+
+    cell('Time zone',S.rot.tz||'Local time')+
+    cell('Shifts',String(M.shifts.length))+
+    cell('People on rota',String(M.rota.length))+
+    cell('Allocation',S.rot.mode==='balanced'?'Balanced round-robin':'Strict round-robin')+
+    cell('Weekend days',WKLABEL[S.rot.wknd])+'</div>');
+
+  /* schedule */
+  h.push('<h3 class="sec">Schedule — '+M.shifts.length+' shift'+(M.shifts.length===1?'':'s')+'</h3>');
+  if(!M.shifts.length||!M.rota.length){
+    h.push('<p style="font-size:9pt">No rota generated — add people and a valid start date.</p>');
+  }else{
+    h.push('<table><colgroup><col style="width:7%"><col style="width:20%"><col style="width:20%">'+
+      '<col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:20%">'+
+      '<col style="width:14%"></colgroup><thead><tr>'+
+      '<th class="c">Shift</th><th>From</th><th>To</th><th class="n">Days</th><th class="n">W/end</th>'+
+      '<th class="n">Hol</th><th>On call</th><th>Contact</th></tr></thead><tbody>');
+    for(var i=0;i<M.shifts.length;i++){
+      var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+      h.push('<tr'+(i===p.cur?' class="hl"':'')+'><td class="c">'+s.no+'</td>'+
+        '<td>'+esc(fmtD(s.start))+' '+fmtT(s.start)+'</td>'+
+        '<td>'+esc(fmtD(s.end))+' '+fmtT(s.end)+'</td>'+
+        '<td class="n">'+s.days.length+'</td><td class="n">'+s.wkd+'</td><td class="n">'+s.hold+'</td>'+
+        '<td>'+esc(r?r.name:'NOT COVERED')+(s.src==='manual'?' *':'')+'</td>'+
+        '<td>'+esc(r?r.contact:'')+'</td></tr>');
+    }
+    h.push('</tbody></table><p style="font-size:7.5pt;margin:0 0 4pt">* assigned or swapped by hand — '+
+      'see the swap log below.</p>');
+  }
+
+  /* fairness + holidays */
+  h.push('<div class="cols"><div><h3 class="sec">Fairness</h3>');
+  if(M.rota.length){
+    h.push('<table><thead><tr><th>Person</th><th class="n">Shifts</th><th class="n">Days</th>'+
+      '<th class="n">W/end</th><th class="n">Hol</th></tr></thead><tbody>');
+    for(var k=0;k<M.rota.length;k++){
+      var rr=M.rota[k];
+      h.push('<tr><td>'+esc(rr.name)+'</td><td class="n">'+rr.shifts+'</td><td class="n">'+rr.days+
+        '</td><td class="n">'+rr.wkd+'</td><td class="n">'+rr.hold+'</td></tr>');
+    }
+    h.push('</tbody><tfoot><tr><td>Total / spread</td><td class="n">'+M.totShifts+'</td>'+
+      '<td class="n">&plusmn;'+M.spread+'</td><td class="n">&plusmn;'+M.wspread+'</td>'+
+      '<td class="n">&plusmn;'+M.hspread+'</td></tr></tfoot></table>'+
+      '<p style="font-size:7.5pt;margin:0">An equal split of '+M.shifts.length+' shifts across '+
+      M.rota.length+' people is '+(Math.round(M.target*100)/100).toFixed(2)+' each. '+
+      'Spread is the busiest person minus the quietest.</p>');
+  }else{h.push('<p style="font-size:9pt">No one on the rota.</p>');}
+  h.push('</div><div><h3 class="sec">Public holidays &amp; unavailability</h3>');
+  if(M.hol.list.length){
+    h.push('<table><thead><tr><th>Date</th><th>Holiday</th></tr></thead><tbody>');
+    for(var q=0;q<M.hol.list.length;q++)
+      h.push('<tr><td>'+esc(fmtD(M.hol.list[q].d))+'</td><td>'+esc(M.hol.list[q].name)+'</td></tr>');
+    h.push('</tbody></table>');
+  }else{h.push('<p style="font-size:8.5pt;margin-bottom:4pt">No public holidays entered.</p>');}
+  var bl=[];
+  for(var z=0;z<M.rota.length;z++)if(M.rota[z].blackCount)
+    bl.push(esc(M.rota[z].name)+' — '+M.rota[z].blackCount+' day'+(M.rota[z].blackCount===1?'':'s')+
+      ' unavailable ('+esc(S.members[M.rota[z].idx].black)+')');
+  h.push('<p style="font-size:8pt;line-height:1.45">'+(bl.length?bl.join('<br>')
+    :'No blackout dates recorded.')+'</p></div></div>');
+
+  /* swaps */
+  h.push('<h3 class="sec">Swaps &amp; cover recorded</h3>');
+  if(S.swaps.length){
+    h.push('<table><colgroup><col style="width:16%"><col style="width:10%"><col style="width:24%">'+
+      '<col style="width:18%"><col style="width:18%"><col style="width:14%"></colgroup><thead><tr>'+
+      '<th>Recorded</th><th>Type</th><th>Shift</th><th>Was</th><th>Now</th><th>Reason</th></tr></thead><tbody>');
+    for(var w=0;w<S.swaps.length;w++){
+      var sw=S.swaps[w],a=[],b=[],c2=[];
+      for(var lg=0;lg<sw.legs.length;lg++){
+        a.push(esc(sw.legs[lg].label));b.push(esc(sw.legs[lg].from||'not covered'));
+        c2.push(esc(sw.legs[lg].to||'not covered'));
+      }
+      h.push('<tr><td>'+esc(sw.ts)+'</td><td>'+(sw.type==='swap'?'Swap':'Cover')+'</td><td>'+
+        a.join('<br>')+'</td><td>'+b.join('<br>')+'</td><td>'+c2.join('<br>')+'</td><td>'+
+        esc(sw.note||'')+'</td></tr>');
+    }
+    h.push('</tbody></table>');
+  }else{h.push('<p style="font-size:9pt">None recorded.</p>');}
+
+  h.push('<div class="cols" style="margin-top:8pt"><div class="box"><b class="t">Important — read before publishing</b>'+
+    'This rota is a planning aid. It allocates cover fairly and shows who holds the pager; it does '+
+    '<b>not</b> check rest periods, maximum weekly hours, night-work limits or standby and call-out pay, '+
+    'and it uses only the public-holiday dates entered by hand. Check the rota against contracts of '+
+    'employment, any collective or works agreement, and the working-time rules applying where each person '+
+    'is based. Take advice from your HR or legal adviser if in doubt.</div>'+
+    '<div class="box"><b class="t">How this rota was built</b>'+
+    'Shift <i>i</i> runs from the first handover plus <i>i</i> &times; '+M.step+' day'+(M.step===1?'':'s')+
+    ' until the next shift begins, covering '+M.step+' calendar day'+(M.step===1?'':'s')+
+    ' from its start date. Allocation walks the rota order from the person after the last one picked and '+
+    'skips anyone whose unavailable dates touch the shift'+
+    (S.rot.mode==='balanced'?', giving the shift to whichever available person has fewest shifts so far'
+      :', giving the shift to the first available person')+
+    (S.rot.b2b?', and avoids back-to-back shifts where someone else is free':'')+
+    '. Hand-made assignments and swaps override that and are counted in the fairness table. Times are '+
+    'local wall-clock times with no daylight-saving conversion.</div></div>');
+
+  h.push('<div class="sign"><div><i></i>Prepared by</div><div><i></i>Approved by</div><div><i></i>Date</div></div>');
+  h.push('<p class="fine">'+esc(S.org.business||'')+(S.org.business?' — ':'')+esc(team)+
+    ' · rota issued '+esc(fmtD(now))+' '+fmtT(now)+' · ref '+esc(ref)+
+    ' · generated with the Solvix On-Call Rotation Planner. Figures are derived from the entries above; '+
+    'check them before you rely on them.</p>');
+  host.innerHTML=h.join('');
+}
+function cell(k,v){return '<div><b>'+esc(k)+'</b><span>'+esc(v||'—')+'</span></div>';}
+
+/* ══ exports ══════════════════════════════════════════════════════ */
+function dl(name,mime,text,bom){
+  try{
+    var blob=new Blob([(bom?'\ufeff':'')+text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){toast('Could not create the file in this browser.',true);}
+}
+function csvCell(v){
+  v=(v==null?'':String(v));
+  return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;
+}
+function csv(rows){
+  var out=[];
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i],line=[];
+    for(var j=0;j<r.length;j++)line.push(csvCell(r[j]));
+    out.push(line.join(','));
+  }
+  return out.join('\r\n')+'\r\n';
+}
+function fname(kind,ext){
+  return 'on-call-'+kind+'-'+slug(S.org.team||S.org.business||'rota')+'-'+
+    (S.rot.start||'undated')+'.'+ext;
+}
+function exportScheduleCsv(){
+  var rows=[['On-call rota',S.org.team||''],['Organisation',S.org.business||''],
+    ['Rota owner',S.org.contact||''],['Escalation',S.org.esc||''],
+    ['First handover',(M.startDT?fmtDT(M.startDT):'')],['Shift length (days)',M.step],
+    ['Shifts',M.shifts.length],['Time zone',S.rot.tz||'local'],
+    ['Allocation',S.rot.mode==='balanced'?'Balanced round-robin':'Strict round-robin'],
+    ['Weekend days',WKLABEL[S.rot.wknd]],['Exported',fmtD(new Date())+' '+fmtT(new Date())],[],
+    ['Shift','Start date','Start time','End date','End time','Days','Weekend days',
+     'Public holiday days','Holiday names','On call','Contact','Source','Auto pick']];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+    rows.push([s.no,s.startISO,fmtT(s.start),s.endISO,fmtT(s.end),s.days.length,s.wkd,s.hold,
+      s.holNames.join('; '),r?r.name:'NOT COVERED',r?r.contact:'',
+      s.src==='manual'?'Manual / swap':'Round-robin',
+      s.base>=0?nameOf(M,s.base):'nobody available']);
+  }
+  dl(fname('schedule','csv'),'text/csv;charset=utf-8',csv(rows),true);
+  toast('Schedule CSV downloaded.');
+}
+function exportFairCsv(){
+  var rows=[['On-call fairness report',S.org.team||''],
+    ['Period',(M.startDT?fmtD(M.startDT):'')+' to '+(M.shifts.length?fmtD(M.shifts[M.shifts.length-1].end):'')],
+    ['Shifts generated',M.shifts.length],['Shifts allocated',M.totShifts],
+    ['Even split would be',(Math.round(M.target*100)/100).toFixed(2)],
+    ['Shift spread',M.spread],['Weekend-day spread',M.wspread],['Holiday-day spread',M.hspread],[],
+    ['Person','Contact','On rota','Shifts','Days on call','Weekend days','Public holiday days',
+     'Blackout days','Share of allocated shifts %']];
+  for(var i=0;i<M.mem.length;i++){
+    var r=M.mem[i];
+    rows.push([r.name,r.contact,r.onRota?'Yes':'No',r.onRota?r.shifts:'',r.onRota?r.days:'',
+      r.onRota?r.wkd:'',r.onRota?r.hold:'',r.blackCount,
+      (r.onRota&&M.totShifts)?((r.shifts/M.totShifts)*100).toFixed(1):'']);
+  }
+  dl(fname('fairness','csv'),'text/csv;charset=utf-8',csv(rows),true);
+  toast('Fairness CSV downloaded.');
+}
+function icsEsc(s){
+  return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/;/g,'\\;')
+    .replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+}
+function fold(line){
+  var out='',s=line;
+  while(s.length>70){out+=s.slice(0,70)+'\r\n ';s=s.slice(70);}
+  return out+s;
+}
+function icsStamp(d){
+  return d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+'T'+
+    p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds())+'Z';
+}
+function icsLocal(d){
+  return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'T'+
+    p2(d.getHours())+p2(d.getMinutes())+'00';
+}
+function exportIcs(){
+  if(!M.shifts.length||!M.rota.length){toast('Nothing to export yet — build a rota first.',true);return;}
+  var L=[],stamp=icsStamp(new Date()),sl=slug(S.org.team||'rota');
+  L.push('BEGIN:VCALENDAR','VERSION:2.0',
+    'PRODID:-//Solvix Toolkit//On-Call Rotation Planner//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    'X-WR-CALNAME:'+icsEsc((S.org.team||'On-call rota')+(S.org.business?' — '+S.org.business:'')));
+  if(S.rot.tz)L.push('X-WR-TIMEZONE:'+icsEsc(S.rot.tz));
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+    var desc='Shift '+s.no+' of '+M.shifts.length+'.\n'+
+      'On call: '+(r?r.name:'NOT COVERED')+(r&&r.contact?' ('+r.contact+')':'')+'\n'+
+      'From '+fmtDT(s.start)+' to '+fmtDT(s.end)+(S.rot.tz?' '+S.rot.tz:'')+'.\n'+
+      s.days.length+' days, '+s.wkd+' weekend days, '+s.hold+' public-holiday days'+
+      (s.holNames.length?' ('+s.holNames.join('; ')+')':'')+'.\n'+
+      (s.src==='manual'?'Assigned or swapped by hand.\n':'Allocated by round-robin.\n')+
+      (S.org.esc?'Escalation: '+S.org.esc+'\n':'')+
+      (S.org.contact?'Rota owner: '+S.org.contact+'\n':'');
+    L.push('BEGIN:VEVENT',
+      'UID:oncall-'+sl+'-'+s.startISO.replace(/-/g,'')+'-'+s.no+'@solvix.tools',
+      'DTSTAMP:'+stamp,'DTSTART:'+icsLocal(s.start),'DTEND:'+icsLocal(s.end),
+      'SUMMARY:'+icsEsc('On call: '+(r?r.name:'NOT COVERED')+(S.org.team?' — '+S.org.team:'')),
+      'DESCRIPTION:'+icsEsc(desc),
+      'CATEGORIES:ON-CALL','TRANSP:TRANSPARENT','STATUS:CONFIRMED','SEQUENCE:0',
+      'END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  var out=[];
+  for(var k=0;k<L.length;k++)out.push(fold(L[k]));
+  dl(fname('rota','ics'),'text/calendar;charset=utf-8',out.join('\r\n')+'\r\n',false);
+  toast('Calendar file (.ics) downloaded — '+M.shifts.length+' events.');
+}
+function exportJson(){
+  dl(fname('rota','json'),'application/json',JSON.stringify(S,null,2),false);
+  toast('JSON saved — import it here to restore everything.');
+}
+function importJson(file){
+  if(!file)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      S=normalise(o);
+      renderTeam();fillForm();renderAll();
+      toast('Imported '+S.members.length+' people and '+S.swaps.length+' log entries.');
+    }catch(e){toast('That file could not be read as a saved rota.',true);}
+  };
+  fr.onerror=function(){toast('That file could not be read.',true);};
+  fr.readAsText(file);
+}
+function toast(msg,bad){
+  var el=$('#swapMsg');
+  el.textContent=msg;
+  el.style.color=bad?'var(--bad)':'';
+  el.style.background=bad?'var(--bad-wash)':'';
+  clearTimeout(toast._t);
+  toast._t=setTimeout(function(){el.textContent='';},6000);
+}

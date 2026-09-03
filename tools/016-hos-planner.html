@@ -613,7 +613,8 @@ function fmtDurLong(mins){
   var neg=mins<0, a=Math.round(Math.abs(mins));
   if(state.df==='dec')return (neg?'−':'')+(a/60).toFixed(2)+' h';
   var h=Math.floor(a/60), m=a%60;
-  return (neg?'−':'')+(h?h+' h ':'')+(m||!h?m+' m':'').trim();
+  var out=h?(h+' h'+(m?' '+m+' m':'')):(m+' m');
+  return (neg?'−':'')+out;
 }
 function hhmm(minOfDay){
   var m=((Math.round(minOfDay)%1440)+1440)%1440;
@@ -780,7 +781,7 @@ function simulate(){
   var s={
     drive:0, sinceBreak:0, winStart:0, winOn:false,
     cycle:priorCycleMins(d), cycleLimit:cycleLimitMins(),
-    driveLog:[], pending:null, viol:[], notes:[], rows:[],
+    driveLog:[], pending:null, prov:null, viol:[], notes:[], rows:[],
     total:0, driveTot:0, onTot:0, offTot:0, sbTot:0, onlyTot:0,
     preFullReset:false
   };
@@ -797,18 +798,18 @@ function simulate(){
     s.notes.push({t:0,kind:'warn',text:'Only '+fmtDurLong(preM)+' off duty before the shift — short of the 10 consecutive hours in §395.3(a)(1), so the previous shift’s clocks carry over. Carry-over figures you entered are used below.'});
   }
 
-  var offRun=0, sbRun=0, ndRun=0, runStart=0;
+  var offRun=0, sbCur=0, sbMax=0, ndRun=0;
 
   function closeOffRun(endT){
-    if(offRun<=0){sbRun=0;return;}
+    if(offRun<=0){sbCur=0;sbMax=0;return;}
     if(offRun>=600){
-      s.drive=0; s.sinceBreak=0; s.winOn=false; s.winStart=0; s.pending=null;
+      s.drive=0; s.sinceBreak=0; s.winOn=false; s.winStart=0; s.pending=null; s.prov=null;
       s.notes.push({t:endT,kind:'reset',text:fmtDurLong(offRun)+' consecutive off duty / sleeper berth ending '+clockFull(endT)+' — 10-hour reset met (§395.3(a)(1)). All shift clocks back to zero.'});
-      offRun=0;sbRun=0;return;
+      offRun=0;sbCur=0;sbMax=0;return;
     }
     if(offRun>=120){
-      var cand={end:endT,off:offRun,sb:sbRun};
-      var p=s.pending;
+      var cand={end:endT,off:offRun,sb:sbMax,start:endT-offRun};
+      var p=s.pending, paired=false;
       if(p){
         var tot=p.off+cand.off;
         var okPair=(tot>=600)&&((p.sb>=420&&cand.off>=120)||(cand.sb>=420&&p.off>=120));
@@ -819,14 +820,24 @@ function simulate(){
           s.sinceBreak=0;
           var wu=(endT-E1)-cand.off; if(wu<0)wu=0;
           s.winOn=true; s.winStart=endT-wu;
+          s.prov=null; paired=true;
           s.notes.push({t:endT,kind:'split',text:'Sleeper-berth split applied at '+clockFull(endT)+' — '+
             fmtDurLong(p.off)+' + '+fmtDurLong(cand.off)+' = '+fmtDurLong(tot)+
             ' (§395.1(g)(1)). Neither period counts against the 14-hour window and the 11-hour and 14-hour clocks are recalculated from the end of the first period at '+clockFull(E1)+'.'});
         }
       }
+      /* §395.1(g)(1)(ii): a sleeper-berth period of at least 7 (and less than 10) consecutive
+         hours is excluded from the 14-hour window when it is taken — conditional on a paired
+         period of at least 2 hours being taken as well. */
+      if(!paired&&cand.sb>=420&&s.winOn){
+        s.winStart+=cand.off;
+        s.prov={end:endT,mins:cand.off,sb:cand.sb};
+        s.notes.push({t:endT,kind:'split',text:fmtDurLong(cand.sb)+' in the sleeper berth ending '+clockFull(endT)+
+          ' is excluded from the 14-hour window (§395.1(g)(1)(ii)). This only holds if you also take a separate period of at least 2 consecutive hours off duty or in the sleeper berth, bringing the pair to at least 10 hours.'});
+      }
       s.pending=cand;
     }
-    offRun=0;sbRun=0;
+    offRun=0;sbCur=0;sbMax=0;
   }
   function flag(rule,cite,at,segEnd,fix){
     if(at>=segEnd)return;
@@ -869,7 +880,7 @@ function simulate(){
 
     }else{
       offRun+=len; ndRun+=len;
-      sbRun=(st==='SB')?sbRun+len:0;
+      if(st==='SB'){sbCur+=len; if(sbCur>sbMax)sbMax=sbCur;} else sbCur=0;
       if(st==='SB')s.sbTot+=len; else s.offTot+=len;
       row.drive=s.drive;
     }
@@ -881,6 +892,13 @@ function simulate(){
 
   closeOffRun(s.total);
   if(ndRun>=30)s.sinceBreak=0;
+  if(s.prov){
+    var drovAfter=0;
+    for(var z=0;z<s.driveLog.length;z++)drovAfter+=overlap(s.driveLog[z].s,s.driveLog[z].e,s.prov.end,s.total);
+    if(drovAfter>0)s.notes.push({t:s.total,kind:'warn',text:'The '+fmtDurLong(s.prov.sb)+
+      ' sleeper-berth period ending '+clockFull(s.prov.end)+' was excluded from the 14-hour window, but no paired period of at least 2 consecutive hours follows it in this plan. Add that second period — otherwise the exclusion does not apply and the '+
+      fmtDurLong(drovAfter)+' driven after it may fall outside the 14-hour window.'});
+  }
 
   s.remDrive=LIM_DRIVE-s.drive;
   s.remWin=s.winOn?(LIM_WIN-(s.total-s.winStart)):LIM_WIN;
