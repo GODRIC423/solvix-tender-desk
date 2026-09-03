@@ -952,3 +952,239 @@ function setStatus(j,st,fromSelect){
   syncRow(j.id); validateJob(j);
   if(st==='failed'&&!String(j.fail||'').trim()&&!fromSelect) focusRow(j.id,'fail');
 }
+
+/* ── live results ────────────────────────────────────────── */
+function renderResults(){
+  var C=compute();
+  $('heroPct').textContent = C.util==null?'—':fPct(C.util,1);
+  $('heroSub').textContent = (C.totAvail==null)
+    ? 'Add an operative with a shift to see crew load.'
+    : fInt(C.totCommitted)+' of '+fInt(C.totAvail)+' available minutes committed'+
+      (C.overOps? ' · '+C.overOps+' operative'+(C.overOps===1?'':'s')+' over' : '');
+  $('sUnassigned').textContent=fInt(C.pool.length);
+  $('sUnassignedU').textContent=C.pool.length?(fInt(C.poolMin)+' min to place'):'nothing waiting';
+  $('sDone').textContent=fInt(C.done);
+  $('sDoneU').textContent='of '+fInt(C.total)+' jobs';
+  $('sFail').textContent=fInt(C.failed);
+  $('sCarry').textContent=fInt(C.carry);
+  $('sSpare').textContent=C.spare==null?'—':fInt(C.spare);
+  $('sLate').textContent=fInt(C.risk);
+
+  var on=$('overNote'); on.innerHTML='';
+  var bits=[];
+  if(C.overOps) bits.push({c:'bad',t:'<strong>Over-committed.</strong> '+
+    C.rows.filter(function(r){return r.over;}).map(function(r){
+      return esc(r.op.name||'Operative')+' is '+fInt(r.overBy)+' min over';}).join('; ')+
+    '. Move work to someone with spare time, or agree overtime before you dispatch.'});
+  else if(C.risk) bits.push({c:'warn',t:'<strong>'+C.risk+' job'+(C.risk===1?'':'s')+' at window risk.</strong> '+
+    'Projected arrival is after the customer’s window closes. Re-order the column or call ahead.'});
+  else if(C.pool.length) bits.push({c:'warn',t:'<strong>'+C.pool.length+' job'+(C.pool.length===1?'':'s')+
+    ' unassigned.</strong> Drag them onto a column, or use Auto-assign to fill the biggest gaps first.'});
+  else if(C.total) bits.push({c:'',t:'<strong>Board is clear.</strong> Every job is assigned and no operative is over their shift.'});
+  bits.forEach(function(b){ var d=el('div','note'+(b.c?' '+b.c:'')); d.innerHTML=b.t; on.appendChild(d); });
+
+  var ol=$('opload'); ol.innerHTML='';
+  if(!C.rows.length) ol.appendChild(el('div','hint','No operatives on shift.'));
+  C.rows.forEach(function(r){
+    var w=el('div','oi');
+    var l1=el('div','l1');
+    l1.appendChild(el('b',null,r.op.name||'(unnamed)'));
+    l1.appendChild(el('span',null,fInt(r.committed)+'/'+(r.avail==null?'—':fInt(r.avail))+' min · '+fPct(r.util,0)));
+    w.appendChild(l1);
+    var bar=el('div','bar'+(r.over?' hot':(r.util!=null&&r.util>=85?' warm':'')));
+    var i=el('i'); i.style.width=(r.util==null?0:Math.max(0,Math.min(100,r.util)))+'%'; bar.appendChild(i);
+    w.appendChild(bar);
+    var l2=el('div','hint');
+    l2.textContent = (r.jobs.length? r.jobs.length+' job'+(r.jobs.length===1?'':'s') : 'no jobs')+
+      ' · finishes '+m2t(r.finish)+(r.past? ' — '+fInt(r.past)+' min past shift end':'')+
+      (r.risk? ' · '+r.risk+' at window risk':'');
+    if(r.past||r.over) l2.style.color='var(--bad)';
+    w.appendChild(l2);
+    ol.appendChild(w);
+  });
+  var lc=$('liveChip');
+  lc.className='chip '+(C.overOps?'bad':(C.risk||C.pool.length?'warn':'ok'));
+  lc.textContent=C.overOps?'Over-committed':(C.pool.length?'Jobs waiting':(C.risk?'Window risk':'On plan'));
+  $('sampleTag').style.display=S.sample?'':'none';
+}
+
+/* ── end-of-day report ───────────────────────────────────── */
+function buckets(){
+  var done=[],fail=[],carry=[];
+  S.jobs.forEach(function(j){
+    if(j.status==='complete') done.push(j); else if(j.status==='failed') fail.push(j); else carry.push(j);
+  });
+  return {done:done,fail:fail,carry:carry};
+}
+function opName(id){ var o=S.ops.filter(function(p){return p.id===id;})[0]; return o?(o.name||'(unnamed)'):'Unassigned'; }
+function renderEod(){
+  var B=buckets(), n=$('eod'); n.innerHTML='';
+  function block(title,cls,list,fmt,emptyTxt){
+    var d=el('div');
+    var hh=el('div','hh');
+    hh.appendChild(el('h3',null,title));
+    hh.appendChild(el('span','chip'+(cls?' '+cls:''),String(list.length)));
+    d.appendChild(hh);
+    if(!list.length){ d.appendChild(el('p','hint',emptyTxt)); return d; }
+    var ul=el('ul');
+    list.forEach(function(j){ var li=el('li'); li.innerHTML=fmt(j); ul.appendChild(li); });
+    d.appendChild(ul); return d;
+  }
+  n.appendChild(block('Completed','ok',B.done,function(j){
+    var a=actualMin(j);
+    return '<strong>'+esc(j.ref||'—')+'</strong> '+esc(j.cust)+' — '+opName(j.opId)+
+      (j.stamps&&j.stamps.complete?', off site '+esc(j.stamps.complete):'')+
+      (a!=null? ' <span class="hint">('+fInt(a)+' min on site vs '+fInt(num(j.dur))+' planned)</span>':'');
+  },'Nothing completed yet today.'));
+  n.appendChild(block('Failed / aborted','bad',B.fail,function(j){
+    return '<strong>'+esc(j.ref||'—')+'</strong> '+esc(j.cust)+' — '+opName(j.opId)+
+      '<br><span class="hint">Reason: '+esc(j.fail||'no reason recorded')+'</span>';
+  },'No failed visits.'));
+  n.appendChild(block('Carry over to next day','warn',B.carry,function(j){
+    return '<strong>'+esc(j.ref||'—')+'</strong> '+esc(j.cust)+' — '+(SMAP[j.status]||SMAP.booked).l+
+      ', '+opName(j.opId)+(j.prio==='urgent'?' <span class="chip sm bad">Urgent</span>':'');
+  },'Nothing to carry over — the board is clear.'));
+  $('eodStamp').textContent='Completed '+B.done.length+' · failed '+B.fail.length+' · carried over '+B.carry.length;
+}
+
+/* ── printed document ────────────────────────────────────── */
+function buildDoc(){
+  var C=compute(), B=buckets(), scope=$('printScope').value, d=$('doc');
+  var printed=new Date();
+  var stamp=printed.getFullYear()+'-'+String(printed.getMonth()+1).padStart(2,'0')+'-'+
+    String(printed.getDate()).padStart(2,'0')+' '+String(printed.getHours()).padStart(2,'0')+':'+
+    String(printed.getMinutes()).padStart(2,'0');
+  var h='';
+  h+='<div class="dh"><div><div class="t">'+esc(S.depot||'Dispatch')+'</div>'+
+     '<div>Daily run sheets &amp; end-of-day report</div></div>'+
+     '<div class="r"><b>'+esc(longDate(S.day))+'</b><br>'+
+     'Dispatcher: '+esc(S.dispatcher||'—')+'<br>'+
+     'Control room: '+esc(S.phone||'—')+'<br>'+
+     'Printed '+esc(stamp)+'</div></div>';
+  h+='<div class="disc"><b>Planning estimate — read before you drive.</b> Projected arrival times on this '+
+     'sheet are calculated from the shift start plus the travel and on-site minutes entered by the dispatcher. '+
+     'They make no allowance for traffic, parking, site access delays or job overruns, and they are not a '+
+     'record or check of drivers’ hours, working-time limits or statutory rest breaks — those must be '+
+     'confirmed separately against the rules and contracts that apply to your operation. Times recorded by '+
+     'hand on this sheet are the authoritative record of the visit.</div>';
+  h+='<div class="rsh"><div class="kv"><b>Jobs on board</b> '+C.total+'<br>'+
+     '<b>Assigned</b> '+(C.total-C.pool.length)+'<br><b>Unassigned</b> '+C.pool.length+'</div>'+
+     '<div class="kv"><b>Crew on shift</b> '+S.ops.length+'<br>'+
+     '<b>Available</b> '+(C.totAvail==null?'—':fInt(C.totAvail)+' min')+'<br>'+
+     '<b>Committed</b> '+fInt(C.totCommitted)+' min</div>'+
+     '<div class="kv"><b>Crew load</b> '+(C.util==null?'—':fPct(C.util,1))+'<br>'+
+     '<b>Spare</b> '+(C.spare==null?'—':fInt(C.spare)+' min')+'<br>'+
+     '<b>Over-committed</b> '+C.overOps+' operative(s)</div></div>';
+
+  if(scope!=='report'){
+    var rows=C.rows.filter(function(r){ return scope==='all'||scope===r.op.id; });
+    rows.forEach(function(r){
+      h+='<section class="rs"><h2>Run sheet — '+esc(r.op.name||'(unnamed operative)')+'</h2>';
+      h+='<div class="rsh"><div class="kv"><b>Role</b> '+esc(r.op.role||'—')+'<br>'+
+         '<b>Vehicle</b> '+esc(r.op.veh||'—')+'<br><b>Date</b> '+esc(longDate(S.day))+'</div>'+
+         '<div class="kv"><b>Shift</b> '+esc(r.op.start)+' – '+esc(r.op.end)+'<br>'+
+         '<b>Unpaid break</b> '+fInt(num(r.op.brk))+' min<br>'+
+         '<b>Available</b> '+(r.avail==null?'—':fInt(r.avail)+' min')+'</div>'+
+         '<div class="kv"><b>Jobs</b> '+r.jobs.length+'<br>'+
+         '<b>Committed</b> '+fInt(r.committed)+' min<br>'+
+         '<b>Load</b> '+(r.util==null?'—':fPct(r.util,1))+(r.over?' — OVER by '+fInt(r.overBy)+' min':'')+'</div>'+
+         '<div class="kv"><b>Projected finish</b> '+m2t(r.finish)+
+         (r.past?'<br><b>Past shift end by</b> '+fInt(r.past)+' min':'')+'</div></div>';
+      if(!r.jobs.length){ h+='<p class="nt">No jobs assigned.</p></section>'; return; }
+      h+='<table><thead><tr>'+
+         '<th style="width:7mm">#</th><th style="width:14mm">ETA</th><th style="width:20mm">Window</th>'+
+         '<th>Job</th><th style="width:24mm">Phone</th><th style="width:13mm">Plan</th>'+
+         '<th style="width:16mm">Priority</th><th style="width:18mm">Status</th>'+
+         '<th style="width:15mm">Arrived</th><th style="width:15mm">Left</th><th class="sig">Signature</th>'+
+         '</tr></thead><tbody>';
+      r.jobs.forEach(function(j,i){
+        var e=j._eta||{};
+        h+='<tr><td>'+(i+1)+'</td>'+
+           '<td>'+(e.arrive==null?'—':m2t(e.arrive))+(e.risk?'<br><b>LATE</b>':'')+'</td>'+
+           '<td>'+(t2m(j.ws)!=null&&t2m(j.we)!=null?esc(j.ws)+'–'+esc(j.we):'—')+'</td>'+
+           '<td><b>'+esc(j.ref||'—')+' · '+esc(j.cust||'—')+'</b><br>'+esc(j.addr||'')+
+           (j.notes?'<br><span class="nt">'+esc(j.notes)+'</span>':'')+
+           (j.status==='failed'&&j.fail?'<br><span class="nt"><b>Failed:</b> '+esc(j.fail)+'</span>':'')+'</td>'+
+           '<td>'+esc(j.phone||'—')+'</td>'+
+           '<td>'+fInt(num(j.dur))+' min<br><span class="nt">+'+fInt(num(j.trav))+' trav</span></td>'+
+           '<td>'+esc((PMAP[j.prio]||PMAP.normal).l)+'</td>'+
+           '<td>'+esc((SMAP[j.status]||SMAP.booked).l)+'</td>'+
+           '<td></td><td></td><td></td></tr>';
+      });
+      h+='</tbody></table>';
+      h+='<p class="nt" style="margin-top:2mm">Order of work is the board order above. Wait time is built in '+
+         'where you would arrive before the window opens. The unpaid break is taken before the first job '+
+         'starting after the shift midpoint.</p>';
+      h+='<div class="kv" style="margin-top:4mm"><b>Operative signature</b> ______________________________ '+
+         '&nbsp;&nbsp;<b>Vehicle checked</b> Y / N &nbsp;&nbsp;<b>Returned</b> ______ : ______</div>';
+      h+='</section>';
+    });
+    if(scope==='all'&&C.pool.length){
+      h+='<section class="rs"><h2>Unassigned — do not run</h2>'+
+         '<table><thead><tr><th style="width:20mm">Ref</th><th>Customer / address</th>'+
+         '<th style="width:24mm">Phone</th><th style="width:22mm">Window</th>'+
+         '<th style="width:16mm">Plan</th><th style="width:18mm">Priority</th></tr></thead><tbody>';
+      C.pool.forEach(function(j){
+        h+='<tr><td>'+esc(j.ref||'—')+'</td><td><b>'+esc(j.cust||'—')+'</b><br>'+esc(j.addr||'')+'</td>'+
+           '<td>'+esc(j.phone||'—')+'</td>'+
+           '<td>'+(t2m(j.ws)!=null&&t2m(j.we)!=null?esc(j.ws)+'–'+esc(j.we):'—')+'</td>'+
+           '<td>'+fInt(num(j.dur))+' min</td><td>'+esc((PMAP[j.prio]||PMAP.normal).l)+'</td></tr>';
+      });
+      h+='</tbody></table></section>';
+    }
+  }
+
+  h+='<section class="rep"><h2>End-of-day report — '+esc(longDate(S.day))+'</h2>';
+  h+='<div class="rsh"><div class="kv"><b>Completed</b> '+B.done.length+'</div>'+
+     '<div class="kv"><b>Failed / aborted</b> '+B.fail.length+'</div>'+
+     '<div class="kv"><b>Carried over</b> '+B.carry.length+'</div>'+
+     '<div class="kv"><b>Total on board</b> '+C.total+'</div></div>';
+  h+='<h3 style="margin:4mm 0 2mm">Completed</h3>';
+  if(!B.done.length) h+='<p class="nt">None.</p>';
+  else{
+    h+='<table><thead><tr><th style="width:20mm">Ref</th><th>Customer</th><th style="width:34mm">Operative</th>'+
+       '<th style="width:16mm">On site</th><th style="width:16mm">Off site</th>'+
+       '<th style="width:18mm">Actual</th><th style="width:18mm">Planned</th><th style="width:18mm">Variance</th></tr></thead><tbody>';
+    B.done.forEach(function(j){
+      var a=actualMin(j), p=num(j.dur), v=(a==null?null:a-p);
+      h+='<tr><td>'+esc(j.ref||'—')+'</td><td>'+esc(j.cust||'—')+'</td><td>'+esc(opName(j.opId))+'</td>'+
+         '<td>'+esc((j.stamps&&j.stamps.onsite)||'—')+'</td><td>'+esc((j.stamps&&j.stamps.complete)||'—')+'</td>'+
+         '<td>'+(a==null?'—':fInt(a)+' min')+'</td><td>'+fInt(p)+' min</td>'+
+         '<td>'+(v==null?'—':(v>0?'+':'')+fInt(v)+' min')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='<h3 style="margin:4mm 0 2mm">Failed / aborted — with reasons</h3>';
+  if(!B.fail.length) h+='<p class="nt">None.</p>';
+  else{
+    h+='<table><thead><tr><th style="width:20mm">Ref</th><th style="width:38mm">Customer</th>'+
+       '<th style="width:32mm">Operative</th><th style="width:16mm">Time</th><th>Reason recorded</th></tr></thead><tbody>';
+    B.fail.forEach(function(j){
+      h+='<tr><td>'+esc(j.ref||'—')+'</td><td>'+esc(j.cust||'—')+'</td><td>'+esc(opName(j.opId))+'</td>'+
+         '<td>'+esc((j.stamps&&j.stamps.failed)||'—')+'</td><td>'+esc(j.fail||'No reason recorded')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='<h3 style="margin:4mm 0 2mm">Carried over to the next working day</h3>';
+  if(!B.carry.length) h+='<p class="nt">None — the board is clear.</p>';
+  else{
+    h+='<table><thead><tr><th style="width:20mm">Ref</th><th>Customer / address</th>'+
+       '<th style="width:24mm">Phone</th><th style="width:22mm">Window</th><th style="width:18mm">Priority</th>'+
+       '<th style="width:22mm">Reached</th><th style="width:30mm">Was with</th></tr></thead><tbody>';
+    B.carry.forEach(function(j){
+      h+='<tr><td>'+esc(j.ref||'—')+'</td><td><b>'+esc(j.cust||'—')+'</b><br>'+esc(j.addr||'')+'</td>'+
+         '<td>'+esc(j.phone||'—')+'</td>'+
+         '<td>'+(t2m(j.ws)!=null&&t2m(j.we)!=null?esc(j.ws)+'–'+esc(j.we):'—')+'</td>'+
+         '<td>'+esc((PMAP[j.prio]||PMAP.normal).l)+'</td>'+
+         '<td>'+esc((SMAP[j.status]||SMAP.booked).l)+'</td>'+
+         '<td>'+esc(j.opId?opName(j.opId):'Unassigned')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='<div class="foot">Available minutes = (shift end − shift start) − unpaid break. Committed minutes = '+
+     'Σ (on-site duration + travel) for every job assigned, whatever its status. Crew load = committed ÷ '+
+     'available. Prepared by '+esc(S.dispatcher||'—')+' at '+esc(S.depot||'—')+'. '+
+     'Generated by Solvix Job Dispatch Board — figures are only as good as the minutes entered.</div>';
+  h+='</section>';
+  d.innerHTML=h;
+}
