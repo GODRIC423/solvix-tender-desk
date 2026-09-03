@@ -356,8 +356,8 @@ tbody tr.now{background:var(--accent-wash)}
                 <th scope="col" class="r" style="width:74px">People</th>
                 <th scope="col" style="width:104px">Pay basis</th>
                 <th scope="col" class="r" style="width:118px">Salary / rate</th>
-                <th scope="col" class="r" style="width:96px">Base / h</th>
-                <th scope="col" class="r" style="width:104px">Loaded / h</th>
+                <th scope="col" class="r" style="width:96px">Base /h ea</th>
+                <th scope="col" class="r" style="width:108px">Line /h</th>
                 <th scope="col" style="width:56px">In?</th>
                 <th scope="col" class="r" style="width:104px">Cost</th>
                 <th scope="col" style="width:44px"><span style="position:absolute;left:-9999px">Remove</span></th>
@@ -366,8 +366,7 @@ tbody tr.now{background:var(--accent-wash)}
             <tbody id="pBody"></tbody>
             <tfoot>
               <tr>
-                <td colspan="5">Total burn rate while these people are in the room</td>
-                <td class="n" id="pFootBase">—</td>
+                <td colspan="6">Total burn rate while these people are in the room</td>
                 <td class="n" id="pFootLoaded">—</td>
                 <td></td>
                 <td class="n" id="pFootCost">—</td>
@@ -748,6 +747,23 @@ function str(v){ return (v==null)?'':String(v); }
 function clamp(v,lo,hi){ if(!isFinite(v)) return lo; return Math.min(hi,Math.max(lo,v)); }
 
 /* ── the maths ────────────────────────────────────────────── */
+/* Round a set of line values to 2dp so that they add up to the rounded
+   total exactly — the odd penny is given to the largest line, the way a
+   finance department expects a column to foot. */
+function alloc(raws,total){
+  var cents=raws.map(function(v){ return Math.round((isFinite(v)?v:0)*100); });
+  var target=Math.round((isFinite(total)?total:0)*100);
+  var sum=0; cents.forEach(function(c){ sum+=c; });
+  var diff=target-sum;
+  var order=[]; raws.forEach(function(v,i){ order.push(i); });
+  order.sort(function(a,b){ return Math.abs(raws[b]||0)-Math.abs(raws[a]||0); });
+  var i=0, guard=0;
+  while(diff!==0 && order.length && guard<order.length*20){
+    var idx=order[i%order.length];
+    cents[idx]+=(diff>0?1:-1); diff+=(diff>0?-1:1); i++; guard++;
+  }
+  return cents.map(function(c){ return c/100; });
+}
 function elapsedSec(){
   var e=Math.max(0,num(S.elapsed));
   if(S.runningSince) e+=Math.max(0,(Date.now()-S.runningSince)/1000);
@@ -795,6 +811,12 @@ function compute(){
       end:(startM==null?null:startM+cum),
       share:(agMin>0? m/agMin : null)};
   });
+  var lineAlloc=alloc(rows.map(function(r){ return (r.lineHr==null||!isFinite(r.lineHr))?0:r.lineHr; }), burnHr);
+  var costAlloc=alloc(rows.map(function(r){
+    return (!r.p.inm||r.rawLineHr==null||!isFinite(r.rawLineHr))?0:r.rawLineHr*usedMin/60; }), burnMin*usedMin);
+  rows.forEach(function(r,i){ r.lineR=lineAlloc[i]; r.costR=costAlloc[i]; });
+  var agAlloc=alloc(ag.map(function(g){ return g.cost; }), burnMin*agMin);
+  ag.forEach(function(g,i){ g.costR=agAlloc[i]; });
   var nowIdx=-1;
   if(started){ for(var i=0;i<ag.length;i++){ if(actualMin<ag[i].cum){ nowIdx=i; break; } } }
   return {rows:rows, burnHr:burnHr, baseHr:baseHr, burnMin:burnMin, headcount:headcount,
@@ -896,12 +918,13 @@ function renderResults(){
     tr.className = r.p.inm?'':'out';
     var cb=tr.querySelector('[data-c="base"]'), cl=tr.querySelector('[data-c="loaded"]'), cc=tr.querySelector('[data-c="cost"]');
     cb.textContent = (r.base==null||!isFinite(r.base))?'—':money(r.base);
-    cl.textContent = (r.loaded==null||!isFinite(r.loaded))?'—':money(r.loaded)+(r.count!==1?' ×'+r.count:'');
-    cc.textContent = (!r.p.inm)?'—':((r.rawLineHr==null||!isFinite(r.rawLineHr))?'—':money(r.rawLineHr*C.usedMin/60));
+    if(r.loaded==null||!isFinite(r.loaded)) cl.textContent='—';
+    else if(!r.p.inm) cl.textContent=money(r.loaded*r.count);
+    else { cl.innerHTML=esc(money(r.lineR))+(r.count!==1?'<div class="mini">'+esc(money(r.loaded))+' ea × '+r.count+'</div>':''); }
+    cc.textContent = (!r.p.inm)?'—':((r.rawLineHr==null||!isFinite(r.rawLineHr))?'—':money(r.costR));
   });
-  $('pFootBase').textContent   = C.headcount===0?'—':money(C.baseHr);
-  $('pFootLoaded').textContent = money(C.burnHr);
-  $('pFootCost').textContent   = money(C.used);
+  $('pFootLoaded').textContent = C.headcount?money(C.burnHr):'—';
+  $('pFootCost').textContent   = C.headcount?money(C.used):'—';
   $('peopleChip').textContent  = C.headcount+(C.headcount===1?' person':' people');
 
   /* agenda rows */
@@ -912,7 +935,7 @@ function renderResults(){
     if(!g) return;
     tr.className=(idx===C.nowIdx)?'now':'';
     tr.querySelector('[data-c="end"]').textContent  = (g.end==null)?'—':m2t(g.end);
-    tr.querySelector('[data-c="cost"]').textContent = money(g.cost);
+    tr.querySelector('[data-c="cost"]').textContent = money(g.costR);
     tr.querySelector('[data-c="share"]').textContent= (g.share==null)?'—':n2(g.share*100,0)+'%';
   });
   $('aFootMin').textContent  = S.agenda.length?n2(C.agMin,0)+' min':'—';
@@ -1036,7 +1059,7 @@ function buildDoc(){
      '</tbody></table>';
 
   h+='<h3>Attendees and rates</h3><table><thead><tr><th>Name</th><th>Role</th><th class="n">No.</th>'+
-     '<th>Basis</th><th class="n">Salary / rate</th><th class="n">Base /h</th><th class="n">Loaded /h</th>'+
+     '<th>Basis</th><th class="n">Salary / rate</th><th class="n">Base /h ea</th><th class="n">Line /h</th>'+
      '<th class="n">Cost</th></tr></thead><tbody>';
   if(!C.rows.length) h+='<tr><td colspan="8">No attendees listed.</td></tr>';
   C.rows.forEach(function(r){
@@ -1044,10 +1067,10 @@ function buildDoc(){
       '<td class="n">'+r.count+'</td><td>'+(r.p.basis==='hourly'?'Hourly':'Salary')+'</td>'+
       '<td class="n">'+(r.p.basis==='hourly'?money(num(r.p.amount)):money(num(r.p.amount),0))+'</td>'+
       '<td class="n">'+((r.base==null)?'—':money(r.base))+'</td>'+
-      '<td class="n">'+((r.loaded==null)?'—':money(r.loaded))+'</td>'+
-      '<td class="n">'+((!r.p.inm||r.rawLineHr==null)?'—':money(r.rawLineHr*C.usedMin/60))+'</td></tr>';
+      '<td class="n">'+((r.loaded==null)?'—':money(r.p.inm?r.lineR:r.loaded*r.count))+'</td>'+
+      '<td class="n">'+((!r.p.inm||r.rawLineHr==null)?'—':money(r.costR))+'</td></tr>';
   });
-  h+='</tbody><tfoot><tr><td colspan="6"><b>Total burn rate</b></td><td class="n"><b>'+money(C.burnHr)+'</b></td>'+
+  h+='</tbody><tfoot><tr><td colspan="6"><b>Total burn rate (all attending)</b></td><td class="n"><b>'+money(C.burnHr)+'</b></td>'+
      '<td class="n"><b>'+money(C.used)+'</b></td></tr></tfoot></table>';
 
   if(S.agenda.length){
@@ -1055,7 +1078,7 @@ function buildDoc(){
        '<th class="n">Ends</th><th class="n">Cost</th><th class="n">Share</th></tr></thead><tbody>';
     C.agenda.forEach(function(g){
       h+='<tr><td>'+esc(g.a.name||'—')+'</td><td>'+esc(g.a.owner||'—')+'</td><td class="n">'+n2(g.min,0)+'</td>'+
-        '<td class="n">'+(g.end==null?'—':m2t(g.end))+'</td><td class="n">'+money(g.cost)+'</td>'+
+        '<td class="n">'+(g.end==null?'—':m2t(g.end))+'</td><td class="n">'+money(g.costR)+'</td>'+
         '<td class="n">'+(g.share==null?'—':n2(g.share*100,0)+'%')+'</td></tr>';
     });
     h+='</tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="n"><b>'+n2(C.agMin,0)+'</b></td>'+
@@ -1136,12 +1159,12 @@ function exportCsv(){
     push(['ATTENDEE',r.p.name,r.p.role,(r.p.basis==='hourly'?'Hourly':'Salary/yr'),
       n2(num(r.p.amount),2),(r.base==null?'':n2(r.base,4)),n2(num(S.onCost),2),
       (r.loaded==null?'':n2(r.loaded,4)),n2(C.usedMin,1),
-      ((!r.p.inm||r.rawLineHr==null)?'0.00':n2(r.rawLineHr*C.usedMin/60,2)),
+      ((!r.p.inm||r.rawLineHr==null)?'0.00':n2(r.costR,2)),
       (C.burnHr>0&&r.p.inm&&r.rawLineHr!=null)?n2(r.rawLineHr/C.burnHr*100,1):'',
       (r.p.inm?('×'+r.count+' attending'):'not attending')]);
   });
   C.agenda.forEach(function(g){
-    push(['AGENDA',g.a.name,g.a.owner,'','','','','',n2(g.min,0),n2(g.cost,2),
+    push(['AGENDA',g.a.name,g.a.owner,'','','','','',n2(g.min,0),n2(g.costR,2),
       (g.share==null?'':n2(g.share*100,1)),(g.end==null?'':'ends '+m2t(g.end))]);
   });
   push(['TOTAL','Burn rate per hour','','','','','',n2(C.burnHr,2),'','','','fully loaded']);
