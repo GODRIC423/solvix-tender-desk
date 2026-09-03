@@ -280,3 +280,283 @@ tr.done td.item,tr.done td.n{text-decoration:line-through;color:var(--muted)}
 }
 </style>
 </head>
+<body>
+
+<div class="app">
+
+<header class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">MP</div>
+    <div style="min-width:0">
+      <h1>Meal Planner &amp; Shopping List</h1>
+      <div class="sub">WEEK PLAN &middot; AISLE-SORTED SHOP</div>
+    </div>
+  </div>
+  <div class="row">
+    <label class="lbl" for="iPrintDoc" style="margin-right:-3px">Print</label>
+    <select id="iPrintDoc" style="width:auto;font-size:13px;padding:7px 8px">
+      <option value="all">Plan + shopping list</option>
+      <option value="plan">Meal plan only</option>
+      <option value="list">Shopping list only</option>
+      <option value="rec">Recipe cards</option>
+    </select>
+    <button type="button" class="btn sm pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="btnCsv">Shopping CSV</button>
+    <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+    <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<!-- ── printed document header ─────────────────────────────────────── -->
+<div class="printonly phead">
+  <div class="t" id="pTitle">Meal plan &amp; shopping list</div>
+  <div class="m" id="pSub">&mdash;</div>
+</div>
+<div class="printonly pmeta" id="pMeta"></div>
+
+<div class="note warn noprint" id="sampleBanner" style="margin-top:12px">
+  <strong>Sample week loaded.</strong> A household of two adults and two children, eleven recipes and a full seven-day plan &mdash;
+  edit anything, or
+  <button type="button" class="btn sm" id="btnBlank" style="margin:0 2px">start a blank plan</button>
+  to enter your own.
+</div>
+
+<div class="split" style="margin-top:12px">
+
+  <!-- ═══ left column ═══════════════════════════════════════════════ -->
+  <div class="stack">
+
+    <section class="card noprint" id="cSetup">
+      <div class="hd"><h2>Household &amp; week</h2><span class="chip" id="chipPortions">&mdash;</span></div>
+      <div class="bd">
+        <div class="grid cols-3">
+          <div class="f"><label for="iHouse">Household / plan name</label>
+            <input id="iHouse" type="text" autocomplete="off"></div>
+          <div class="f"><label for="iStart">Week starting</label>
+            <input id="iStart" type="date"></div>
+          <div class="f"><label for="iDays">Days in plan</label>
+            <select id="iDays">
+              <option value="3">3 days</option><option value="4">4 days</option>
+              <option value="5">5 days</option><option value="6">6 days</option>
+              <option value="7">7 days</option><option value="10">10 days</option>
+              <option value="14">14 days</option>
+            </select></div>
+        </div>
+        <div class="grid cols-3 mt10">
+          <div class="f"><label for="iAdults">Adults</label>
+            <input id="iAdults" type="number" min="0" max="40" step="1" inputmode="numeric">
+            <span class="err" id="eAdults" hidden></span></div>
+          <div class="f"><label for="iKids">Children</label>
+            <input id="iKids" type="number" min="0" max="40" step="1" inputmode="numeric">
+            <span class="err" id="eKids" hidden></span></div>
+          <div class="f"><label for="iKidPct">Child portion (% of adult)</label>
+            <input id="iKidPct" type="number" min="10" max="100" step="5" inputmode="numeric">
+            <span class="err" id="eKidPct" hidden></span></div>
+        </div>
+        <div class="grid cols-3 mt10">
+          <div class="f"><label for="iCur">Currency</label>
+            <select id="iCur">
+              <option value="&pound;">&pound; Pound</option>
+              <option value="$">$ Dollar</option>
+              <option value="&euro;">&euro; Euro</option>
+              <option value="custom">Custom symbol&hellip;</option>
+            </select></div>
+          <div class="f" id="wCurCustom" hidden><label for="iCurCustom">Custom symbol</label>
+            <input id="iCurCustom" type="text" maxlength="4" autocomplete="off"></div>
+          <div class="f"><label for="iUnits">Quantity units</label>
+            <select id="iUnits">
+              <option value="metric">Metric (g / ml / kg / L)</option>
+              <option value="imperial">Imperial (oz / fl oz / lb / qt)</option>
+            </select></div>
+        </div>
+        <p class="hint mt10" id="hPortions">&mdash;</p>
+      </div>
+    </section>
+
+    <section class="card" id="cWeek">
+      <div class="hd">
+        <h2>Week plan</h2>
+        <span class="chip" id="chipMeals">&mdash;</span>
+        <button type="button" class="btn sm noprint" id="btnPlanCsv">Plan CSV</button>
+        <button type="button" class="btn sm dgr noprint" id="btnClearWeek">Empty the week</button>
+      </div>
+      <div class="bd" style="padding-top:10px">
+        <div class="tw">
+          <table class="wk">
+            <thead><tr>
+              <th scope="col">Day</th>
+              <th scope="col">Breakfast</th>
+              <th scope="col">Lunch</th>
+              <th scope="col">Dinner</th>
+            </tr></thead>
+            <tbody id="wkBody"></tbody>
+          </table>
+        </div>
+        <p class="hint mt10">Portions default to the household size. Type over a portions box for guests or a bigger batch;
+          clear it to go back to the default. Choose <em>Leftovers of&hellip;</em> to eat an earlier meal again &mdash;
+          that meal is then cooked bigger instead of buying twice.</p>
+      </div>
+    </section>
+
+    <section class="card noprint" id="cRecEdit">
+      <div class="hd">
+        <h2>Recipe library</h2>
+        <span class="chip" id="chipRecipes">&mdash;</span>
+        <button type="button" class="btn sm" id="btnRecCsv">Recipes CSV</button>
+        <button type="button" class="btn sm pri" id="btnNewRec">+ New recipe</button>
+      </div>
+      <div class="bd">
+        <div class="rlist" id="recList"></div>
+        <div class="sepr"></div>
+        <div id="recEditor">
+          <div class="grid cols-3">
+            <div class="f" style="grid-column:span 2"><label for="iRecName">Recipe name</label>
+              <input id="iRecName" type="text" autocomplete="off">
+              <span class="err" id="eRecName" hidden></span></div>
+            <div class="f"><label for="iRecServ">Recipe serves (base portions)</label>
+              <input id="iRecServ" type="number" min="0.5" max="200" step="0.5" inputmode="decimal">
+              <span class="err" id="eRecServ" hidden></span></div>
+          </div>
+          <div class="row mt10" style="justify-content:space-between">
+            <fieldset style="flex:1 1 320px">
+              <legend>Suggest for</legend>
+              <div class="tagbox">
+                <label class="check"><input type="checkbox" id="iTagB"> Breakfast</label>
+                <label class="check"><input type="checkbox" id="iTagL"> Lunch</label>
+                <label class="check"><input type="checkbox" id="iTagD"> Dinner</label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="tw mt10">
+            <table class="ing">
+              <thead><tr>
+                <th scope="col" class="r">Qty</th>
+                <th scope="col">Unit</th>
+                <th scope="col">Ingredient</th>
+                <th scope="col">Aisle</th>
+                <th scope="col" class="r" id="thPrice">Price</th>
+                <th scope="col">Staple</th>
+                <th scope="col"><span class="lbl">Del</span></th>
+              </tr></thead>
+              <tbody id="ingBody"></tbody>
+            </table>
+          </div>
+          <div class="row mt10">
+            <button type="button" class="btn sm" id="btnAddIng">+ Add ingredient</button>
+            <button type="button" class="btn sm" id="btnDupRec">Duplicate recipe</button>
+            <button type="button" class="btn sm dgr" id="btnDelRec">Delete recipe</button>
+            <span class="hint" id="recCost">&mdash;</span>
+          </div>
+          <p class="hint mt10">Prices are per <strong id="priceBasisHint">kg / L / item</strong> &mdash; the cost of the whole
+            pack divided by its size. Tick <em>Staple</em> for cupboard items (oil, spices, flour) so you can mark them as
+            already held and keep them off the list.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ right column — the answer ═════════════════════════════════ -->
+  <div>
+   <div class="sticky">
+    <section class="card" id="cRes">
+      <div class="hd"><h2>This week&rsquo;s shop</h2><span class="chip" id="chipUnits">METRIC</span></div>
+      <div class="bd">
+        <div class="hero-wrap">
+          <div class="stat hero">
+            <div class="k">Estimated shop total</div>
+            <div class="v" id="oTotal">&mdash;</div>
+            <div class="u" id="oTotalSub">&mdash;</div>
+          </div>
+          <div class="substats">
+            <div class="stat"><div class="k">Items to buy</div><div class="v" id="oItems">&mdash;</div></div>
+            <div class="stat"><div class="k">Meals planned</div><div class="v" id="oMeals">&mdash;</div></div>
+            <div class="stat"><div class="k">Per person / day</div><div class="v" id="oPPD">&mdash;</div></div>
+            <div class="stat"><div class="k">Cost per portion</div><div class="v" id="oPP">&mdash;</div></div>
+          </div>
+        </div>
+        <div class="note warn mt10" id="disclaimer">
+          <strong>An estimate from your own prices, not a supermarket quote.</strong>
+          Costs are your unit prices multiplied by the rounded-up pack quantities on the list; they take no account of
+          offers, multibuys, pack sizes or substitutions, and the real till total will differ.
+          This planner does <strong>not</strong> check nutrition, allergens or dietary suitability &mdash;
+          if anyone you are cooking for has an allergy or a medical diet, read the actual product labels and take advice
+          from a dietitian or your GP.
+        </div>
+        <div id="warnBox" class="mt10"></div>
+        <h3 class="mt14" style="margin-bottom:6px">Cost by aisle</h3>
+        <div class="tw">
+          <table><thead><tr>
+            <th scope="col">Aisle</th><th scope="col" class="n">Items</th><th scope="col" class="n">Est. cost</th>
+          </tr></thead>
+          <tbody id="aisleBody"></tbody>
+          <tfoot><tr><td>Total</td><td class="n" id="fItems">&mdash;</td><td class="n" id="fCost">&mdash;</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="ft">
+        <span class="lbl">Excluded from list</span>
+        <strong class="mono" id="oHeld">&mdash;</strong>
+        <span class="hint" style="margin-left:auto" id="oHeldVal">&mdash;</span>
+      </div>
+    </section>
+   </div>
+  </div>
+
+</div>
+
+<!-- ═══ shopping list ═══════════════════════════════════════════════ -->
+<section class="card mt14" id="cList">
+  <div class="hd">
+    <h2>Shopping list</h2>
+    <span class="chip" id="chipList">&mdash;</span>
+    <button type="button" class="btn sm noprint" id="btnUntick">Untick all</button>
+    <button type="button" class="btn sm noprint" id="btnCsv2">CSV</button>
+  </div>
+  <div class="bd" style="padding:0">
+    <div class="tw">
+      <table class="sl">
+        <thead><tr>
+          <th scope="col" class="tick"><span class="lbl">Got</span></th>
+          <th scope="col">Item</th>
+          <th scope="col" class="n">Needed</th>
+          <th scope="col" class="n">Buy</th>
+          <th scope="col" class="n" id="thUnitPrice">Unit price</th>
+          <th scope="col" class="n">Est. cost</th>
+        </tr></thead>
+        <tbody id="slBody"></tbody>
+        <tfoot><tr><td></td><td>Estimated total</td><td class="n"></td><td class="n"></td><td class="n"></td>
+          <td class="n" id="slTotal">&mdash;</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+  <div class="ft"><span class="hint">Quantities are rounded <strong>up</strong> to a sensible pack step
+    (5&nbsp;g/ml under 100, 10 under 1&nbsp;000, 50 above; whole items for anything counted).
+    Estimated cost is charged on the rounded-up quantity.</span></div>
+</section>
+
+<!-- ═══ pantry ══════════════════════════════════════════════════════ -->
+<section class="card mt14" id="cPantry">
+  <div class="hd"><h2>Pantry staples</h2><span class="chip" id="chipPantry">&mdash;</span></div>
+  <div class="bd">
+    <p class="hint" style="margin-bottom:9px">Tick what you already have enough of. Ticked staples drop off the
+      shopping list and out of the estimated total &mdash; the quantity the week needs is still shown so you can check the jar.</p>
+    <div class="pantry" id="pantryBody"></div>
+  </div>
+</section>
+
+<!-- ═══ printed recipe cards ════════════════════════════════════════ -->
+<section class="printonly" id="cRecPrint"></section>
+
+<footer class="hint" style="margin-top:18px;padding-top:10px;border-top:1px solid var(--line)">
+  Ingredients are scaled by <strong>cooked portions &divide; recipe base servings</strong>, aggregated across the whole plan
+  and converted to a single base unit per ingredient (grams for weight, millilitres for volume, whole items for anything counted),
+  so 500&nbsp;g + 0.5&nbsp;kg totals 1&nbsp;kg. Conversions used: 1&nbsp;kg = 1&nbsp;000&nbsp;g, 1&nbsp;lb = 453.59237&nbsp;g,
+  1&nbsp;oz = 28.349523125&nbsp;g, 1&nbsp;L = 1&nbsp;000&nbsp;ml, 1&nbsp;US&nbsp;qt = 946.353&nbsp;ml,
+  1&nbsp;US&nbsp;fl&nbsp;oz = 29.5735&nbsp;ml, 1&nbsp;cup = 240&nbsp;ml, 1&nbsp;tbsp = 15&nbsp;ml, 1&nbsp;tsp = 5&nbsp;ml.
+  Everything is stored only in this browser &mdash; nothing is uploaded. Estimates only; check labels for allergens.
+</footer>
+
+</div>
