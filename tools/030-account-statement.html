@@ -847,17 +847,17 @@ function sample(){
         pay:'Bank transfer — Meridian Print & Supply Ltd\nSort code 20-15-88 · Account 4471 0392\nPlease quote account HRB-014 and the invoice numbers you are paying.',
         msg:'Two invoices are now past their due date. If the 50-day item (INV-2041) is in query, please let us know this week so we can hold it off the reminder run.'},
     rows:[
-      {id:nid(),d:'2026-04-30',t:'inv',ref:'INV-1942',desc:'Menu reprint — spring range',due:'2026-05-30',amt:980,alloc:''},
-      {id:nid(),d:'2026-05-14',t:'inv',ref:'INV-1988',desc:'Table talkers & A-board posters',due:'2026-06-13',amt:1120,alloc:''},
-      {id:nid(),d:'2026-06-12',t:'inv',ref:'INV-2041',desc:'Takeaway cups, 20k, 3 sites',due:'2026-07-12',amt:1850,alloc:''},
-      {id:nid(),d:'2026-06-30',t:'pay',ref:'PAY-0912',desc:'BACS receipt',due:'',amt:980,alloc:'INV-1942'},
-      {id:nid(),d:'2026-07-08',t:'inv',ref:'INV-2076',desc:'Napkins & carrier bags, quarterly call-off',due:'2026-08-07',amt:2420,alloc:''},
-      {id:nid(),d:'2026-07-22',t:'crn',ref:'CRN-0031',desc:'Short delivery on cup lids',due:'',amt:180,alloc:'INV-2041'},
-      {id:nid(),d:'2026-08-04',t:'inv',ref:'INV-2103',desc:'Loyalty cards, 10k',due:'2026-09-03',amt:1260,alloc:''},
-      {id:nid(),d:'2026-08-11',t:'pay',ref:'PAY-0947',desc:'BACS receipt',due:'',amt:1500,alloc:''},
-      {id:nid(),d:'2026-08-18',t:'inv',ref:'INV-2118',desc:'Autumn window graphics, 5 sites',due:'2026-09-17',amt:3275.5,alloc:''},
-      {id:nid(),d:'2026-08-26',t:'inv',ref:'INV-2124',desc:'Till roll & label stock',due:'2026-09-25',amt:640,alloc:''},
-      {id:nid(),d:'2026-08-28',t:'pay',ref:'PAY-0961',desc:'BACS receipt',due:'',amt:850,alloc:''}
+      {id:'s01',d:'2026-04-30',t:'inv',ref:'INV-1942',desc:'Menu reprint — spring range',due:'2026-05-30',amt:980,alloc:''},
+      {id:'s02',d:'2026-05-14',t:'inv',ref:'INV-1988',desc:'Table talkers & A-board posters',due:'2026-06-13',amt:1120,alloc:''},
+      {id:'s03',d:'2026-06-12',t:'inv',ref:'INV-2041',desc:'Takeaway cups, 20k, 3 sites',due:'2026-07-12',amt:1850,alloc:''},
+      {id:'s04',d:'2026-06-30',t:'pay',ref:'PAY-0912',desc:'BACS receipt',due:'',amt:980,alloc:'s01'},
+      {id:'s05',d:'2026-07-08',t:'inv',ref:'INV-2076',desc:'Napkins & carrier bags, quarterly call-off',due:'2026-08-07',amt:2420,alloc:''},
+      {id:'s06',d:'2026-07-22',t:'crn',ref:'CRN-0031',desc:'Short delivery on cup lids',due:'',amt:180,alloc:'s03'},
+      {id:'s07',d:'2026-08-04',t:'inv',ref:'INV-2103',desc:'Loyalty cards, 10k',due:'2026-09-03',amt:1260,alloc:''},
+      {id:'s08',d:'2026-08-11',t:'pay',ref:'PAY-0947',desc:'BACS receipt',due:'',amt:1500,alloc:''},
+      {id:'s09',d:'2026-08-18',t:'inv',ref:'INV-2118',desc:'Autumn window graphics, 5 sites',due:'2026-09-17',amt:3275.5,alloc:''},
+      {id:'s10',d:'2026-08-26',t:'inv',ref:'INV-2124',desc:'Till roll & label stock',due:'2026-09-25',amt:640,alloc:''},
+      {id:'s11',d:'2026-08-28',t:'pay',ref:'PAY-0961',desc:'BACS receipt',due:'',amt:850,alloc:''}
     ]
   };
 }
@@ -1214,9 +1214,12 @@ function renderOpen(){
 
 function renderMsgs(){
   var m=[];
-  if(R.badDates) m.push(R.badDates+' entr'+(R.badDates===1?'y has':'ies have')+' no valid date and are left out of every total.');
-  if(R.badAmt) m.push(R.badAmt+' entr'+(R.badAmt===1?'y has':'ies have')+' a missing or negative amount and are left out.');
-  if(R.after) m.push(R.after+' entr'+(R.after===1?'y is':'ies are')+' dated after the period end — shown greyed out, excluded from this statement.');
+  if(R.badDates) m.push(R.badDates===1?'One entry has no valid date, so it is left out of every total.'
+    :R.badDates+' entries have no valid date, so they are left out of every total.');
+  if(R.badAmt) m.push(R.badAmt===1?'One entry has a missing or negative amount, so it is left out.'
+    :R.badAmt+' entries have a missing or negative amount, so they are left out.');
+  if(R.after) m.push(R.after===1?'One entry is dated after the period end — greyed out below and excluded from this statement.'
+    :R.after+' entries are dated after the period end — greyed out below and excluded from this statement.');
   var box=$('#ledMsg');
   if(saveWarned) return;
   box.innerHTML = m.length? '<div class="note warn" style="margin-top:10px">'+m.map(esc).join('<br>')+'</div>' : '';
@@ -1411,6 +1414,8 @@ function err(id,msg){
   if(msg){ e.textContent=msg; e.hidden=false; } else { e.hidden=true; e.textContent=''; }
 }
 function mark(inputId,bad){ var el=$(inputId); if(el) el.classList.toggle('inv',!!bad); }
+var touched={}, showAllErrs=false;
+function nag(id){ return !!(touched[id]||showAllErrs); }
 function validate(){
   var f=pd(S.st.from), t=pd(S.st.to), a=pd(S.st.asat), d=pd(S.st.date);
   var bad;
@@ -1422,8 +1427,9 @@ function validate(){
   bad = (S.st.date&&d===null); err('#eSDate',bad?'Use a real date.':''); mark('#iSDate',bad);
   var tn=parseInt(S.st.terms,10);
   bad=!(isFinite(tn)&&tn>=0&&tn<=365); err('#eTerms',bad?'Terms must be 0–365 days.':''); mark('#iTerms',bad);
-  err('#eBName',S.biz.name.trim()?'':'The statement needs your business name.'); mark('#iBName',!S.biz.name.trim());
-  err('#eCName',S.cust.name.trim()?'':'Say who the statement is for.'); mark('#iCName',!S.cust.name.trim());
+  var nb=!S.biz.name.trim()&&nag('iBName'), nc=!S.cust.name.trim()&&nag('iCName');
+  err('#eBName',nb?'The statement needs your business name.':''); mark('#iBName',nb);
+  err('#eCName',nc?'Say who the statement is for.':''); mark('#iCName',nc);
   S.rows.forEach(function(r){
     var e=$('[data-err="'+cssq(r.id)+'"]'); if(!e) return;
     var v=r.amt, m='';
@@ -1540,7 +1546,7 @@ function setPreview(on){
   if(on) window.scrollTo(0,0);
 }
 var previewOn=false;
-function togglePreview(){ previewOn=!previewOn; if(previewOn) renderDoc(); setPreview(previewOn); }
+function togglePreview(){ previewOn=!previewOn; if(previewOn){ showAllErrs=true; validate(); renderDoc(); } setPreview(previewOn); }
 $('#bPreview').addEventListener('click',togglePreview);
 $('#bPreview2').addEventListener('click',togglePreview);
 if(previewOn) setPreview(true);
@@ -1548,8 +1554,13 @@ if(previewOn) setPreview(true);
 /* preview mode hides the shell; give a way back that is always reachable */
 document.addEventListener('keydown',function(ev){ if(ev.key==='Escape'&&previewOn) togglePreview(); });
 
-$('#bPrint').addEventListener('click',function(){ renderDoc(); window.print(); });
-$('#bPrint2').addEventListener('click',function(){ renderDoc(); window.print(); });
+function doPrint(){ showAllErrs=true; validate(); renderDoc(); window.print(); }
+$('#bPrint').addEventListener('click',doPrint);
+$('#bPrint2').addEventListener('click',doPrint);
+document.addEventListener('focusout',function(ev){
+  var id=ev.target&&ev.target.id;
+  if(id==='iBName'||id==='iCName'){ touched[id]=1; validate(); }
+});
 $('#bCsv').addEventListener('click',doCsv);
 $('#bJson').addEventListener('click',doJson);
 $('#bImport').addEventListener('click',function(){ $('#fImport').click(); });
@@ -1558,7 +1569,7 @@ $('#fImport').addEventListener('change',function(){ if(this.files&&this.files[0]
 function resetAll(){
   if(!window.confirm('Clear the customer, the ledger and every saved figure from this browser? This cannot be undone.')) return;
   try{ localStorage.removeItem(KEY); }catch(e){}
-  S=blank(); save(); fillForm(); validate(); renderRows(); renderResults(); banner();
+  S=blank(); touched={}; showAllErrs=false; save(); fillForm(); validate(); renderRows(); renderResults(); banner();
   window.scrollTo(0,0);
 }
 $('#bClear').addEventListener('click',resetAll);
