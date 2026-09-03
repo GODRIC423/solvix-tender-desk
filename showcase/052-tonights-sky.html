@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tonight's Sky — a planetarium for 3 September 2026</title>
+<meta name="description" content="A rotating star dome for 41° north on the evening of 3 September 2026: drag to look around, hover a constellation to draw its lines, and read what is visible tonight.">
+<meta name="theme-color" content="#05070F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%2305070F'/%3E%3Cpath d='M14 44 L26 30 L36 36 L50 18' fill='none' stroke='%23D8B65C' stroke-width='1.5'/%3E%3Cg fill='%23F8F6F0'%3E%3Ccircle cx='14' cy='44' r='2.4'/%3E%3Ccircle cx='26' cy='30' r='3'/%3E%3Ccircle cx='36' cy='36' r='2'/%3E%3Ccircle cx='50' cy='18' r='2.8'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bellefair&display=swap" rel="stylesheet">
+<style>
+:root{
+  --night:#05070F;
+  --star:#F8F6F0;
+  --gold:#D8B65C;
+  --horizon:#0E1A33;
+  --ink:rgba(248,246,240,.78);
+  --ink-dim:rgba(248,246,240,.52);
+  --rule:rgba(216,182,92,.32);
+  --serif:"Bellefair",Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--night);color:var(--star);
+  font-family:var(--serif);font-size:17px;line-height:1.45;
+  overflow:hidden;-webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:1px solid var(--gold);outline-offset:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- dome ---------- */
+#dome{
+  position:fixed;inset:0;width:100%;height:100%;display:block;
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+}
+#dome.dragging{cursor:grabbing}
+#dome:focus-visible{outline-offset:-3px}
+
+/* ---------- title ---------- */
+.mast{
+  position:fixed;left:clamp(20px,3vw,44px);top:clamp(18px,3vw,38px);
+  pointer-events:none;z-index:3;max-width:min(52vw,560px);
+}
+.eyebrow{
+  margin:0 0 .6rem;font-size:.78rem;letter-spacing:.32em;text-transform:uppercase;
+  color:var(--gold);display:flex;align-items:center;gap:.9rem;
+}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--gold);opacity:.8}
+h1{
+  margin:0;font-weight:400;line-height:.92;letter-spacing:-.01em;
+  font-size:clamp(2.9rem,6.4vw,6.2rem);
+}
+h1 em{font-style:normal;color:var(--gold)}
+.mast p{
+  margin:1rem 0 0;max-width:34ch;color:var(--ink);font-size:1.02rem;line-height:1.5;
+}
+.live{
+  margin-top:1rem;display:flex;gap:1.6rem;flex-wrap:wrap;
+  font-size:.86rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);
+}
+.live b{font-weight:400;color:var(--star);letter-spacing:.06em;font-size:1rem;text-transform:none}
+
+/* ---------- plate (list) ---------- */
+.plate{
+  position:fixed;right:clamp(20px,2.4vw,34px);top:clamp(18px,3vw,38px);
+  width:344px;max-height:calc(100vh - 60px);
+  background:rgba(5,7,15,.62);
+  border:1px solid var(--rule);
+  padding:22px 22px 18px;z-index:4;
+  display:flex;flex-direction:column;gap:14px;
+}
+.plate::before,.plate::after{
+  content:"";position:absolute;width:10px;height:10px;border:1px solid var(--gold);
+}
+.plate::before{left:-1px;top:-1px;border-right:0;border-bottom:0}
+.plate::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.plate h2{
+  margin:0;font-weight:400;font-size:.78rem;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);
+  display:flex;justify-content:space-between;align-items:baseline;
+}
+.plate h2 span{letter-spacing:.08em;color:var(--ink-dim);text-transform:none;font-size:.9rem}
+.list{list-style:none;margin:0;padding:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.list li{border-top:1px solid rgba(216,182,92,.14)}
+.list li:first-child{border-top:0}
+.row{
+  width:100%;display:grid;grid-template-columns:2rem 1fr auto;align-items:baseline;gap:.5rem;
+  padding:.62rem .3rem .6rem;text-align:left;position:relative;transition:background .25s;
+}
+.row::before{
+  content:"";position:absolute;left:-22px;top:50%;width:0;height:1px;background:var(--gold);
+  transition:width .35s cubic-bezier(.2,.7,.2,1);
+}
+.row:hover::before,.row:focus-visible::before,.row.is-active::before{width:14px}
+.row:hover,.row:focus-visible{background:rgba(216,182,92,.05)}
+.row.is-active .nm{color:var(--gold)}
+.row .num{font-size:.8rem;color:var(--ink-dim);letter-spacing:.1em}
+.row .nm{font-size:1.32rem;line-height:1;transition:color .3s}
+.row .nm small{
+  display:block;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);margin-top:.28rem;
+}
+.row .alt{text-align:right;line-height:1}
+.row .alt b{font-weight:400;font-size:1.12rem;font-variant-numeric:tabular-nums}
+.row .alt em{display:block;font-style:normal;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);margin-top:.3rem}
+.row.is-set{opacity:.45}
+.detail{border-top:1px solid var(--rule);padding-top:14px;min-height:118px}
+.detail h3{margin:0 0 .35rem;font-weight:400;font-size:1.15rem;color:var(--gold);letter-spacing:.02em}
+.detail h3 span:last-child{color:var(--ink-dim);font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;margin-left:.6rem}
+.detail p{margin:0;color:var(--ink);font-size:.98rem;line-height:1.5}
+.detail .fade{transition:opacity .3s}
+.detail.swap .fade{opacity:0}
+
+/* ---------- corners ---------- */
+.corner{
+  position:fixed;bottom:clamp(18px,3vw,34px);z-index:3;font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);
+}
+.corner.left{left:clamp(20px,3vw,44px);display:flex;flex-direction:column;gap:.7rem;align-items:flex-start}
+.corner.right{right:clamp(20px,2.4vw,34px);text-align:right;pointer-events:none;line-height:1.9}
+.corner.right b{font-weight:400;color:var(--ink)}
+.hint{pointer-events:none;display:flex;flex-direction:column;gap:.55rem;line-height:1.4}
+.hint kbd{font:inherit;border:1px solid var(--rule);padding:.05rem .4rem;border-radius:2px;color:var(--ink)}
+.toggle{
+  display:inline-flex;align-items:center;gap:.65rem;padding:.5rem .95rem .45rem;
+  border:1px solid var(--rule);letter-spacing:.18em;text-transform:uppercase;color:var(--ink);
+  transition:border-color .3s,color .3s;
+}
+.toggle:hover{border-color:var(--gold);color:var(--star)}
+.toggle i{
+  width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);
+  transition:background .3s,box-shadow .3s;
+}
+.toggle[aria-pressed="false"] i{background:transparent;box-shadow:none;border:1px solid var(--gold)}
+.toggle .on,.toggle .off{display:none}
+.toggle[aria-pressed="true"] .on,.toggle[aria-pressed="false"] .off{display:inline}
+
+/* ---------- mobile ---------- */
+.strip{display:none}
+@media (max-width:1000px){
+  body{font-size:16px}
+  .mast{max-width:78vw;left:18px;top:16px}
+  h1{font-size:clamp(2.6rem,12vw,3.6rem)}
+  .mast p{display:none}
+  .live{margin-top:.7rem;gap:1rem;font-size:.72rem}
+  .live b{font-size:.9rem}
+  .corner.right{display:none}
+  .corner.left{display:none}
+  .plate{
+    left:0;right:0;top:auto;bottom:112px;width:auto;max-height:none;
+    border-left:0;border-right:0;padding:12px 0 10px;gap:10px;
+    background:linear-gradient(180deg,rgba(5,7,15,0) 0%,rgba(5,7,15,.82) 22%,rgba(5,7,15,.82) 100%);
+    border-top:0;border-bottom:1px solid var(--rule);
+  }
+  .plate::before,.plate::after{display:none}
+  .plate h2{padding:0 18px}
+  .list{display:none}
+  .strip{
+    display:flex;gap:8px;overflow-x:auto;padding:2px 18px 6px;scroll-snap-type:x proximity;
+    scrollbar-width:none;
+  }
+  .strip::-webkit-scrollbar{display:none}
+  .chip{
+    flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;
+    padding:.55rem .85rem .5rem;border:1px solid rgba(216,182,92,.28);min-width:118px;text-align:left;
+    transition:border-color .3s,background .3s;
+  }
+  .chip .nm{font-size:1.1rem;line-height:1}
+  .chip .alt{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);white-space:nowrap}
+  .chip.is-active{border-color:var(--gold);background:rgba(216,182,92,.08)}
+  .chip.is-active .nm{color:var(--gold)}
+  .chip.is-set{opacity:.5}
+  .detail{border-top:0;padding:0 18px;min-height:0}
+  .detail p{font-size:.92rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .plate h2 span{display:none}
+  .mobile-toggle{position:absolute;right:14px;top:4px;display:inline-flex;padding:.35rem .7rem .3rem;font-size:.7rem}
+}
+@media (min-width:1001px){.mobile-toggle{display:none}}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<canvas id="dome" tabindex="0" role="img" aria-label="Star dome for 41 degrees north on 3 September 2026. Drag or use the arrow keys to look around; press plus or minus to change the time."></canvas>
+
+<header class="mast">
+  <p class="eyebrow">Planetarium · 3 September 2026</p>
+  <h1>Tonight's <em>Sky</em></h1>
+  <p>A dome of twelve hundred stars and the dust of the Milky Way, drawn for 41° north. Drag to turn your head; hover a name and its lines are inked in gold.</p>
+  <div class="live" aria-live="off">
+    <span>Looking <b id="lookDir">S · 180°</b></span>
+    <span>Local time <b id="clock">21:30</b></span>
+    <span>Sidereal <b id="lst">19h 45m</b></span>
+  </div>
+</header>
+
+<aside class="plate" aria-labelledby="visHead">
+  <h2 id="visHead">Visible tonight <span>21:30 · 41° N</span></h2>
+  <button class="toggle mobile-toggle" id="driftM" type="button" aria-pressed="true" aria-label="Toggle the passage of time"><i aria-hidden="true"></i><span class="on">Turning</span><span class="off">Paused</span></button>
+  <ol class="list" id="list"></ol>
+  <div class="strip" id="strip" role="list" aria-label="Constellations visible tonight"></div>
+  <div class="detail" id="detail">
+    <h3 class="fade"><span class="dn" id="dName">Cygnus</span><span id="dGen">The Swan</span></h3>
+    <p class="fade" id="dNote"></p>
+  </div>
+</aside>
+
+<footer class="corner left">
+  <div class="hint"><span>Drag to look around</span><span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> turn</span><span><kbd>+</kbd> <kbd>−</kbd> time</span></div>
+  <button class="toggle" id="drift" type="button" aria-pressed="true"><i aria-hidden="true"></i><span class="on">Sky turning · 1 min / s</span><span class="off">Sky paused</span></button>
+</footer>
+<div class="corner right" aria-hidden="true">
+  <div>Stereographic projection · <b id="fov">Field 98°</b></div>
+  <div>Latitude <b>41° N</b> · Magnitude limit <b>6.5</b></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const DEG = Math.PI / 180;
+const LAT = 41 * DEG, SLAT = Math.sin(LAT), CLAT = Math.cos(LAT);
+const GOLD = '216,182,92', STAR = '248,246,240';
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- catalogue: RA (hours), Dec (deg), magnitude, optional name ---------- */
+const CONS = [
+ { id:'cyg', name:'Cygnus', gen:'The Swan', star:'Deneb',
+   note:'The Northern Cross lies along the spine of the Milky Way and rides almost straight overhead at this hour. Deneb marks the tail, Albireo the beak; in a small telescope Albireo splits into a gold and sapphire pair.',
+   stars:[[20.690,45.28,1.25,'Deneb'],[20.370,40.26,2.2,'Sadr'],[19.512,27.96,3.1,'Albireo'],[20.770,33.97,2.5],[19.749,45.13,2.9],[19.496,51.73,3.8],[19.285,53.37,3.8],[21.216,30.23,3.2]],
+   lines:[[0,1],[1,2],[1,3],[3,7],[1,4],[4,5],[5,6]] },
+ { id:'lyr', name:'Lyra', gen:'The Lyre', star:'Vega',
+   note:'Vega, the fifth-brightest star in the sky, hangs above a tiny parallelogram of fainter stars: the frame of the lyre. Twelve thousand years from now, as the Earth’s axis wanders, Vega will be our pole star.',
+   stars:[[18.616,38.78,0.03,'Vega'],[18.835,33.36,3.5,'Sheliak'],[18.982,32.69,3.2,'Sulafat'],[18.908,36.90,4.3],[18.746,37.60,4.3],[18.739,39.67,4.6]],
+   lines:[[0,4],[4,3],[3,2],[2,1],[1,4],[0,5]] },
+ { id:'aql', name:'Aquila', gen:'The Eagle', star:'Altair',
+   note:'Altair sits between its two attendants, Tarazed and Alshain, and completes the Summer Triangle with Vega and Deneb. It spins once every nine hours, so fast that the star is visibly flattened at its poles.',
+   stars:[[19.846,8.87,0.77,'Altair'],[19.771,10.61,2.7,'Tarazed'],[19.921,6.41,3.7,'Alshain'],[19.090,13.86,3.0],[19.425,3.11,3.4],[20.188,-0.82,3.2],[19.102,-4.88,3.4],[19.874,1.01,3.9]],
+   lines:[[1,0],[0,2],[1,4],[4,3],[4,7],[7,5],[4,6]] },
+ { id:'cas', name:'Cassiopeia', gen:'The Queen', star:'Schedar',
+   note:'The W climbs the north-east as the Dipper sinks on the opposite side of the pole; the two swing around Polaris like a see-saw through the night. The zigzag traces the faint northern stretch of the Milky Way.',
+   stars:[[0.153,59.15,2.3,'Caph'],[0.675,56.54,2.2,'Schedar'],[0.945,60.72,2.5],[1.430,60.24,2.7,'Ruchbah'],[1.907,63.67,3.4]],
+   lines:[[0,1],[1,2],[2,3],[3,4]] },
+ { id:'cep', name:'Cepheus', gen:'The King', star:'Alderamin',
+   note:'A lopsided house of modest stars beside Cassiopeia. Its quiet star Delta Cephei brightens and fades every 5.37 days, the prototype of the pulsing variables that let us measure the distances to other galaxies.',
+   stars:[[21.310,62.59,2.5,'Alderamin'],[21.478,70.56,3.2,'Alfirk'],[23.656,77.63,3.2,'Errai'],[22.828,66.20,3.5],[22.181,58.20,3.4],[22.486,58.42,4.0,'δ Cephei']],
+   lines:[[0,1],[1,2],[2,3],[3,4],[4,0],[4,5]] },
+ { id:'uma', name:'Ursa Major', gen:'The Great Bear', star:'Alioth',
+   note:'The Dipper stands low in the north-west, scooping at the horizon. Follow the pointers, Merak and Dubhe, to Polaris. Mizar, at the bend of the handle, shows a faint companion, Alcor, to a sharp unaided eye.',
+   stars:[[11.062,61.75,1.8,'Dubhe'],[11.031,56.38,2.4,'Merak'],[11.897,53.69,2.4,'Phecda'],[12.257,57.03,3.3,'Megrez'],[12.900,55.96,1.8,'Alioth'],[13.399,54.93,2.2,'Mizar'],[13.792,49.31,1.9,'Alkaid']],
+   lines:[[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] },
+ { id:'peg', name:'Pegasus', gen:'The Winged Horse', star:'Enif',
+   note:'The Great Square heaves up out of the east, a signpost that autumn is coming. Its north-east corner, Alpheratz, officially belongs to Andromeda; Enif, far to the south-west, is the horse’s muzzle.',
+   stars:[[23.079,15.21,2.5,'Markab'],[23.063,28.08,2.4,'Scheat'],[0.220,15.18,2.8,'Algenib'],[0.140,29.09,2.1,'Alpheratz'],[21.736,9.88,2.4,'Enif'],[22.691,10.83,3.4],[22.717,30.22,2.9],[22.170,6.20,3.5]],
+   lines:[[0,1],[1,3],[3,2],[2,0],[0,5],[5,7],[7,4],[1,6]] },
+ { id:'sgr', name:'Sagittarius', gen:'The Archer', star:'Kaus Australis',
+   note:'The Teapot tips its spout toward the centre of the Milky Way, low in the south. The “steam” rising from it is the brightest star cloud in the galaxy; the black hole at our galaxy’s heart lies just beyond the tip.',
+   stars:[[18.403,-34.38,1.85,'Kaus Australis'],[18.921,-26.30,2.05,'Nunki'],[19.043,-29.88,2.6],[18.350,-29.83,2.7],[18.466,-25.42,2.8,'Kaus Borealis'],[18.096,-30.42,3.0],[18.761,-26.99,3.2],[19.116,-27.67,3.3]],
+   lines:[[5,3],[3,0],[0,2],[2,6],[6,4],[4,3],[6,1],[1,7],[7,2]] },
+];
+const SOLO = [
+ { name:'Polaris', ra:2.530, dec:89.26, mag:2.0, note:'the still point' },
+ { name:'Saturn', ra:0.75, dec:2.5, mag:0.6, planet:true, note:'rising, steady' },
+];
+
+/* ---------- seeded field stars & Milky Way ---------- */
+let seed = 20260903;
+const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const gauss = () => { const u = 1 - rnd(), v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+const field = [];   // {A,B,C,mag,ph,fr}
+for (let i = 0; i < 1700; i++) {
+  const z = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+  const u = rnd(); const mag = 6.5 - 3.4 * u * u;
+  field.push({ A: r * Math.cos(th), B: r * Math.sin(th), C: z, mag, ph: rnd() * 6.28, fr: 1.2 + rnd() * 2.4 });
+}
+// galactic plane: north galactic pole RA 12.857h Dec 27.13; centre RA 17.76h Dec -29
+const vec = (raH, decD) => { const ra = raH * 15 * DEG, d = decD * DEG, c = Math.cos(d); return [c * Math.cos(ra), c * Math.sin(ra), Math.sin(d)]; };
+const ngp = vec(12.857, 27.13), gc0 = vec(17.76, -29.0);
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const kk = dot(gc0, ngp); let e1 = [gc0[0] - kk * ngp[0], gc0[1] - kk * ngp[1], gc0[2] - kk * ngp[2]];
+const n1 = Math.hypot(...e1); e1 = e1.map(v => v / n1);
+const e2 = [ngp[1] * e1[2] - ngp[2] * e1[1], ngp[2] * e1[0] - ngp[0] * e1[2], ngp[0] * e1[1] - ngp[1] * e1[0]];
+const dust = [];
+for (let i = 0; i < 4200; i++) {
+  const l = rnd() * Math.PI * 2;
+  const wide = rnd() < 0.4;
+  const b = gauss() * (wide ? 12 : 4.2) * DEG;
+  // brighter toward the galactic centre (l≈0), with a dark rift near l≈20-40°
+  const centre = 0.55 + 0.45 * Math.cos(l);
+  const rift = 1 - 0.55 * Math.exp(-Math.pow(((l / DEG) - 30) / 14, 2)) * Math.exp(-Math.pow(b / DEG / 3, 2));
+  const cb = Math.cos(b), sb = Math.sin(b), cl = Math.cos(l), sl = Math.sin(l);
+  dust.push({
+    A: cb * (cl * e1[0] + sl * e2[0]) + sb * ngp[0],
+    B: cb * (cl * e1[1] + sl * e2[1]) + sb * ngp[1],
+    C: cb * (cl * e1[2] + sl * e2[2]) + sb * ngp[2],
+    a: (0.16 + rnd() * 0.42) * centre * rift * (wide ? 0.55 : 1),
+    s: 0.8 + rnd() * 1.1,
+  });
+}
+// pre-compute constellation stars
+for (const c of CONS) {
+  c.a = 0; c.target = 0;
+  c.pts = c.stars.map(s => { const v = vec(s[0], s[1]); return { A: v[0], B: v[1], C: v[2], mag: s[2], name: s[3], ph: rnd() * 6.28, fr: 1.4 + rnd() * 2, sx: 0, sy: 0, vis: false, alt: 0, az: 0 }; });
+}
+for (const s of SOLO) { const v = vec(s.ra, s.dec); s.A = v[0]; s.B = v[1]; s.C = v[2]; s.ph = rnd() * 6.28; s.fr = 1.5; }
+
+/* ---------- state ---------- */
+const canvas = document.getElementById('dome');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, F = 500, CX = 0, CY = 0;
+let yaw = 180 * DEG, pitch = (innerWidth <= 1000 ? 48 : 53) * DEG, vyaw = 0, vpitch = 0;
+const LST0 = 19.75; let lst = LST0;     // hours
+let drift = !reduce, twinkle = !reduce;
+let hover = null, active = 'cyg';
+let flight = null;                        // {y0,p0,y1,p1,t0,dur}
+let last = performance.now(), running = true;
+let ring = { cx: 0, cy: 0, r: 0 };
+
+function resize() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(2, devicePixelRatio || 1);
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const mobile = W <= 1000;
+  F = (mobile ? 0.34 : 0.42) * Math.sqrt(W * H);
+  CX = W / 2; CY = H * (mobile ? 0.40 : 0.5);
+  if (mobile) { ring.r = Math.min(W * 0.62, 260); ring.cx = W / 2; ring.cy = H + ring.r * 0.6; }
+  else {
+    const panelLeft = W - 344 - Math.max(20, Math.min(W * .024, 34));
+    ring.r = Math.min(330, (panelLeft - 48) / 2);
+    ring.cx = W / 2; if (ring.cx + ring.r > panelLeft - 12) ring.cx = panelLeft - 12 - ring.r;
+    ring.cy = H + ring.r * 0.58;
+  }
+  const hfov = 4 * Math.atan(W / 2 / (2 * F)) / DEG;
+  document.getElementById('fov').textContent = 'Field ' + Math.round(hfov) + '°';
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- maths ---------- */
+let cL = 1, sL = 0, fx, fy, fz, rx, ry, ux, uy, uz;
+function setCamera() {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
+  fx = sy * cp; fy = cy * cp; fz = sp;
+  rx = cy; ry = -sy;
+  ux = -sy * sp; uy = -cy * sp; uz = cp;
+  const L = lst * 15 * DEG; cL = Math.cos(L); sL = Math.sin(L);
+}
+// equatorial (A,B,C) -> horizontal (east,north,up)
+function horiz(o, out) {
+  const hx = cL * o.A + sL * o.B, hy = sL * o.A - cL * o.B, hz = o.C;
+  out[0] = -hy; out[1] = CLAT * hz - SLAT * hx; out[2] = SLAT * hz + CLAT * hx;
+}
+const tmp = [0, 0, 0];
+// project horizontal vector -> screen; returns false if behind
+function project(e, n, u, out) {
+  const pz = e * fx + n * fy + u * fz;
+  if (pz < -0.35) return false;
+  const k = 2 * F / (1 + pz);
+  out.x = CX + (e * rx + n * ry) * k;
+  out.y = CY - (e * ux + n * uy + u * uz) * k;
+  return true;
+}
+const P = { x: 0, y: 0 };
+function dirName(azDeg) {
+  const names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  return names[Math.round(((azDeg % 360) + 360) % 360 / 22.5) % 16];
+}
+function altAz(e, n, u) { const L = Math.hypot(e, n, u) || 1; return { alt: Math.asin(Math.max(-1, Math.min(1, u / L))) / DEG, az: ((Math.atan2(e, n) / DEG) + 360) % 360 }; }
+
+/* ---------- drawing ---------- */
+function starRadius(mag) { return Math.max(0.55, 3.1 - 0.5 * mag); }
+function drawStar(x, y, mag, tw, planet) {
+  const r = starRadius(mag) * (1 + 0.12 * tw);
+  const a = Math.min(1, Math.max(0.18, 1.08 - mag * 0.13)) * (0.86 + 0.14 * tw);
+  if (mag < 1.6) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 7);
+    g.addColorStop(0, `rgba(${STAR},${0.28 * a})`); g.addColorStop(1, `rgba(${STAR},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 7, 0, 6.2832); ctx.fill();
+  }
+  ctx.fillStyle = planet ? `rgba(${GOLD},1)` : `rgba(${STAR},${a})`;
+  if (r < 0.9) { ctx.fillRect(x - r, y - r, r * 2, r * 2); return; }
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+}
+function setFont(px, spacing) { ctx.font = px + 'px Bellefair, Georgia, serif'; if ('letterSpacing' in ctx) ctx.letterSpacing = (spacing || 0) + 'px'; }
+
+function frame(now) {
+  if (!running) return;
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+
+  // time & camera motion
+  if (drift) lst = (lst + dt / 60) % 24;   // one sidereal minute per second
+  if (flight) {
+    const k = Math.min(1, (now - flight.t0) / flight.dur), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    yaw = flight.y0 + (flight.y1 - flight.y0) * e; pitch = flight.p0 + (flight.p1 - flight.p0) * e;
+    if (k >= 1) flight = null;
+  } else if (!dragging) {
+    yaw += vyaw * dt; pitch += vpitch * dt; vyaw *= Math.pow(0.02, dt); vpitch *= Math.pow(0.02, dt);
+  }
+  pitch = Math.max(3 * DEG, Math.min(88 * DEG, pitch));
+  yaw = ((yaw % 6.2832) + 6.2832) % 6.2832;
+  setCamera();
+
+  // ground + sky disc
+  ctx.fillStyle = '#05070F'; ctx.fillRect(0, 0, W, H);
+  const half = pitch / 2, tanH = Math.tan(half);
+  const R = 2 * F / Math.sin(pitch), yc = CY + F * (tanH - 1 / tanH);
+  ctx.fillStyle = '#070B18'; ctx.fillRect(0, 0, W, H);          // ground
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX, yc, R, 0, 6.2832); ctx.clip();
+  const sky = ctx.createRadialGradient(CX, yc, Math.max(0, R - Math.min(R, 520)), CX, yc, R);
+  sky.addColorStop(0, '#05070F'); sky.addColorStop(0.55, '#080E1F'); sky.addColorStop(1, '#0E1A33');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+  // Milky Way dust
+  for (let i = 0; i < dust.length; i++) {
+    const d = dust[i]; horiz(d, tmp); if (tmp[2] < -0.02) continue;
+    if (!project(tmp[0], tmp[1], tmp[2], P)) continue;
+    if (P.x < -4 || P.x > W + 4 || P.y < -4 || P.y > H + 4) continue;
+    ctx.fillStyle = `rgba(${STAR},${d.a})`; ctx.fillRect(P.x, P.y, d.s, d.s);
+  }
+  // field stars
+  for (let i = 0; i < field.length; i++) {
+    const s = field[i]; horiz(s, tmp); if (tmp[2] < -0.01) continue;
+    if (!project(tmp[0], tmp[1], tmp[2], P)) continue;
+    if (P.x < -6 || P.x > W + 6 || P.y < -6 || P.y > H + 6) continue;
+    const tw = twinkle ? Math.sin(t * s.fr + s.ph) : 0;
+    drawStar(P.x, P.y, s.mag, tw, false);
+  }
+  // constellations
+  for (const c of CONS) {
+    c.target = (hover === c.id || (!hover && active === c.id)) ? 1 : 0;
+    c.a += (c.target - c.a) * Math.min(1, dt * 6);
+    let sumx = 0, sumy = 0, nvis = 0, sumAlt = 0, se = 0, sn = 0, su = 0;
+    for (const p of c.pts) {
+      horiz(p, tmp); se += tmp[0]; sn += tmp[1]; su += tmp[2];
+      p.alt = Math.asin(Math.max(-1, Math.min(1, tmp[2]))) / DEG;
+      p.vis = tmp[2] > -0.01 && project(tmp[0], tmp[1], tmp[2], P);
+      if (p.vis) { p.sx = P.x; p.sy = P.y; sumx += P.x; sumy += P.y; nvis++; }
+    }
+    const aa = altAz(se, sn, su); c.alt = aa.alt; c.az = aa.az; c.ce = se; c.cn = sn; c.cu = su;
+    if (c.a > 0.01) {
+      ctx.strokeStyle = `rgba(${GOLD},${0.9 * c.a})`; ctx.lineWidth = 0.9; ctx.beginPath();
+      for (const [i, j] of c.lines) {
+        const p = c.pts[i], q = c.pts[j]; if (!p.vis || !q.vis) continue;
+        // shorten the line so it does not touch the stars (chart engraving style)
+        const dx = q.sx - p.sx, dy = q.sy - p.sy, L = Math.hypot(dx, dy) || 1, g1 = starRadius(p.mag) + 4, g2 = starRadius(q.mag) + 4;
+        if (L < g1 + g2 + 2) continue;
+        ctx.moveTo(p.sx + dx / L * g1, p.sy + dy / L * g1); ctx.lineTo(q.sx - dx / L * g2, q.sy - dy / L * g2);
+      }
+      ctx.stroke();
+    }
+    for (const p of c.pts) {
+      if (!p.vis) continue;
+      const tw = twinkle ? Math.sin(t * p.fr + p.ph) : 0;
+      drawStar(p.sx, p.sy, p.mag, tw, false);
+      if (c.a > 0.01) {
+        ctx.strokeStyle = `rgba(${GOLD},${0.75 * c.a})`; ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, starRadius(p.mag) + 3.5, 0, 6.2832); ctx.stroke();
+        if (p.name && (p.mag < 2.6 || c.pts.length <= 6)) {
+          setFont(12, 1.2); ctx.fillStyle = `rgba(${STAR},${0.72 * c.a})`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(p.name, p.sx + starRadius(p.mag) + 9, p.sy + 1);
+        }
+      }
+    }
+    if (c.a > 0.01 && nvis) {
+      const mobile = W <= 1000, panelLeft = mobile ? W : W - 344 - Math.max(20, Math.min(W * .024, 34));
+      const lx = Math.max(90, Math.min(panelLeft - 90, sumx / nvis));
+      let minY = 1e9, maxY = -1e9; for (const p of c.pts) if (p.vis) { minY = Math.min(minY, p.sy); maxY = Math.max(maxY, p.sy); }
+      const topLimit = mobile ? 200 : 70;
+      let ly1 = minY - 30, ly2 = minY - 12;
+      if (ly1 < topLimit) { ly1 = Math.min(H - 40, maxY + 40); ly2 = ly1 + 18; }
+      setFont(W > 1000 ? 26 : 20, 5); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = `rgba(${GOLD},${c.a})`;
+      ctx.fillText(c.name.toUpperCase(), lx, ly1);
+      setFont(12, 3); ctx.fillStyle = `rgba(${STAR},${0.6 * c.a})`;
+      ctx.fillText(c.gen.toUpperCase(), lx, ly2);
+    }
+  }
+  // Polaris & Saturn
+  for (const s of SOLO) {
+    horiz(s, tmp); if (tmp[2] < -0.01) continue;
+    if (!project(tmp[0], tmp[1], tmp[2], P)) continue;
+    const tw = twinkle && !s.planet ? Math.sin(t * s.fr + s.ph) : 0;
+    drawStar(P.x, P.y, s.mag, tw, s.planet);
+    if (P.x > 24 && P.x < W - 90 && P.y > 20 && P.y < H - 20) {
+      setFont(12, 1.5); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(${GOLD},.85)`; ctx.fillText(s.name, P.x + 10, P.y + 1);
+      setFont(10, 1.5); ctx.fillStyle = `rgba(${STAR},.5)`; ctx.fillText(s.note, P.x + 10, P.y + 14);
+    }
+  }
+  ctx.restore();
+
+  // horizon rim & cardinal letters
+  ctx.strokeStyle = `rgba(${GOLD},.06)`; ctx.lineWidth = 34; ctx.beginPath(); ctx.arc(CX, yc, R, 0, 6.2832); ctx.stroke();
+  ctx.strokeStyle = `rgba(${GOLD},.55)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(CX, yc, R, 0, 6.2832); ctx.stroke();
+  ctx.strokeStyle = `rgba(${GOLD},.14)`; ctx.beginPath(); ctx.arc(CX, yc, R - 7, 0, 6.2832); ctx.stroke();
+  const cards = [['N', 0], ['E', 90], ['S', 180], ['W', 270]];
+  const c2 = Math.cos(2.2 * DEG), s2 = Math.sin(2.2 * DEG);
+  for (const [lab, az] of cards) {
+    const a = az * DEG, e = Math.sin(a) * c2, n = Math.cos(a) * c2;
+    if (!project(e, n, s2, P)) continue;
+    if (P.x < -30 || P.x > W + 30 || P.y < -30 || P.y > H + 30) continue;
+    setFont(15, 3); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = `rgba(${GOLD},.95)`; ctx.fillText(lab, P.x, P.y);
+    // tick on the rim
+    if (project(Math.sin(a), Math.cos(a), 0, P)) { ctx.strokeStyle = `rgba(${GOLD},.8)`; ctx.beginPath(); ctx.moveTo(P.x, P.y - 4); ctx.lineTo(P.x, P.y + 5); ctx.stroke(); }
+  }
+  // altitude scale ticks at the meridian in view: 30°/60° marks
+  ctx.strokeStyle = `rgba(${GOLD},.28)`; ctx.setLineDash([2, 6]); ctx.lineWidth = 0.8;
+  for (const altD of [30, 60]) {
+    ctx.beginPath(); let first = true;
+    for (let az = 0; az <= 360; az += 3) {
+      const a = az * DEG, ca = Math.cos(altD * DEG);
+      if (!project(Math.sin(a) * ca, Math.cos(a) * ca, Math.sin(altD * DEG), P)) { first = true; continue; }
+      if (first) { ctx.moveTo(P.x, P.y); first = false; } else ctx.lineTo(P.x, P.y);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if (project(0, 0, 1, P)) { // zenith cross
+    ctx.strokeStyle = `rgba(${GOLD},.5)`; ctx.lineWidth = .8; ctx.beginPath();
+    ctx.moveTo(P.x - 7, P.y); ctx.lineTo(P.x + 7, P.y); ctx.moveTo(P.x, P.y - 7); ctx.lineTo(P.x, P.y + 7); ctx.stroke();
+    setFont(10, 3); ctx.fillStyle = `rgba(${GOLD},.6)`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('ZENITH', P.x + 12, P.y + 1);
+  }
+
+  drawCompass();
+  updateHud(now);
+  requestAnimationFrame(frame);
+}
+
+function drawCompass() {
+  const { cx, cy, r } = ring;
+  const yawD = yaw / DEG;
+  // backing band
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r + 30, Math.PI, 0); ctx.arc(cx, cy, r - 58, 0, Math.PI, true); ctx.closePath();
+  const band = ctx.createRadialGradient(cx, cy, r - 60, cx, cy, r + 30);
+  band.addColorStop(0, 'rgba(5,7,15,0)'); band.addColorStop(0.35, 'rgba(5,7,15,.78)'); band.addColorStop(0.9, 'rgba(5,7,15,.78)'); band.addColorStop(1, 'rgba(5,7,15,0)');
+  ctx.fillStyle = band; ctx.fill();
+  // rings
+  ctx.strokeStyle = `rgba(${GOLD},.85)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 0); ctx.stroke();
+  ctx.strokeStyle = `rgba(${GOLD},.3)`; ctx.beginPath(); ctx.arc(cx, cy, r - 30, Math.PI, 0); ctx.stroke();
+  // field-of-view arc
+  const hf = 2 * Math.atan(W / 2 / (2 * F));
+  ctx.strokeStyle = `rgba(${GOLD},.9)`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, r + 5, -Math.PI / 2 - hf, -Math.PI / 2 + hf); ctx.stroke();
+  // ticks
+  for (let a = 0; a < 360; a += 2.5) {
+    const th = (a - yawD) * DEG; if (Math.cos(th) < -0.05) continue;
+    const major = a % 15 === 0, cardinal = a % 45 === 0;
+    const len = cardinal ? 22 : major ? 12 : 5;
+    const sT = Math.sin(th), cT = Math.cos(th);
+    const fade = Math.min(1, Math.max(0, cT * 1.6));
+    ctx.strokeStyle = `rgba(${GOLD},${(cardinal ? .95 : major ? .7 : .38) * fade})`; ctx.lineWidth = cardinal ? 1.2 : 0.8;
+    ctx.beginPath(); ctx.moveTo(cx + sT * r, cy - cT * r); ctx.lineTo(cx + sT * (r - len), cy - cT * (r - len)); ctx.stroke();
+    if (cardinal) {
+      const lab = dirName(a), rr = r - 42;
+      ctx.save(); ctx.translate(cx + sT * rr, cy - cT * rr); ctx.rotate(th);
+      setFont(lab.length === 1 ? 17 : 11, 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = lab.length === 1 ? `rgba(${STAR},${.95 * fade})` : `rgba(${STAR},${.6 * fade})`; ctx.fillText(lab, 0, 0);
+      ctx.restore();
+    } else if (a % 30 === 0) {
+      const rr = r - 42;
+      ctx.save(); ctx.translate(cx + sT * rr, cy - cT * rr); ctx.rotate(th);
+      setFont(10, 1); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = `rgba(${STAR},${.45 * fade})`; ctx.fillText(a + '°', 0, 0);
+      ctx.restore();
+    }
+  }
+  // pointer
+  ctx.fillStyle = `rgba(${GOLD},1)`; ctx.beginPath(); ctx.moveTo(cx, cy - r + 2); ctx.lineTo(cx - 5, cy - r - 12); ctx.lineTo(cx + 5, cy - r - 12); ctx.closePath(); ctx.fill();
+  // heading readout inside ring
+  const az = Math.round(yawD) % 360;
+  setFont(W > 1000 ? 30 : 22, 1); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = `rgba(${STAR},.95)`;
+  ctx.fillText(az + '°', cx, cy - r + 92);
+  setFont(11, 3); ctx.fillStyle = `rgba(${GOLD},.9)`; ctx.fillText(('AZIMUTH · ' + dirName(az)), cx, cy - r + 110);
+  ctx.restore();
+}
+
+/* ---------- HUD / list ---------- */
+const listEl = document.getElementById('list'), stripEl = document.getElementById('strip');
+const rows = {}, chips = {};
+CONS.forEach((c, i) => {
+  const li = document.createElement('li');
+  li.innerHTML = `<button type="button" class="row" data-id="${c.id}"><span class="num">0${i + 1}</span><span class="nm">${c.name}<small>${c.gen}</small></span><span class="alt"><b>—</b><em>—</em></span></button>`;
+  listEl.appendChild(li); rows[c.id] = li.firstChild;
+  const ch = document.createElement('button'); ch.type = 'button'; ch.className = 'chip'; ch.dataset.id = c.id; ch.setAttribute('role', 'listitem');
+  ch.innerHTML = `<span class="nm">${c.name}</span><span class="alt">—</span>`; stripEl.appendChild(ch); chips[c.id] = ch;
+});
+const dName = document.getElementById('dName'), dGen = document.getElementById('dGen'), dNote = document.getElementById('dNote'), detail = document.getElementById('detail');
+let shown = null;
+function showDetail(id) {
+  if (shown === id) return; shown = id;
+  const c = CONS.find(x => x.id === id);
+  detail.classList.add('swap');
+  setTimeout(() => {
+    dName.textContent = c.name; dGen.textContent = c.gen + ' · ' + c.star;
+    dNote.textContent = c.note; detail.classList.remove('swap');
+  }, reduce ? 0 : 160);
+}
+function setActive(id, fly) {
+  active = id;
+  for (const c of CONS) { rows[c.id].classList.toggle('is-active', c.id === id); chips[c.id].classList.toggle('is-active', c.id === id); }
+  showDetail(id);
+  if (fly) {
+    const c = CONS.find(x => x.id === id);
+    let y1 = c.az * DEG, p1 = Math.max(12 * DEG, Math.min(80 * DEG, c.alt * DEG + (W > 1000 ? 4 : 10) * DEG));
+    // shortest way round
+    let d = y1 - yaw; d = ((d + Math.PI) % 6.2832 + 6.2832) % 6.2832 - Math.PI;
+    flight = { y0: yaw, p0: pitch, y1: yaw + d, p1, t0: performance.now(), dur: reduce ? 1 : 1100 };
+    vyaw = vpitch = 0;
+    chips[id].scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }
+}
+function bind(el) {
+  el.addEventListener('pointerenter', () => { hover = el.dataset.id; showDetail(hover); });
+  el.addEventListener('pointerleave', () => { hover = null; showDetail(active); });
+  el.addEventListener('focus', () => { hover = el.dataset.id; showDetail(hover); });
+  el.addEventListener('blur', () => { hover = null; showDetail(active); });
+  el.addEventListener('click', () => setActive(el.dataset.id, true));
+}
+Object.values(rows).forEach(bind); Object.values(chips).forEach(bind);
+setActive('cyg', false);
+
+const lookEl = document.getElementById('lookDir'), clockEl = document.getElementById('clock'), lstEl = document.getElementById('lst');
+let hudAt = 0;
+function updateHud(now) {
+  if (now - hudAt < 250) return; hudAt = now;
+  const azD = Math.round(yaw / DEG) % 360;
+  lookEl.textContent = dirName(azD) + ' · ' + azD + '°';
+  const minutes = 21 * 60 + 30 + ((lst - LST0 + 24) % 24) * 60 * (24 / 24.0657);
+  const hh = Math.floor(minutes / 60) % 24, mm = Math.floor(minutes % 60);
+  clockEl.textContent = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  const lh = Math.floor(lst), lm = Math.floor((lst - lh) * 60);
+  lstEl.textContent = lh + 'h ' + String(lm).padStart(2, '0') + 'm';
+  for (const c of CONS) {
+    const set = c.alt < 2;
+    const altTxt = set ? 'set' : Math.round(c.alt) + '°';
+    const dirTxt = c.alt > 75 ? 'overhead' : dirName(c.az) + (c.alt < 15 ? ' · low' : '');
+    const r = rows[c.id]; r.querySelector('b').textContent = altTxt; r.querySelector('em').textContent = set ? 'below horizon' : dirTxt;
+    r.classList.toggle('is-set', set);
+    const ch = chips[c.id]; ch.querySelector('.alt').textContent = set ? 'set' : altTxt + ' · ' + dirName(c.az); ch.classList.toggle('is-set', set);
+  }
+}
+
+/* ---------- interaction ---------- */
+let dragging = false, px0 = 0, py0 = 0, lastMove = 0, moved = false;
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; moved = false; flight = null; px0 = e.clientX; py0 = e.clientY; lastMove = performance.now();
+  vyaw = vpitch = 0; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const now = performance.now(), dt = Math.max(0.008, (now - lastMove) / 1000); lastMove = now;
+  const dx = e.clientX - px0, dy = e.clientY - py0; px0 = e.clientX; py0 = e.clientY;
+  if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+  const dyaw = -dx / F, dpitch = dy / F;
+  yaw += dyaw; pitch += dpitch;
+  vyaw = vyaw * 0.5 + (dyaw / dt) * 0.5; vpitch = vpitch * 0.5 + (dpitch / dt) * 0.5;
+});
+const stop = () => { if (!dragging) return; dragging = false; canvas.classList.remove('dragging'); if (performance.now() - lastMove > 80) vyaw = vpitch = 0; };
+canvas.addEventListener('pointerup', stop); canvas.addEventListener('pointercancel', stop);
+
+canvas.addEventListener('keydown', e => {
+  const step = 6 * DEG; let used = true;
+  switch (e.key) {
+    case 'ArrowLeft': flight = null; yaw -= step; break;
+    case 'ArrowRight': flight = null; yaw += step; break;
+    case 'ArrowUp': flight = null; pitch += step; break;
+    case 'ArrowDown': flight = null; pitch -= step; break;
+    case '+': case '=': lst = (lst + 0.25) % 24; break;
+    case '-': case '_': lst = (lst + 23.75) % 24; break;
+    case 'Home': flight = { y0: yaw, p0: pitch, y1: yaw + (((180 * DEG - yaw + Math.PI) % 6.2832 + 6.2832) % 6.2832 - Math.PI), p1: 53 * DEG, t0: performance.now(), dur: 900 }; break;
+    default: used = false;
+  }
+  if (used) e.preventDefault();
+});
+canvas.addEventListener('wheel', e => { e.preventDefault(); lst = (lst + Math.sign(e.deltaY) * 0.05 + 24) % 24; }, { passive: false });
+
+const driftBtns = [document.getElementById('drift'), document.getElementById('driftM')];
+function setDrift(on) { drift = on; driftBtns.forEach(b => b.setAttribute('aria-pressed', String(on))); }
+driftBtns.forEach(b => b.addEventListener('click', () => setDrift(!drift)));
+setDrift(!reduce);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) running = false;
+  else if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
+});
+document.fonts && document.fonts.ready.then(() => { /* canvas labels pick up Bellefair on the next frame */ });
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

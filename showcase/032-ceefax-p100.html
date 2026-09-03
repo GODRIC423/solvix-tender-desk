@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CEEFAX P100 — Headlines</title>
+<meta name="description" content="A working teletext service in the browser: index, headlines, mosaic weather map and TV listings on a fixed 40×25 character grid, with a live clock and page numbers that spin every eight seconds.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='2' y='3' width='4' height='4' fill='%23f00'/%3E%3Crect x='6' y='3' width='4' height='4' fill='%23ff0'/%3E%3Crect x='10' y='3' width='4' height='4' fill='%230f0'/%3E%3Crect x='2' y='7' width='4' height='4' fill='%230ff'/%3E%3Crect x='6' y='7' width='4' height='4' fill='%2300f'/%3E%3Crect x='10' y='7' width='4' height='4' fill='%23f0f'/%3E%3Crect x='2' y='11' width='12' height='2' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+  --k:#000;--r:#f00;--g:#0f0;--y:#ff0;--c:#0ff;--m:#f0f;--b:#00f;--w:#fff;
+  --dim:#7a7a7a;--dimmer:#2a2a2a;
+  --cw:16px;               /* character cell width, set by JS to an integer */
+  --ch:calc(var(--cw) * 1.85);   /* set by JS to an integer too */
+  --fs:calc(var(--cw) * 2.5); /* VT323 advance width is exactly 0.4em */
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--k);color:var(--w)}
+body{
+  font-family:'VT323',ui-monospace,'Courier New',monospace;
+  -webkit-font-smoothing:none;font-smooth:never;text-rendering:optimizeSpeed;
+  min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:20px;padding:12px 8px 16px;overflow-x:hidden
+}
+@media (min-width:1000px){
+  body{flex-direction:row;align-items:center;gap:48px;padding:12px 24px}
+}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+
+/* ---- the 40 x 25 grid ---- */
+.tv{width:calc(var(--cw) * 40);flex:none}
+.screen{width:100%;background:var(--k);position:relative}
+.row{display:flex;height:var(--ch);width:100%}
+.row.dh{height:calc(var(--ch) * 2)}
+.c{
+  flex:none;width:var(--cw);height:var(--ch);
+  font-size:var(--fs);line-height:var(--ch);white-space:pre;overflow:visible;
+  text-align:center
+}
+.row.dh .c{transform:scaleY(2);transform-origin:0 0}
+.c.m{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.c.m b{display:block}
+
+/* progressive row reveal, like a page being received */
+@keyframes rx{from{visibility:hidden}to{visibility:visible}}
+.body.rx .row{animation:rx 1ms steps(1) both}
+
+/* fastext row: real buttons */
+.fx{display:flex;height:var(--ch);width:100%}
+.fx button{
+  flex:none;display:flex;appearance:none;border:0;margin:0;padding:0;background:var(--k);cursor:pointer;
+  font:inherit;font-size:var(--fs);line-height:var(--ch);height:var(--ch);width:calc(var(--cw) * 10);
+  white-space:pre;text-align:left;color:var(--lk)
+}
+.fx button i{display:block;flex:none;width:var(--cw);height:var(--ch);background:var(--lk);margin-right:var(--cw)}
+.fx button span{display:block;flex:none;width:calc(var(--cw) * 8)}
+.fx button:hover span,.fx button:focus-visible span{background:var(--lk);color:var(--k)}
+.fx button:focus-visible{outline:2px solid var(--w);outline-offset:-2px}
+
+/* ---- remote control ---- */
+.remote{
+  width:calc(var(--cw) * 40);max-width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  justify-items:stretch;align-items:center;flex:none
+}
+@media (min-width:1000px){ .remote{width:240px;gap:10px} }
+.remote button{
+  appearance:none;border:2px solid var(--dimmer);background:var(--k);color:var(--dim);cursor:pointer;
+  font:inherit;font-size:clamp(20px,calc(var(--cw) * 1.5),34px);line-height:1;padding:.3em 0;width:100%
+}
+.remote button:hover{border-color:var(--dim);color:var(--w)}
+.remote button:focus-visible{outline:2px solid var(--y);outline-offset:2px}
+.remote button[aria-pressed="true"]{border-color:var(--r);color:var(--r);border-style:solid}
+.remote .hold{grid-column:1 / -1}
+.remote .lbl{grid-column:1 / -1;margin:2px 0 0;text-align:center;color:var(--dim);font-size:clamp(16px,var(--cw),18px);line-height:1.25}
+.remote .lbl kbd{color:var(--w);font:inherit}
+.remote .brand{grid-column:1 / -1;margin:0;text-align:center;color:var(--dim);font-size:clamp(18px,calc(var(--cw) * 1.3),26px);line-height:1;letter-spacing:.1em}
+.remote .brand b{color:var(--w);font-weight:400}
+.hi{color:var(--w)}
+
+@media (prefers-reduced-motion:reduce){
+  .body.rx .row{animation:none}
+}
+</style>
+</head>
+<body>
+<h1 class="sr-only">CEEFAX P100 — Headlines. A teletext service.</h1>
+
+<main class="tv" aria-label="Teletext screen">
+  <div class="screen">
+    <div class="row" id="hdr" aria-hidden="true"></div>
+    <div class="body rx" id="body" aria-hidden="true"></div>
+    <nav class="fx" id="fx" aria-label="Fastext links"></nav>
+  </div>
+  <section class="sr-only" id="sr" aria-live="polite" aria-atomic="true"></section>
+</main>
+
+<nav class="remote" aria-label="Remote control">
+  <p class="brand"><b>TELETEXT</b> REMOTE</p>
+  <button type="button" data-d="1">1</button><button type="button" data-d="2">2</button><button type="button" data-d="3">3</button>
+  <button type="button" data-d="4">4</button><button type="button" data-d="5">5</button><button type="button" data-d="6">6</button>
+  <button type="button" data-d="7">7</button><button type="button" data-d="8">8</button><button type="button" data-d="9">9</button>
+  <button type="button" data-act="prev" aria-label="Previous page">&#9664;</button>
+  <button type="button" data-d="0">0</button>
+  <button type="button" data-act="next" aria-label="Next page">&#9654;</button>
+  <button type="button" class="hold" data-act="hold" id="holdBtn" aria-pressed="false">HOLD</button>
+  <p class="lbl">Type a page number<br><kbd>H</kbd> hold &middot; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> step<br>In service: <span class="hi">100 101 199 400 600</span></p>
+</nav>
+
+<script>
+(() => {
+'use strict';
+const COL = {k:'#000',r:'#f00',g:'#0f0',y:'#ff0',c:'#0ff',m:'#f0f',b:'#00f',w:'#fff'};
+const W = 40, H = 25;
+
+/* ------------------------------------------------------------------ page model */
+class Page {
+  constructor(num, title){
+    this.num = num; this.title = title;
+    this.cells = Array.from({length:H}, () => Array.from({length:W}, () => ({ch:' ', fg:'w', bg:'k', mos:0})));
+    this.dh = new Set();
+    this.links = [];
+  }
+  // markup: {r}{g}{y}{c}{m}{b}{w} foreground, {Br}.. background, {D} double height row
+  line(r, s){
+    let fg='w', bg='k', col=0;
+    for (let i=0; i<s.length;){
+      if (s[i]==='{'){
+        const j = s.indexOf('}', i), code = s.slice(i+1, j);
+        if (code==='D') this.dh.add(r); else if (code[0]==='B') bg = code[1]; else fg = code;
+        i = j+1; continue;
+      }
+      if (col < W){ const c = this.cells[r][col]; c.ch = s[i]; c.fg = fg; c.bg = bg; c.mos = 0; }
+      col++; i++;
+    }
+    for (; col<W; col++){ const c = this.cells[r][col]; c.bg = bg; c.ch = ' '; c.mos = 0; }
+    return this;
+  }
+  text(r, c0, s, fg, bg){
+    for (let i=0; i<s.length && c0+i<W; i++){ const c = this.cells[r][c0+i]; c.ch = s[i]; c.fg = fg; if (bg) c.bg = bg; c.mos = 0; }
+    return this;
+  }
+  fill(r0, r1, c0, c1, bg){
+    for (let r=r0; r<=r1; r++) for (let c=c0; c<=c1; c++){ const x = this.cells[r][c]; x.bg = bg; x.ch=' '; x.mos=0; }
+    return this;
+  }
+  // rows of pixels, 2 x 3 pixels per cell; '.' is transparent, other chars index the colour map
+  bitmap(r0, c0, rows, colors){
+    const Hp = rows.length, Wp = Math.max(...rows.map(x => x.length));
+    for (let cy=0; cy<Math.ceil(Hp/3); cy++) for (let cx=0; cx<Math.ceil(Wp/2); cx++){
+      let code=0, color=null;
+      for (let py=0; py<3; py++) for (let px=0; px<2; px++){
+        const ch = (rows[cy*3+py]||'')[cx*2+px] || '.';
+        if (ch!=='.'){ code |= 1 << (py*2+px); color = colors[ch] || color; }
+      }
+      if (code && r0+cy<H && c0+cx<W){ const cell = this.cells[r0+cy][c0+cx]; cell.mos = code; cell.fg = color; cell.ch=''; }
+    }
+    return this;
+  }
+  fastext(links){ this.links = links; return this; }
+  plain(){
+    const out = [];
+    for (let r=1; r<H-1; r++){
+      if (this.dh.has(r-1)) continue;
+      const t = this.cells[r].map(c => c.mos ? ' ' : c.ch).join('').replace(/\s+/g,' ').trim();
+      if (t) out.push(t);
+    }
+    return out;
+  }
+}
+
+const FX = [
+  {label:'News',      color:'r', to:101},
+  {label:'Weather',   color:'g', to:400},
+  {label:'TV',        color:'y', to:600},
+  {label:'Index',     color:'c', to:100},
+];
+
+/* ------------------------------------------------------------------ pages */
+const pages = {};
+const NOW = new Date();
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const LONGDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][NOW.getDay()];
+
+// P100 — index
+{
+  const p = new Page(100, 'Index');
+  const F = {
+    C:['.###.','#...#','#....','#....','#...#','.###.'],
+    E:['#####','#....','####.','#....','#....','#####'],
+    F:['#####','#....','####.','#....','#....','#....'],
+    A:['.###.','#...#','#####','#...#','#...#','#...#'],
+    X:['#...#','.#.#.','..#..','..#..','.#.#.','#...#'],
+  };
+  const word = 'CEEFAX', cols = 'rygcmw';
+  const rows = Array.from({length:6}, () => '');
+  [...word].forEach((L, i) => { for (let y=0; y<6; y++) rows[y] += F[L][y].replace(/#/g, cols[i]) + '.'; });
+  const map = {}; [...cols].forEach(k => map[k]=k);
+  p.bitmap(1, 1, rows, map);
+  p.text(1, 21, LONGDAY + ' ' + NOW.getDate() + ' ' + MONS[NOW.getMonth()], 'w');
+  p.text(2, 21, 'Page 100 of 899', 'c');
+  p.line(3, '{Br}      {By}      {Bg}      {Bc}      {Bb}      {Bm}     {Bw}     ');
+  p.line(5,  '{y}NEWS            {w}101  {y}WEATHER      {w}400');
+  p.line(6,  '{c}Headlines       {w}101  {c}UK map       {w}400');
+  p.line(7,  '{c}Politics        {w}102  {c}Regional     {w}401');
+  p.line(8,  '{c}World           {w}104  {c}Shipping     {w}409');
+  p.line(9,  '{c}Business        {w}200  {c}Sun & tides  {w}410');
+  p.line(11, '{y}TV & RADIO      {w}600  {y}SPORT        {w}300');
+  p.line(12, '{c}Tonight         {w}600  {c}Football     {w}302');
+  p.line(13, '{c}Tomorrow        {w}601  {c}Cricket      {w}340');
+  p.line(14, '{c}Radio           {w}640  {c}Racing       {w}360');
+  p.line(16, '{y}ABOUT THIS PAGE                     {w}199');
+  p.line(17, '{w}A tribute to the BBC teletext service');
+  p.line(18, '{w}that ran from 1974 to 2012. Pages turn');
+  p.line(19, '{w}on their own every eight seconds.');
+  p.line(21, '{g}In service tonight: 100 101 400 600 199');
+  p.line(22, '{m}Other numbers ring engaged. Type any');
+  p.line(23, '{m}three digits, or use the colour keys.');
+  p.fastext(FX);
+  pages[100] = p;
+}
+
+// P101 — headlines
+{
+  const p = new Page(101, 'Headlines');
+  p.line(1,  '{D}{Bb}{y} HEADLINES                     {w}101 ');
+  const HL = [
+    [3,  'Severn tidal barrage gets planning', 'consent after a nine-year inquiry', '102'],
+    [6,  'Rail fares frozen for a second year', 'as ministers admit passenger slump', '103'],
+    [9,  'Inflation slows to 2.1%, the lowest', 'rate since the spring of 2021', '200'],
+    [12, 'Six-week heatwave finally breaks as', 'an Atlantic front sweeps in tonight', '400'],
+    [15, 'Last analogue phone box in Britain', 'to fall silent on Friday morning', '105'],
+  ];
+  for (const [r, a, b, n] of HL){ p.line(r, '{w}' + a); p.line(r+1, '{w}' + b); p.text(r+1, 36, n, 'c'); }
+  p.line(18, '{w}Lottery: 07 14 22 31 38 45 Bonus 09'); p.text(18, 36, '555', 'c');
+  p.line(20, '{g}Headlines are refreshed every hour.');
+  p.line(21, '{g}Full story on the page number shown.');
+  p.line(23, '{y}Weather 400  {c}TV tonight 600  {m}Sport 300');
+  p.fastext(FX);
+  pages[101] = p;
+}
+
+// P400 — weather map
+{
+  const p = new Page(400, 'Weather');
+  p.line(1, '{D}{Bb}{y} WEATHER  {w}Tomorrow\'s highs         {w}400 ');
+  p.fill(3, 15, 0, 12, 'b');
+  const uk = [
+    '..........####........',
+    '.........######.......',
+    '........#######.......',
+    '.......########.......',
+    '......#########.......',
+    '.....##########.......',
+    '......##########......',
+    '......##########......',
+    '.......#########......',
+    '.......########.......',
+    '........#######.......',
+    '........########......',
+    '.........########.....',
+    '..........#######.....',
+    '..........#######.....',
+    '......##...######.....',
+    '.....####..#######....',
+    '....#####..#######....',
+    '...######..######.....',
+    '...######...######....',
+    '..######....######....',
+    '..######....#######...',
+    '.#######.....#######..',
+    '.#######....########..',
+    '.#######...#########..',
+    '#######...##########..',
+    '#######...###########.',
+    '#######..############.',
+    '.#####...############.',
+    '..###....###########..',
+    '.........###########..',
+    '........############..',
+    '.......############...',
+    '......###########.....',
+    '....#########.........',
+    '...######.............',
+    '..####................',
+    '......................',
+    '......................',
+  ];
+  p.bitmap(3, 1, uk, {'#':'g'});
+  // a sun over the North Sea and a rain cloud out in the Atlantic
+  p.bitmap(3, 9, ['..##..','.####.','######','######','.####.','..##..'], {'#':'y'});
+  p.bitmap(3, 0, ['..####..','.######.','########'], {'#':'w'});
+  p.bitmap(4, 0, ['#.#.#.#.','........','.#.#.#.#'], {'#':'c'});
+  const temps = [[4,6,'13'],[7,7,'15'],[8,4,'16'],[10,8,'17'],[11,6,'18'],[12,10,'19'],[13,8,'20'],[14,5,'19']];
+  for (const [r,c,t] of temps) p.text(r, c, t, 'w', 'k');
+  const R = (r, s) => { let fg='w', bg='k', i=0, col=14; for (;i<s.length;){ if (s[i]==='{'){ const j=s.indexOf('}',i), code=s.slice(i+1,j); if (code[0]==='B') bg=code[1]; else fg=code; i=j+1; continue;} if (col<W){ const x=p.cells[r][col]; x.ch=s[i]; x.fg=fg; x.bg=bg; x.mos=0; } col++; i++; } };
+  R(3,  '{y}TONIGHT');
+  R(4,  '{w}Rain clears east by');
+  R(5,  '{w}midnight. Clear spells,');
+  R(6,  '{w}fog patches inland.');
+  R(8,  '{y}TOMORROW');
+  R(9,  '{w}Bright start. Showers');
+  R(10, '{w}spread from the west,');
+  R(11, '{w}heavy over high ground.');
+  R(12, '{w}Fresh south-westerly.');
+  R(14, '{y}OUTLOOK');
+  R(15, '{w}Settling from Friday.');
+  R(16, '{w}Highs 19, lows 8.');
+  p.line(18, '{c}Wind {w}SW 25-35mph  {c}Pollen {w}LOW  {c}UV {w}3');
+  p.line(19, '{c}Sunrise {w}06:18      {c}Sunset {w}19:41');
+  p.line(21, '{g}Temperatures on the map are degrees C');
+  p.line(22, '{g}Regional forecasts 401-408  Sea 409');
+  p.fastext(FX);
+  pages[400] = p;
+}
+
+// P600 — TV listings
+{
+  const p = new Page(600, 'TV tonight');
+  p.line(1,  '{D}{Bm}{w} TV TONIGHT  ' + LONGDAY.padEnd(21) + '{y}600 ');
+  p.line(3,  '{g}CHANNEL ONE');
+  p.line(4,  '{c}18.00 {w}The Six O\'Clock Bulletin');
+  p.line(5,  '{c}18.30 {w}Regional News and Weather');
+  p.line(6,  '{c}19.00 {w}Coast Road  {y}Drama, 4 of 6');
+  p.line(7,  '{c}20.00 {w}Gardens After Dark');
+  p.line(8,  '{c}21.00 {w}The Nine O\'Clock Bulletin');
+  p.line(9,  '{c}21.30 {w}Film: The Long Signal {y}1987');
+  p.line(10, '{c}23.15 {w}Late Kick-Off');
+  p.line(12, '{g}CHANNEL TWO');
+  p.line(13, '{c}18.00 {w}Open Air Learning');
+  p.line(14, '{c}19.00 {w}Under the Microscope');
+  p.line(15, '{c}19.30 {w}Snooker {y}Semi-final, live');
+  p.line(16, '{c}21.00 {w}Ways of Making: Letterpress');
+  p.line(17, '{c}22.00 {w}The Late Review');
+  p.line(18, '{c}23.00 {w}Test Card and music until 06.00');
+  p.line(20, '{y}Subtitles on page 888');
+  p.line(21, '{y}Programmes may change if snooker runs on');
+  p.line(23, '{m}Full listings 601-620   Radio 640');
+  p.fastext(FX);
+  pages[600] = p;
+}
+
+// P199 — about
+{
+  const p = new Page(199, 'About this page');
+  p.line(1,  '{D}{Br}{w} ABOUT THIS PAGE                {y}199 ');
+  p.line(3,  '{w}Ceefax was the first teletext service');
+  p.line(4,  '{w}in the world, carried in spare lines of');
+  p.line(5,  '{w}the television picture from 1974 until');
+  p.line(6,  '{w}2012. A page is 40 columns by 25 rows;');
+  p.line(7,  '{w}graphics are 2x3 mosaic cells, and each');
+  p.line(8,  '{w}cell may carry only one colour.');
+  p.line(10, '{y}This recreation');
+  p.line(11, '{w}Every page is a real grid of cells, no');
+  p.line(12, '{w}pictures. The header clock is live and');
+  p.line(13, '{w}the page counter spins as it hunts for');
+  p.line(14, '{w}the next page, as the receiver once did.');
+  p.line(16, '{c}Keys');
+  p.line(17, '{w}0-9  page number    {w}H  hold / release');
+  p.line(18, '{w}left and right arrows  previous / next');
+  p.line(19, '{w}Coloured keys below jump to the pages.');
+  p.line(21, '{g}Type: VT323 by Peter Hull');
+  p.line(22, '{g}Colour: the eight teletext primaries');
+  p.fastext(FX);
+  pages[199] = p;
+}
+
+// engaged page for numbers not in service
+function engaged(n){
+  const p = new Page(n, 'Page not in service');
+  p.line(1,  '{D}{Br}{w} PAGE NOT IN SERVICE            {y}' + n + ' ');
+  p.line(4,  '{w}Page ' + n + ' is not being transmitted');
+  p.line(5,  '{w}this evening.');
+  p.line(7,  '{c}Pages in service:');
+  p.line(8,  '{y}100 {w}Index       {y}101 {w}Headlines');
+  p.line(9,  '{y}400 {w}Weather     {y}600 {w}TV tonight');
+  p.line(10, '{y}199 {w}About this page');
+  p.line(12, '{g}The carousel resumes in a moment.');
+  p.line(15, '{Br}     {By}     {Bg}     {Bc}     {Bb}     {Bm}     {Bw}     {Bk}');
+  p.line(16, '{Bk}     {Bw}     {Bm}     {Bb}     {Bc}     {Bg}     {By}     {Br}     ');
+  p.line(18, '{c}Ceefax carries 899 page numbers, but a');
+  p.line(19, '{c}receiver only sees the ones broadcast.');
+  p.line(20, '{c}Everything else is a quiet black screen');
+  p.line(21, '{c}until the carousel comes round again.');
+  p.fastext(FX);
+  return p;
+}
+
+/* ------------------------------------------------------------------ rendering */
+const hdr = document.getElementById('hdr');
+const bodyEl = document.getElementById('body');
+const fxEl = document.getElementById('fx');
+const srEl = document.getElementById('sr');
+const holdBtn = document.getElementById('holdBtn');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+function cellEl(cell){
+  const el = document.createElement(cell.mos ? 'div' : 'span');
+  el.className = 'c' + (cell.mos ? ' m' : '');
+  el.style.background = COL[cell.bg];
+  if (cell.mos){
+    for (let k=0; k<6; k++){ const b = document.createElement('b'); if (cell.mos & (1<<k)) b.style.background = COL[cell.fg]; el.appendChild(b); }
+  } else { el.textContent = cell.ch; el.style.color = COL[cell.fg]; }
+  return el;
+}
+
+function renderBody(page){
+  const frag = document.createDocumentFragment();
+  let vis = 0;
+  for (let r=1; r<H-1; r++){
+    if (page.dh.has(r-1)) continue;
+    const row = document.createElement('div');
+    row.className = 'row' + (page.dh.has(r) ? ' dh' : '');
+    row.style.animationDelay = (vis++ * 22) + 'ms';
+    for (let c=0; c<W; c++) row.appendChild(cellEl(page.cells[r][c]));
+    frag.appendChild(row);
+  }
+  bodyEl.replaceChildren(frag);
+  bodyEl.classList.remove('rx'); void bodyEl.offsetWidth; bodyEl.classList.add('rx');
+
+  fxEl.replaceChildren(...page.links.map(l => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.style.setProperty('--lk', COL[l.color]);
+    b.setAttribute('aria-label', l.label + ', page ' + l.to);
+    const i = document.createElement('i');
+    const s = document.createElement('span'); s.textContent = l.label.padEnd(8);
+    b.append(i, s); b.addEventListener('click', () => go(l.to)); return b;
+  }));
+
+  const h2 = document.createElement('h2'); h2.textContent = 'Page ' + page.num + ': ' + page.title;
+  const ul = document.createElement('ul');
+  for (const t of page.plain()){ const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
+  srEl.replaceChildren(h2, ul);
+}
+
+// header: P### ....CEEFAX ###  Wed 03 Sep 21:14/30
+const hdrCells = [];
+{
+  const p = new Page(0,'');
+  p.line(0, '{w}P100    {g}CEEFAX {w}100  {c}Wed 03 Sep {y}21:14/30');
+  for (let c=0; c<W; c++){ const el = cellEl(p.cells[0][c]); hdrCells.push(el); hdr.appendChild(el); }
+}
+function setHdr(col, s, color){ for (let i=0; i<s.length; i++){ const el = hdrCells[col+i]; el.textContent = s[i]; if (color) el.style.color = COL[color]; } }
+const pad = n => String(n).padStart(2,'0');
+function tick(){
+  const d = new Date();
+  setHdr(20, DAYS[d.getDay()] + ' ' + pad(d.getDate()) + ' ' + MONS[d.getMonth()]);
+  setHdr(31, pad(d.getHours()) + ':' + pad(d.getMinutes()) + '/' + pad(d.getSeconds()));
+}
+
+/* ------------------------------------------------------------------ carousel + spin */
+const ORDER = [100, 101, 400, 600, 199];
+const DWELL = 8000;
+let current = 100, shown = 100, hold = false, timer = 0, spinning = false, typed = '';
+let spinReq = 0;
+
+function schedule(){
+  clearTimeout(timer);
+  if (hold || document.hidden) return;
+  timer = setTimeout(() => { const i = ORDER.indexOf(current); go(ORDER[(i+1) % ORDER.length], true); }, DWELL);
+}
+
+function land(n){
+  current = n; shown = n;
+  setHdr(15, String(n), hold ? 'r' : 'w');
+  if (hold) setHdr(15, 'HLD', 'r');
+  renderBody(pages[n] || engaged(n));
+  schedule();
+}
+
+function go(n, auto){
+  if (!auto && typed){ typed=''; }
+  srEl.setAttribute('aria-live', auto ? 'off' : 'polite');   // only announce pages the reader asked for
+  n = Math.max(100, Math.min(899, n|0));
+  clearTimeout(timer);
+  cancelAnimationFrame(spinReq); spinning = false;
+  setHdr(1, String(n), 'w');
+  if (reduced.matches){ land(n); return; }
+  // spin the counter through the carousel, roughly 20 steps over ~900ms
+  spinning = true;
+  const from = shown, dist = ((n - from) % 800 + 800) % 800 || 800;
+  const t0 = performance.now(), dur = 900;
+  let lastStep = -1;
+  const frame = now => {
+    const p = Math.min(1, (now - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 2);
+    const step = Math.floor(eased * 20);
+    if (step !== lastStep){ lastStep = step; const v = 100 + ((from - 100 + Math.round(dist * eased)) % 800); setHdr(15, String(v), 'w'); }
+    if (p < 1){ spinReq = requestAnimationFrame(frame); }
+    else { spinning = false; land(n); }
+  };
+  spinReq = requestAnimationFrame(frame);
+}
+
+function step(dir){
+  const i = ORDER.indexOf(current);
+  const j = i < 0 ? 0 : (i + dir + ORDER.length) % ORDER.length;
+  go(ORDER[j]);
+}
+
+function setHold(v){
+  hold = v;
+  holdBtn.setAttribute('aria-pressed', String(v));
+  holdBtn.textContent = v ? 'HELD' : 'HOLD';
+  if (v){ clearTimeout(timer); if (!spinning) setHdr(15, 'HLD', 'r'); }
+  else { if (!spinning) setHdr(15, String(current), 'w'); schedule(); }
+}
+
+let typeTimer = 0;
+function digit(d){
+  typed = (typed + d).slice(-3);
+  setHdr(1, typed.padEnd(3, ' '), 'w');
+  clearTimeout(typeTimer);
+  if (typed.length === 3){ const n = +typed; typed = ''; go(n); }
+  else typeTimer = setTimeout(() => { typed=''; setHdr(1, String(current), 'w'); }, 3000);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^[0-9]$/.test(e.key)){ digit(e.key); e.preventDefault(); }
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown'){ step(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp'){ step(-1); e.preventDefault(); }
+  else if (e.key === 'h' || e.key === 'H'){ setHold(!hold); }
+  else if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)){ step(1); e.preventDefault(); }
+});
+document.querySelector('.remote').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.d !== undefined) digit(b.dataset.d);
+  else if (b.dataset.act === 'prev') step(-1);
+  else if (b.dataset.act === 'next') step(1);
+  else if (b.dataset.act === 'hold') setHold(!hold);
+});
+
+/* ------------------------------------------------------------------ sizing: integer cell widths keep the pixels crisp */
+function size(){
+  const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+  const side = vw >= 1000;
+  const byW = (vw - (side ? 48 + 48 + 240 : 16)) / 40;
+  const byH = (vh - (side ? 24 : 300)) / 46.25;   // 25 rows of 1.85cw
+  const cw = Math.max(8, Math.floor(Math.min(byW, byH)));
+  const ch = Math.ceil(cw * 1.85);
+  document.documentElement.style.setProperty('--cw', cw + 'px');
+  document.documentElement.style.setProperty('--ch', ch + 'px');
+}
+size();
+addEventListener('resize', size);
+
+/* ------------------------------------------------------------------ clock + visibility */
+let clock = 0;
+function startClock(){ clearInterval(clock); tick(); clock = setInterval(tick, 1000); }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ clearInterval(clock); clearTimeout(timer); }
+  else { startClock(); schedule(); }
+});
+startClock();
+land(100);
+})();
+</script>
+</body>
+</html>

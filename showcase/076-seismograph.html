@@ -146,7 +146,7 @@ button{font:inherit;color:inherit}
 section{padding-top:clamp(40px,6vw,88px)}
 .sec-h{display:flex;align-items:baseline;gap:18px;border-bottom:2px solid var(--text);padding-bottom:10px;margin-bottom:22px}
 .sec-h h2{margin:0;font-size:clamp(20px,2.2vw,28px);letter-spacing:.02em;font-weight:700}
-.sec-h .num{color:var(--ink);font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+.sec-h .num{white-space:nowrap;color:var(--ink);font-size:13px;letter-spacing:.18em;text-transform:uppercase}
 .sec-h .right{margin-left:auto;font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;display:flex;gap:14px;align-items:center}
 .knob.dark{border-color:var(--brass);color:var(--brass-2)}
 .knob.dark:hover{background:rgba(166,124,82,.14)}
@@ -166,7 +166,8 @@ section{padding-top:clamp(40px,6vw,88px)}
 .log .id{color:var(--muted);font-size:12px}
 .log .mag{font-weight:700;font-size:22px;letter-spacing:-.03em;color:var(--ink)}
 .log .mag.small{color:var(--text)}
-.bar{height:10px;background:repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px 10%);position:relative}
+.log .barc{display:block}
+.bar{display:block;height:10px;background:repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px 10%);position:relative}
 .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);width:calc(var(--w)*1%)}
 .bar.small i{background:var(--brass)}
 .log .src{font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--grid-2);justify-self:start}
@@ -215,7 +216,6 @@ footer{margin-top:clamp(48px,7vw,100px)}
   .head{grid-template-columns:1fr}
   .stamp{justify-self:start;transform:rotate(-1.5deg)}
   .paper{height:clamp(300px,52vh,460px)}
-  .pen{width:120px}
   .readout b{font-size:30px}
   .stats{grid-template-columns:1fr 1fr}
   .stat:nth-child(2){border-right:0}
@@ -227,6 +227,9 @@ footer{margin-top:clamp(48px,7vw,100px)}
   .log .id{grid-area:id}.log .time{grid-area:time;text-align:right;color:var(--muted);font-size:12px}
   .log .mag{grid-area:mag;font-size:30px}.log .barc{grid-area:bar}.log .src{grid-area:src}.log .cls{grid-area:cls;text-align:right}.log .wave{grid-area:wave}
   .hint{display:none}
+  .sec-h{flex-wrap:wrap;gap:10px 14px}
+  .sec-h h2{white-space:nowrap}
+  .sec-h .right{margin-left:0;flex-basis:100%;justify-content:space-between}
 }
 @media (max-width:480px){
   .rail-in{padding:0 14px}
@@ -279,10 +282,10 @@ footer{margin-top:clamp(48px,7vw,100px)}
           <!-- arm, rotates about pivot at (157,300) -->
           <g id="arm" transform="rotate(0 157 300)">
             <rect x="157" y="296" width="0" height="8" fill="#A67C52"/>
-            <line x1="157" y1="300" x2="26" y2="300" stroke="#A67C52" stroke-width="5" stroke-linecap="round"/>
-            <line x1="157" y1="298.5" x2="26" y2="298.5" stroke="#D9BE98" stroke-width="1.2"/>
-            <line x1="40" y1="300" x2="18" y2="300" stroke="#8F1414" stroke-width="3" stroke-linecap="round"/>
-            <circle cx="16" cy="300" r="2.4" fill="#C81E1E"/>
+            <line id="armA" x1="157" y1="300" x2="36" y2="300" stroke="#A67C52" stroke-width="5" stroke-linecap="round"/>
+            <line id="armB" x1="157" y1="298.5" x2="36" y2="298.5" stroke="#D9BE98" stroke-width="1.2"/>
+            <line id="nib" x1="50" y1="300" x2="28" y2="300" stroke="#8F1414" stroke-width="3" stroke-linecap="round"/>
+            <circle id="nibDot" cx="26" cy="300" r="2.4" fill="#C81E1E"/>
             <rect x="120" y="292" width="24" height="16" rx="2" fill="#7E5B39"/>
           </g>
           <circle cx="157" cy="300" r="12" fill="#7E5B39"/>
@@ -390,7 +393,8 @@ footer{margin-top:clamp(48px,7vw,100px)}
 
   // ---------- geometry ----------
   let W = 0, H = 0, dpr = 1;
-  const PEN_X = () => W - 16;                // pen tip x (css px)
+  let armLen = 131;                          // arm length in svg px
+  const PEN_X = () => W - 23 - armLen;       // pen tip x = end of arm (css px)
   let samples = new Float32Array(0);
   function resize(){
     const r = paper.getBoundingClientRect();
@@ -408,6 +412,11 @@ footer{margin-top:clamp(48px,7vw,100px)}
     pensvg.setAttribute('viewBox', `0 0 180 ${H}`);
     mast.setAttribute('height', H); mastCap.setAttribute('y', H - 8);
     pivotG.setAttribute('transform', `translate(0 ${(H / 2 - 300).toFixed(1)})`);
+    armLen = W < 700 ? 84 : 131;
+    const tip = 157 - armLen;
+    $('armA').setAttribute('x2', tip + 10); $('armB').setAttribute('x2', tip + 10);
+    $('nib').setAttribute('x1', tip + 24); $('nib').setAttribute('x2', tip + 2);
+    $('nibDot').setAttribute('cx', tip);
   }
   addEventListener('resize', resize, {passive:true});
   resize();
@@ -505,7 +514,7 @@ footer{margin-top:clamp(48px,7vw,100px)}
     ctx.fillStyle = g; ctx.fillRect(0, 0, 60, H);
     // arm
     const defl = clip(samples[n - 1], lim);
-    const ang = -Math.atan2(defl, 131) * 180 / Math.PI;
+    const ang = -Math.atan2(defl, armLen) * 180 / Math.PI;
     arm.setAttribute('transform', `rotate(${ang.toFixed(2)} 157 300)`);
     lastValue = defl;
   }
