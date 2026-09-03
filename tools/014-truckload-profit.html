@@ -624,22 +624,41 @@ function U(){
        fuelL:'Fuel price (per gallon)',fixedL:'Fixed cost per mile',payL:'Driver pay (cents per loaded mile)',
        payH:'e.g. 62 = 62¢ per loaded mile.'};
 }
+var LASTCONV=null;
 function convState(to){
   if(to===S.units) return;
-  var toMet=(to==='met');
-  function cd(v,d){var x=n(v); if(x===null) return v; return String(r(toMet? x*MI_KM : x/MI_KM, d));}
-  function cr(v,d){var x=n(v); if(x===null) return v; return String(r(toMet? x/MI_KM : x*MI_KM, d));}
-  // fuel economy
-  var e=n(S.eff); if(e!==null && e>0) S.eff=String(r(L100/e, toMet?2:2));
-  // fuel price per gallon <-> per litre
-  var f=n(S.fuel); if(f!==null) S.fuel=String(r(toMet? f/GAL_L : f*GAL_L, 3));
-  S.fixed=cr(S.fixed,3);
-  if(S.payMode==='cpm') S.payRate=cr(S.payRate,2);
+  var toMet=(to==='met'), memo={};
+  var rev = !!(LASTCONV && LASTCONV.to===S.units && LASTCONV.from===to);
+  // conv() converts one field. If this toggle exactly reverses the previous one and
+  // the value has not been edited since, the original figure is restored verbatim so
+  // that a there-and-back trip never quietly nudges the user's numbers.
+  function conv(key,cur,fn,dp){
+    var nv;
+    if(rev && LASTCONV.map[key] && String(cur)===LASTCONV.map[key].to){
+      nv=LASTCONV.map[key].from;
+    } else {
+      var x=n(cur);
+      nv = (x===null||!isFinite(x)) ? cur : String(r(fn(x),dp));
+    }
+    memo[key]={from:String(cur),to:String(nv)};
+    return nv;
+  }
+  var fEff  = function(x){return x>0 ? L100/x : x;};                 // MPG <-> L/100km
+  var fFuel = function(x){return toMet ? x/GAL_L : x*GAL_L;};        // per gallon <-> per litre
+  var fRate = function(x){return toMet ? x/MI_KM : x*MI_KM;};        // per mile <-> per km
+  var fDist = function(x){return toMet ? x*MI_KM : x/MI_KM;};        // miles <-> km
+
+  S.eff  = conv('eff',  S.eff,  fEff,  2);
+  S.fuel = conv('fuel', S.fuel, fFuel, 3);
+  S.fixed= conv('fixed',S.fixed,fRate, 4);
+  if(S.payMode==='cpm') S.payRate=conv('payRate',S.payRate,fRate,2);
   for(var i=0;i<S.loads.length;i++){
     var L=S.loads[i];
-    L.loaded=cd(L.loaded,1); L.dead=cd(L.dead,1);
-    if(L.basis==='mile') L.rate=cr(L.rate,3);
+    L.loaded=conv('L'+L.id+'.loaded',L.loaded,fDist,1);
+    L.dead  =conv('L'+L.id+'.dead',  L.dead,  fDist,1);
+    if(L.basis==='mile') L.rate=conv('L'+L.id+'.rate',L.rate,fRate,4);
   }
+  LASTCONV={from:S.units,to:to,map:memo};
   S.units=to;
 }
 

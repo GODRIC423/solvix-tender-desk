@@ -833,3 +833,386 @@ function compute(){
   m.breachCount=m.breaches.length;
   return m;
 }
+
+/* ══ rendering ═════════════════════════════════════════════════ */
+function optLabel(t){var h=tplHours(t);
+  return (t.code?t.code+' · ':'')+(t.name||'Shift')+'  '+t.s+'–'+t.e+(h===null?'':'  '+hrs1(h)+'h');}
+
+function rebuildGrid(){
+  var dates=weekDates(), isos=dates.map(isoOf);
+  var head=$('#rotaHead'), body=$('#rotaBody'), foot=$('#rotaFoot');
+  cellEls={};
+  /* head */
+  var h='<tr><th scope="col" class="who">Staff</th>';
+  for(var c=0;c<7;c++){var d=dates[c],we=(d.getDay()===0||d.getDay()===6);
+    h+='<th scope="col" class="dcol'+(we?' wknd':'')+'"><span class="dn">'+DOW3[d.getDay()]+
+       '</span><span class="dd">'+shortDate(d)+'</span></th>';}
+  h+='<th scope="col" class="tcol">Week h</th><th scope="col" class="tcol">Week cost</th></tr>';
+  head.innerHTML=h;
+  /* body */
+  if(!S.staff.length){ body.innerHTML='<tr><td colspan="10" class="empty">No staff yet — use “Add staff”.</td></tr>';
+    foot.innerHTML=''; return; }
+  var frag=document.createDocumentFragment();
+  S.staff.forEach(function(p){
+    var tr=document.createElement('tr');
+    var td=document.createElement('td'); td.className='who';
+    td.innerHTML='<div class="nm"></div><div class="rl"></div><div class="rt"></div>';
+    tr.appendChild(td);
+    var refs={nm:td.querySelector('.nm'),rl:td.querySelector('.rl'),rt:td.querySelector('.rt'),cells:[]};
+    for(var c=0;c<7;c++){
+      var cd=document.createElement('td'); cd.className='cell';
+      var raw=cellOf(isos[c],p.id);
+      var sel=document.createElement('select');
+      sel.setAttribute('aria-label',(p.name||'Staff')+' — '+longDate(dates[c]));
+      var opts='<option value="">— Off —</option>';
+      S.tpls.forEach(function(t){opts+='<option value="'+esc(t.id)+'">'+esc(optLabel(t))+'</option>';});
+      opts+='<option value="'+CUSTOM+'">Custom time…</option>';
+      if(raw&&raw.t&&raw.t!==CUSTOM&&!tplById(raw.t))
+        opts+='<option value="'+esc(raw.t)+'">? unknown shift</option>';
+      sel.innerHTML=opts;
+      sel.value=raw?raw.t:'';
+      var cust=document.createElement('div'); cust.className='cust'; cust.hidden=true;
+      var ci1=document.createElement('input'); ci1.type='time'; ci1.step='300';
+      ci1.setAttribute('aria-label','Start time');
+      var ci2=document.createElement('input'); ci2.type='time'; ci2.step='300';
+      ci2.setAttribute('aria-label','Finish time');
+      var ci3=document.createElement('input'); ci3.type='number'; ci3.min='0'; ci3.step='5';
+      ci3.className='brk'; ci3.placeholder='break min'; ci3.setAttribute('aria-label','Unpaid break, minutes');
+      cust.appendChild(ci1); cust.appendChild(ci2); cust.appendChild(ci3);
+      if(raw&&raw.t===CUSTOM){cust.hidden=false;ci1.value=raw.s||'';ci2.value=raw.e||'';ci3.value=raw.b;}
+      var meta=document.createElement('div'); meta.className='cmeta';
+      meta.innerHTML='<span class="tm"></span><span class="hrs"></span>';
+      var flg=document.createElement('div'); flg.className='flg';
+      cd.appendChild(sel); cd.appendChild(cust); cd.appendChild(meta); cd.appendChild(flg);
+      tr.appendChild(cd);
+      (function(pid,iso,sel,cust,ci1,ci2,ci3){
+        sel.addEventListener('change',function(){
+          var v=sel.value;
+          if(!v){ setCell(iso,pid,null); cust.hidden=true; }
+          else if(v===CUSTOM){
+            var prev=cellOf(iso,pid), base=prev?resolve(prev):null;
+            var s=(base&&base.s)?base.s:'09:00', e=(base&&base.e)?base.e:'17:00',
+                b=(base&&isFinite(base.b))?base.b:30;
+            ci1.value=s; ci2.value=e; ci3.value=b;
+            setCell(iso,pid,{t:CUSTOM,s:s,e:e,b:b}); cust.hidden=false;
+          } else { setCell(iso,pid,{t:v}); cust.hidden=true; }
+          touched(); refresh();
+        });
+        function custChange(){
+          setCell(iso,pid,{t:CUSTOM,s:ci1.value||'09:00',e:ci2.value||'17:00',
+            b:Math.max(0,Math.round(num(ci3.value,0)))});
+          touched(); refresh();
+        }
+        ci1.addEventListener('input',custChange); ci2.addEventListener('input',custChange);
+        ci3.addEventListener('input',custChange);
+      })(p.id,isos[c],sel,cust,ci1,ci2,ci3);
+      refs.cells.push({td:cd,sel:sel,cust:cust,tm:meta.querySelector('.tm'),
+        hrs:meta.querySelector('.hrs'),flg:flg});
+    }
+    var th1=document.createElement('td'); th1.className='tot';
+    th1.innerHTML='<span class="h"></span>'; tr.appendChild(th1);
+    var th2=document.createElement('td'); th2.className='tot';
+    th2.innerHTML='<span class="c2"></span>'; tr.appendChild(th2);
+    refs.th=th1.querySelector('.h'); refs.tc=th2.querySelector('.c2'); refs.tdH=th1;
+    frag.appendChild(tr);
+    cellEls[p.id]=refs;
+  });
+  body.innerHTML=''; body.appendChild(frag);
+  /* foot */
+  var f='<tr><td class="who">On duty / required</td>';
+  for(var c2=0;c2<7;c2++) f+='<td data-fd="'+c2+'"><span class="hc">—</span><span class="rq"></span></td>';
+  f+='<td class="tot" id="ftH">—</td><td class="tot" id="ftC">—</td></tr>';
+  foot.innerHTML=f;
+}
+
+function rebuildStaff(){
+  var tb=$('#staffBody'); tb.innerHTML=''; staffEls={};
+  S.staff.forEach(function(p,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><input type="text" class="f-name" value="'+esc(p.name)+'" aria-label="Staff name '+(i+1)+'" placeholder="Name"></td>'+
+      '<td><input type="text" class="f-role" value="'+esc(p.role)+'" aria-label="Role '+(i+1)+'" placeholder="Role"></td>'+
+      '<td class="n"><input type="number" class="f-rate" min="0" step="0.01" inputmode="decimal" value="'+
+        (p.rate||0)+'" aria-label="Hourly rate '+(i+1)+'"></td>'+
+      '<td class="n"><input type="number" class="f-con" min="0" step="0.5" inputmode="decimal" value="'+
+        (p.contract||0)+'" aria-label="Contract hours '+(i+1)+'"></td>'+
+      '<td class="n s-h">—</td><td class="n s-c">—</td>'+
+      '<td><button type="button" class="rmbtn" aria-label="Remove '+esc(p.name||('staff '+(i+1)))+'">&#215;</button></td>';
+    tb.appendChild(tr);
+    var nm=tr.querySelector('.f-name'), rl=tr.querySelector('.f-role'),
+        rt=tr.querySelector('.f-rate'), cn=tr.querySelector('.f-con');
+    nm.addEventListener('input',function(){p.name=nm.value;
+      if(cellEls[p.id])cellEls[p.id].nm.textContent=p.name||'(unnamed)'; touched(); refresh();});
+    rl.addEventListener('input',function(){p.role=rl.value;
+      if(cellEls[p.id])cellEls[p.id].rl.textContent=p.role; touched(); refresh();});
+    rt.addEventListener('input',function(){p.rate=Math.max(0,num(rt.value,0)); touched(); refresh();});
+    rt.addEventListener('blur',function(){ var bad=rt.value!==''&&!isFinite(parseFloat(rt.value));
+      rt.classList.toggle('inv',bad||num(rt.value,0)<0);
+      if(num(rt.value,0)<0){rt.value=0;p.rate=0;touched();refresh();} });
+    cn.addEventListener('input',function(){p.contract=Math.max(0,num(cn.value,0)); touched(); refresh();});
+    tr.querySelector('.rmbtn').addEventListener('click',function(){
+      if(S.staff.length===1&&!p.name&&!p.role){return;}
+      if(!window.confirm('Remove '+(p.name||'this person')+' from the rota? Their shifts in every week will be deleted.'))return;
+      for(var iso in S.shifts){ if(S.shifts.hasOwnProperty(iso)&&S.shifts[iso][p.id]){
+        delete S.shifts[iso][p.id];
+        if(!Object.keys(S.shifts[iso]).length) delete S.shifts[iso]; } }
+      S.staff=S.staff.filter(function(x){return x!==p;});
+      if(!S.staff.length) S.staff=[{id:uid('p'),name:'',role:'',rate:0,contract:0}];
+      touched(); rebuildStaff(); rebuildGrid(); refresh();
+    });
+    staffEls[p.id]={h:tr.querySelector('.s-h'),c:tr.querySelector('.s-c'),row:tr};
+  });
+}
+
+function rebuildTpls(){
+  var tb=$('#tplBody'); tb.innerHTML='';
+  S.tpls.forEach(function(t,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><input type="text" class="t-code" maxlength="4" style="text-align:center" value="'+esc(t.code)+'" aria-label="Shift code '+(i+1)+'"></td>'+
+      '<td><input type="text" class="t-name" value="'+esc(t.name)+'" aria-label="Shift name '+(i+1)+'"></td>'+
+      '<td><input type="time" step="300" class="t-s" value="'+esc(t.s)+'" aria-label="Start '+(i+1)+'"></td>'+
+      '<td><input type="time" step="300" class="t-e" value="'+esc(t.e)+'" aria-label="Finish '+(i+1)+'"></td>'+
+      '<td class="n"><input type="number" min="0" step="5" class="t-b" value="'+(t.b||0)+'" aria-label="Break minutes '+(i+1)+'"></td>'+
+      '<td class="n t-h">—</td>'+
+      '<td><button type="button" class="rmbtn" aria-label="Remove shift '+esc(t.code||t.name)+'">&#215;</button></td>';
+    tb.appendChild(tr);
+    function bind(sel,key,fn){ var el=tr.querySelector(sel);
+      el.addEventListener('input',function(){ t[key]=fn?fn(el.value):el.value; touched();
+        refreshTplHours(); rebuildGrid(); refresh(); }); }
+    bind('.t-code','code'); bind('.t-name','name'); bind('.t-s','s'); bind('.t-e','e');
+    bind('.t-b','b',function(v){return Math.max(0,Math.round(num(v,0)));});
+    tr.querySelector('.rmbtn').addEventListener('click',function(){
+      if(S.tpls.length<=1){ note('Keep at least one shift template.'); return; }
+      var used=0; for(var iso in S.shifts){ if(!S.shifts.hasOwnProperty(iso))continue;
+        for(var pid in S.shifts[iso]){ if(S.shifts[iso][pid]&&S.shifts[iso][pid].t===t.id)used++; } }
+      if(!window.confirm('Delete the “'+(t.name||t.code)+'” template?'+
+        (used?' The '+used+' shift'+(used===1?'':'s')+' already using it will keep the same times as custom shifts.':'')))return;
+      for(var iso2 in S.shifts){ if(!S.shifts.hasOwnProperty(iso2))continue;
+        for(var pid2 in S.shifts[iso2]){ if(S.shifts[iso2][pid2]&&S.shifts[iso2][pid2].t===t.id)
+          S.shifts[iso2][pid2]={t:CUSTOM,s:t.s,e:t.e,b:num(t.b,0)}; } }
+      S.tpls=S.tpls.filter(function(x){return x!==t;});
+      touched(); rebuildTpls(); rebuildGrid(); refresh();
+    });
+  });
+  refreshTplHours();
+}
+function refreshTplHours(){
+  var rows=$('#tplBody').children;
+  for(var i=0;i<rows.length&&i<S.tpls.length;i++){
+    var h=tplHours(S.tpls[i]), cell=rows[i].querySelector('.t-h');
+    if(!cell)continue;
+    if(h===null){cell.textContent='—';cell.style.color='var(--bad)';}
+    else{cell.textContent=hrs(h)+(parseHM(S.tpls[i].e)<=parseHM(S.tpls[i].s)?' ⌂':'');cell.style.color='';}
+  }
+}
+function rebuildCover(){
+  var g=$('#coverGrid'); g.innerHTML='';
+  var dates=weekDates();
+  dates.forEach(function(d){
+    var dow=d.getDay(), id='cov'+dow;
+    var w=document.createElement('div'); w.className='f';
+    w.innerHTML='<label for="'+id+'">'+DOWL[dow]+'</label>'+
+      '<input id="'+id+'" type="number" min="0" step="1" inputmode="numeric" value="'+
+      (S.cover[dow]||0)+'">';
+    g.appendChild(w);
+    var inp=w.querySelector('input');
+    inp.addEventListener('input',function(){S.cover[dow]=Math.max(0,Math.round(num(inp.value,0)));
+      touched(); refresh();});
+  });
+}
+
+/* ══ live refresh — recomputes and updates text, never rebuilds ══ */
+function refresh(){
+  M=compute();
+  var dates=M.dates;
+  /* grid cells */
+  M.rows.forEach(function(row){
+    var refs=cellEls[row.p.id]; if(!refs)return;
+    refs.nm.textContent=row.p.name||'(unnamed)';
+    refs.rl.textContent=row.p.role||'';
+    refs.rt.textContent=(num(row.p.rate,0)>0?money(row.p.rate)+'/h':'no rate')+
+      (num(row.p.contract,0)>0?' · '+hrs1(row.p.contract)+'h contract':'');
+    row.cells.forEach(function(cl,c){
+      var e=refs.cells[c];
+      if(!cl.sh){ e.tm.textContent=''; e.hrs.textContent=''; e.flg.innerHTML='';
+        e.td.className='cell off'; return; }
+      e.tm.textContent=(cl.sh.s&&cl.sh.e)?(cl.sh.s+'–'+cl.sh.e+(cl.m.overnight?'⁺':'')):'—';
+      e.hrs.textContent=cl.m.ok?hrs(cl.m.hours)+'h':'—';
+      var fh='';
+      cl.flags.forEach(function(f){
+        fh+='<span class="fchip'+(f.sev==='warn'?' w':'')+'" title="'+esc(f.msg)+'">'+esc(f.k)+'</span>';});
+      e.flg.innerHTML=fh;
+      e.td.className='cell'+(cl.flags.length?' brch':'');
+    });
+    refs.th.textContent=hrs(row.hours);
+    refs.tdH.className='tot'+(row.overCap?' over':'');
+    refs.tdH.title=row.overCap?('Over the '+hrs1(num(S.rules.cap,48))+' h weekly cap'):
+      (row.contractVar!==null?('Contract '+hrs1(num(row.p.contract,0))+' h — '+
+        (row.contractVar>0?'+':'')+hrs1(row.contractVar)+' h'):'');
+    refs.tc.textContent=row.shifts?money(row.cost):'—';
+  });
+  /* grid foot */
+  for(var c=0;c<7;c++){
+    var td=$('#rotaFoot [data-fd="'+c+'"]'); if(!td)continue;
+    var d=M.days[c];
+    td.className=d.short>0?'uns':'';
+    td.innerHTML='<span class="hc">'+d.head+'</span><span class="rq">'+
+      (d.req>0?('need '+d.req+(d.short>0?' · short '+d.short:'')):'no target')+'</span>';
+    td.title=d.short>0?(DOWL[d.date.getDay()]+' is '+d.short+' person'+(d.short===1?'':'s')+
+      ' below the required cover of '+d.req):'';
+  }
+  var fh=$('#ftH'), fc=$('#ftC');
+  if(fh)fh.innerHTML='<span class="h">'+hrs(M.totHours)+'</span>';
+  if(fc)fc.innerHTML='<span class="h">'+money(M.totCost)+'</span>';
+  /* staff table */
+  M.rows.forEach(function(row){
+    var e=staffEls[row.p.id]; if(!e)return;
+    e.h.textContent=row.shifts?hrs(row.hours):'—';
+    e.c.textContent=row.shifts?money(row.cost):'—';
+    e.h.style.color=row.overCap?'var(--bad)':'';
+  });
+  $('#stfH').textContent=hrs(M.totHours);
+  $('#stfC').textContent=money(M.totCost);
+  /* headline stats */
+  var ws=dates[0], we=dates[6];
+  $('#wkLabel').textContent=longDate(ws)+' — '+longDate(we);
+  $('#heroWk').textContent=shortDate(ws)+' to '+shortDate(we);
+  $('#sCost').textContent=M.totShifts?money(M.totCost):'—';
+  $('#sCostSub').textContent=M.totShifts?
+    (M.totShifts+' shift'+(M.totShifts===1?'':'s')+' · '+hrs(M.totHours)+' paid hours'):
+    'No shifts rostered yet';
+  $('#sHours').textContent=M.totShifts?hrs(M.totHours):'—';
+  $('#sShifts').textContent=M.totShifts?(M.totShifts+' shifts rostered'):'—';
+  $('#sAvg').textContent=(M.avg===null)?'—':money(M.avg);
+  $('#sStaff').textContent=S.staff.length+' people on the rota';
+  $('#sBreach').textContent=String(M.breachCount);
+  $('#sBreachSub').textContent=M.breachCount?'Check the flagged cells':'Rest, days and cap all clear';
+  $('#stBr').className='stat'+(M.breachCount?' flagbad':' flagok');
+  $('#sCover').textContent=String(M.coverShort);
+  $('#sCoverSub').textContent=M.coverShort?'Below the cover you set':'Cover met every day';
+  $('#stCov').className='stat'+(M.coverShort?' flagbad':' flagok');
+  $('#brCount').textContent=M.breachCount+' breach'+(M.breachCount===1?'':'es');
+  $('#brCount').className='chip'+(M.breachCount?' bad':' ok');
+  $('#ftTot').textContent=hrs(M.totHours)+' h · '+money(M.totCost);
+  $('#sampleChip').hidden=!S.sample;
+  /* breach list */
+  var bl=$('#brList'), out='';
+  M.days.forEach(function(d){
+    if(d.short>0) out+='<div class="note warn"><b>Under cover — '+DOW3[d.date.getDay()]+' '+
+      shortDate(d.date)+'</b>'+d.head+' rostered against '+d.req+' required — '+d.short+
+      ' person'+(d.short===1?'':'s')+' short.</div>';
+  });
+  M.breaches.forEach(function(b){
+    out+='<div class="note bad"><b>'+esc(b.kind==='REST'?'Rest':(b.kind==='CAP'?'Weekly cap':
+      (b.kind==='TIME'?'Shift times':'Consecutive days')))+' — '+esc(b.who)+', '+esc(b.day)+' '+
+      shortDate(b.date)+'</b>'+esc(b.msg)+'</div>';
+  });
+  if(!out) out='<div class="note" style="border-color:var(--ok);background:var(--ok-wash)">'+
+    '<b style="display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px">All clear</b>'+
+    'Every day meets the cover you set and no rest, consecutive-day or weekly-hours threshold is passed.</div>';
+  bl.innerHTML=out;
+  /* day list */
+  var dl=$('#dayList'), dh='';
+  M.days.forEach(function(d){
+    dh+='<div class="kv"><span class="l">'+DOW3[d.date.getDay()]+' '+shortDate(d.date)+
+      ' <i>'+d.head+'/'+(d.req||'—')+'</i></span><span class="v'+(d.short>0?' bad':'')+'">'+
+      (d.hours>0?hrs(d.hours)+'h · '+money(d.cost):'—')+'</span></div>';
+  });
+  dl.innerHTML=dh;
+  buildDoc();
+  save();
+}
+function note(t){ var m=$('#msg'); m.textContent=t||'';
+  if(dirtyTimer)clearTimeout(dirtyTimer);
+  if(t) dirtyTimer=setTimeout(function(){m.textContent='';},4500); }
+function touched(){ if(S.sample){S.sample=false;$('#sampleChip').hidden=true;} }
+
+/* ══ printed wall rota ═════════════════════════════════════════ */
+function buildDoc(){
+  var d=M.dates, o=S.org;
+  var h='';
+  h+='<div class="lh"><div><div class="org">'+esc(o.name||'—')+'</div>'+
+     (o.unit?'<div class="oaddr">'+esc(o.unit)+'</div>':'')+
+     (o.addr?'<div class="oaddr">'+esc(o.addr)+'</div>':'')+
+     '</div><div class="ttl"><h2>WEEKLY STAFF ROTA</h2>'+
+     '<div class="wk">'+esc(longDate(d[0]))+' — '+esc(longDate(d[6]))+'</div>'+
+     (o.ref?'<div class="ref">Ref '+esc(o.ref)+'</div>':'')+
+     '<div class="ref">Printed '+esc(longDate(new Date()))+'</div></div></div>';
+  h+='<div class="meta">'+
+     '<div><b>Prepared by</b><span>'+esc(o.mgr||'—')+'</span></div>'+
+     '<div><b>Staff rostered</b><span>'+M.rows.filter(function(r){return r.shifts>0;}).length+
+       ' of '+S.staff.length+'</span></div>'+
+     '<div><b>Total paid hours</b><span>'+hrs(M.totHours)+' h</span></div>'+
+     '<div><b>Total wage cost</b><span>'+esc(money(M.totCost))+'</span></div></div>';
+  /* rota table */
+  h+='<table class="rt"><thead><tr><th class="who">Staff</th>';
+  for(var c=0;c<7;c++) h+='<th class="d">'+DOW3[d[c].getDay()]+'<br>'+esc(shortDate(d[c]))+'</th>';
+  h+='<th class="t n">Hours</th><th class="t n">Cost</th></tr></thead><tbody>';
+  M.rows.forEach(function(row){
+    h+='<tr><td class="who"><span class="nm">'+esc(row.p.name||'(unnamed)')+'</span>'+
+       (row.p.role?'<span class="rl">'+esc(row.p.role)+'</span>':'')+
+       (num(row.p.rate,0)>0?'<span class="rl">'+esc(money(row.p.rate))+'/h</span>':'')+'</td>';
+    row.cells.forEach(function(cl){
+      if(!cl.sh){h+='<td class="d offd">OFF</td>';return;}
+      h+='<td class="d'+(cl.flags.length?' flag':'')+'"><span class="cd">'+esc(cl.sh.code||'S')+
+         (cl.flags.length?' &#9650;':'')+'</span><span class="tm">'+esc(cl.sh.s)+'–'+esc(cl.sh.e)+
+         '</span><span class="hh">'+(cl.m.ok?hrs(cl.m.hours)+' h':'check times')+'</span></td>';
+    });
+    h+='<td class="t n">'+hrs(row.hours)+'</td><td class="t n">'+esc(money(row.cost))+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td class="who">On duty / required</td>';
+  M.days.forEach(function(dd){
+    h+='<td class="d'+(dd.short>0?' uns':'')+'">'+dd.head+' / '+(dd.req||'—')+
+       (dd.short>0?'<br>short '+dd.short:'')+'</td>';
+  });
+  h+='<td class="t n">'+hrs(M.totHours)+'</td><td class="t n">'+esc(money(M.totCost))+'</td></tr></tfoot></table>';
+  /* shift key */
+  h+='<div class="cols"><div>';
+  h+='<h3 class="sec">Rule checks — '+(M.breachCount?(M.breachCount+' flagged'):'none flagged')+'</h3>';
+  if(M.breachCount||M.coverShort){
+    h+='<ol class="brl">';
+    M.days.forEach(function(dd){ if(dd.short>0)
+      h+='<li><b>'+DOW3[dd.date.getDay()]+' '+esc(shortDate(dd.date))+' — under cover:</b> '+
+        dd.head+' rostered against '+dd.req+' required ('+dd.short+' short).</li>'; });
+    M.breaches.forEach(function(b){
+      h+='<li>&#9650; <b>'+esc(b.who)+', '+esc(b.day)+' '+esc(shortDate(b.date))+':</b> '+esc(b.msg)+'</li>';});
+    h+='</ol>';
+  } else {
+    h+='<p class="none">No rest, consecutive-day, weekly-hours or cover shortfalls against the thresholds below.</p>';
+  }
+  h+='<h3 class="sec">Shift key</h3><table><thead><tr><th>Code</th><th>Shift</th><th>Start</th>'+
+     '<th>Finish</th><th class="n">Break</th><th class="n">Paid h</th></tr></thead><tbody>';
+  S.tpls.forEach(function(t){var th=tplHours(t);
+    h+='<tr><td>'+esc(t.code)+'</td><td>'+esc(t.name)+'</td><td>'+esc(t.s)+'</td><td>'+esc(t.e)+
+       '</td><td class="n">'+Math.max(0,Math.round(num(t.b,0)))+' min</td><td class="n">'+
+       (th===null?'—':hrs(th))+'</td></tr>';});
+  h+='<tr><td>C</td><td>Custom time (typed on the cell)</td><td>—</td><td>—</td><td class="n">—</td><td class="n">—</td></tr>';
+  h+='</tbody></table></div><div>';
+  h+='<h3 class="sec">Totals</h3><div class="totbox">'+
+     '<div><span>Paid hours</span><span class="n">'+hrs(M.totHours)+' h</span></div>'+
+     '<div><span>Shifts rostered</span><span class="n">'+M.totShifts+'</span></div>'+
+     '<div><span>Average cost / hour</span><span class="n">'+esc(M.avg===null?'—':money(M.avg))+'</span></div>'+
+     '<div class="big"><span>Weekly wage cost</span><span class="n">'+esc(money(M.totCost))+'</span></div></div>';
+  h+='<h3 class="sec">Thresholds applied</h3><div class="rules"><b>Checked against</b>'+
+     'Minimum rest between shifts: '+hrs1(num(S.rules.rest,11))+' h &nbsp;·&nbsp; '+
+     'Maximum consecutive days: '+Math.max(1,Math.round(num(S.rules.consec,6)))+' &nbsp;·&nbsp; '+
+     'Weekly hours cap: '+hrs1(num(S.rules.cap,48))+' h<br>'+
+     'Paid hours = finish &minus; start (plus 24 h for an overnight shift) &minus; unpaid break. '+
+     'Cost = paid hours &times; hourly rate, rounded to 2 dp per shift.</div></div></div>';
+  h+='<div class="disc"><b>Planning aid — not a compliance ruling.</b> This rota has been checked only '+
+     'against the three thresholds printed above, for this week alone. It does not average working hours '+
+     'over a 17-week reference period and takes no account of individual opt-outs, night-work limits, '+
+     'young-worker rules, sector exemptions, collective agreements or contracts of employment. '+
+     'The defaults reflect limits commonly applied under the UK Working Time Regulations 1998 and '+
+     'EU Directive 2003/88/EC but are not a statement of your legal obligations. Wage figures are gross, '+
+     'before employer on-costs, enhancements, allowances and deductions. Confirm with your HR or '+
+     'employment adviser before publishing this rota.</div>';
+  h+='<div class="sig">'+
+     '<div class="box"><b>Prepared by</b><div class="rule2"></div><div class="cap">Signature &amp; date</div></div>'+
+     '<div class="box"><b>Approved by</b><div class="rule2"></div><div class="cap">Signature &amp; date</div></div>'+
+     '<div class="box"><b>Displayed on</b><div class="rule2"></div><div class="cap">Date posted to the staff room</div></div></div>';
+  h+='<div class="foot">'+esc(o.name||'Weekly staff rota')+(o.unit?' — '+esc(o.unit):'')+
+     ' · week commencing '+esc(longDate(M.dates[0]))+' · page 1 of 1</div>';
+  $('#printdoc').innerHTML=h;
+}
