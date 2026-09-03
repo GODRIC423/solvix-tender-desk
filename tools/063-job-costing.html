@@ -1,0 +1,1502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Job Costing &amp; Margin Calculator — true cost, gross and net margin, break-even and variance</title>
+<meta name="description" content="Offline job costing sheet: labour at charge-out and true cost (wage plus on-costs), materials and subcontract with markup, plant hire, overhead recovered as a percentage of cost or a rate per labour hour. Shows gross margin, net margin, the markup applied, the break-even price and the price needed to hit a target margin, warns when the margin falls short, and compares actuals against the original estimate. Prints a costing sheet, exports CSV and JSON.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EJC%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B;--accent-ink:#145C39;--accent-wash:#E3F2EA;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}}
+:root[data-theme="dark"]{--accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}
+
+[hidden]{display:none!important}
+body>.appbar{margin:0;padding-left:0;padding-right:0}
+.appbar-in{width:100%;max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:9px 14px;align-items:center}
+.app>*+*{margin-top:14px}
+#work>*+*{margin-top:14px}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.sticky{position:static}}
+@media(min-width:901px){.col-res{grid-column:2;grid-row:1}.col-in{grid-column:1;grid-row:1}}
+.col-res,.col-in{min-width:0}
+.col-in>*+*{margin-top:14px}
+.card>.bd,.card>.hd,.card>.ft{min-width:0}
+.stack>*{min-width:0}
+@media(max-width:560px){.appbar .btn{font-size:12.5px;padding:7px 9px}.hidesm{display:none}}
+
+/* results */
+.col-res .stat.hero .v{font-size:34px;line-height:1.05}
+.col-res .stat.hero .u{display:block;margin-top:6px;line-height:1.45}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:340px){.statgrid{grid-template-columns:1fr}}
+.statgrid .stat{padding:9px 11px}
+.statgrid .stat .v{font-size:17px}
+.statgrid .stat .u{display:block;font-size:11.5px;line-height:1.35;margin-top:2px}
+.neg{color:var(--bad)}.pos{color:var(--ok)}
+.mini{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.tiny{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.ftbig{font:700 19px/1.1 var(--mono);margin-left:auto;font-variant-numeric:tabular-nums}
+
+/* basis switch */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;background:var(--raise)}
+.seg button{font:600 12px/1 var(--sans);padding:7px 11px;border:0;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* cost mix bars */
+.mix{display:flex;flex-direction:column;gap:5px}
+.mixrow{position:relative;display:flex;gap:8px;align-items:baseline;font-size:12.5px;
+  padding:5px 8px;border:1px solid var(--line);border-radius:3px;background:var(--raise);overflow:hidden}
+.mixrow .bar{position:absolute;inset:0 auto 0 0;background:var(--accent-wash);z-index:0}
+.mixrow span,.mixrow b{position:relative;z-index:1}
+.mixrow .nm{flex:1 1 auto;min-width:0}
+.mixrow b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700}
+.mixrow .pc{font-family:var(--mono);color:var(--muted);font-size:11.5px;width:44px;text-align:right}
+
+/* warnings */
+.wlist{display:flex;flex-direction:column;gap:6px}
+.wrow{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.42;
+  border-left:3px solid var(--bad);background:var(--bad-wash);padding:6px 9px;border-radius:0 3px 3px 0}
+.wrow.wk{border-left-color:var(--warn);background:var(--warn-wash)}
+.wrow.wo{border-left-color:var(--ok);background:var(--ok-wash)}
+.wrow b{font-family:var(--mono);font-weight:700;flex:none}
+
+/* line tables */
+.lt{min-width:640px}
+.lt td{padding:4px 5px;vertical-align:middle}
+.lt th{padding:8px 5px;white-space:normal;vertical-align:bottom;font-size:10px}
+.lt th .sm2{display:block;font:400 9.5px/1.2 var(--mono);letter-spacing:.02em;text-transform:none;color:var(--faint);margin-top:2px}
+.lt input,.lt select{padding:5px 5px}
+.lt input[type=text]{text-align:left;font-family:var(--sans)}
+.lt td.td input{min-width:170px}
+.lt td.tu input{min-width:62px}
+.lt td.n input{min-width:60px}
+.lt td.act{background:var(--sunk)}
+.lt tr:hover td.act{background:var(--sunk)}
+.lt td.calc{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+.lt td.calc.hi{font-weight:700;color:var(--accent-ink)}
+.lt .rm{border:0;background:transparent;color:var(--muted);cursor:pointer;font:700 14px/1 var(--mono);padding:4px 7px;border-radius:3px}
+.lt .rm:hover{color:var(--bad);background:var(--bad-wash)}
+.lt tfoot td{font-size:12.5px}
+.cellerr{display:block;font:11px/1.3 var(--sans);color:var(--bad);margin-top:2px;white-space:normal;max-width:150px}
+.acthead{background:var(--sunk)!important;border-bottom-color:var(--accent)!important}
+#labTab{min-width:830px}#matTab{min-width:800px}#subTab{min-width:610px}#pltTab{min-width:690px}
+
+/* variance */
+.vtab td.n,.vtab th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.vtab td:first-child{font-weight:600}
+.grid-oh{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.banner{border-left-color:var(--warn);background:var(--warn-wash)}
+.hdnote{font:11.5px/1.4 var(--sans);color:var(--muted);flex-basis:100%}
+
+/* ══ the costing sheet — preview on screen, the deliverable in print ══ */
+#docCard{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh);padding:22px clamp(14px,3vw,30px) 26px}
+body.preview #docCard{display:block}
+body.preview #work{display:none}
+.doc-top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start;border-bottom:2.5px solid var(--ink);padding-bottom:12px}
+.doc-biz{min-width:0;flex:1 1 250px}
+.doc-biz .bn{font:700 20px/1.15 var(--sans);letter-spacing:-.015em}
+.doc-biz .ba{font:12.5px/1.5 var(--sans);color:var(--ink-2);margin-top:4px;white-space:pre-line}
+.doc-ttl{text-align:right;flex:0 1 auto}
+.doc-ttl .t1{font:700 21px/1.1 var(--sans);letter-spacing:-.02em;text-transform:uppercase}
+.doc-ttl .t2{font:600 12.5px/1.35 var(--sans);color:var(--ink-2);margin-top:4px}
+.doc-ttl .t3{display:inline-block;margin-top:6px;font:700 9.5px/1 var(--sans);letter-spacing:.1em;
+  text-transform:uppercase;border:1.5px solid var(--ink);padding:4px 6px;border-radius:3px}
+.doc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin:14px 0 14px}
+@media(max-width:640px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
+.doc-grid div span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.doc-grid div b{font:600 13px/1.35 var(--sans);word-break:break-word}
+.doc-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1.5px solid var(--ink);border-radius:4px;overflow:hidden;margin-bottom:14px}
+@media(max-width:640px){.doc-hero{grid-template-columns:repeat(2,1fr)}}
+.doc-hero div{padding:9px 11px;border-right:1px solid var(--line-hard)}
+.doc-hero div:last-child{border-right:0}
+.doc-hero span{display:block;font:600 9px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.doc-hero b{display:block;font:700 18px/1.15 var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+.doc-sec{margin-top:14px}
+.doc-sec h4{font:700 10.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink);
+  border-bottom:1.5px solid var(--line-hard);padding-bottom:4px;margin-bottom:0}
+.doc-sec table{width:100%;font-size:12.5px}
+.doc-sec th{background:var(--sunk);font-size:9.5px;padding:5px 6px;white-space:normal}
+.doc-sec td{padding:4px 6px;border-bottom:1px solid var(--line)}
+.doc-sec td.n,.doc-sec th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.doc-sec tfoot td{font-weight:700;background:var(--sunk);border-top:1.5px solid var(--line-hard)}
+.doc-sum{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+@media(max-width:640px){.doc-sum{grid-template-columns:1fr}}
+.doc-notes{margin-top:14px;font:12.5px/1.55 var(--sans);white-space:pre-line}
+.doc-sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:18px}
+.doc-sign div{border-top:1px solid var(--line-hard);padding-top:5px;font:11.5px/1.4 var(--sans);color:var(--muted)}
+.doc-foot{margin-top:14px;border-top:1px solid var(--line);padding-top:8px;
+  font:11.5px/1.5 var(--sans);color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px}
+
+@media print{
+  #work,.appbar,.banner,.noprint{display:none!important}
+  #docCard{display:block!important;border:0;box-shadow:none;padding:0;border-radius:0}
+  .app>*+*{margin-top:0}
+  .doc-top{border-bottom:2.5pt solid #000;padding-bottom:3mm}
+  .doc-biz .bn{font-size:16pt}.doc-biz .ba{font-size:8.5pt}
+  .doc-ttl .t1{font-size:16pt}.doc-ttl .t2{font-size:9.5pt}.doc-ttl .t3{font-size:7pt;border-color:#000}
+  .doc-grid{display:grid!important;grid-template-columns:repeat(4,1fr);gap:2.5mm 5mm;margin:4mm 0}
+  .doc-grid div span{font-size:7pt;color:#555}.doc-grid div b{font-size:9.5pt}
+  .doc-hero{display:grid!important;grid-template-columns:repeat(4,1fr);border:1pt solid #000;margin-bottom:4mm}
+  .doc-hero div{padding:2mm 2.5mm;border-right:.5pt solid #888}
+  .doc-hero span{font-size:6.8pt}.doc-hero b{font-size:13pt}
+  .doc-sec{margin-top:4.5mm;break-inside:avoid}
+  .doc-sec h4{font-size:8pt}
+  .doc-sec table{font-size:8.6pt}
+  .doc-sec th{background:#eee!important;font-size:7pt;padding:1.4mm 1.6mm}
+  .doc-sec td{padding:1.2mm 1.6mm;border-bottom:.5pt solid #ccc}
+  .doc-sum{display:grid!important;grid-template-columns:1fr 1fr;gap:5mm;margin-top:4.5mm}
+  .doc-notes{font-size:8.6pt;margin-top:4mm}
+  .doc-sign{display:grid!important;margin-top:6mm}
+  .doc-sign div{font-size:8pt}
+  .note{border-left:2.5pt solid #000;background:#fff!important;padding:2.5mm 3mm;font-size:8.4pt}
+  .doc-foot{font-size:7.6pt;margin-top:4mm}
+  thead{display:table-header-group}
+  tr,td,th{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">JC</div>
+    <div style="min-width:0">
+      <h1>Job Costing &amp; Margin Calculator</h1>
+      <div class="sub" id="barSub">true cost · margin · variance</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrev">Preview<span class="hidesm"> sheet</span></button>
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn" id="btnImport">Import<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn dgr" id="btnClear">Clear<span class="hidesm"> all data</span></button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <div class="note banner noprint" id="banner">
+    <strong>Sample job loaded</strong> — a dental surgery electrical refit priced at &pound;12,850, with actual
+    hours and invoices recorded so the variance is live. Overwrite anything, or start from an empty job.
+    <div class="row" style="margin-top:9px">
+      <button type="button" class="btn sm" id="btnBlank">Start an empty job</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- ══════ THE COSTING SHEET — the printed deliverable ══════ -->
+  <section id="docCard" aria-label="Job costing sheet document">
+    <div class="doc-top">
+      <div class="doc-biz">
+        <div class="bn" id="dBiz">—</div>
+        <div class="ba" id="dAddr"></div>
+      </div>
+      <div class="doc-ttl">
+        <div class="t1">Job Costing Sheet</div>
+        <div class="t2" id="dTitle">—</div>
+        <div class="t3">Internal — commercial in confidence</div>
+      </div>
+    </div>
+    <div class="doc-grid">
+      <div><span>Job reference</span><b id="dRef">—</b></div>
+      <div><span>Client</span><b id="dClient">—</b></div>
+      <div><span>Site</span><b id="dSite">—</b></div>
+      <div><span>Date</span><b id="dDate">—</b></div>
+      <div><span>Prepared by</span><b id="dBy">—</b></div>
+      <div><span>Costed on</span><b id="dBasis">—</b></div>
+      <div><span>Overhead recovery</span><b id="dOh">—</b></div>
+      <div><span>Currency</span><b id="dCur">—</b></div>
+    </div>
+    <div class="doc-hero">
+      <div><span>Quoted price</span><b id="dhPrice">—</b></div>
+      <div><span>Total cost</span><b id="dhCost">—</b></div>
+      <div><span>Net profit</span><b id="dhProfit">—</b></div>
+      <div><span>Net margin</span><b id="dhMargin">—</b></div>
+    </div>
+
+    <div class="doc-sec"><h4>Labour</h4><div class="tw"><table id="dLab"></table></div></div>
+    <div class="doc-sec"><h4>Materials</h4><div class="tw"><table id="dMat"></table></div></div>
+    <div class="doc-sec"><h4>Subcontract</h4><div class="tw"><table id="dSub"></table></div></div>
+    <div class="doc-sec"><h4>Plant &amp; equipment</h4><div class="tw"><table id="dPlt"></table></div></div>
+
+    <div class="doc-sum">
+      <div class="doc-sec" style="margin-top:0"><h4>Cost summary and variance</h4>
+        <div class="tw"><table id="dVar"></table></div></div>
+      <div class="doc-sec" style="margin-top:0"><h4>Price, margin and break-even</h4>
+        <div class="tw"><table id="dMar"></table></div></div>
+    </div>
+
+    <div class="doc-notes" id="dNotes"></div>
+
+    <div class="doc-sign">
+      <div>Costed by / date</div>
+      <div>Approved by / date</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="note warn">
+        <strong>This is an internal management costing, not a quotation, invoice or statutory account.</strong>
+        It shows only the costs entered on this sheet. Figures exclude VAT and any other sales tax, finance and
+        card charges, retentions, warranty or defect-rectification costs, bad debt and the cost of any work not
+        listed above, unless you have entered them as lines. On-costs, overhead recovery rates and markups are
+        the ones you typed — the tool does not know your real employment costs, your true annual overhead or
+        your tax position. Check the figures against your accounting records before you rely on them to price
+        work, and take advice from your accountant on employment on-costs, overhead absorption and tax.
+      </div>
+    </div>
+    <div class="doc-foot" id="dFoot"></div>
+  </section>
+
+  <div id="work">
+  <div class="split">
+
+    <!-- ══════ RESULTS ══════ -->
+    <section class="col-res">
+      <div class="card sticky">
+        <div class="hd">
+          <h2>Margin on this job</h2>
+          <div class="seg noprint" role="group" aria-label="Costing basis">
+            <button type="button" id="segEst" aria-pressed="true">Estimate</button>
+            <button type="button" id="segAct" aria-pressed="false">Actual</button>
+          </div>
+        </div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k" id="heroK">Net margin — estimate</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">—</div>
+          </div>
+
+          <div class="statgrid">
+            <div class="stat"><div class="k">Quoted price</div><div class="v" id="vPrice">—</div><div class="u" id="uPrice">—</div></div>
+            <div class="stat"><div class="k">Total cost</div><div class="v" id="vCost">—</div><div class="u" id="uCost">—</div></div>
+            <div class="stat"><div class="k">Gross margin</div><div class="v" id="vGm">—</div><div class="u" id="uGm">before overhead</div></div>
+            <div class="stat"><div class="k">Markup applied</div><div class="v" id="vMu">—</div><div class="u" id="uMu">on total cost</div></div>
+            <div class="stat"><div class="k">Break-even price</div><div class="v" id="vBe">—</div><div class="u" id="uBe">margin nil</div></div>
+            <div class="stat"><div class="k" id="kTp">Price at target</div><div class="v" id="vTp">—</div><div class="u" id="uTp">—</div></div>
+            <div class="stat"><div class="k">Priced build-up</div><div class="v" id="vBu">—</div><div class="u" id="uBu">—</div></div>
+            <div class="stat"><div class="k">Overhead recovered</div><div class="v" id="vOh">—</div><div class="u" id="uOh">—</div></div>
+          </div>
+
+          <div>
+            <div class="mini">Where the cost goes</div>
+            <div class="mix" id="mix"></div>
+          </div>
+
+          <div>
+            <div class="mini">Checks</div>
+            <div class="wlist" id="wlist"></div>
+          </div>
+
+          <div class="note warn" id="scrDisc">
+            <strong>Internal costing only — not a quotation and not tax advice.</strong>
+            Figures exclude VAT and other sales taxes, retentions, finance charges and anything you have not
+            entered as a line. The on-cost, overhead and markup percentages are yours, not a standard.
+            Check against your accounts before you price work, and ask your accountant about employment
+            on-costs and overhead absorption.
+          </div>
+        </div>
+        <div class="ft">
+          <span class="lbl" id="ftK">Net profit</span>
+          <span class="ftbig" id="ftV">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ INPUTS ══════ -->
+    <section class="col-in">
+
+      <div class="card">
+        <div class="hd"><h2>Job</h2><span class="chip" id="chipHrs">—</span></div>
+        <div class="bd grid cols-2">
+          <div class="f"><label for="iBiz">Your business</label><input type="text" id="iBiz" data-j="biz" autocomplete="organization"></div>
+          <div class="f"><label for="iTitle">Job / works</label><input type="text" id="iTitle" data-j="title"></div>
+          <div class="f" style="grid-column:1/-1"><label for="iAddr">Business address &amp; contact</label><textarea id="iAddr" data-j="addr" rows="2"></textarea></div>
+          <div class="f"><label for="iClient">Client</label><input type="text" id="iClient" data-j="client"></div>
+          <div class="f"><label for="iSite">Site</label><input type="text" id="iSite" data-j="site"></div>
+          <div class="f"><label for="iRef">Job reference</label><input type="text" id="iRef" data-j="ref"></div>
+          <div class="f"><label for="iDate">Date</label><input type="date" id="iDate" data-j="date"></div>
+          <div class="f"><label for="iBy">Prepared by</label><input type="text" id="iBy" data-j="by"></div>
+          <div class="f"><label for="iCur">Currency</label>
+            <select id="iCur"><option value="£">£ Pound</option><option value="$">$ Dollar</option><option value="€">€ Euro</option><option value="custom">Other…</option></select>
+          </div>
+          <div class="f" id="wrapCurOther" hidden><label for="iCurOther">Currency symbol</label><input type="text" id="iCurOther" maxlength="4"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Labour</h2>
+          <span class="chip" id="chipLab">—</span>
+          <button type="button" class="btn sm noprint" id="addLab">+ Add labour line</button>
+          <div class="hdnote">Charge-out is what the client pays for the hour. True cost is the wage plus on-costs —
+            employer&rsquo;s tax, pension, holiday, sick and insurance — so the margin is honest.</div>
+        </div>
+        <div class="bd">
+          <div class="row" style="margin-bottom:10px">
+            <div class="f" style="max-width:220px"><label for="iDefOc">Default on-costs % for new lines</label>
+              <input type="number" id="iDefOc" min="0" max="200" step="0.5" inputmode="decimal"></div>
+            <button type="button" class="btn sm noprint" id="applyOc">Apply to every labour line</button>
+          </div>
+          <div class="tw"><table id="labTab" class="lt"><thead><tr>
+            <th scope="col">Labour / trade</th>
+            <th scope="col" class="n">Est hours</th>
+            <th scope="col" class="n acthead">Actual hours</th>
+            <th scope="col" class="n">Charge-out<span class="sm2">per hour</span></th>
+            <th scope="col" class="n">Wage rate<span class="sm2">per hour</span></th>
+            <th scope="col" class="n">On-costs<span class="sm2">%</span></th>
+            <th scope="col" class="n">True cost<span class="sm2">per hour</span></th>
+            <th scope="col" class="n">Line cost</th>
+            <th scope="col" class="n">Line charge</th>
+            <th scope="col"><span class="lbl">Del</span></th>
+          </tr></thead><tbody id="labBody"></tbody>
+          <tfoot><tr><td>Totals</td><td class="n" id="fLabH">—</td><td class="n act" id="fLabAH">—</td>
+            <td colspan="4"></td><td class="n" id="fLabC">—</td><td class="n" id="fLabR">—</td><td></td></tr></tfoot>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Materials</h2>
+          <span class="chip" id="chipMat">—</span>
+          <button type="button" class="btn sm noprint" id="addMat">+ Add material line</button>
+          <div class="hdnote">Cost is what you pay the merchant. Markup is what you add on top when you charge it on.
+            Leave &ldquo;actual cost&rdquo; blank until the invoice lands — blank lines are costed at the estimate.</div>
+        </div>
+        <div class="bd">
+          <div class="tw"><table id="matTab" class="lt"><thead><tr>
+            <th scope="col">Material</th>
+            <th scope="col">Unit</th>
+            <th scope="col" class="n">Qty</th>
+            <th scope="col" class="n">Unit cost</th>
+            <th scope="col" class="n">Est cost</th>
+            <th scope="col" class="n acthead">Actual cost</th>
+            <th scope="col" class="n">Markup %</th>
+            <th scope="col" class="n">Charge</th>
+            <th scope="col"><span class="lbl">Del</span></th>
+          </tr></thead><tbody id="matBody"></tbody>
+          <tfoot><tr><td colspan="4">Totals</td><td class="n" id="fMatC">—</td><td class="n act" id="fMatA">—</td>
+            <td></td><td class="n" id="fMatR">—</td><td></td></tr></tfoot>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Subcontract</h2>
+          <span class="chip" id="chipSub">—</span>
+          <button type="button" class="btn sm noprint" id="addSub">+ Add subcontract line</button>
+        </div>
+        <div class="bd">
+          <div class="tw"><table id="subTab" class="lt"><thead><tr>
+            <th scope="col">Subcontractor / package</th>
+            <th scope="col" class="n">Est cost</th>
+            <th scope="col" class="n acthead">Actual cost</th>
+            <th scope="col" class="n">Markup %</th>
+            <th scope="col" class="n">Charge</th>
+            <th scope="col"><span class="lbl">Del</span></th>
+          </tr></thead><tbody id="subBody"></tbody>
+          <tfoot><tr><td>Totals</td><td class="n" id="fSubC">—</td><td class="n act" id="fSubA">—</td>
+            <td></td><td class="n" id="fSubR">—</td><td></td></tr></tfoot>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Plant &amp; equipment</h2>
+          <span class="chip" id="chipPlt">—</span>
+          <button type="button" class="btn sm noprint" id="addPlt">+ Add plant line</button>
+        </div>
+        <div class="bd">
+          <div class="tw"><table id="pltTab" class="lt"><thead><tr>
+            <th scope="col">Plant, hire or equipment</th>
+            <th scope="col" class="n">Qty<span class="sm2">days / uses</span></th>
+            <th scope="col" class="n">Rate</th>
+            <th scope="col" class="n">Est cost</th>
+            <th scope="col" class="n acthead">Actual cost</th>
+            <th scope="col" class="n">Markup %</th>
+            <th scope="col" class="n">Charge</th>
+            <th scope="col"><span class="lbl">Del</span></th>
+          </tr></thead><tbody id="pltBody"></tbody>
+          <tfoot><tr><td colspan="3">Totals</td><td class="n" id="fPltC">—</td><td class="n act" id="fPltA">—</td>
+            <td></td><td class="n" id="fPltR">—</td><td></td></tr></tfoot>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Overhead, price and target</h2></div>
+        <div class="bd stack">
+          <fieldset>
+            <legend>Overhead recovery</legend>
+            <div class="grid-oh">
+              <div class="f"><label for="iOhM">Recovered as</label>
+                <select id="iOhM"><option value="hour">A rate per labour hour</option><option value="pct">A percentage of direct cost</option></select></div>
+              <div class="f" id="wrapOhR"><label for="iOhR">Rate per labour hour</label>
+                <input type="number" id="iOhR" min="0" step="0.25" inputmode="decimal"><span class="err" id="eOhR" hidden></span></div>
+              <div class="f" id="wrapOhP" hidden><label for="iOhP">Percentage of direct cost</label>
+                <input type="number" id="iOhP" min="0" max="500" step="0.5" inputmode="decimal"><span class="err" id="eOhP" hidden></span></div>
+              <div class="f"><span class="lbl">Overhead on this job</span>
+                <div class="num" id="ohOut" style="padding:8px 0;font-weight:700">—</div></div>
+            </div>
+            <div class="hint" style="margin-top:8px">Overhead is your yard, vans, insurance, office and unbilled time.
+              Recover it per labour hour when labour drives your costs; as a percentage of direct cost when materials do.</div>
+          </fieldset>
+          <div class="grid cols-3">
+            <div class="f"><label for="iQuoted">Quoted price to client</label>
+              <input type="number" id="iQuoted" min="0" step="0.01" inputmode="decimal"><span class="err" id="eQuoted" hidden></span>
+              <span class="hint">Excluding VAT / sales tax</span></div>
+            <div class="f"><label for="iTarget">Target net margin %</label>
+              <input type="number" id="iTarget" min="0" max="99" step="0.5" inputmode="decimal"><span class="err" id="eTarget" hidden></span>
+              <span class="hint">You are warned below this</span></div>
+            <div class="f"><span class="lbl">Build-up says</span>
+              <div class="num" id="buOut" style="padding:8px 0;font-weight:700">—</div>
+              <button type="button" class="btn sm noprint" id="useBu">Use as quoted price</button></div>
+          </div>
+          <div class="f"><label for="iNotes">Notes for the costing sheet</label>
+            <textarea id="iNotes" data-j="notes" rows="3"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Estimate versus actual</h2><span class="chip" id="chipVar">—</span></div>
+        <div class="bd">
+          <div class="tw"><table class="vtab"><thead><tr>
+            <th scope="col">Cost element</th><th scope="col" class="n">Estimate</th><th scope="col" class="n">Actual</th>
+            <th scope="col" class="n">Variance</th><th scope="col" class="n">%</th>
+          </tr></thead><tbody id="varBody"></tbody></table></div>
+          <div class="hint" style="margin-top:10px" id="varHint">—</div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+  </div>
+
+  <footer class="tiny" style="margin-top:18px;line-height:1.6">
+    Gross margin = (price − direct cost) ÷ price. Net margin = (price − direct cost − overhead) ÷ price.
+    Markup applied = net profit ÷ total cost. Break-even price = total cost. Price at target margin =
+    total cost ÷ (1 − target ÷ 100). Labour true cost = hours × wage rate × (1 + on-costs ÷ 100).
+    Overhead is recovered either at a rate per labour hour or as a percentage of direct cost, as selected.
+    Money is rounded to two decimals for display only; every total is computed from the unrounded figures.
+    All figures exclude VAT and other sales taxes. No standard costing framework is implied — this is an
+    internal management calculation, not an accounting statement.
+  </footer>
+</main>
+<script>
+(function(){
+"use strict";
+var KEY='solvix.job-costing.v1';
+
+/* ══ helpers ══════════════════════════════════════════════════════ */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function pv(s){ /* parse a user number; null when blank or not a number */
+  if(s===null||s===undefined)return null;
+  var t=String(s).replace(/[\s,]/g,'').replace(/[£$€]/g,'');
+  if(t==='')return null;
+  var n=parseFloat(t);
+  return isFinite(n)?n:null;
+}
+function n0(s){var v=pv(s);return v==null?0:v;}
+function fin(n){return typeof n==='number'&&isFinite(n);}
+function grp(x){var p=x.split('.');return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(p[1]?'.'+p[1]:'');}
+function money(n,dp){
+  if(!fin(n))return '—';
+  dp=dp==null?2:dp;
+  if(Math.abs(n)<5e-9)n=0;
+  var s=grp(Math.abs(n).toFixed(dp));
+  return (n<0?'−':'')+CUR()+s;
+}
+function money0(n){return fin(n)?((Math.abs(n)<5e-9?'':(n<0?'−':''))+CUR()+grp(Math.abs(Math.round(n)).toFixed(0))):'—';}
+function pct(n,dp){
+  if(!fin(n))return '—';
+  dp=dp==null?1:dp;
+  if(Math.abs(n)<5e-9)n=0;
+  return (n<0?'−':'')+Math.abs(n).toFixed(dp)+'%';
+}
+function pts(n,dp){
+  if(!fin(n))return '—';
+  dp=dp==null?1:dp;
+  if(Math.abs(n)<5e-9)n=0;
+  return (n>0?'+':n<0?'−':'')+Math.abs(n).toFixed(dp);
+}
+function hrs(n){
+  if(!fin(n))return '—';
+  return (Math.round(n*100)/100).toFixed(2).replace(/\.00$/,'')+' h';
+}
+function num(n,dp){
+  if(!fin(n))return '—';
+  dp=(dp==null)?2:dp;
+  if(Math.abs(n)<5e-9)n=0;
+  return (n<0?'−':'')+grp(Math.abs(n).toFixed(dp));
+}
+function CUR(){return S.cur==='custom'?(S.curOther||'¤'):S.cur;}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dLong(iso){
+  if(!iso)return '—';
+  var p=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); if(!p)return iso;
+  var M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return Number(p[3])+' '+M[Number(p[2])-1]+' '+p[1];
+}
+
+/* ══ state ════════════════════════════════════════════════════════ */
+function blank(){
+  return {v:1,sample:false,showBanner:false,basis:'est',preview:false,
+    cur:'£',curOther:'',
+    job:{biz:'',addr:'',client:'',site:'',ref:'',title:'',date:todayISO(),by:'',notes:''},
+    defOc:'28',
+    lab:[mkLab(),mkLab()],mat:[mkMat(),mkMat()],sub:[mkSub()],plt:[mkPlt()],
+    oh:{m:'hour',pct:'9',rate:''},
+    quoted:'',target:'20'};
+}
+function mkLab(){return {d:'',h:'',ah:'',cr:'',wr:'',oc:S&&S.defOc?S.defOc:'28'};}
+function mkMat(){return {d:'',u:'',q:'',uc:'',ac:'',mu:''};}
+function mkSub(){return {d:'',c:'',ac:'',mu:''};}
+function mkPlt(){return {d:'',q:'',r:'',ac:'',mu:''};}
+
+function sample(){
+  return {v:1,sample:true,showBanner:true,basis:'est',preview:false,
+    cur:'£',curOther:'',
+    job:{biz:'Marchetti & Sons Electrical Ltd',
+      addr:'14 Bell Lane, Sheffield S3 8QT\n0114 496 2210 · accounts@marchetti-elec.co.uk\nNICEIC 402118 · VAT 388 4471 06',
+      client:'Ashgrove Dental Practice',site:'22 Ashgrove Road, Sheffield S10 2LB',
+      ref:'JC-2481',title:'Surgery refit — first and second fix electrical',
+      date:todayISO(),by:'R. Marchetti',
+      notes:'Quoted 12,850.00 against a build-up of 12,328.91 — the extra was held back as contingency for the fire alarm interface.\nActual hours from timesheets to week 36. Scissor lift ran a fourth day because the ceiling grid was late.'},
+    defOc:'28',
+    lab:[
+      {d:'Approved electrician — first fix',h:'64',ah:'71',cr:'58',wr:'24.50',oc:'28'},
+      {d:'Approved electrician — second fix, test & certify',h:'38',ah:'38',cr:'58',wr:'24.50',oc:'28'},
+      {d:'Apprentice (2nd year)',h:'40',ah:'44',cr:'32',wr:'12.80',oc:'28'},
+      {d:'Site supervision & client meetings',h:'8',ah:'10',cr:'65',wr:'31',oc:'28'}],
+    mat:[
+      {d:'LED panel luminaire 600×600, 40W',u:'each',q:'18',uc:'42.60',ac:'812.00',mu:'22'},
+      {d:'Twin & earth cable 2.5mm², 100m drum',u:'drum',q:'6',uc:'78.40',ac:'470.40',mu:'22'},
+      {d:'Consumer unit, 18-way metal, SPD',u:'each',q:'1',uc:'289.00',ac:'',mu:'22'},
+      {d:'Containment, accessories & sundries',u:'lot',q:'1',uc:'465.00',ac:'528.75',mu:'15'}],
+    sub:[
+      {d:'Fire alarm interface & commissioning',c:'980',ac:'1040.00',mu:'12'},
+      {d:"Builder's work and making good",c:'640',ac:'',mu:'12'}],
+    plt:[
+      {d:'Scissor lift hire',q:'3',r:'96',ac:'384.00',mu:'10'},
+      {d:'Test instrument calibration & consumables',q:'1',r:'85',ac:'',mu:'0'}],
+    oh:{m:'hour',pct:'9',rate:'11.50'},
+    quoted:'12850',target:'22'};
+}
+
+var S=sample();
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return false;
+    S=normalise(o);
+    return true;
+  }catch(e){return false;}
+}
+function normalise(o){
+  var b=blank();
+  var s={v:1,
+    sample:!!o.sample,showBanner:!!o.showBanner,
+    basis:(o.basis==='act')?'act':'est',
+    preview:!!o.preview,
+    cur:typeof o.cur==='string'?o.cur:'£',
+    curOther:typeof o.curOther==='string'?o.curOther:'',
+    defOc:o.defOc==null?'28':String(o.defOc),
+    job:{},oh:{},
+    quoted:o.quoted==null?'':String(o.quoted),
+    target:o.target==null?'20':String(o.target)};
+  var jk=['biz','addr','client','site','ref','title','date','by','notes'];
+  for(var i=0;i<jk.length;i++){var k=jk[i];s.job[k]=(o.job&&o.job[k]!=null)?String(o.job[k]):b.job[k];}
+  s.oh.m=(o.oh&&o.oh.m==='pct')?'pct':'hour';
+  s.oh.pct=(o.oh&&o.oh.pct!=null)?String(o.oh.pct):'9';
+  s.oh.rate=(o.oh&&o.oh.rate!=null)?String(o.oh.rate):'';
+  function arr(src,keys){
+    var out=[];
+    if(Object.prototype.toString.call(src)==='[object Array]'){
+      for(var i=0;i<src.length;i++){
+        var r=src[i]||{},n={};
+        for(var j=0;j<keys.length;j++)n[keys[j]]=r[keys[j]]==null?'':String(r[keys[j]]);
+        out.push(n);
+      }
+    }
+    return out;
+  }
+  s.lab=arr(o.lab,['d','h','ah','cr','wr','oc']);
+  s.mat=arr(o.mat,['d','u','q','uc','ac','mu']);
+  s.sub=arr(o.sub,['d','c','ac','mu']);
+  s.plt=arr(o.plt,['d','q','r','ac','mu']);
+  return s;
+}
+
+/* ══ maths ════════════════════════════════════════════════════════ */
+function labLine(r,basis){
+  var eh=n0(r.h), ah=pv(r.ah);
+  var h=(basis==='act')?(ah!=null?ah:eh):eh;
+  var cr=n0(r.cr), wr=n0(r.wr), oc=n0(r.oc);
+  var tr=wr*(1+oc/100);
+  return {h:h,eh:eh,ah:ah,cr:cr,wr:wr,oc:oc,trueRate:tr,cost:h*tr,chg:h*cr,ecost:eh*tr,acost:(ah!=null?ah:eh)*tr};
+}
+function matLine(r,basis){
+  var q=n0(r.q), uc=n0(r.uc), mu=n0(r.mu), est=q*uc, ac=pv(r.ac);
+  var cost=(basis==='act')?(ac!=null?ac:est):est;
+  return {q:q,uc:uc,mu:mu,est:est,ac:ac,cost:cost,chg:cost*(1+mu/100),ecost:est,acost:(ac!=null?ac:est)};
+}
+function subLine(r,basis){
+  var est=n0(r.c), mu=n0(r.mu), ac=pv(r.ac);
+  var cost=(basis==='act')?(ac!=null?ac:est):est;
+  return {est:est,mu:mu,ac:ac,cost:cost,chg:cost*(1+mu/100),ecost:est,acost:(ac!=null?ac:est)};
+}
+function pltLine(r,basis){
+  var q=n0(r.q), rt=n0(r.r), mu=n0(r.mu), est=q*rt, ac=pv(r.ac);
+  var cost=(basis==='act')?(ac!=null?ac:est):est;
+  return {q:q,rate:rt,mu:mu,est:est,ac:ac,cost:cost,chg:cost*(1+mu/100),ecost:est,acost:(ac!=null?ac:est)};
+}
+
+function compute(basis){
+  var t={basis:basis,labH:0,labCost:0,labChg:0,matCost:0,matChg:0,subCost:0,subChg:0,pltCost:0,pltChg:0,
+    lab:[],mat:[],sub:[],plt:[],actuals:0,lines:0};
+  var i,L;
+  for(i=0;i<S.lab.length;i++){L=labLine(S.lab[i],basis);t.lab.push(L);t.labH+=L.h;t.labCost+=L.cost;t.labChg+=L.chg;
+    t.lines++;if(L.ah!=null)t.actuals++;}
+  for(i=0;i<S.mat.length;i++){L=matLine(S.mat[i],basis);t.mat.push(L);t.matCost+=L.cost;t.matChg+=L.chg;
+    t.lines++;if(L.ac!=null)t.actuals++;}
+  for(i=0;i<S.sub.length;i++){L=subLine(S.sub[i],basis);t.sub.push(L);t.subCost+=L.cost;t.subChg+=L.chg;
+    t.lines++;if(L.ac!=null)t.actuals++;}
+  for(i=0;i<S.plt.length;i++){L=pltLine(S.plt[i],basis);t.plt.push(L);t.pltCost+=L.cost;t.pltChg+=L.chg;
+    t.lines++;if(L.ac!=null)t.actuals++;}
+
+  t.direct=t.labCost+t.matCost+t.subCost+t.pltCost;
+  t.ohRate=n0(S.oh.rate); t.ohPct=n0(S.oh.pct);
+  t.oh=(S.oh.m==='pct')?(t.direct*t.ohPct/100):(t.labH*t.ohRate);
+  t.total=t.direct+t.oh;
+  t.buildup=t.labChg+t.matChg+t.subChg+t.pltChg;
+
+  var price=pv(S.quoted);
+  t.price=(price!=null&&price>=0)?price:null;
+  var tgt=pv(S.target); t.target=(tgt!=null&&tgt>=0&&tgt<100)?tgt:null;
+
+  if(t.price!=null){
+    t.gp=t.price-t.direct;
+    t.np=t.price-t.total;
+    t.gm=t.price>0?(t.gp/t.price*100):null;
+    t.nm=t.price>0?(t.np/t.price*100):null;
+  }else{t.gp=null;t.np=null;t.gm=null;t.nm=null;}
+  t.markup=(t.total>0&&t.np!=null)?(t.np/t.total*100):null;
+  t.be=t.total;
+  t.tp=(t.target!=null&&t.target<100)?(t.total/(1-t.target/100)):null;
+  t.recovered=(t.price!=null)?(t.price-t.direct):null;   /* what is left to pay overhead */
+  t.effRate=(t.labH>0&&t.price!=null)?((t.price-t.matCost-t.subCost-t.pltCost)/t.labH):null;
+  return t;
+}
+
+/* ══ rendering the line tables ════════════════════════════════════ */
+var REF={lab:[],mat:[],sub:[],plt:[]};
+
+function inp(k,i,f,v,type,extra){
+  return '<input type="'+type+'" data-k="'+k+'" data-i="'+i+'" data-f="'+f+'" value="'+esc(v)+'"'+(extra||'')+
+    ' aria-label="'+esc(ARIA[k][f])+' row '+(i+1)+'">';
+}
+var ARIA={
+  lab:{d:'Labour description',h:'Estimated hours',ah:'Actual hours',cr:'Charge-out rate per hour',wr:'Wage rate per hour',oc:'On-costs percent'},
+  mat:{d:'Material description',u:'Unit',q:'Quantity',uc:'Unit cost',ac:'Actual cost',mu:'Markup percent'},
+  sub:{d:'Subcontract description',c:'Estimated cost',ac:'Actual cost',mu:'Markup percent'},
+  plt:{d:'Plant description',q:'Quantity',r:'Rate',ac:'Actual cost',mu:'Markup percent'}
+};
+var NUMA=' step="any" min="0" inputmode="decimal"';
+var MUA=' step="any" min="-100" inputmode="decimal"';
+
+function renderRows(){
+  var i,h;
+  /* labour */
+  h='';
+  for(i=0;i<S.lab.length;i++){var r=S.lab[i];
+    h+='<tr><td class="td">'+inp('lab',i,'d',r.d,'text')+'</td>'+
+      '<td class="n">'+inp('lab',i,'h',r.h,'number',NUMA)+'</td>'+
+      '<td class="n act">'+inp('lab',i,'ah',r.ah,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('lab',i,'cr',r.cr,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('lab',i,'wr',r.wr,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('lab',i,'oc',r.oc,'number',' step="any" min="0" max="300" inputmode="decimal"')+'</td>'+
+      '<td class="calc" data-c="tr"></td><td class="calc" data-c="cost"></td><td class="calc hi" data-c="chg"></td>'+
+      '<td><button type="button" class="rm noprint" data-rm="lab" data-i="'+i+'" aria-label="Delete labour line '+(i+1)+'">✕</button></td></tr>';
+  }
+  $('labBody').innerHTML=h||'<tr><td colspan="10" class="empty">No labour lines. Add one to start.</td></tr>';
+  /* materials */
+  h='';
+  for(i=0;i<S.mat.length;i++){var m=S.mat[i];
+    h+='<tr><td class="td">'+inp('mat',i,'d',m.d,'text')+'</td>'+
+      '<td class="tu">'+inp('mat',i,'u',m.u,'text')+'</td>'+
+      '<td class="n">'+inp('mat',i,'q',m.q,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('mat',i,'uc',m.uc,'number',NUMA)+'</td>'+
+      '<td class="calc" data-c="est"></td>'+
+      '<td class="n act">'+inp('mat',i,'ac',m.ac,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('mat',i,'mu',m.mu,'number',MUA)+'</td>'+
+      '<td class="calc hi" data-c="chg"></td>'+
+      '<td><button type="button" class="rm noprint" data-rm="mat" data-i="'+i+'" aria-label="Delete material line '+(i+1)+'">✕</button></td></tr>';
+  }
+  $('matBody').innerHTML=h||'<tr><td colspan="9" class="empty">No material lines.</td></tr>';
+  /* subcontract */
+  h='';
+  for(i=0;i<S.sub.length;i++){var s=S.sub[i];
+    h+='<tr><td class="td">'+inp('sub',i,'d',s.d,'text')+'</td>'+
+      '<td class="n">'+inp('sub',i,'c',s.c,'number',NUMA)+'</td>'+
+      '<td class="n act">'+inp('sub',i,'ac',s.ac,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('sub',i,'mu',s.mu,'number',MUA)+'</td>'+
+      '<td class="calc hi" data-c="chg"></td>'+
+      '<td><button type="button" class="rm noprint" data-rm="sub" data-i="'+i+'" aria-label="Delete subcontract line '+(i+1)+'">✕</button></td></tr>';
+  }
+  $('subBody').innerHTML=h||'<tr><td colspan="6" class="empty">No subcontract lines.</td></tr>';
+  /* plant */
+  h='';
+  for(i=0;i<S.plt.length;i++){var p=S.plt[i];
+    h+='<tr><td class="td">'+inp('plt',i,'d',p.d,'text')+'</td>'+
+      '<td class="n">'+inp('plt',i,'q',p.q,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('plt',i,'r',p.r,'number',NUMA)+'</td>'+
+      '<td class="calc" data-c="est"></td>'+
+      '<td class="n act">'+inp('plt',i,'ac',p.ac,'number',NUMA)+'</td>'+
+      '<td class="n">'+inp('plt',i,'mu',p.mu,'number',MUA)+'</td>'+
+      '<td class="calc hi" data-c="chg"></td>'+
+      '<td><button type="button" class="rm noprint" data-rm="plt" data-i="'+i+'" aria-label="Delete plant line '+(i+1)+'">✕</button></td></tr>';
+  }
+  $('pltBody').innerHTML=h||'<tr><td colspan="8" class="empty">No plant lines.</td></tr>';
+
+  REF={lab:[],mat:[],sub:[],plt:[]};
+  ['lab','mat','sub','plt'].forEach(function(k){
+    var rows=$(k+'Body').querySelectorAll('tr');
+    for(var i=0;i<rows.length;i++){
+      var cells={},cs=rows[i].querySelectorAll('[data-c]');
+      for(var j=0;j<cs.length;j++)cells[cs[j].getAttribute('data-c')]=cs[j];
+      if(cs.length)REF[k].push(cells);
+    }
+  });
+}
+
+/* ══ the live calculation ═════════════════════════════════════════ */
+function calc(){
+  var E=compute('est'), A=compute('act'), T=(S.basis==='act')?A:E;
+  var cur=CUR();
+
+  /* per-line cells (active basis) */
+  var i;
+  for(i=0;i<REF.lab.length&&i<T.lab.length;i++){
+    var L=T.lab[i];
+    if(REF.lab[i].tr)REF.lab[i].tr.textContent=money(L.trueRate);
+    if(REF.lab[i].cost)REF.lab[i].cost.textContent=money(L.cost);
+    if(REF.lab[i].chg)REF.lab[i].chg.textContent=money(L.chg);
+  }
+  for(i=0;i<REF.mat.length&&i<T.mat.length;i++){
+    if(REF.mat[i].est)REF.mat[i].est.textContent=money(T.mat[i].est);
+    if(REF.mat[i].chg)REF.mat[i].chg.textContent=money(T.mat[i].chg);
+  }
+  for(i=0;i<REF.sub.length&&i<T.sub.length;i++){
+    if(REF.sub[i].chg)REF.sub[i].chg.textContent=money(T.sub[i].chg);
+  }
+  for(i=0;i<REF.plt.length&&i<T.plt.length;i++){
+    if(REF.plt[i].est)REF.plt[i].est.textContent=money(T.plt[i].est);
+    if(REF.plt[i].chg)REF.plt[i].chg.textContent=money(T.plt[i].chg);
+  }
+
+  /* table feet */
+  $('fLabH').textContent=E.labH>0?hrs(E.labH):'—';
+  $('fLabAH').textContent=A.labH>0?hrs(A.labH):'—';
+  $('fLabC').textContent=T.labCost>0?money(T.labCost):'—';
+  $('fLabR').textContent=T.labChg>0?money(T.labChg):'—';
+  $('fMatC').textContent=E.matCost>0?money(E.matCost):'—';
+  $('fMatA').textContent=A.matCost>0?money(A.matCost):'—';
+  $('fMatR').textContent=T.matChg>0?money(T.matChg):'—';
+  $('fSubC').textContent=E.subCost>0?money(E.subCost):'—';
+  $('fSubA').textContent=A.subCost>0?money(A.subCost):'—';
+  $('fSubR').textContent=T.subChg>0?money(T.subChg):'—';
+  $('fPltC').textContent=E.pltCost>0?money(E.pltCost):'—';
+  $('fPltA').textContent=A.pltCost>0?money(A.pltCost):'—';
+  $('fPltR').textContent=T.pltChg>0?money(T.pltChg):'—';
+
+  /* chips */
+  $('chipHrs').textContent=T.labH>0?(hrs(T.labH)+' labour'):'no hours yet';
+  $('chipLab').textContent=S.lab.length+(S.lab.length===1?' line':' lines');
+  $('chipMat').textContent=S.mat.length+(S.mat.length===1?' line':' lines');
+  $('chipSub').textContent=S.sub.length+(S.sub.length===1?' line':' lines');
+  $('chipPlt').textContent=S.plt.length+(S.plt.length===1?' line':' lines');
+
+  /* hero */
+  var isAct=(S.basis==='act');
+  $('heroK').textContent='Net margin on the quoted price — '+(isAct?'actual':'estimate');
+  var hv=$('heroV'),hu=$('heroU');
+  hv.classList.remove('neg','pos');
+  if(T.nm==null){
+    hv.textContent='—';
+    hu.textContent=(T.price==null)?'Enter the quoted price to see the margin.':'A quoted price of nil has no margin — enter the price you are charging.';
+  }else{
+    hv.textContent=pct(T.nm,1);
+    if(T.nm<0)hv.classList.add('neg');
+    hu.textContent=money(T.np)+' profit on '+money(T.price)+' after '+money(T.total)+' of cost'+
+      (T.target!=null?(' · target '+pct(T.target,T.target%1?1:0)):'');
+  }
+  var st=$('ftK'),fv=$('ftV');
+  fv.classList.remove('neg','pos');
+  st.textContent=isAct?'Net profit (actual)':'Net profit (estimate)';
+  fv.textContent=(T.np==null)?'—':money(T.np);
+  if(T.np!=null){fv.classList.add(T.np<0?'neg':'pos');}
+
+  /* stat grid */
+  $('vPrice').textContent=(T.price==null)?'—':money(T.price);
+  $('uPrice').textContent='excluding VAT / sales tax';
+  $('vCost').textContent=T.total>0?money(T.total):'—';
+  $('uCost').textContent=T.total>0?(money(T.direct)+' direct + '+money(T.oh)+' overhead'):'no costs entered';
+  $('vGm').textContent=(T.gm==null)?'—':pct(T.gm,1);
+  $('uGm').textContent=(T.gp==null)?'before overhead':(money(T.gp)+' before overhead');
+  $('vMu').textContent=(T.markup==null)?'—':pct(T.markup,1);
+  $('uMu').textContent=(T.total>0)?('on '+money(T.total)+' of cost'):'on total cost';
+  $('vBe').textContent=T.total>0?money(T.be):'—';
+  $('uBe').textContent='the price at which you break even';
+  $('kTp').textContent='Price at '+(T.target!=null?pct(T.target,T.target%1?1:0):'target')+' margin';
+  $('vTp').textContent=(T.tp==null||T.total<=0)?'—':money(T.tp);
+  if(T.tp!=null&&T.price!=null&&T.total>0){
+    var gap=T.price-T.tp;
+    $('uTp').textContent=(gap>=0?money(gap)+' above the target price':money(-gap)+' short of the target price');
+  }else{$('uTp').textContent='cost ÷ (1 − target)';}
+  $('vBu').textContent=T.buildup>0?money(T.buildup):'—';
+  $('uBu').textContent='charge-out rates + markups';
+  $('vOh').textContent=T.oh>0?money(T.oh):'—';
+  $('uOh').textContent=(S.oh.m==='pct')?(pct(T.ohPct,T.ohPct%1?1:0)+' of direct cost'):(money(T.ohRate)+'/h × '+hrs(T.labH));
+
+  $('ohOut').textContent=T.oh>0?money(T.oh):'—';
+  $('buOut').textContent=T.buildup>0?money(T.buildup):'—';
+
+  /* cost mix */
+  var mixRows=[['Labour',T.labCost],['Materials',T.matCost],['Subcontract',T.subCost],['Plant & equipment',T.pltCost],['Overhead',T.oh]];
+  var mh='';
+  for(i=0;i<mixRows.length;i++){
+    var val=mixRows[i][1], p=(T.total>0)?(val/T.total*100):null;
+    if(val<=0&&T.total>0)continue;
+    mh+='<div class="mixrow"><span class="bar" style="width:'+(p==null?0:Math.max(0,Math.min(100,p)).toFixed(2))+'%"></span>'+
+      '<span class="nm">'+esc(mixRows[i][0])+'</span><b>'+money(val)+'</b><span class="pc">'+(p==null?'—':pct(p,0))+'</span></div>';
+  }
+  $('mix').innerHTML=mh||'<div class="tiny">Enter some costs and the split appears here.</div>';
+
+  /* variance table */
+  var vr=[['Labour',E.labCost,A.labCost],['Materials',E.matCost,A.matCost],['Subcontract',E.subCost,A.subCost],
+    ['Plant & equipment',E.pltCost,A.pltCost],['Direct cost',E.direct,A.direct],['Overhead',E.oh,A.oh],['Total cost',E.total,A.total]];
+  var vh='';
+  for(i=0;i<vr.length;i++){
+    var e=vr[i][1],a=vr[i][2],dv=a-e,pcv=(Math.abs(e)>1e-9)?(dv/e*100):null;
+    var cls=(Math.abs(dv)<0.005)?'':(dv>0?'neg':'pos');
+    vh+='<tr'+(vr[i][0]==='Total cost'?' style="font-weight:700"':'')+'><td>'+esc(vr[i][0])+'</td>'+
+      '<td class="n">'+money(e)+'</td><td class="n">'+money(a)+'</td>'+
+      '<td class="n '+cls+'">'+(Math.abs(dv)<0.005?'—':(dv>0?'+':'−')+money(Math.abs(dv)).replace('−',''))+'</td>'+
+      '<td class="n '+cls+'">'+(pcv==null?'—':pts(pcv,1)+'%')+'</td></tr>';
+  }
+  var npE=E.np,npA=A.np;
+  vh+='<tr style="font-weight:700"><td>Net profit</td><td class="n">'+(npE==null?'—':money(npE))+'</td>'+
+    '<td class="n">'+(npA==null?'—':money(npA))+'</td><td class="n '+((npA!=null&&npE!=null&&npA-npE<0)?'neg':'pos')+'">'+
+    ((npE==null||npA==null)?'—':(Math.abs(npA-npE)<0.005?'—':(npA-npE>0?'+':'−')+money(Math.abs(npA-npE)).replace('−','')))+'</td>'+
+    '<td class="n">'+((npE==null||npA==null||Math.abs(npE)<1e-9)?'—':pts((npA-npE)/Math.abs(npE)*100,1)+'%')+'</td></tr>';
+  vh+='<tr style="font-weight:700"><td>Net margin</td><td class="n">'+(E.nm==null?'—':pct(E.nm,1))+'</td>'+
+    '<td class="n">'+(A.nm==null?'—':pct(A.nm,1))+'</td><td class="n '+((A.nm!=null&&E.nm!=null&&A.nm-E.nm<0)?'neg':'pos')+'" colspan="2">'+
+    ((E.nm==null||A.nm==null)?'—':pts(A.nm-E.nm,1)+' points')+'</td></tr>';
+  $('varBody').innerHTML=vh;
+  var recorded=A.actuals, tot=A.lines;
+  $('chipVar').textContent=recorded+' of '+tot+' lines have actuals';
+  $('chipVar').className='chip'+(recorded===0?'':(A.total>E.total+0.005?' bad':(A.total<E.total-0.005?' ok':'')));
+  $('varHint').textContent=recorded===0
+    ? 'No actuals recorded yet, so the actual column mirrors the estimate. Enter actual hours and invoiced costs as they come in — every line left blank is costed at its estimate.'
+    : (recorded+' of '+tot+' lines have an actual recorded. Lines still blank are costed at their estimate, so the actual column is a running position, not a final account.');
+
+  /* checks */
+  var w=[];
+  if(T.price==null){w.push(['warn','Price','No quoted price entered, so margin, markup and the target comparison cannot be worked out.']);}
+  else if(T.price===0){w.push(['bad','Price','The quoted price is nil. Enter what you are charging the client, excluding VAT.']);}
+  if(T.total<=0){w.push(['warn','Cost','No costs entered yet — add labour, materials, subcontract or plant lines.']);}
+  if(T.nm!=null&&T.nm<0){w.push(['bad','Loss','This job loses '+money(-T.np)+'. The price is below the break-even of '+money(T.be)+'.']);}
+  else if(T.nm!=null&&T.target!=null&&T.nm<T.target){
+    w.push(['bad','Below target','Net margin '+pct(T.nm,1)+' is '+pts(T.nm-T.target,1)+' points under the '+pct(T.target,T.target%1?1:0)+
+      ' target. You would need '+money(T.tp)+' to hit it — '+money(T.tp-T.price)+' more.']);
+  }else if(T.nm!=null&&T.target!=null){
+    w.push(['ok','On target','Net margin '+pct(T.nm,1)+' clears the '+pct(T.target,T.target%1?1:0)+' target by '+pts(T.nm-T.target,1)+' points.']);
+  }
+  if(T.price!=null&&T.buildup>0&&T.price<T.buildup-0.005){
+    w.push(['warn','Discount','The quoted price is '+money(T.buildup-T.price)+' below your own build-up of '+money(T.buildup)+
+      ' — that discount comes straight out of the margin.']);
+  }
+  if(T.recovered!=null&&T.oh>0&&T.recovered<T.oh){
+    w.push(['bad','Overhead','The price leaves '+money(T.recovered)+' after direct cost but overhead on this job is '+money(T.oh)+
+      '. This job does not carry its share of the business.']);
+  }
+  for(i=0;i<T.lab.length;i++){
+    var Li=T.lab[i];
+    if(Li.h>0&&Li.cr>0&&Li.cr<Li.trueRate-1e-9){
+      w.push(['bad','Labour '+(i+1),(S.lab[i].d||'Line '+(i+1))+' charges '+money(Li.cr)+'/h against a true cost of '+
+        money(Li.trueRate)+'/h — every hour loses money.']);
+    }
+  }
+  var zeroOc=false;
+  for(i=0;i<S.lab.length;i++){if(n0(S.lab[i].h)>0&&n0(S.lab[i].wr)>0&&n0(S.lab[i].oc)===0)zeroOc=true;}
+  if(zeroOc)w.push(['warn','On-costs','A labour line has 0% on-costs. Employer tax, pension, holiday, sick pay and insurance are real — at 0% the margin here flatters the job.']);
+  if(T.oh<=0&&T.labH>0)w.push(['warn','Overhead','No overhead is being recovered. Unless it is genuinely nil, the net margin shown is really a gross margin.']);
+  if(A.total>E.total+0.005&&A.actuals>0&&E.total>0){
+    w.push([(A.total>E.total*1.05?'bad':'warn'),'Variance','Actual cost is '+money(A.total-E.total)+' over the estimate ('+
+      pts((A.total-E.total)/E.total*100,1)+'%)'+(A.nm!=null?', taking the margin to '+pct(A.nm,1):'')+'.']);
+  }
+  var wh='';
+  for(i=0;i<w.length;i++){
+    wh+='<div class="wrow '+(w[i][0]==='warn'?'wk':w[i][0]==='ok'?'wo':'')+'"><b>'+esc(w[i][1])+'</b><span>'+esc(w[i][2])+'</span></div>';
+  }
+  $('wlist').innerHTML=wh||'<div class="tiny">Nothing to flag.</div>';
+
+  $('barSub').textContent=(S.job.ref?S.job.ref+' · ':'')+(T.nm==null?'no price yet':pct(T.nm,1)+' net margin');
+  buildDoc(E,A,T);
+  return T;
+}
+
+/* ══ the printed costing sheet ════════════════════════════════════ */
+function tbl(head,rows,_unused,empty){
+  if(!rows.length)return '<tbody><tr><td class="empty" style="padding:10px 0;text-align:left">'+esc(empty)+'</td></tr></tbody>';
+  var h='<thead><tr>';
+  for(var i=0;i<head.length;i++)h+='<th scope="col"'+(head[i][1]?' class="n"':'')+'>'+head[i][0]+'</th>';
+  h+='</tr></thead><tbody>';
+  for(i=0;i<rows.length;i++){
+    h+='<tr>';
+    for(var j=0;j<rows[i].length;j++)h+='<td'+(head[j]&&head[j][1]?' class="n"':'')+'>'+rows[i][j]+'</td>';
+    h+='</tr>';
+  }
+  h+='</tbody>';
+  return h;
+}
+function buildDoc(E,A,T){
+  var isAct=(S.basis==='act');
+  $('dBiz').textContent=S.job.biz||'—';
+  $('dAddr').textContent=S.job.addr||'';
+  $('dTitle').textContent=S.job.title||'—';
+  $('dRef').textContent=S.job.ref||'—';
+  $('dClient').textContent=S.job.client||'—';
+  $('dSite').textContent=S.job.site||'—';
+  $('dDate').textContent=dLong(S.job.date);
+  $('dBy').textContent=S.job.by||'—';
+  $('dBasis').textContent=isAct?('Actual — '+A.actuals+' of '+A.lines+' lines recorded'):'Estimate';
+  $('dOh').textContent=(S.oh.m==='pct')?(pct(T.ohPct,T.ohPct%1?1:0)+' of direct cost'):(money(T.ohRate)+' per labour hour');
+  $('dCur').textContent=CUR()+' — figures exclude VAT';
+  $('dhPrice').textContent=(T.price==null)?'—':money(T.price);
+  $('dhCost').textContent=T.total>0?money(T.total):'—';
+  $('dhProfit').textContent=(T.np==null)?'—':money(T.np);
+  $('dhMargin').textContent=(T.nm==null)?'—':pct(T.nm,1);
+
+  var i,rows=[];
+  for(i=0;i<T.lab.length;i++){var L=T.lab[i];
+    rows.push([esc(S.lab[i].d||'Labour line '+(i+1)),hrs(L.h),money(L.cr),money(L.chg),money(L.wr),pct(L.oc,L.oc%1?1:0),money(L.trueRate),money(L.cost)]);}
+  $('dLab').innerHTML=tbl([['Labour',0],['Hours',1],['Charge-out',1],['Charge value',1],['Wage/h',1],['On-costs',1],['True cost/h',1],['Cost',1]],
+    rows,null,'No labour on this job.')+
+    (rows.length?'<tfoot><tr><td>Total labour</td><td class="n">'+hrs(T.labH)+'</td><td class="n"></td><td class="n">'+money(T.labChg)+
+      '</td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n">'+money(T.labCost)+'</td></tr></tfoot>':'');
+
+  rows=[];
+  for(i=0;i<T.mat.length;i++){var M=T.mat[i];
+    rows.push([esc(S.mat[i].d||'Material line '+(i+1)),esc(S.mat[i].u||'—'),num(M.q,M.q%1?2:0),money(M.uc),money(M.cost),pct(M.mu,M.mu%1?1:0),money(M.chg)]);}
+  $('dMat').innerHTML=tbl([['Material',0],['Unit',0],['Qty',1],['Unit cost',1],['Cost',1],['Markup',1],['Charge',1]],rows,null,'No materials on this job.')+
+    (rows.length?'<tfoot><tr><td>Total materials</td><td></td><td class="n"></td><td class="n"></td><td class="n">'+money(T.matCost)+
+      '</td><td class="n"></td><td class="n">'+money(T.matChg)+'</td></tr></tfoot>':'');
+
+  rows=[];
+  for(i=0;i<T.sub.length;i++){var B=T.sub[i];
+    rows.push([esc(S.sub[i].d||'Subcontract line '+(i+1)),money(B.cost),pct(B.mu,B.mu%1?1:0),money(B.chg)]);}
+  $('dSub').innerHTML=tbl([['Package',0],['Cost',1],['Markup',1],['Charge',1]],rows,null,'No subcontract on this job.')+
+    (rows.length?'<tfoot><tr><td>Total subcontract</td><td class="n">'+money(T.subCost)+'</td><td class="n"></td><td class="n">'+money(T.subChg)+'</td></tr></tfoot>':'');
+
+  rows=[];
+  for(i=0;i<T.plt.length;i++){var P=T.plt[i];
+    rows.push([esc(S.plt[i].d||'Plant line '+(i+1)),num(P.q,P.q%1?2:0),money(P.rate),money(P.cost),pct(P.mu,P.mu%1?1:0),money(P.chg)]);}
+  $('dPlt').innerHTML=tbl([['Item',0],['Qty',1],['Rate',1],['Cost',1],['Markup',1],['Charge',1]],rows,null,'No plant or equipment on this job.')+
+    (rows.length?'<tfoot><tr><td>Total plant</td><td class="n"></td><td class="n"></td><td class="n">'+money(T.pltCost)+
+      '</td><td class="n"></td><td class="n">'+money(T.pltChg)+'</td></tr></tfoot>':'');
+
+  /* variance */
+  var vr=[['Labour',E.labCost,A.labCost],['Materials',E.matCost,A.matCost],['Subcontract',E.subCost,A.subCost],
+    ['Plant & equipment',E.pltCost,A.pltCost],['Direct cost',E.direct,A.direct],['Overhead',E.oh,A.oh],['Total cost',E.total,A.total]];
+  var vh='<thead><tr><th scope="col">Cost element</th><th scope="col" class="n">Estimate</th><th scope="col" class="n">Actual</th><th scope="col" class="n">Variance</th></tr></thead><tbody>';
+  for(i=0;i<vr.length;i++){
+    var dv=vr[i][2]-vr[i][1];
+    vh+='<tr'+(i>=4?' style="font-weight:700"':'')+'><td>'+esc(vr[i][0])+'</td><td class="n">'+money(vr[i][1])+'</td><td class="n">'+money(vr[i][2])+
+      '</td><td class="n">'+(Math.abs(dv)<0.005?'—':(dv>0?'+':'−')+money(Math.abs(dv)).replace('−',''))+'</td></tr>';
+  }
+  vh+='</tbody>';
+  $('dVar').innerHTML=vh;
+
+  var mh='<tbody>';
+  function mrow(k,v,b){mh+='<tr'+(b?' style="font-weight:700"':'')+'><td>'+k+'</td><td class="n">'+v+'</td></tr>';}
+  mrow('Quoted price (excl. VAT)',(T.price==null)?'—':money(T.price));
+  mrow('Direct cost',money(T.direct));
+  mrow('Gross profit',(T.gp==null)?'—':money(T.gp));
+  mrow('Gross margin',(T.gm==null)?'—':pct(T.gm,1));
+  mrow('Overhead recovered',money(T.oh));
+  mrow('Total cost',money(T.total),1);
+  mrow('Net profit',(T.np==null)?'—':money(T.np),1);
+  mrow('Net margin',(T.nm==null)?'—':pct(T.nm,1),1);
+  mrow('Markup applied on cost',(T.markup==null)?'—':pct(T.markup,1));
+  mrow('Break-even price',money(T.be));
+  mrow('Target net margin',(T.target==null)?'—':pct(T.target,T.target%1?1:0));
+  mrow('Price needed at target',(T.tp==null)?'—':money(T.tp));
+  mrow('Price from the build-up',money(T.buildup));
+  mh+='</tbody>';
+  $('dMar').innerHTML=mh;
+
+  var notes=S.job.notes?('Notes\n'+S.job.notes):'';
+  $('dNotes').textContent=notes;
+  $('dNotes').style.display=notes?'block':'none';
+
+  $('dFoot').innerHTML='<span>'+esc(S.job.biz||'Job costing sheet')+'</span><span>Ref '+esc(S.job.ref||'—')+'</span>'+
+    '<span>Costed on the '+(isAct?'actual':'estimate')+' basis</span><span>Printed '+esc(dLong(todayISO()))+'</span>';
+}
+
+/* ══ wiring ═══════════════════════════════════════════════════════ */
+function fillFields(){
+  var jk=['biz','addr','client','site','ref','title','date','by','notes'];
+  var map={biz:'iBiz',addr:'iAddr',client:'iClient',site:'iSite',ref:'iRef',title:'iTitle',date:'iDate',by:'iBy',notes:'iNotes'};
+  for(var i=0;i<jk.length;i++){var el=$(map[jk[i]]);if(el)el.value=S.job[jk[i]]||'';}
+  $('iCur').value=(S.cur==='£'||S.cur==='$'||S.cur==='€')?S.cur:'custom';
+  $('iCurOther').value=S.curOther||'';
+  $('wrapCurOther').hidden=($('iCur').value!=='custom');
+  $('iDefOc').value=S.defOc;
+  $('iOhM').value=S.oh.m;
+  $('iOhR').value=S.oh.rate;
+  $('iOhP').value=S.oh.pct;
+  $('wrapOhR').hidden=(S.oh.m!=='hour');
+  $('wrapOhP').hidden=(S.oh.m!=='pct');
+  $('iQuoted').value=S.quoted;
+  $('iTarget').value=S.target;
+  $('segEst').setAttribute('aria-pressed',S.basis==='est'?'true':'false');
+  $('segAct').setAttribute('aria-pressed',S.basis==='act'?'true':'false');
+  $('banner').hidden=!S.showBanner;
+  document.body.classList.toggle('preview',!!S.preview);
+  $('btnPrev').textContent=S.preview?'Back to figures':'Preview sheet';
+}
+function renderAll(){renderRows();fillFields();calc();}
+
+function msg(text,bad){
+  var m=$('msg');
+  if(!m){
+    m=document.createElement('div');m.id='msg';m.className='note noprint';
+    m.style.marginTop='0';
+    $('banner').parentNode.insertBefore(m,$('banner').nextSibling);
+  }
+  m.className='note noprint'+(bad?' bad':' ');
+  m.textContent=text;
+  m.hidden=false;
+  clearTimeout(m._t);m._t=setTimeout(function(){m.hidden=true;},6000);
+}
+
+/* validation of the scalar fields, on blur */
+function vfield(el,errId,min,max,label){
+  var v=pv(el.value), e=$(errId), bad=null;
+  if(el.value.trim()!==''){
+    if(v==null)bad=label+' must be a number.';
+    else if(min!=null&&v<min)bad=label+' cannot be less than '+min+'.';
+    else if(max!=null&&v>max)bad=label+' cannot be more than '+max+'.';
+  }
+  if(e){e.textContent=bad||'';e.hidden=!bad;}
+  el.classList.toggle('inv',!!bad);
+  return !bad;
+}
+
+function bindDelegates(){
+  ['labBody','matBody','subBody','pltBody'].forEach(function(id){
+    var body=$(id);
+    body.addEventListener('input',function(ev){
+      var t=ev.target;
+      if(!t||!t.getAttribute)return;
+      var k=t.getAttribute('data-k');if(!k)return;
+      var i=+t.getAttribute('data-i'), f=t.getAttribute('data-f');
+      if(!S[k]||!S[k][i])return;
+      S[k][i][f]=t.value;
+      S.sample=false;
+      calc();save();
+    });
+    body.addEventListener('blur',function(ev){
+      var t=ev.target;
+      if(!t||!t.getAttribute||t.tagName!=='INPUT'||t.type!=='number')return;
+      var v=pv(t.value),bad=null,f=t.getAttribute('data-f');
+      if(t.value.trim()!==''){
+        if(v==null)bad='Must be a number';
+        else if(f==='mu'){if(v<-100)bad='Cannot be under −100%';}
+        else if(v<0)bad='Cannot be negative';
+        else if(f==='oc'&&v>300)bad='Over 300% is unlikely';
+      }
+      var cell=t.parentNode, ex=cell.querySelector('.cellerr');
+      if(bad){
+        if(!ex){ex=document.createElement('span');ex.className='cellerr';cell.appendChild(ex);}
+        ex.textContent=bad;t.classList.add('inv');
+      }else{
+        if(ex)ex.parentNode.removeChild(ex);
+        t.classList.remove('inv');
+      }
+    },true);
+    body.addEventListener('click',function(ev){
+      var b=ev.target.closest?ev.target.closest('[data-rm]'):null;
+      if(!b)return;
+      var k=b.getAttribute('data-rm'), i=+b.getAttribute('data-i');
+      S[k].splice(i,1);S.sample=false;
+      renderRows();calc();save();
+    });
+  });
+}
+
+function bind(){
+  /* job text fields */
+  ['iBiz','iAddr','iClient','iSite','iRef','iTitle','iDate','iBy','iNotes'].forEach(function(id){
+    var el=$(id);
+    el.addEventListener('input',function(){S.job[el.getAttribute('data-j')]=el.value;S.sample=false;calc();save();});
+  });
+  $('iCur').addEventListener('change',function(){
+    S.cur=$('iCur').value;
+    $('wrapCurOther').hidden=(S.cur!=='custom');
+    if(S.cur==='custom'&&!S.curOther){S.curOther='';}
+    calc();save();
+  });
+  $('iCurOther').addEventListener('input',function(){S.curOther=$('iCurOther').value.slice(0,4);calc();save();});
+  $('iDefOc').addEventListener('input',function(){S.defOc=$('iDefOc').value;save();});
+  $('applyOc').addEventListener('click',function(){
+    var v=$('iDefOc').value;
+    for(var i=0;i<S.lab.length;i++)S.lab[i].oc=v;
+    S.sample=false;renderRows();calc();save();
+    msg('On-costs of '+(pv(v)==null?'0':pv(v))+'% applied to every labour line.');
+  });
+  $('iOhM').addEventListener('change',function(){
+    S.oh.m=$('iOhM').value;
+    $('wrapOhR').hidden=(S.oh.m!=='hour');
+    $('wrapOhP').hidden=(S.oh.m!=='pct');
+    S.sample=false;calc();save();
+  });
+  $('iOhR').addEventListener('input',function(){S.oh.rate=$('iOhR').value;S.sample=false;calc();save();});
+  $('iOhP').addEventListener('input',function(){S.oh.pct=$('iOhP').value;S.sample=false;calc();save();});
+  $('iQuoted').addEventListener('input',function(){S.quoted=$('iQuoted').value;S.sample=false;calc();save();});
+  $('iTarget').addEventListener('input',function(){S.target=$('iTarget').value;S.sample=false;calc();save();});
+  $('iOhR').addEventListener('blur',function(){vfield($('iOhR'),'eOhR',0,null,'The overhead rate');});
+  $('iOhP').addEventListener('blur',function(){vfield($('iOhP'),'eOhP',0,500,'The overhead percentage');});
+  $('iQuoted').addEventListener('blur',function(){vfield($('iQuoted'),'eQuoted',0,null,'The quoted price');});
+  $('iTarget').addEventListener('blur',function(){vfield($('iTarget'),'eTarget',0,99,'The target margin');});
+
+  $('useBu').addEventListener('click',function(){
+    var T=compute(S.basis);
+    if(!(T.buildup>0)){msg('There is nothing to build up yet — add some cost lines first.',true);return;}
+    S.quoted=(Math.ceil(T.buildup*100)/100).toFixed(2);
+    S.sample=false;$('iQuoted').value=S.quoted;calc();save();
+    msg('Quoted price set to the build-up of '+money(T.buildup)+'.');
+  });
+
+  $('addLab').addEventListener('click',function(){S.lab.push(mkLab());S.sample=false;renderRows();calc();save();focusLast('labBody');});
+  $('addMat').addEventListener('click',function(){S.mat.push(mkMat());S.sample=false;renderRows();calc();save();focusLast('matBody');});
+  $('addSub').addEventListener('click',function(){S.sub.push(mkSub());S.sample=false;renderRows();calc();save();focusLast('subBody');});
+  $('addPlt').addEventListener('click',function(){S.plt.push(mkPlt());S.sample=false;renderRows();calc();save();focusLast('pltBody');});
+
+  $('segEst').addEventListener('click',function(){S.basis='est';fillFields();calc();save();});
+  $('segAct').addEventListener('click',function(){S.basis='act';fillFields();calc();save();});
+
+  $('btnPrev').addEventListener('click',function(){S.preview=!S.preview;fillFields();calc();save();window.scrollTo(0,0);});
+  $('btnPrint').addEventListener('click',function(){calc();window.print();});
+  $('btnCsv').addEventListener('click',exportCsv);
+  $('btnJson').addEventListener('click',exportJson);
+  $('btnImport').addEventListener('click',function(){$('fileIn').click();});
+  $('fileIn').addEventListener('change',importJson);
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear this job and every saved figure from this browser? This cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blank();renderAll();save();
+    msg('Cleared. An empty job is ready.');
+  });
+  $('btnBlank').addEventListener('click',function(){
+    S=blank();renderAll();save();
+    msg('Empty job started — fill in the lines as you go.');
+  });
+  $('btnDismiss').addEventListener('click',function(){S.showBanner=false;$('banner').hidden=true;save();});
+}
+function focusLast(id){
+  var rows=$(id).querySelectorAll('tr');
+  if(!rows.length)return;
+  var el=rows[rows.length-1].querySelector('input');
+  if(el)el.focus();
+}
+
+/* ══ export ═══════════════════════════════════════════════════════ */
+function csvCell(v){
+  var s=(v==null)?'':String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvText(rows){return rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';}
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},600);
+  }catch(e){msg('This browser blocked the download.',true);}
+}
+function slug(s){return (String(s||'job-costing').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'job-costing').slice(0,40);}
+
+function exportCsv(){
+  var E=compute('est'),A=compute('act'),T=(S.basis==='act')?A:E,c=CUR();
+  var R=[];
+  R.push(['Job costing sheet']);
+  R.push(['Business',S.job.biz]);
+  R.push(['Job',S.job.title]);
+  R.push(['Reference',S.job.ref]);
+  R.push(['Client',S.job.client]);
+  R.push(['Site',S.job.site]);
+  R.push(['Date',S.job.date]);
+  R.push(['Prepared by',S.job.by]);
+  R.push(['Currency',c]);
+  R.push(['Costed on',S.basis==='act'?'Actual':'Estimate']);
+  R.push(['Overhead recovery',S.oh.m==='pct'?(n0(S.oh.pct)+'% of direct cost'):(n0(S.oh.rate)+' per labour hour')]);
+  R.push([]);
+  R.push(['Section','Description','Unit','Est qty / hours','Rate','Charge-out rate','On-costs %','Markup %',
+    'Est cost ('+c+')','Actual qty / hours','Actual cost ('+c+')','Cost on this basis ('+c+')','Charge value ('+c+')']);
+  var i,f2=function(n){return fin(n)?(Math.round(n*100)/100).toFixed(2):'';};
+  for(i=0;i<E.lab.length;i++){
+    var le=E.lab[i],la=A.lab[i],lt=T.lab[i];
+    R.push(['Labour',S.lab[i].d,'hours',f2(le.eh),f2(le.trueRate),f2(le.cr),f2(le.oc),'',
+      f2(le.ecost),(le.ah==null?'':f2(le.ah)),f2(la.cost),f2(lt.cost),f2(lt.chg)]);
+  }
+  for(i=0;i<E.mat.length;i++){
+    var me=E.mat[i],ma=A.mat[i],mt=T.mat[i];
+    R.push(['Materials',S.mat[i].d,S.mat[i].u,f2(me.q),f2(me.uc),'','',f2(me.mu),
+      f2(me.est),'',(me.ac==null?'':f2(me.ac)),f2(mt.cost),f2(mt.chg)]);
+  }
+  for(i=0;i<E.sub.length;i++){
+    var se=E.sub[i],st=T.sub[i];
+    R.push(['Subcontract',S.sub[i].d,'','','','','',f2(se.mu),
+      f2(se.est),'',(se.ac==null?'':f2(se.ac)),f2(st.cost),f2(st.chg)]);
+  }
+  for(i=0;i<E.plt.length;i++){
+    var pe=E.plt[i],pt=T.plt[i];
+    R.push(['Plant',S.plt[i].d,'',f2(pe.q),f2(pe.rate),'','',f2(pe.mu),
+      f2(pe.est),'',(pe.ac==null?'':f2(pe.ac)),f2(pt.cost),f2(pt.chg)]);
+  }
+  R.push([]);
+  R.push(['Summary','Estimate ('+c+')','Actual ('+c+')','Variance ('+c+')']);
+  var pairs=[['Labour cost',E.labCost,A.labCost],['Material cost',E.matCost,A.matCost],['Subcontract cost',E.subCost,A.subCost],
+    ['Plant cost',E.pltCost,A.pltCost],['Direct cost',E.direct,A.direct],['Overhead',E.oh,A.oh],['Total cost',E.total,A.total],
+    ['Priced build-up',E.buildup,A.buildup]];
+  for(i=0;i<pairs.length;i++)R.push([pairs[i][0],f2(pairs[i][1]),f2(pairs[i][2]),f2(pairs[i][2]-pairs[i][1])]);
+  R.push(['Labour hours',f2(E.labH),f2(A.labH),f2(A.labH-E.labH)]);
+  R.push([]);
+  R.push(['Margin on the '+(S.basis==='act'?'actual':'estimate')+' basis','Value']);
+  R.push(['Quoted price',T.price==null?'':f2(T.price)]);
+  R.push(['Direct cost',f2(T.direct)]);
+  R.push(['Gross profit',T.gp==null?'':f2(T.gp)]);
+  R.push(['Gross margin %',T.gm==null?'':f2(T.gm)]);
+  R.push(['Overhead',f2(T.oh)]);
+  R.push(['Total cost',f2(T.total)]);
+  R.push(['Net profit',T.np==null?'':f2(T.np)]);
+  R.push(['Net margin %',T.nm==null?'':f2(T.nm)]);
+  R.push(['Markup applied %',T.markup==null?'':f2(T.markup)]);
+  R.push(['Break-even price',f2(T.be)]);
+  R.push(['Target net margin %',T.target==null?'':f2(T.target)]);
+  R.push(['Price needed at target',T.tp==null?'':f2(T.tp)]);
+  R.push([]);
+  R.push(['Internal management costing. Excludes VAT and other sales taxes, retentions, finance charges and any cost not entered as a line. Not a quotation and not tax advice.']);
+  dl(slug(S.job.ref||S.job.title)+'-costing.csv','\ufeff'+csvText(R),'text/csv;charset=utf-8');
+}
+function exportJson(){
+  dl(slug(S.job.ref||S.job.title)+'-costing.json',JSON.stringify(S,null,2),'application/json');
+}
+function importJson(ev){
+  var f=ev.target.files&&ev.target.files[0];
+  if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      if(!o||typeof o!=='object'||Object.prototype.toString.call(o)==='[object Array]')throw new Error('shape');
+      if(!o.job&&!o.lab&&!o.mat)throw new Error('shape');
+      S=normalise(o);
+      renderAll();save();
+      msg('Job restored from '+f.name+'.');
+    }catch(e){
+      msg('That file could not be read as a saved job. Choose a JSON file exported from this tool.',true);
+    }
+    ev.target.value='';
+  };
+  rd.onerror=function(){msg('The file could not be opened.',true);ev.target.value='';};
+  rd.readAsText(f);
+}
+
+/* ══ boot ═════════════════════════════════════════════════════════ */
+if(!load()){S=sample();save();}
+renderAll();
+bindDelegates();
+bind();
+window.addEventListener('beforeprint',function(){try{calc();}catch(e){}});
+})();
+</script>
+</body>
+</html>
