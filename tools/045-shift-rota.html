@@ -198,7 +198,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .rota{min-width:1010px;border-collapse:separate;border-spacing:0}
 .rota th,.rota td{border-bottom:1px solid var(--line)}
 .rota th.who,.rota td.who{position:sticky;left:0;z-index:2;background:var(--surface);
-  border-right:1px solid var(--line-hard);min-width:158px;max-width:180px}
+  border-right:1px solid var(--line-hard);min-width:166px;max-width:190px}
 .rota th.who{background:var(--sunk);z-index:3}
 .rota tbody tr:hover td.who{background:var(--accent-wash)}
 .rota th.dcol{text-align:center;min-width:118px;padding:6px 6px}
@@ -208,7 +208,7 @@ table input:focus,table select:focus{background:var(--raise)}
 .rota th.tcol{text-align:right;min-width:74px}
 .who .nm{font-weight:650;font-size:13.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
 .who .rl{font:11.5px/1.3 var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis}
-.who .rt{font:11px/1.3 var(--mono);color:var(--faint)}
+.who .rt{font:11px/1.35 var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.cell{padding:5px 5px;vertical-align:top;background:var(--surface)}
 td.cell.off{background:var(--sunk)}
 td.cell.brch{background:var(--bad-wash);box-shadow:inset 3px 0 0 0 var(--bad)}
@@ -228,8 +228,8 @@ td.cell.off select{color:var(--muted)}
 .fchip.w{background:var(--warn);color:#fff}
 .rota tfoot td{background:var(--sunk);font-size:12.5px;padding:7px 6px;text-align:center;border-top:2px solid var(--line-hard)}
 .rota tfoot td.who{text-align:left;background:var(--sunk)}
-.rota tfoot .hc{font:700 15px/1.15 var(--mono)}
-.rota tfoot .rq{font:11px/1.3 var(--sans);color:var(--muted)}
+.rota tfoot .hc{font:700 15px/1.15 var(--mono);display:block}
+.rota tfoot .rq{font:11px/1.3 var(--sans);color:var(--muted);display:block;margin-top:1px}
 .rota tfoot td.uns .hc{color:var(--bad)}
 .rota tfoot td.uns{background:var(--bad-wash)}
 .rota tfoot td.uns .rq{color:var(--bad);font-weight:650}
@@ -240,6 +240,10 @@ td.cell.off select{color:var(--muted)}
 .rmbtn{border:1px solid var(--line);background:var(--raise);color:var(--muted);border-radius:3px;
   font:700 11px/1 var(--mono);padding:3px 6px;cursor:pointer}
 .rmbtn:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-wash)}
+
+#staffTbl{min-width:580px}
+#tplTbl{min-width:560px}
+#staffTbl .t-h,#tplTbl .t-h{white-space:nowrap}
 
 /* rail lists */
 .kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dashed var(--line)}
@@ -838,7 +842,7 @@ function compute(){
 
 /* ══ rendering ═════════════════════════════════════════════════ */
 function optLabel(t){var h=tplHours(t);
-  return (t.code?t.code+' · ':'')+(t.name||'Shift')+'  '+t.s+'–'+t.e+(h===null?'':'  '+hrs1(h)+'h');}
+  return (t.code?t.code+' · ':'')+(t.name||'Shift')+(h===null?'':'  '+hrs1(h)+'h');}
 
 function rebuildGrid(){
   var dates=weekDates(), isos=dates.map(isoOf);
@@ -935,7 +939,7 @@ function rebuildStaff(){
       '<td><input type="text" class="f-name" value="'+esc(p.name)+'" aria-label="Staff name '+(i+1)+'" placeholder="Name"></td>'+
       '<td><input type="text" class="f-role" value="'+esc(p.role)+'" aria-label="Role '+(i+1)+'" placeholder="Role"></td>'+
       '<td class="n"><input type="number" class="f-rate" min="0" step="0.01" inputmode="decimal" value="'+
-        (p.rate||0)+'" aria-label="Hourly rate '+(i+1)+'"></td>'+
+        r2(num(p.rate,0)).toFixed(2)+'" aria-label="Hourly rate '+(i+1)+'"></td>'+
       '<td class="n"><input type="number" class="f-con" min="0" step="0.5" inputmode="decimal" value="'+
         (p.contract||0)+'" aria-label="Contract hours '+(i+1)+'"></td>'+
       '<td class="n s-h">—</td><td class="n s-c">—</td>'+
@@ -948,9 +952,14 @@ function rebuildStaff(){
     rl.addEventListener('input',function(){p.role=rl.value;
       if(cellEls[p.id])cellEls[p.id].rl.textContent=p.role; touched(); refresh();});
     rt.addEventListener('input',function(){p.rate=Math.max(0,num(rt.value,0)); touched(); refresh();});
-    rt.addEventListener('blur',function(){ var bad=rt.value!==''&&!isFinite(parseFloat(rt.value));
-      rt.classList.toggle('inv',bad||num(rt.value,0)<0);
-      if(num(rt.value,0)<0){rt.value=0;p.rate=0;touched();refresh();} });
+    rt.addEventListener('blur',function(){
+      var v=parseFloat(rt.value);
+      if(rt.value===''){p.rate=0;rt.value='0.00';rt.classList.remove('inv');touched();refresh();return;}
+      if(!isFinite(v)||v<0){rt.classList.add('inv');p.rate=0;rt.value='0.00';touched();refresh();return;}
+      rt.classList.remove('inv'); p.rate=r2(v); rt.value=p.rate.toFixed(2); touched(); refresh(); });
+    cn.addEventListener('blur',function(){ var v=parseFloat(cn.value);
+      if(!isFinite(v)||v<0){cn.value='0';p.contract=0;} else {p.contract=Math.round(v*2)/2;cn.value=p.contract;}
+      touched(); refresh(); });
     cn.addEventListener('input',function(){p.contract=Math.max(0,num(cn.value,0)); touched(); refresh();});
     tr.querySelector('.rmbtn').addEventListener('click',function(){
       if(S.staff.length===1&&!p.name&&!p.role){return;}
@@ -1005,7 +1014,8 @@ function refreshTplHours(){
     var h=tplHours(S.tpls[i]), cell=rows[i].querySelector('.t-h');
     if(!cell)continue;
     if(h===null){cell.textContent='—';cell.style.color='var(--bad)';}
-    else{cell.textContent=hrs(h)+(parseHM(S.tpls[i].e)<=parseHM(S.tpls[i].s)?' ⌂':'');cell.style.color='';}
+    else{cell.textContent=hrs(h)+(parseHM(S.tpls[i].e)<=parseHM(S.tpls[i].s)?'⁺':'');cell.style.color='';
+      cell.title=(parseHM(S.tpls[i].e)<=parseHM(S.tpls[i].s))?'Overnight shift — finishes the next day':'';}
   }
 }
 function rebuildCover(){
@@ -1034,7 +1044,8 @@ function refresh(){
     refs.nm.textContent=row.p.name||'(unnamed)';
     refs.rl.textContent=row.p.role||'';
     refs.rt.textContent=(num(row.p.rate,0)>0?money(row.p.rate)+'/h':'no rate')+
-      (num(row.p.contract,0)>0?' · '+hrs1(row.p.contract)+'h contract':'');
+      (num(row.p.contract,0)>0?' · '+hrs1(row.p.contract)+'h':'');
+    refs.rt.title=(num(row.p.contract,0)>0?('Contract '+hrs1(row.p.contract)+' hours a week'):'No contract hours set');
     row.cells.forEach(function(cl,c){
       var e=refs.cells[c];
       if(!cl.sh){ e.tm.textContent=''; e.hrs.textContent=''; e.flg.innerHTML='';
