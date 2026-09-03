@@ -789,3 +789,301 @@ function calc(){
     lines:lines,accTot:accTot,subtotal:subtotal,taxRate:taxRate,tax:tax,total:total,
     entered:entered,billedStops:rows.filter(function(o){return o.amount>0;}).length};
 }
+
+/* ── row rendering ───────────────────────────────────────── */
+var TYPES=['Pickup','Delivery','Pickup + delivery','Cross-dock','Other'];
+function stopRows(){
+  var h='';
+  S.stops.forEach(function(st,i){
+    var id=esc(st.id);
+    h+='<tr data-id="'+id+'">'+
+      '<td class="onCell"><input type="checkbox" data-r="bill" data-id="'+id+'"'+(st.bill!==false?' checked':'')+
+        ' aria-label="Bill detention for stop '+(i+1)+'"></td>'+
+      '<td><select data-r="type" data-id="'+id+'" aria-label="Kind of stop '+(i+1)+'">'+
+        TYPES.map(function(t){return '<option'+(t===st.type?' selected':'')+'>'+esc(t)+'</option>';}).join('')+
+        '</select></td>'+
+      '<td><input data-r="loc" data-id="'+id+'" value="'+esc(st.loc)+'" placeholder="Facility, city" aria-label="Location of stop '+(i+1)+'"></td>'+
+      '<td><input type="datetime-local" data-r="arr" data-id="'+id+'" value="'+esc(st.arr)+'" aria-label="Arrival at stop '+(i+1)+'"></td>'+
+      '<td><input type="datetime-local" data-r="dep" data-id="'+id+'" value="'+esc(st.dep)+'" aria-label="Departure from stop '+(i+1)+'"></td>'+
+      '<td class="calc c-onsite">—</td>'+
+      '<td class="freecell"><input type="number" data-r="free" data-id="'+id+'" value="'+esc(st.free)+'" step="0.25" min="0" '+
+        'inputmode="decimal" placeholder="'+nf(Math.max(0,num(S.freeHours)),2)+'" aria-label="Free hours at stop '+(i+1)+'"></td>'+
+      '<td class="calc c-over">—</td>'+
+      '<td class="calc c-billed">—</td>'+
+      '<td><input data-r="ref" data-id="'+id+'" value="'+esc(st.ref)+'" placeholder="BOL / gate / ELD ref" aria-label="Evidence reference for stop '+(i+1)+'"></td>'+
+      '<td class="amtcell c-amt">—</td>'+
+      '<td class="delcell"><button type="button" class="btn ico sm" data-del="'+id+'" aria-label="Delete stop '+(i+1)+'">✕</button></td>'+
+      '</tr>'+
+      '<tr class="rowerr" data-errfor="'+id+'" hidden><td colspan="12"></td></tr>';
+  });
+  $('#stopsB').innerHTML=h||'<tr><td colspan="12" class="empty">No stops yet — add one to start the claim.</td></tr>';
+}
+function accRows(){
+  var h='';
+  S.lines.forEach(function(l,i){
+    var id=esc(l.id);
+    h+='<tr data-lid="'+id+'">'+
+      '<td class="onCell"><input type="checkbox" data-l="on" data-id="'+id+'"'+(l.on?' checked':'')+
+        ' aria-label="Include charge '+(i+1)+' on the invoice"></td>'+
+      '<td class="desccell"><input data-l="desc" data-id="'+id+'" value="'+esc(l.desc)+'" placeholder="Charge description" aria-label="Description of charge '+(i+1)+'"></td>'+
+      '<td><input type="number" data-l="qty" data-id="'+id+'" value="'+esc(l.qty)+'" step="0.01" min="0" inputmode="decimal" aria-label="Quantity for charge '+(i+1)+'"></td>'+
+      '<td class="unitcell"><input data-l="unit" data-id="'+id+'" value="'+esc(l.unit)+'" placeholder="each" aria-label="Unit for charge '+(i+1)+'"></td>'+
+      '<td><input type="number" data-l="rate" data-id="'+id+'" value="'+esc(l.rate)+'" step="0.01" min="0" inputmode="decimal" aria-label="Rate for charge '+(i+1)+'"></td>'+
+      '<td class="n c-lamt">—</td>'+
+      '<td class="delcell"><button type="button" class="btn ico sm" data-ldel="'+id+'" aria-label="Delete charge '+(i+1)+'">✕</button></td>'+
+      '</tr>';
+  });
+  $('#accB').innerHTML=h||'<tr><td colspan="7" class="empty">No accessorial lines — add one or restore the standard list.</td></tr>';
+}
+function fillFields(){
+  $$('[data-h]').forEach(function(el){el.value=S[el.getAttribute('data-h')]==null?'':S[el.getAttribute('data-h')];});
+  $$('[data-n]').forEach(function(el){var v=S[el.getAttribute('data-n')];el.value=(v===''||v==null)?'':v;});
+  $('#cur').value=(['$','£','€','custom'].indexOf(S.cur)>=0)?S.cur:'custom';
+  if($('#cur').value==='custom'&&S.cur!=='custom'){S.curCustom=S.cur;S.cur='custom';}
+  $('#curCustom').value=S.curCustom||'';
+  $('#curCustomWrap').hidden=(S.cur!=='custom');
+  $('#sampleNote').hidden=!S.sample;
+}
+function renderAll(){fillFields();stopRows();accRows();paint();}
+
+/* ── paint ───────────────────────────────────────────────── */
+function paint(){
+  var c=calc();
+  /* stop rows */
+  c.rows.forEach(function(o){
+    var tr=$('tr[data-id="'+o.id+'"]');if(!tr)return;
+    var on=$('.c-onsite',tr),ov=$('.c-over',tr),bl=$('.c-billed',tr),am=$('.c-amt',tr);
+    if(o.onsite==null){on.textContent='—';ov.textContent='—';bl.textContent='—';am.textContent='—';}
+    else{
+      on.innerHTML=nf(o.onsite,2)+'<span class="sm">'+hm(o.onsite)+'</span>';
+      ov.textContent=nf(o.over,2);
+      bl.textContent=o.bill?nf(o.billed,2):'—';
+      am.innerHTML=money(o.amount)+(o.capped?'<span class="sm capped">cap applied</span>':'');
+    }
+    var er=$('tr[data-errfor="'+o.id+'"]');
+    if(er){
+      var td=er.firstChild;
+      if(o.err){er.hidden=false;td.className='';td.textContent=o.err;}
+      else if(o.msg){er.hidden=false;td.className='okmsg';td.textContent=o.msg;}
+      else er.hidden=true;
+    }
+    $('input[data-r="arr"][data-id="'+o.id+'"]').classList.toggle('inv',!!o.err);
+    $('input[data-r="dep"][data-id="'+o.id+'"]').classList.toggle('inv',!!o.err);
+  });
+  $('#stopCount').textContent=S.stops.length;
+  $('#tfOnsite').textContent=c.rows.some(function(o){return o.onsite!=null;})?nf(c.onsiteTot,2):'—';
+  $('#tfOver').textContent=c.rows.some(function(o){return o.onsite!=null;})?nf(c.overTot,2):'—';
+  $('#tfBilled').textContent=c.rows.some(function(o){return o.onsite!=null;})?nf(c.billedTot,2):'—';
+  $('#tfDet').textContent=c.rows.some(function(o){return o.onsite!=null;})?money(c.detention):'—';
+  /* accessorial rows */
+  c.lines.forEach(function(l){
+    var tr=$('tr[data-lid="'+l.id+'"]');if(!tr)return;
+    var cell=$('.c-lamt',tr);
+    cell.textContent=l.on?money(l.amount):'—';
+    cell.classList.toggle('zero',!l.on);
+  });
+  $('#tfAcc').textContent=S.lines.length?money(c.accTot):'—';
+  /* rule strip */
+  $('#ruleStrip').innerHTML=
+    '<span class="ri"><span class="rk">Free time</span> <b>'+nf(c.defFree,2)+' h</b>/stop</span>'+
+    '<span class="ri"><span class="rk">Detention</span> <b>'+money(c.rate)+'</b>/h</span>'+
+    '<span class="ri"><span class="rk">Rounding</span> <b>'+esc(ruleText())+'</b></span>'+
+    '<span class="ri"><span class="rk">Daily maximum</span> <b>'+(c.cap>0?money(c.cap):'none')+'</b></span>';
+  /* cap hint */
+  var ch=$('#capHint');
+  if(c.cap<=0)ch.textContent='No daily maximum set — detention bills in full at '+money(c.rate)+' per hour.';
+  else if(!c.capDays.length)ch.textContent='Daily maximum of '+money(c.cap)+' per day set; not reached on any day.';
+  else ch.innerHTML='<strong>Daily maximum applied.</strong> '+c.capDays.map(function(d){
+      return fdate(d.day)+': '+money(d.gross)+' reduced to '+money(d.billed)+' (−'+money(d.cut)+')';
+    }).join(' · ')+'. The cap is shared pro rata across that day’s stops.';
+  /* stop-off helper */
+  var extra=Math.max(0,S.stops.length-2);
+  $('#stopoffHint').innerHTML='Timeline holds '+S.stops.length+' stop'+(S.stops.length===1?'':'s')+
+    ' — '+extra+' beyond the first pickup and delivery. '+
+    (extra>0?'<button type="button" class="btn sm" id="bUseStops">Use '+extra+' for stop-off</button>':'');
+  /* results */
+  $('#oTotal').textContent=c.entered?money(c.total):'—';
+  $('#mTotal').textContent=c.entered?money(c.total):'—';
+  var parts=[];
+  if(c.detention>0)parts.push(money(c.detention)+' detention');
+  if(c.layover>0)parts.push(money(c.layover)+' layover');
+  if(c.tonu>0)parts.push(money(c.tonu)+' TONU');
+  if(c.accTot>0)parts.push(money(c.accTot)+' accessorials');
+  if(c.tax>0)parts.push(money(c.tax)+' '+(S.taxLabel||'tax'));
+  $('#oTotalSub').textContent=c.entered?(parts.length?parts.join(' + '):'Nothing chargeable yet on these timestamps.')
+    :'Enter arrival and departure times, or a flat charge, to price the claim.';
+  $('#oDet').textContent=c.entered?money(c.detention):'—';
+  $('#oDetHrs').textContent=c.rows.some(function(o){return o.onsite!=null;})?nf(c.billedTot,2):'—';
+  $('#oFlat').textContent=c.entered?money(r2(c.layover+c.tonu)):'—';
+  $('#oAcc').textContent=c.entered?money(c.accTot):'—';
+  $('#oOnsite').textContent=c.rows.some(function(o){return o.onsite!=null;})?hm(c.onsiteTot):'—';
+  $('#chipStops').textContent=c.billedStops+' of '+S.stops.length+' stops chargeable';
+  /* summary list */
+  var b='';
+  function line(k,v,cls){b+='<tr'+(cls?' class="'+cls+'"':'')+'><td>'+k+'</td><td class="n">'+v+'</td></tr>';}
+  c.rows.forEach(function(o){
+    if(o.amount>0)line('Detention — stop '+o.n+' '+esc(o.type.toLowerCase())+' ('+nf(o.billed,2)+' h)'+
+      (o.capped?' <em>capped</em>':''),money(o.amount),'sub');
+  });
+  line('<strong>Detention total</strong>',money(c.detention));
+  if(c.layover>0)line('Layover — '+nf(c.layNights,0)+' night'+(c.layNights===1?'':'s')+' @ '+money(c.layRate),money(c.layover));
+  if(c.tonu>0)line('TONU — '+nf(c.tonuQty,0)+' @ '+money(c.tonuRate),money(c.tonu));
+  c.lines.forEach(function(l){
+    if(l.on&&l.amount!==0)line(esc(l.desc||'Accessorial')+' — '+nf(l.qty,2)+' '+esc(l.unit||'')+' @ '+money(l.rate),money(l.amount));
+  });
+  line('<strong>Subtotal</strong>',c.entered?money(c.subtotal):'—','sum');
+  if(c.taxRate>0)line(esc(S.taxLabel||'Tax')+' @ '+nf(c.taxRate,2)+'%',money(c.tax));
+  line('<strong>Total to bill</strong>',c.entered?money(c.total):'—','sum');
+  $('#bdBody').innerHTML=b;
+  /* due date hint */
+  var due=addDaysISO(S.invDate,Math.max(0,Math.round(num(S.terms))));
+  $('#dueHint').textContent=due?('Due '+fdate(due)):'Enter an invoice date to show the due date.';
+  buildDoc(c,due);
+  return c;
+}
+
+/* ── printed invoice ─────────────────────────────────────── */
+function buildDoc(c,due){
+  var h='';
+  h+='<div class="lh"><div><div class="co">'+esc(S.carrier||'Carrier name')+'</div>'+
+     '<div class="ad">'+esc(S.carrierAddr||'')+(S.carrierId?'\n'+esc(S.carrierId):'')+'</div></div>'+
+     '<div class="ti"><b>ACCESSORIAL INVOICE</b>'+
+     '<span>No. '+esc(S.invNo||'—')+'</span>'+
+     '<span>Issued '+fdate(S.invDate)+'</span>'+
+     '<span>Due '+(due?fdate(due):'—')+'</span></div></div>';
+  h+='<div class="meta">'+
+     '<div class="wide"><div class="k">Bill to</div><div class="v">'+esc(S.billTo||'—')+
+       (S.billToAddr?'\n'+esc(S.billToAddr):'')+(S.billToRef?'\n'+esc(S.billToRef):'')+'</div></div>'+
+     '<div><div class="k">Load / pro no.</div><div class="v">'+esc(S.loadNo||'—')+'</div></div>'+
+     '<div><div class="k">BOL</div><div class="v">'+esc(S.bol||'—')+'</div></div>'+
+     '<div><div class="k">Tractor / trailer</div><div class="v">'+esc(S.unitNo||'—')+'</div></div>'+
+     '<div><div class="k">Driver</div><div class="v">'+esc(S.driver||'—')+'</div></div>'+
+     '<div><div class="k">Terms</div><div class="v">Net '+nf(Math.max(0,Math.round(num(S.terms))),0)+' days</div></div>'+
+     '<div><div class="k">Total due</div><div class="v"><strong>'+(c.entered?money(c.total):'—')+'</strong></div></div>'+
+     '</div>';
+  /* charges */
+  h+='<h3>Charges</h3><table><thead><tr><th>Charge</th><th>Basis</th><th class="n">Qty</th>'+
+     '<th class="n">Rate</th><th class="n">Amount</th></tr></thead><tbody>';
+  var detBasis=nf(c.billedTot,2)+' billable h across '+c.billedStops+' stop'+(c.billedStops===1?'':'s')+
+    ' · '+nf(c.defFree,2)+' h free per stop · '+ruleText()+(c.cap>0?' · daily maximum '+money(c.cap):'');
+  h+='<tr><td>Detention</td><td>'+esc(detBasis)+'</td><td class="n">'+nf(c.billedTot,2)+' h</td>'+
+     '<td class="n">'+money(c.rate)+'/h</td><td class="n">'+money(c.detention)+'</td></tr>';
+  if(c.capCut>0)h+='<tr><td>— daily maximum adjustment</td><td>'+
+     esc(c.capDays.map(function(d){return fdate(d.day)+' capped at '+money(d.billed);}).join('; '))+
+     '</td><td class="n"></td><td class="n"></td><td class="n">included above (−'+money(c.capCut)+')</td></tr>';
+  if(c.layover>0)h+='<tr><td>Layover</td><td>'+esc(S.layNote||'Flat charge per night held')+'</td>'+
+     '<td class="n">'+nf(c.layNights,0)+' night'+(c.layNights===1?'':'s')+'</td><td class="n">'+money(c.layRate)+
+     '</td><td class="n">'+money(c.layover)+'</td></tr>';
+  if(c.tonu>0)h+='<tr><td>TONU — truck ordered not used</td><td>'+esc(S.tonuNote||'Flat charge per cancelled dispatch')+'</td>'+
+     '<td class="n">'+nf(c.tonuQty,0)+'</td><td class="n">'+money(c.tonuRate)+'</td><td class="n">'+money(c.tonu)+'</td></tr>';
+  c.lines.forEach(function(l){
+    if(!l.on||l.amount===0)return;
+    h+='<tr><td>'+esc(l.desc||'Accessorial')+'</td><td></td><td class="n">'+nf(l.qty,2)+' '+esc(l.unit||'')+
+      '</td><td class="n">'+money(l.rate)+'</td><td class="n">'+money(l.amount)+'</td></tr>';
+  });
+  h+='<tr class="tot"><td colspan="4">Subtotal</td><td class="n">'+money(c.subtotal)+'</td></tr>';
+  if(c.taxRate>0)h+='<tr class="tot"><td colspan="4">'+esc(S.taxLabel||'Tax')+' @ '+nf(c.taxRate,2)+'%</td>'+
+     '<td class="n">'+money(c.tax)+'</td></tr>';
+  h+='<tr class="grand"><td colspan="4">TOTAL DUE</td><td class="n">'+money(c.total)+'</td></tr>';
+  h+='</tbody></table>';
+  /* evidence */
+  h+='<h3>Detention detail — supporting timestamps</h3>'+
+     '<table><thead><tr><th>#</th><th>Stop</th><th>Location</th><th>Arrival</th><th>Departure</th>'+
+     '<th class="n">On site</th><th class="n">Free</th><th class="n">Over</th><th class="n">Billed</th>'+
+     '<th class="n">Amount</th><th>Evidence</th></tr></thead><tbody>';
+  if(!c.rows.length)h+='<tr><td colspan="11">No stops recorded.</td></tr>';
+  c.rows.forEach(function(o){
+    h+='<tr><td class="n">'+o.n+'</td><td>'+esc(o.type)+'</td><td>'+esc(o.loc||'—')+'</td>'+
+      '<td>'+fdt(o.arr)+'</td><td>'+fdt(o.dep)+'</td>'+
+      '<td class="n">'+(o.onsite==null?'—':nf(o.onsite,2)+' h')+'</td>'+
+      '<td class="n">'+nf(o.free,2)+' h</td>'+
+      '<td class="n">'+(o.over==null?'—':nf(o.over,2)+' h')+'</td>'+
+      '<td class="n">'+(o.onsite==null||!o.bill?'—':nf(o.billed,2)+' h')+'</td>'+
+      '<td class="n">'+(o.onsite==null?'—':money(o.amount))+(o.capped?' *':'')+'</td>'+
+      '<td>'+esc(o.ref||'')+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  h+='<p class="tsnote">Times are as recorded'+(S.evidence?' — source: '+esc(S.evidence):'')+
+     '. On-site time is departure minus arrival; billable detention is on-site time less free time, '+
+     esc(ruleText())+', at '+money(c.rate)+' per hour'+
+     (c.cap>0?', with a maximum of '+money(c.cap)+' of detention per calendar day (shared pro rata across that day’s stops — marked *)':'')+'.</p>';
+  if(S.notes)h+='<h3>Notes</h3><p class="rules">'+esc(S.notes).replace(/\n/g,'<br>')+'</p>';
+  if(S.remit)h+='<h3>Remit to</h3><p class="rules">'+esc(S.remit).replace(/\n/g,'<br>')+'</p>';
+  h+='<div class="disc"><b>Basis of charge</b>These charges are calculated from the timestamps and contract '+
+     'rates entered above. They are payable only where the governing rate confirmation, broker or shipper '+
+     'accessorial policy, or carrier agreement provides for them, and where any notice and documentation '+
+     'deadlines have been met. No detention rate is set by regulation. Queries should be raised with the '+
+     'issuing carrier before the due date; disputes may need legal or brokerage advice.</div>';
+  h+='<div class="sign"><div>Prepared by — '+esc(S.preparedBy||'')+'</div><div>Accepted by / date</div></div>';
+  h+='<div class="foot"><span>'+esc(S.carrier||'Carrier')+' · Invoice '+esc(S.invNo||'—')+' · Load '+esc(S.loadNo||'—')+
+     '</span><span>Prepared '+fdate(todayISO())+(S.sample?' · SAMPLE DATA':'')+'</span></div>';
+  $('#doc').innerHTML=h;
+}
+
+/* ── exports ─────────────────────────────────────────────── */
+function csvEsc(v){var s=String(v==null?'':v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){msg('Download failed in this browser: '+e.message,true);}
+}
+function toCSV(){
+  var c=calc(),due=addDaysISO(S.invDate,Math.max(0,Math.round(num(S.terms)))),R=[];
+  R.push(['Accessorial invoice — detention, layover, TONU and accessorial charges']);
+  R.push(['Carrier',S.carrier,'Carrier address',S.carrierAddr,'MC / DOT',S.carrierId]);
+  R.push(['Bill to',S.billTo,'Bill-to address',S.billToAddr,'Their reference',S.billToRef]);
+  R.push(['Invoice no.',S.invNo,'Invoice date',S.invDate,'Terms (days)',S.terms,'Due',due]);
+  R.push(['Load / pro no.',S.loadNo,'BOL',S.bol,'Tractor / trailer',S.unitNo,'Driver',S.driver]);
+  R.push(['Currency',sym(),'Free time per stop (h)',nf(c.defFree,2),'Detention rate per h',nf(c.rate,2),
+          'Rounding',ruleText(),'Daily maximum',c.cap>0?nf(c.cap,2):'none']);
+  R.push(['Time source / evidence',S.evidence]);
+  R.push([]);
+  R.push(['INVOICE LINES']);
+  R.push(['Charge','Basis','Qty','Unit','Rate','Amount ('+sym()+')']);
+  R.push(['Detention','Billable hours beyond free time; '+ruleText(),nf(c.billedTot,2),'hour',nf(c.rate,2),nf(c.detention,2)]);
+  if(c.capCut>0)R.push(['Daily maximum adjustment',
+    c.capDays.map(function(d){return d.day+' '+nf(d.gross,2)+' capped to '+nf(d.billed,2);}).join('; '),'','','',
+    '-'+nf(c.capCut,2)+' (already applied)']);
+  if(c.layover>0)R.push(['Layover',S.layNote,nf(c.layNights,0),'night',nf(c.layRate,2),nf(c.layover,2)]);
+  if(c.tonu>0)R.push(['TONU',S.tonuNote,nf(c.tonuQty,0),'event',nf(c.tonuRate,2),nf(c.tonu,2)]);
+  c.lines.forEach(function(l){
+    if(l.on&&l.amount!==0)R.push([l.desc,'',nf(l.qty,2),l.unit,nf(l.rate,2),nf(l.amount,2)]);
+  });
+  R.push(['','','','','Subtotal',nf(c.subtotal,2)]);
+  if(c.taxRate>0)R.push(['','','','',(S.taxLabel||'Tax')+' @ '+nf(c.taxRate,2)+'%',nf(c.tax,2)]);
+  R.push(['','','','','TOTAL DUE',nf(c.total,2)]);
+  R.push([]);
+  R.push(['DETENTION DETAIL — SUPPORTING TIMESTAMPS']);
+  R.push(['#','Stop','Location','Arrival','Departure','On site (h)','Free (h)','Over free (h)','Billed (h)',
+          'Rate','Gross','Daily cap applied','Amount ('+sym()+')','Evidence ref','Billable']);
+  c.rows.forEach(function(o){
+    R.push([o.n,o.type,o.loc,o.arr,o.dep,o.onsite==null?'':nf(o.onsite,2),nf(o.free,2),
+      o.over==null?'':nf(o.over,2),o.onsite==null?'':nf(o.billed,2),nf(c.rate,2),
+      o.onsite==null?'':nf(o.gross,2),o.capped?'yes':'no',o.onsite==null?'':nf(o.amount,2),o.ref,
+      o.bill?'yes':'no']);
+  });
+  R.push([]);
+  R.push(['Notes',S.notes]);
+  R.push(['Remit to',S.remit]);
+  R.push(['Prepared by',S.preparedBy]);
+  R.push(['Disclaimer','Charges are calculated from the timestamps and rates entered. They are payable only '+
+    'where the rate confirmation, accessorial policy or carrier agreement provides for them. No detention '+
+    'rate is set by regulation.']);
+  return '﻿'+R.map(function(row){return row.map(csvEsc).join(',');}).join('\r\n')+'\r\n';
+}
+function msg(text,bad){
+  var n=$('#sampleNote');n.hidden=false;
+  n.className='note'+(bad?' bad':' ');
+  n.innerHTML=esc(text);
+}
+function noteSample(){
+  var n=$('#sampleNote');n.className='note';n.hidden=!S.sample;
+  n.innerHTML='<strong>Sample data loaded.</strong> A demonstration detention claim on load '+
+    esc(S.loadNo||'—')+'. Type over any value, or use <em>Start blank invoice</em> in the first card.';
+}

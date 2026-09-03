@@ -1150,3 +1150,195 @@ function renderSelects(){
   else ss.value='__custom';
   $('#svcNameWrap').hidden=ss.value!=='__custom';
 }
+
+/* ── printed day sheet ─────────────────────────────────────────── */
+function renderDoc(){
+  var t=C.tot,h=[];
+  h.push('<div class="lh"><div><div class="org">'+esc(S.org||'Appointment day sheet')+'</div>'+
+    '<div class="oaddr">'+esc([S.addr,S.phone].filter(Boolean).join('\n'))+'</div></div>'+
+    '<div class="ttl"><h2>APPOINTMENT DAY SHEET</h2>'+
+    '<div class="wk">'+esc(dateLong(S.date))+'</div>'+
+    '<div class="ref">'+esc(S.ref||'—')+' · printed '+esc(stampNow())+'</div></div></div>');
+
+  h.push('<div class="meta">'+
+    '<div><b>Opening hours</b><span>'+(C.valid?fmtT(C.open)+'–'+fmtT(C.close):'—')+'</span></div>'+
+    '<div><b>Resources on</b><span>'+C.perRes.filter(function(p){return p.r.on;}).length+'</span></div>'+
+    '<div><b>Appointments</b><span>'+t.count+'</span></div>'+
+    '<div><b>Buffer</b><span>'+C.buffer+' min</span></div>'+
+    '<div><b>Utilisation</b><span>'+pct(t.util)+'</span></div></div>');
+
+  h.push('<div class="hero"><div><div class="lab">Booked value for the day</div>'+
+    '<div class="big">'+money(t.value)+'</div>'+
+    '<div class="sm">'+t.count+' appointments · '+durTxt(t.booked)+' of '+durTxt(t.avail)+' sold</div></div>'+
+    '<div><div class="lab">Still sellable</div><div class="big">'+durTxt(t.free)+'</div>'+
+    '<div class="sm">'+t.gaps+' gap(s) of '+C.gapMin+' min or more</div></div>'+
+    '<div><div class="lab">No-show / cancelled</div><div class="big">'+t.noshow+' / '+t.cancel+'</div>'+
+    '<div class="sm">'+money(t.lost)+' held but not earned</div></div></div>');
+
+  /* day book grid */
+  if(G.ok&&G.cols.length){
+    h.push('<h3 class="sec">Day book — '+esc(dateShort(S.date))+'</h3>');
+    h.push('<div class="pgwrap"><table class="pg"><thead><tr><th class="c" style="width:42pt">Time</th>');
+    G.cols.forEach(function(p){h.push('<th>'+esc(resName(p.r))+(p.r.role?' — '+esc(p.r.role):'')+
+      '<br>'+fmtT(p.ws)+'–'+fmtT(p.we)+'</th>');});
+    h.push('</tr></thead><tbody>');
+    G.rows.forEach(function(row){
+      h.push('<tr><td class="tc">'+(row.t%60===0||S.slot>=30?fmtT(row.t):'')+'</td>');
+      row.cells.forEach(function(cl){
+        if(cl.type==='skip')return;
+        if(cl.type==='free'){h.push('<td class="'+(cl.off?'of':'')+'"></td>');return;}
+        h.push('<td class="bk" rowspan="'+cl.span+'">');
+        cl.grp.items.forEach(function(b){
+          h.push('<div class="c1">'+fmtT(b.start)+'–'+fmtT(bkEnd(b))+' '+esc(b.name||'—')+'</div>'+
+            '<div class="c2">'+esc(bkSvcName(b))+' · '+money(b.price)+' · '+esc(ST[b.status].l)+'</div>');
+        });
+        h.push('</td>');
+      });
+      h.push('</tr>');
+    });
+    h.push('</tbody></table></div>');
+  }
+
+  /* appointment detail */
+  h.push('<h3 class="sec">Appointments in time order</h3>');
+  var list=S.bk.slice().sort(function(a,b){return a.start-b.start||a.dur-b.dur;});
+  h.push('<table><colgroup><col style="width:11%"><col style="width:13%"><col style="width:16%">'+
+    '<col style="width:14%"><col style="width:16%"><col style="width:7%"><col style="width:9%"><col style="width:14%"></colgroup>'+
+    '<thead><tr><th>Time</th><th>Resource</th><th>Client</th><th>Contact</th><th>Service</th>'+
+    '<th class="n">Mins</th><th class="n">Price</th><th>Status / note</th></tr></thead><tbody>');
+  if(!list.length)h.push('<tr><td colspan="8">No appointments booked for this day.</td></tr>');
+  list.forEach(function(b){
+    var r=resById(b.res);
+    h.push('<tr><td class="n">'+fmtT(b.start)+'–'+fmtT(bkEnd(b))+'</td>'+
+      '<td>'+esc(r?resName(r):'—')+'</td><td>'+esc(b.name||'—')+'</td>'+
+      '<td>'+esc(b.contact||'—')+'</td><td>'+esc(bkSvcName(b))+'</td>'+
+      '<td class="n">'+b.dur+'</td><td class="n">'+money(b.price)+'</td>'+
+      '<td>'+esc(ST[b.status].l)+(b.note?' — '+esc(b.note):'')+'</td></tr>');
+  });
+  h.push('</tbody><tfoot><tr><td colspan="5">Counted towards booked value ('+t.count+' held, '+
+    t.noshow+' no-show, '+t.cancel+' cancelled)</td><td class="n">'+t.booked+'</td>'+
+    '<td class="n">'+money(t.value)+'</td><td></td></tr></tfoot></table>');
+
+  /* per-resource summary + gaps */
+  h.push('<h3 class="sec">Utilisation by resource</h3>');
+  h.push('<table><thead><tr><th>Resource</th><th>Hours today</th><th class="n">Available</th>'+
+    '<th class="n">Booked</th><th class="n">Utilisation</th><th class="n">Appts</th><th class="n">Value</th>'+
+    '<th class="n">Sellable left</th></tr></thead><tbody>');
+  C.perRes.forEach(function(p){
+    h.push('<tr><td>'+esc(resName(p.r))+(p.r.on?'':' (off)')+'</td>'+
+      '<td>'+(p.avail>0?fmtT(p.ws)+'–'+fmtT(p.we):'—')+'</td>'+
+      '<td class="n">'+durTxt(p.avail)+'</td><td class="n">'+durTxt(p.booked)+'</td>'+
+      '<td class="n">'+pct(p.util)+'</td><td class="n">'+p.count+'</td>'+
+      '<td class="n">'+money(p.value)+'</td><td class="n">'+durTxt(p.free)+'</td></tr>');
+  });
+  h.push('</tbody><tfoot><tr><td colspan="2">Day total</td><td class="n">'+durTxt(t.avail)+'</td>'+
+    '<td class="n">'+durTxt(t.booked)+'</td><td class="n">'+pct(t.util)+'</td><td class="n">'+t.count+'</td>'+
+    '<td class="n">'+money(t.value)+'</td><td class="n">'+durTxt(t.free)+'</td></tr></tfoot></table>');
+
+  h.push('<h3 class="sec">Gaps still to sell ('+C.gapMin+' min or more, buffer allowed for)</h3>');
+  h.push('<table><thead><tr><th>Resource</th><th class="n">From</th><th class="n">Until</th>'+
+    '<th class="n">Length</th><th>Services that fit</th></tr></thead><tbody>');
+  var anyGap=false;
+  C.perRes.forEach(function(p){p.gaps.forEach(function(g){anyGap=true;
+    h.push('<tr><td>'+esc(resName(p.r))+'</td><td class="n">'+fmtT(g.start)+'</td>'+
+      '<td class="n">'+fmtT(g.end)+'</td><td class="n">'+durTxt(g.len)+'</td>'+
+      '<td>'+((g.fits&&g.fits.length)?esc(g.fits.map(function(v){return v.name;}).join(', ')):'—')+'</td></tr>');});});
+  if(!anyGap)h.push('<tr><td colspan="5">No gap of '+C.gapMin+' minutes or more — the day is full.</td></tr>');
+  h.push('</tbody></table>');
+
+  h.push('<div class="cols" style="margin-top:8pt"><div class="box"><b class="t">Front-desk notes</b>'+
+    esc(S.prep||'')+'<div style="height:24pt"></div></div>'+
+    '<div class="box"><b class="t">How these figures are worked out</b>'+
+    'Utilisation = booked service minutes ÷ available minutes, where available is each resource’s own hours clipped to '+
+    fmtT(C.open)+'–'+fmtT(C.close)+'. Booked value counts appointments marked booked, confirmed, arrived or completed. '+
+    'No-shows are excluded from value but still hold their time; cancellations release it. A gap is a free run with the '+
+    C.buffer+'-minute buffer taken off each end.</div></div>');
+
+  h.push('<div class="fine"><b>A booking sheet, not a compliance or payment record.</b> This sheet prevents '+
+    'double-booking on the same person, room, chair or bay and reports how full the day is. It does not check staff '+
+    'working-time limits, rest breaks, ratios, insurance or licensing, it does not take payment or hold a deposit, and '+
+    'it does not send reminders. It contains client names and contact details — treat it as personal data and handle, '+
+    'store and destroy it under your own data-protection duties. Confirm cancellation terms, deposits and staff hours '+
+    'with the person responsible for them.</div>');
+
+  h.push('<div class="sign"><div><i></i>Prepared by</div><div><i></i>Checked by</div><div><i></i>Date</div></div>');
+  $('#printdoc').innerHTML=h.join('');
+}
+
+/* ── exports ───────────────────────────────────────────────────── */
+function csvCell(v){v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function csvRow(a){return a.map(csvCell).join(',');}
+function dl(name,mime,text){
+  try{
+    var b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(u);a.remove();},400);
+  }catch(e){msg('Could not start the download in this browser.',true);}
+}
+function slugDate(){return (S.date||todayISO()).replace(/[^0-9]/g,'-');}
+function exportCsv(){
+  var t=C.tot,L=[];
+  L.push(csvRow(['Appointment day sheet']));
+  L.push(csvRow(['Business',S.org]));
+  L.push(csvRow(['Address',S.addr]));
+  L.push(csvRow(['Contact',S.phone]));
+  L.push(csvRow(['Reference',S.ref]));
+  L.push(csvRow(['Date',S.date,dateLong(S.date)]));
+  L.push(csvRow(['Opening hours',C.valid?min2hm(C.open):'',C.valid?min2hm(C.close):'']));
+  L.push(csvRow(['Slot minutes',S.slot]));
+  L.push(csvRow(['Buffer minutes',C.buffer]));
+  L.push(csvRow(['Currency',sym()]));
+  L.push(csvRow(['Printed',stampNow()]));
+  L.push('');
+  L.push(csvRow(['APPOINTMENTS']));
+  L.push(csvRow(['Date','Resource','Role','Start','End','Minutes','Service','Client','Contact','Status',
+    'Price ('+sym()+')','Counts to value','Note','Flags']));
+  S.bk.slice().sort(function(a,b){return a.start-b.start;}).forEach(function(b){
+    var r=resById(b.res),fl=(C.flags[b.id]||[]).map(function(f){return f.t;}).join('; ');
+    L.push(csvRow([S.date,r?resName(r):'(none)',r?r.role:'',min2hm(b.start),min2hm(bkEnd(b)),b.dur,
+      bkSvcName(b),b.name,b.contact,ST[b.status].l,b.price.toFixed(2),
+      ST[b.status].value?'yes':'no',b.note,fl]));
+  });
+  L.push('');
+  L.push(csvRow(['UTILISATION BY RESOURCE']));
+  L.push(csvRow(['Resource','Role','On today','Available from','Available until','Available minutes',
+    'Booked minutes','Utilisation %','Appointments','Booked value ('+sym()+')','No-show value ('+sym()+')',
+    'Sellable minutes left','Gaps listed']));
+  C.perRes.forEach(function(p){
+    L.push(csvRow([resName(p.r),p.r.role,p.r.on?'yes':'no',p.avail>0?min2hm(p.ws):'',p.avail>0?min2hm(p.we):'',
+      p.avail,p.booked,p.util==null?'':(Math.round(p.util*10)/10).toFixed(1),p.count,p.value.toFixed(2),
+      p.lost.toFixed(2),p.free,p.gaps.length]));
+  });
+  L.push(csvRow(['DAY TOTAL','','','','',t.avail,t.booked,t.util==null?'':(Math.round(t.util*10)/10).toFixed(1),
+    t.count,t.value.toFixed(2),t.lost.toFixed(2),t.free,t.gaps]));
+  L.push('');
+  L.push(csvRow(['GAPS OF '+C.gapMin+' MIN OR MORE']));
+  L.push(csvRow(['Resource','From','Until','Minutes','Services that fit','Best price ('+sym()+')']));
+  C.perRes.forEach(function(p){p.gaps.forEach(function(g){
+    L.push(csvRow([resName(p.r),min2hm(g.start),min2hm(g.end),g.len,
+      (g.fits||[]).map(function(v){return v.name;}).join('; '),
+      (g.fits&&g.fits.length)?g.fits[0].price.toFixed(2):'']));
+  });});
+  L.push('');
+  L.push(csvRow(['SERVICE & PRICE LIST']));
+  L.push(csvRow(['Service','Minutes','Price ('+sym()+')']));
+  S.svc.forEach(function(v){L.push(csvRow([v.name,v.dur,v.price.toFixed(2)]));});
+  dl('day-sheet-'+slugDate()+'.csv','text/csv;charset=utf-8','﻿'+L.join('\r\n')+'\r\n');
+  msg('CSV exported.');
+}
+function exportJson(){
+  dl('day-sheet-'+slugDate()+'.json','application/json',JSON.stringify(S,null,2));
+  msg('JSON exported — import it back to restore this day exactly.');
+}
+function importJson(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=normalise(JSON.parse(String(fr.result)));
+      if(!o||!o.res)throw new Error('bad');
+      S=o; editId=null; clearEditor(); save(); renderAll(); msg('Imported '+(o.bk?o.bk.length:0)+' appointments.');
+    }catch(e){msg('That file is not a day sheet this tool can read.',true);}
+  };
+  fr.onerror=function(){msg('Could not read that file.',true);};
+  fr.readAsText(file);
+}
