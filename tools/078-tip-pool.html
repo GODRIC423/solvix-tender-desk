@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tip Pooling Calculator — split card &amp; cash tips by hours, role or points</title>
+<meta name="description" content="Split a tip pool fairly across a shift or a whole week. Equal, hours-weighted or points-weighted (role multiplier) methods, card processing fees deducted and shown separately from cash, payouts rounded to the nearest note with the remainder shown transparently. Printable distribution sheet with sign-off lines, CSV and JSON.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Ccircle cx='12.5' cy='16' r='6.4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='21' cy='16' r='6.4' fill='none' stroke='%23fff' stroke-width='2' opacity='.65'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E2838E;--accent-ink:#EAA4AC;--accent-wash:#331A1E;--on-accent:#180A0C}}
+:root[data-theme="dark"]{--accent:#E2838E;--accent-ink:#EAA4AC;--accent-wash:#331A1E;--on-accent:#180A0C}
+
+[hidden]{display:none!important}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(300px,.62fr)}
+.split>*{min-width:0}
+@media(max-width:1000px){.split{grid-template-columns:1fr}.split>.rail{order:-1}}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:480px){.span2{grid-column:span 1}}
+.msg{min-height:0;margin:0}
+.msg:not(:empty){margin-top:0;padding:9px 12px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 13px/1.4 var(--sans);border:1px solid var(--ok)}
+.msg.bad:not(:empty){background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:7px 12px;border:0;border-right:1px solid var(--line-hard);
+  background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* shift tabs */
+.tabbar{display:flex;flex-wrap:wrap;gap:6px}
+.tbtn{font:600 13px/1.15 var(--sans);padding:7px 10px;border-radius:4px;cursor:pointer;text-align:left;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);display:inline-flex;gap:6px;align-items:center;max-width:100%}
+.tbtn:hover{border-color:var(--accent)}
+.tbtn .tn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:20ch}
+.tbtn[aria-pressed="true"]{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* editable mini tables */
+.mini{table-layout:fixed}
+.mini col.c-x{width:32px}
+.mini td{padding:5px 6px}
+.mini td.i{padding-right:0}
+.xb{border:1px solid transparent;background:none;color:var(--faint);cursor:pointer;font:700 15px/1 var(--mono);
+  padding:2px 6px;border-radius:3px}
+.xb:hover{color:var(--bad);background:var(--bad-wash);border-color:var(--bad)}
+
+.rtbl{min-width:280px}
+.rtbl col.c-name{width:auto}.rtbl col.c-w{width:96px}
+.stbl{min-width:340px}
+.stbl col.c-name{width:auto}.stbl col.c-role{width:150px}
+.htbl{min-width:420px}
+.htbl col.c-name{width:auto}.htbl col.c-role{width:130px}.htbl col.c-h{width:110px}
+
+.disttbl{min-width:900px}
+.disttbl col.c-no{width:30px}.disttbl col.c-name{width:auto}.disttbl col.c-role{width:100px}
+.disttbl col.c-h{width:70px}.disttbl col.c-p{width:70px}.disttbl col.c-pc{width:70px}
+.disttbl col.c-m{width:92px}
+
+.rail .stat{background:var(--surface)}
+.rail .stat.hero{background:var(--accent-wash)}
+.hero .v{font-size:30px}
+.hero .sub2{font:600 12.5px/1.35 var(--sans);color:var(--accent-ink);margin-top:5px}
+.sgrid{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+@media(max-width:340px){.sgrid{grid-template-columns:1fr}}
+.feebox{border:1px solid var(--line);border-radius:4px;padding:9px 11px;font-size:12.5px;line-height:1.6;background:var(--sunk)}
+.feebox .fr{display:flex;justify-content:space-between;gap:10px}
+.feebox .fr.tot{border-top:1px solid var(--line-hard);margin-top:4px;padding-top:4px;font-weight:650;color:var(--ink)}
+.feebox span.n{font-family:var(--mono);white-space:nowrap}
+footer.sf{margin-top:4px;font-size:12px;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:10px}
+
+/* printed document */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:2.5pt solid #000;padding-bottom:6pt;margin-bottom:9pt}
+.doc .lh .org{font-size:12.5pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.02em}
+.doc .lh .ref{font-family:var(--mono);font-size:9.5pt;margin-top:3pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:9pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:21pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:10pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7.5pt;letter-spacing:.05em;text-transform:uppercase}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc tfoot td{font-weight:700;background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .feeline{font-size:8.5pt;margin:4pt 0 6pt;color:#333}
+.doc .shiftblock{margin-bottom:10pt;break-inside:avoid}
+.doc .shiftblock+.shiftblock{margin-top:4pt}
+.doc .disc{border:1pt solid #000;padding:5pt 7pt;margin-top:9pt;font-size:8pt;line-height:1.45;break-inside:avoid}
+.doc .disc b{text-transform:uppercase;letter-spacing:.05em}
+.doc .sigtbl td{min-height:20pt;padding:6pt 4pt}
+.doc .sigtbl .sl{border-bottom:.75pt solid #000;display:block;height:14pt}
+.doc .foot{margin-top:8pt;border-top:.75pt solid #999;padding-top:4pt;font-size:7.5pt;color:#444;
+  display:flex;justify-content:space-between;gap:12pt}
+@media print{
+  .doc table{break-inside:auto}
+  .doc thead{display:table-header-group}
+  .doc .shiftblock,.doc .disc{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">TP</div>
+    <div>
+      <h1>Tip Pooling Calculator</h1>
+      <div class="sub">EQUAL · HOURS · POINTS · CARD &amp; CASH</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint" style="padding-top:0">
+<div class="pagestack">
+
+  <div class="note" id="sampleban">
+    <strong>Sample data loaded.</strong> A weekend of dinner and brunch shifts for a five-person team is filled in
+    so you can see how the split works. Edit any figure to make it yours, or
+    <button type="button" class="btn sm" id="bBlank" style="margin-left:4px">Start blank</button>
+  </div>
+
+  <div class="split">
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd"><h2>Pool settings</h2></div>
+        <div class="bd">
+          <div class="fgrid wide">
+            <div class="f"><label for="oCur">Currency</label>
+              <select id="oCur">
+                <option value="£">£ Pound</option><option value="$">$ Dollar</option><option value="€">€ Euro</option><option value="custom">Custom…</option>
+              </select></div>
+            <div class="f" id="wCustom" hidden><label for="oCurC">Custom symbol</label>
+              <input id="oCurC" maxlength="4" style="text-align:center"></div>
+            <div class="f"><label for="oMethod">Split method</label>
+              <select id="oMethod">
+                <option value="equal">Equal split</option>
+                <option value="hours">Hours-weighted</option>
+                <option value="points">Points-weighted (role)</option>
+              </select></div>
+            <div class="f"><label for="oRound">Round payouts to nearest</label>
+              <select id="oRound">
+                <option value="0">Exact (no rounding)</option>
+                <option value="0.5">Nearest 0.50</option>
+                <option value="1">Nearest 1.00</option>
+                <option value="5">Nearest 5.00</option>
+                <option value="10">Nearest 10.00</option>
+                <option value="20">Nearest 20.00</option>
+              </select></div>
+            <div class="f"><label for="oFeePct">Card processing fee %</label>
+              <input id="oFeePct" type="number" min="0" max="100" step="0.1" data-min="0" data-max="100">
+              <span class="err" id="oFeePct-e"></span></div>
+            <div class="f" style="justify-content:flex-end">
+              <label class="check" for="oFeeOn"><input type="checkbox" id="oFeeOn"><span>Deduct fee from card tips before splitting</span></label>
+            </div>
+          </div>
+          <p class="hint" style="margin-top:10px">Only <strong>points-weighted</strong> uses the role weights below. Hours-weighted splits purely by hours worked (weight 1 for everyone); equal split ignores hours and pays every person who worked the shift the same share.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Roles &amp; weights</h2>
+          <span class="hint">Used by points-weighted split</span>
+          <button type="button" class="btn sm" id="bAddRole">+ Role</button>
+        </div>
+        <div class="tw">
+          <table class="mini rtbl" id="roleTbl">
+            <colgroup><col class="c-name"><col class="c-w"><col class="c-x"></colgroup>
+            <thead><tr><th scope="col">Role</th><th scope="col" class="n">Weight</th><th scope="col" aria-label="Remove"></th></tr></thead>
+            <tbody id="roleBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Staff roster</h2>
+          <button type="button" class="btn sm" id="bAddStaff">+ Person</button>
+        </div>
+        <div class="tw">
+          <table class="mini stbl" id="staffTbl">
+            <colgroup><col class="c-name"><col class="c-role"><col class="c-x"></colgroup>
+            <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col" aria-label="Remove"></th></tr></thead>
+            <tbody id="staffBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Shift being edited</h2>
+          <button type="button" class="btn sm" id="bAddShift">+ Shift</button>
+          <button type="button" class="btn sm" id="bDupShift">Duplicate</button>
+          <button type="button" class="btn sm dgr" id="bDelShift">Delete shift</button>
+        </div>
+        <div class="bd stack" style="gap:12px">
+          <div class="tabbar" id="shiftbar"></div>
+          <div class="fgrid wide">
+            <div class="f span2"><label for="shLabel">Shift label</label>
+              <input id="shLabel" style="text-align:left;font-family:var(--sans)" autocomplete="off"></div>
+            <div class="f"><label for="shCard">Card tips</label>
+              <input id="shCard" type="number" min="0" step="0.01" data-min="0">
+              <span class="err" id="shCard-e"></span></div>
+            <div class="f"><label for="shCash">Cash tips</label>
+              <input id="shCash" type="number" min="0" step="0.01" data-min="0">
+              <span class="err" id="shCash-e"></span></div>
+          </div>
+          <div class="feebox" id="feebox"></div>
+          <div class="tw">
+            <table class="mini htbl" id="hoursTbl">
+              <colgroup><col class="c-name"><col class="c-role"><col class="c-h"></colgroup>
+              <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col" class="n">Hours</th></tr></thead>
+              <tbody id="hoursBody"></tbody>
+            </table>
+          </div>
+          <p class="hint">Leave hours at 0 for anyone who didn't work this shift — they won't be included in its split.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>For the printed sheet</h2><span class="hint">Appears on the distribution sheet header.</span></div>
+        <div class="bd">
+          <div class="fgrid wide">
+            <div class="f"><label for="oOrg">Business</label><input id="oOrg" style="text-align:left;font-family:var(--sans)" autocomplete="organization"></div>
+            <div class="f"><label for="oSite">Site / outlet</label><input id="oSite" style="text-align:left;font-family:var(--sans)"></div>
+            <div class="f"><label for="oPeriod">Pay period</label><input id="oPeriod" style="text-align:left;font-family:var(--sans)"></div>
+            <div class="f"><label for="oBy">Prepared by</label><input id="oBy" style="text-align:left;font-family:var(--sans)"></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="rail stack">
+      <section class="card sticky">
+        <div class="hd">
+          <h2>Distribution</h2>
+          <div class="seg" role="group" aria-label="View">
+            <button type="button" id="vShift" aria-pressed="true">Per shift</button>
+            <button type="button" id="vWeek" aria-pressed="false">Per week</button>
+          </div>
+        </div>
+        <div class="bd stack" style="gap:11px">
+          <div class="stat hero">
+            <div class="k" id="heroLabel">Total pool</div>
+            <div class="v" id="heroValue">—</div>
+            <div class="sub2" id="heroSub">—</div>
+          </div>
+          <div class="sgrid">
+            <div class="stat"><div class="k">Cash tips</div><div class="v" id="sCash" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k">Card tips, net of fee</div><div class="v" id="sCard" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k">People sharing</div><div class="v" id="sPeople" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k">Blended £/hr</div><div class="v" id="sBlend" style="font-size:18px">—</div></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="note warn">
+        <strong>Not legal or payroll advice.</strong> Tip-pooling rules — who may be included (front vs back of house,
+        supervisors, owners), how tips interact with minimum wage or a "tip credit", and record-keeping duties — vary
+        by country, state/province and sometimes by city, and change over time. This tool only does the arithmetic
+        you ask it to. Confirm your pooling policy with your labour lawyer, accountant or local wage authority before
+        you pay out.
+      </div>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="hd">
+      <h2 id="distTitle">Who gets paid what</h2>
+      <span class="hint" id="distHint">—</span>
+    </div>
+    <div class="tw">
+      <table class="disttbl" id="distTbl">
+        <colgroup><col class="c-no"><col class="c-name"><col class="c-role"><col class="c-h"><col class="c-p"><col class="c-pc"><col class="c-m"><col class="c-m"><col class="c-m"><col class="c-m"></colgroup>
+        <thead><tr>
+          <th scope="col">#</th><th scope="col">Name</th><th scope="col">Role</th>
+          <th scope="col" class="n" id="hHours">Hours</th><th scope="col" class="n" id="hPts">Points</th>
+          <th scope="col" class="n">Share</th><th scope="col" class="n">Cash share</th>
+          <th scope="col" class="n">Card share</th><th scope="col" class="n">Total (exact)</th>
+          <th scope="col" class="n">Payout (rounded)</th>
+        </tr></thead>
+        <tbody id="distBody"></tbody>
+        <tfoot id="distFoot"></tfoot>
+      </table>
+    </div>
+    <div class="ft">
+      <span class="hint" style="margin-right:auto">Points = hours × role weight (equal split uses weight 1 and ignores hours in the weighting). Share = points ÷ total points × pool. Cash and card are split in the same proportion, then shown separately.</span>
+    </div>
+  </section>
+
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+  <footer class="sf">
+    Pool = cash tips + (card tips × (1 − processing fee %)) when the fee deduction is on. Per person: points = hours worked × role weight;
+    share = points ÷ total points of everyone who worked that shift × pool. Cash and card shares use the same share fraction so the two
+    funding sources stay traceable. Payouts round to the nearest note/coin denomination you choose; the rounding remainder — the gap between
+    the exact pool and the sum of rounded payouts — is shown on every table so nothing goes missing silently. Week figures sum each person's
+    exact share across every shift entered, then round once at the week total. Money to 2 decimal places; nothing here is uploaded, everything
+    is stored in this browser only.
+  </footer>
+
+</div>
+</main>
+
+<div id="docs" class="printonly"></div>
+
+<script>
+(function(){
+'use strict';
+var KEY='solvix.tip-pool.v1';
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function fin(n){return typeof n==='number'&&isFinite(n);}
+function num(v){if(v===''||v===null||v===undefined)return NaN;var n=typeof v==='number'?v:parseFloat(String(v).replace(/,/g,''));return isFinite(n)?n:NaN;}
+function round2(n){if(!fin(n))return n;var v=Math.round((n+(n>=0?1:-1)*1e-9)*100)/100;if(Object.is(v,-0))v=0;return v;}
+function grp(s){var p=String(s).split('.');p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');return p.join('.');}
+function sym(){return S.cur==='custom'?(S.curCustom||'¤'):(S.cur||'£');}
+function money(n){if(!fin(n))return '—';var v=round2(n);if(Object.is(v,-0))v=0;return (v<0?'-':'')+sym()+grp(Math.abs(v).toFixed(2));}
+function pct(n,dp){if(!fin(n))return '—';dp=dp==null?1:dp;var v=n;if(Math.abs(v)<Math.pow(10,-dp)/2)v=0;return v.toFixed(dp)+'%';}
+function hrs(n){if(!fin(n))return '—';var s=n.toFixed(2);s=s.replace(/0$/,'').replace(/\.0$|\.00$/,function(m){return '';});if(s.indexOf('.')>=0){s=s.replace(/0+$/,'').replace(/\.$/,'');}return s===''?'0':s;}
+function uid(p){return p+Date.now().toString(36)+Math.floor(Math.random()*1e5).toString(36);}
+function clamp(n,lo,hi){return Math.max(lo,Math.min(hi,n));}
+function today(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function fmtDate(iso){if(!iso)return '';var p=String(iso).split('-');if(p.length!==3)return esc(iso);
+ var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var d=parseInt(p[2],10),m=parseInt(p[1],10);
+ if(!(m>=1&&m<=12))return esc(iso);return d+' '+M[m-1]+' '+p[0];}
+
+/* ── sample data ───────────────────────────────────────────────── */
+function sample(){
+ var roles=[
+  {id:'r1',name:'Server',weight:1},
+  {id:'r2',name:'Bartender',weight:1},
+  {id:'r3',name:'Busser',weight:0.5},
+  {id:'r4',name:'Kitchen',weight:0.3}
+ ];
+ var staff=[
+  {id:'p1',name:'Alex',roleId:'r1'},
+  {id:'p2',name:'Jordan',roleId:'r1'},
+  {id:'p3',name:'Sam',roleId:'r2'},
+  {id:'p4',name:'Priya',roleId:'r3'},
+  {id:'p5',name:'Chris',roleId:'r4'}
+ ];
+ var shifts=[
+  {id:'s1',label:'Sat 30 Aug — Dinner',card:850,cash:210,hours:{p1:6,p2:5.5,p3:6,p4:6,p5:7}},
+  {id:'s2',label:'Sun 31 Aug — Brunch',card:520,cash:140,hours:{p1:5,p2:0,p3:4,p4:5,p5:4}}
+ ];
+ return {v:1,sample:true,cur:'£',curCustom:'',method:'points',feeEnabled:true,feePct:2.6,roundNote:1,view:'shift',
+  org:'The Copper Larder',site:'12 Bridge Street, Ludlow',period:'Week of 25 Aug – 31 Aug',by:'K. Alvarez, GM',
+  selShift:'s1',roles:roles,staff:staff,shifts:shifts};
+}
+function blank(){
+ var s1='s'+Date.now().toString(36);
+ return {v:1,sample:false,cur:'£',curCustom:'',method:'points',feeEnabled:true,feePct:2.6,roundNote:1,view:'shift',
+  org:'',site:'',period:'',by:'',selShift:s1,
+  roles:[{id:'r1',name:'Server',weight:1},{id:'r2',name:'Bartender',weight:1},{id:'r3',name:'Busser',weight:0.5},{id:'r4',name:'Kitchen',weight:0.3}],
+  staff:[],
+  shifts:[{id:s1,label:'Shift 1',card:'',cash:'',hours:{}}]};
+}
+
+/* ── state ─────────────────────────────────────────────────────── */
+var S;
+function load(){
+ try{
+  var raw=localStorage.getItem(KEY);
+  if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.roles)&&Array.isArray(p.staff)&&Array.isArray(p.shifts))return p;}
+ }catch(e){}
+ return sample();
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+S=load();
+
+function findRole(id){for(var i=0;i<S.roles.length;i++)if(S.roles[i].id===id)return S.roles[i];return null;}
+function findStaff(id){for(var i=0;i<S.staff.length;i++)if(S.staff[i].id===id)return S.staff[i];return null;}
+function findShift(id){for(var i=0;i<S.shifts.length;i++)if(S.shifts[i].id===id)return S.shifts[i];return null;}
+function curShift(){return findShift(S.selShift)||S.shifts[0];}
+
+/* ── computation ───────────────────────────────────────────────── */
+function weightOf(staffMember){var r=staffMember?findRole(staffMember.roleId):null;return r&&fin(r.weight)?r.weight:1;}
+function computeShift(shift){
+ var cardTips=num(shift.card); if(!fin(cardTips)||cardTips<0)cardTips=0;
+ var cashTips=num(shift.cash); if(!fin(cashTips)||cashTips<0)cashTips=0;
+ var feePct=S.feeEnabled?clamp(num(S.feePct)||0,0,100):0;
+ var feeAmt=round2(cardTips*feePct/100);
+ var netCard=round2(cardTips-feeAmt);
+ var pool=round2(cashTips+netCard);
+ var rows=[],totalPoints=0;
+ S.staff.forEach(function(st){
+  var h=num(shift.hours?shift.hours[st.id]:NaN);
+  if(!fin(h)||h<=0)return;
+  var w=weightOf(st);
+  var pts= S.method==='equal' ? 1 : S.method==='hours' ? h : h*w;
+  totalPoints+=pts;
+  rows.push({id:st.id,name:st.name,role:(findRole(st.roleId)||{}).name||'—',weight:w,hours:h,points:pts});
+ });
+ rows.forEach(function(r){
+  var share= totalPoints>0 ? r.points/totalPoints : 0;
+  r.share=share;
+  r.cash=round2(cashTips*share);
+  r.card=round2(netCard*share);
+  r.total=round2(r.cash+r.card);
+ });
+ return {cardTips:cardTips,cashTips:cashTips,feePct:feePct,feeAmt:feeAmt,netCard:netCard,pool:pool,rows:rows,totalPoints:totalPoints};
+}
+function computeWeek(){
+ var byId={},order=[],cashTot=0,cardTot=0,feeTot=0,netCardTot=0,poolTot=0;
+ S.shifts.forEach(function(sh){
+  var c=computeShift(sh);
+  cashTot+=c.cashTips; cardTot+=c.cardTips; feeTot+=c.feeAmt; netCardTot+=c.netCard; poolTot+=c.pool;
+  c.rows.forEach(function(r){
+   if(!byId[r.id]){byId[r.id]={id:r.id,name:r.name,role:r.role,hours:0,points:0,cash:0,card:0,total:0,shifts:0};order.push(r.id);}
+   var acc=byId[r.id];
+   acc.hours+=r.hours; acc.points+=r.points; acc.cash+=r.cash; acc.card+=r.card; acc.total+=r.total; acc.shifts+=1;
+  });
+ });
+ var rows=order.map(function(id){
+  var a=byId[id];
+  return {id:a.id,name:a.name,role:a.role,hours:round2(a.hours),points:round2(a.points),
+   cash:round2(a.cash),card:round2(a.card),total:round2(a.cash+a.card),shifts:a.shifts,
+   share: poolTot>0?a.total/poolTot:0};
+ });
+ return {cardTips:round2(cardTot),cashTips:round2(cashTot),feeAmt:round2(feeTot),netCard:round2(netCardTot),
+  pool:round2(poolTot),rows:rows,shiftCount:S.shifts.length};
+}
+function roundTo(amount,note){
+ if(!fin(amount))return amount;
+ if(!note||note<=0)return round2(amount);
+ return round2(Math.round(amount/note)*note);
+}
+
+/* ── validation ────────────────────────────────────────────────── */
+function markErr(input,errEl,bad,msg){
+ if(!input)return;
+ if(bad){input.classList.add('inv');if(errEl)errEl.textContent=msg||'';}
+ else{input.classList.remove('inv');if(errEl)errEl.textContent='';}
+}
+function validateAll(){
+ var fee=num(S.feePct);
+ markErr($('oFeePct'),$('oFeePct-e'), S.feeEnabled && (!fin(fee)||fee<0||fee>100), 'Enter 0–100');
+ var sh=curShift();
+ var c=num(sh.card),k=num(sh.cash);
+ markErr($('shCard'),$('shCard-e'), sh.card!==''&&(!fin(c)||c<0), 'Must be 0 or more');
+ markErr($('shCash'),$('shCash-e'), sh.cash!==''&&(!fin(k)||k<0), 'Must be 0 or more');
+}
+
+/* ── rendering: roles ──────────────────────────────────────────── */
+function renderRoles(){
+ var tb=$('roleBody'); tb.innerHTML='';
+ S.roles.forEach(function(r){
+  var tr=document.createElement('tr');
+  tr.innerHTML=
+   '<td class="i"><input data-role="'+r.id+'" data-k="name" value="'+esc(r.name)+'" style="text-align:left;font-family:var(--sans)"></td>'+
+   '<td class="n"><input type="number" min="0" step="0.05" data-role="'+r.id+'" data-k="weight" value="'+esc(r.weight)+'"></td>'+
+   '<td><button type="button" class="xb" data-delrole="'+r.id+'" aria-label="Remove role" title="Remove role">×</button></td>';
+  tb.appendChild(tr);
+ });
+}
+/* ── rendering: staff ──────────────────────────────────────────── */
+function roleOptions(sel){
+ return S.roles.map(function(r){return '<option value="'+r.id+'"'+(r.id===sel?' selected':'')+'>'+esc(r.name)+'</option>';}).join('');
+}
+function renderStaff(){
+ var tb=$('staffBody'); tb.innerHTML='';
+ if(!S.staff.length){
+  tb.innerHTML='<tr><td colspan="3" class="empty">No staff yet — add your first person.</td></tr>';
+  return;
+ }
+ S.staff.forEach(function(p){
+  var tr=document.createElement('tr');
+  tr.innerHTML=
+   '<td class="i"><input data-staff="'+p.id+'" data-k="name" value="'+esc(p.name)+'" style="text-align:left;font-family:var(--sans)"></td>'+
+   '<td><select data-staff="'+p.id+'" data-k="roleId">'+roleOptions(p.roleId)+'</select></td>'+
+   '<td><button type="button" class="xb" data-delstaff="'+p.id+'" aria-label="Remove person" title="Remove person">×</button></td>';
+  tb.appendChild(tr);
+ });
+}
+/* ── rendering: shift tabs + fields + hours ────────────────────── */
+function renderShiftTabs(){
+ var bar=$('shiftbar'); bar.innerHTML='';
+ S.shifts.forEach(function(sh){
+  var b=document.createElement('button');
+  b.type='button'; b.className='tbtn'; b.setAttribute('data-shift',sh.id);
+  b.setAttribute('aria-pressed', sh.id===S.selShift ? 'true':'false');
+  b.innerHTML='<span class="tn">'+esc(sh.label||'Shift')+'</span>';
+  bar.appendChild(b);
+ });
+ $('bDelShift').disabled = S.shifts.length<=1;
+}
+function renderShiftFields(){
+ var sh=curShift();
+ $('shLabel').value=sh.label||'';
+ $('shCard').value=sh.card===''?'':sh.card;
+ $('shCash').value=sh.cash===''?'':sh.cash;
+}
+function renderHoursTable(){
+ var tb=$('hoursBody'); var sh=curShift();
+ tb.innerHTML='';
+ if(!S.staff.length){
+  tb.innerHTML='<tr><td colspan="3" class="empty">Add staff to the roster above first.</td></tr>';
+  return;
+ }
+ S.staff.forEach(function(p){
+  var r=findRole(p.roleId);
+  var h=sh.hours&&sh.hours[p.id]!==undefined?sh.hours[p.id]:'';
+  var tr=document.createElement('tr');
+  tr.innerHTML=
+   '<td>'+esc(p.name)+'</td>'+
+   '<td>'+esc(r?r.name:'—')+'</td>'+
+   '<td class="n"><input type="number" min="0" step="0.25" data-hours="'+p.id+'" value="'+esc(h)+'"></td>';
+  tb.appendChild(tr);
+ });
+}
+function renderFeebox(){
+ var sh=curShift(); var c=computeShift(sh);
+ var box=$('feebox');
+ if(S.feeEnabled && c.cardTips>0){
+  box.innerHTML=
+   '<div class="fr"><span>Card tips</span><span class="n">'+money(c.cardTips)+'</span></div>'+
+   '<div class="fr"><span>− Processing fee ('+ (fin(c.feePct)?c.feePct:0) +'%)</span><span class="n">−'+money(c.feeAmt)+'</span></div>'+
+   '<div class="fr tot"><span>= Net card tips into pool</span><span class="n">'+money(c.netCard)+'</span></div>';
+ } else {
+  box.innerHTML='<div class="fr tot"><span>Card tips into pool (no fee deducted)</span><span class="n">'+money(c.cardTips)+'</span></div>';
+ }
+}
+
+/* ── rendering: distribution + hero ────────────────────────────── */
+function renderDist(){
+ var body=$('distBody'), foot=$('distFoot');
+ var isWeek = S.view==='week';
+ $('hHours').textContent = isWeek ? 'Hours (wk)' : 'Hours';
+ $('hPts').textContent = isWeek ? 'Points (wk)' : 'Points';
+
+ var data, poolAmt, cashAmt, cardAmt, title, hint;
+ if(isWeek){
+  data=computeWeek(); poolAmt=data.pool; cashAmt=data.cashTips; cardAmt=data.netCard;
+  title='Who gets paid what — week total ('+S.shifts.length+' shift'+(S.shifts.length===1?'':'s')+')';
+  hint='Sum of each person\'s exact share across every shift, rounded once at the week total.';
+ } else {
+  var sh=curShift(); data=computeShift(sh); poolAmt=data.pool; cashAmt=data.cashTips; cardAmt=data.netCard;
+  title='Who gets paid what — '+(sh.label||'this shift');
+  hint='Rounded to the nearest '+(S.roundNote>0?(sym()+Number(S.roundNote).toFixed(2)):'cent')+'.';
+ }
+ $('distTitle').textContent=title;
+ $('distHint').textContent=hint;
+
+ body.innerHTML='';
+ if(!data.rows.length){
+  body.innerHTML='<tr><td colspan="10" class="empty">No hours entered yet — nobody is scheduled to share this pool.</td></tr>';
+ } else {
+  data.rows.forEach(function(r,i){
+   var rounded=roundTo(r.total,S.roundNote);
+   var tr=document.createElement('tr');
+   var hoursCell = isWeek ? hrs(r.hours)+' <span class="hint">('+r.shifts+' sh)</span>' : hrs(r.hours);
+   tr.innerHTML=
+    '<td class="n">'+(i+1)+'</td>'+
+    '<td>'+esc(r.name)+'</td>'+
+    '<td>'+esc(r.role)+'</td>'+
+    '<td class="n">'+hoursCell+'</td>'+
+    '<td class="n">'+hrs(r.points)+'</td>'+
+    '<td class="n">'+pct(r.share*100)+'</td>'+
+    '<td class="n">'+money(r.cash)+'</td>'+
+    '<td class="n">'+money(r.card)+'</td>'+
+    '<td class="n">'+money(r.total)+'</td>'+
+    '<td class="n" style="font-weight:650">'+money(rounded)+'</td>';
+   body.appendChild(tr);
+  });
+ }
+ var sumRounded=0; data.rows.forEach(function(r){sumRounded+=roundTo(r.total,S.roundNote);});
+ sumRounded=round2(sumRounded);
+ var remainder=round2(poolAmt-sumRounded);
+ foot.innerHTML=
+  '<tr><td colspan="6" style="text-align:right">Pool total</td>'+
+   '<td class="n">'+money(cashAmt)+'</td><td class="n">'+money(cardAmt)+'</td>'+
+   '<td class="n">'+money(poolAmt)+'</td><td class="n">'+money(sumRounded)+'</td></tr>'+
+  '<tr><td colspan="9" style="text-align:right">Rounding remainder'+(Math.abs(remainder)>=0.005?(remainder<0?' — top up the pool by':' — carries forward / stays in the till'):'')+'</td>'+
+   '<td class="n" style="color:'+(Math.abs(remainder)<0.005?'inherit':(remainder<0?'var(--bad)':'var(--ok)'))+'">'+money(Math.abs(remainder)<0.005?0:remainder)+'</td></tr>';
+
+ return data;
+}
+function renderHero(dataFromDist){
+ var isWeek=S.view==='week';
+ var d=dataFromDist||(isWeek?computeWeek():computeShift(curShift()));
+ $('heroLabel').textContent = isWeek ? 'Total pool — week' : 'Total pool — '+(curShift().label||'shift');
+ $('heroValue').textContent = money(d.pool);
+ var n=d.rows.length;
+ $('heroSub').textContent = n>0 ? ('split '+n+' way'+(n===1?'':'s')+' by '+({equal:'equal share',hours:'hours worked',points:'points (role-weighted)'}[S.method])) : 'no hours entered yet';
+ $('sCash').textContent=money(d.cashTips);
+ $('sCard').textContent=money(d.netCard);
+ $('sPeople').textContent=n>0?String(n):'—';
+ var totalHours=0; d.rows.forEach(function(r){totalHours+=r.hours;});
+ $('sBlend').textContent = totalHours>0 ? money(d.pool/totalHours) : '—';
+}
+
+/* ── printed document ──────────────────────────────────────────── */
+function renderPrint(){
+ var docs=$('docs'); docs.innerHTML='';
+ var frag=document.createElement('div'); frag.className='doc';
+
+ function distTable(data,titleTxt){
+  var h='<h3 class="sec">'+esc(titleTxt)+'</h3>';
+  h+='<div class="feeline">Cash tips '+money(data.cashTips)+' + card tips '+money(data.cardTips!==undefined?data.cardTips:data.netCard)+
+     (data.feeAmt?(' − processing fee '+money(data.feeAmt)):'')+' = net pool <strong>'+money(data.pool)+'</strong> ('+
+     ({equal:'equal split',hours:'hours-weighted',points:'points-weighted'}[S.method])+')</div>';
+  h+='<table><thead><tr><th>#</th><th>Name</th><th>Role</th><th class="n">Hours</th><th class="n">Points</th>'+
+     '<th class="n">Share</th><th class="n">Cash</th><th class="n">Card</th><th class="n">Total</th><th class="n">Payout</th></tr></thead><tbody>';
+  var sumR=0;
+  data.rows.forEach(function(r,i){
+   var rounded=roundTo(r.total,S.roundNote); sumR+=rounded;
+   h+='<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.role)+'</td><td class="n">'+hrs(r.hours)+'</td>'+
+      '<td class="n">'+hrs(r.points)+'</td><td class="n">'+pct(r.share*100)+'</td><td class="n">'+money(r.cash)+'</td>'+
+      '<td class="n">'+money(r.card)+'</td><td class="n">'+money(r.total)+'</td><td class="n">'+money(rounded)+'</td></tr>';
+  });
+  if(!data.rows.length) h+='<tr><td colspan="10">No hours recorded.</td></tr>';
+  sumR=round2(sumR);
+  var rem=round2(data.pool-sumR);
+  h+='</tbody><tfoot><tr><td colspan="8" class="n" style="text-align:right">Totals</td><td class="n">'+money(data.pool)+'</td><td class="n">'+money(sumR)+'</td></tr>'+
+     '<tr><td colspan="9" style="text-align:right">Rounding remainder</td><td class="n">'+money(Math.abs(rem)<0.005?0:rem)+'</td></tr></tfoot></table>';
+  return h;
+ }
+
+ var body='';
+ body+='<div class="lh"><div><div class="org">'+esc(S.org||'Tip Pool Distribution')+'</div>'+
+   '<div class="oaddr">'+esc(S.site||'')+'</div></div>'+
+   '<div class="ttl"><h2>Tip Distribution Sheet</h2><div class="ref">'+esc(S.period||fmtDate(today()))+'</div></div></div>';
+ body+='<div class="meta">'+
+   '<div><b>Prepared by</b><span>'+esc(S.by||'—')+'</span></div>'+
+   '<div><b>Printed</b><span>'+fmtDate(today())+'</span></div>'+
+   '<div><b>Split method</b><span>'+({equal:'Equal split',hours:'Hours-weighted',points:'Points-weighted'}[S.method])+'</span></div>'+
+   '<div><b>Currency</b><span>'+esc(sym())+'</span></div></div>';
+
+ S.shifts.forEach(function(sh){
+  var c=computeShift(sh);
+  body+='<div class="shiftblock">'+distTable(c,'Shift — '+(sh.label||'Untitled shift'))+'</div>';
+ });
+ var wk=computeWeek();
+ body+='<div class="shiftblock">'+distTable(wk,'Week summary — all shifts combined')+'</div>';
+
+ body+='<div class="shiftblock"><h3 class="sec">Role weights used</h3><table><thead><tr><th>Role</th><th class="n">Weight</th></tr></thead><tbody>'+
+   S.roles.map(function(r){return '<tr><td>'+esc(r.name)+'</td><td class="n">'+hrs(r.weight)+'</td></tr>';}).join('')+
+   '</tbody></table></div>';
+
+ body+='<div class="shiftblock"><h3 class="sec">Sign-off — week total received</h3><table class="sigtbl"><thead><tr><th>Name</th><th class="n">Amount</th><th>Signature</th><th>Date</th></tr></thead><tbody>'+
+   wk.rows.map(function(r){return '<tr><td>'+esc(r.name)+'</td><td class="n">'+money(roundTo(r.total,S.roundNote))+'</td><td><span class="sl"></span></td><td><span class="sl"></span></td></tr>';}).join('') +
+   (wk.rows.length?'':'<tr><td colspan="4">No hours recorded.</td></tr>')+
+   '</tbody></table></div>';
+
+ body+='<div class="disc"><b>Not legal or payroll advice.</b> Tip-pooling eligibility, minimum-wage / tip-credit interaction and '+
+   'record-keeping requirements vary by jurisdiction and change over time. This sheet is a calculation aid only — confirm your '+
+   'pooling policy and payout method with your labour lawyer, accountant or local wage authority.</div>';
+ body+='<div class="foot"><span>Generated by Solvix Tip Pooling Calculator</span><span>'+fmtDate(today())+'</span></div>';
+
+ frag.innerHTML=body;
+ docs.appendChild(frag);
+}
+
+/* ── binding: settings ─────────────────────────────────────────── */
+function bindStatic(){
+ $('oCur').addEventListener('change',function(){S.cur=this.value;$('wCustom').hidden=(this.value!=='custom');renderAll();});
+ $('oCurC').addEventListener('input',function(){S.curCustom=this.value;renderAll();});
+ $('oMethod').addEventListener('change',function(){S.method=this.value;renderAll();});
+ $('oRound').addEventListener('change',function(){S.roundNote=num(this.value)||0;renderAll();});
+ $('oFeePct').addEventListener('input',function(){S.feePct=this.value===''?'':num(this.value);renderAll();});
+ $('oFeePct').addEventListener('blur',function(){validateAll();});
+ $('oFeeOn').addEventListener('change',function(){S.feeEnabled=this.checked;renderAll();});
+
+ $('shLabel').addEventListener('input',function(){curShift().label=this.value;renderShiftTabs();renderAll(true);});
+ $('shCard').addEventListener('input',function(){curShift().card=this.value===''?'':num(this.value);renderAll();});
+ $('shCard').addEventListener('blur',function(){validateAll();});
+ $('shCash').addEventListener('input',function(){curShift().cash=this.value===''?'':num(this.value);renderAll();});
+ $('shCash').addEventListener('blur',function(){validateAll();});
+
+ $('oOrg').addEventListener('input',function(){S.org=this.value;save();});
+ $('oSite').addEventListener('input',function(){S.site=this.value;save();});
+ $('oPeriod').addEventListener('input',function(){S.period=this.value;save();});
+ $('oBy').addEventListener('input',function(){S.by=this.value;save();});
+
+ $('vShift').addEventListener('click',function(){S.view='shift';renderAll();});
+ $('vWeek').addEventListener('click',function(){S.view='week';renderAll();});
+
+ $('bAddRole').addEventListener('click',function(){
+  S.roles.push({id:uid('r'),name:'New role',weight:1}); renderRoles(); renderStaff(); renderHoursTable(); renderAll(); });
+ $('roleBody').addEventListener('input',function(e){
+  var t=e.target, id=t.getAttribute('data-role'); if(!id)return;
+  var r=findRole(id); if(!r)return; var k=t.getAttribute('data-k');
+  if(k==='name'){r.name=t.value;renderStaff();renderHoursTable();}
+  else if(k==='weight'){r.weight=t.value===''?'':num(t.value);}
+  renderAll(true);
+ });
+ $('roleBody').addEventListener('click',function(e){
+  var id=e.target.getAttribute('data-delrole'); if(!id)return;
+  if(S.roles.length<=1){msgFlash('Keep at least one role.',true);return;}
+  S.roles=S.roles.filter(function(r){return r.id!==id;});
+  S.staff.forEach(function(p){if(p.roleId===id)p.roleId=S.roles[0].id;});
+  renderRoles(); renderStaff(); renderHoursTable(); renderAll();
+ });
+
+ $('bAddStaff').addEventListener('click',function(){
+  S.staff.push({id:uid('p'),name:'New person',roleId:S.roles[0]?S.roles[0].id:''});
+  renderStaff(); renderHoursTable(); renderAll();
+ });
+ $('staffBody').addEventListener('input',function(e){
+  var t=e.target, id=t.getAttribute('data-staff'); if(!id)return;
+  var p=findStaff(id); if(!p)return; var k=t.getAttribute('data-k');
+  if(k==='name'){p.name=t.value;renderHoursTable();}
+  else if(k==='roleId'){p.roleId=t.value;renderHoursTable();}
+  renderAll(true);
+ });
+ $('staffBody').addEventListener('click',function(e){
+  var id=e.target.getAttribute('data-delstaff'); if(!id)return;
+  S.staff=S.staff.filter(function(p){return p.id!==id;});
+  S.shifts.forEach(function(sh){if(sh.hours)delete sh.hours[id];});
+  renderStaff(); renderHoursTable(); renderAll();
+ });
+
+ $('hoursBody').addEventListener('input',function(e){
+  var t=e.target, id=t.getAttribute('data-hours'); if(!id)return;
+  var sh=curShift(); if(!sh.hours)sh.hours={};
+  sh.hours[id]=t.value===''?'':num(t.value);
+  renderAll();
+ });
+
+ $('bAddShift').addEventListener('click',function(){
+  var id=uid('s');
+  S.shifts.push({id:id,label:'Shift '+(S.shifts.length+1),card:'',cash:'',hours:{}});
+  S.selShift=id; renderShiftTabs(); renderShiftFields(); renderHoursTable(); renderAll();
+ });
+ $('bDupShift').addEventListener('click',function(){
+  var sh=curShift(); var id=uid('s');
+  var copy={id:id,label:(sh.label||'Shift')+' (copy)',card:sh.card,cash:sh.cash,hours:Object.assign({},sh.hours||{})};
+  var idx=S.shifts.indexOf(sh);
+  S.shifts.splice(idx+1,0,copy); S.selShift=id;
+  renderShiftTabs(); renderShiftFields(); renderHoursTable(); renderAll();
+ });
+ $('bDelShift').addEventListener('click',function(){
+  if(S.shifts.length<=1)return;
+  var sh=curShift(); var idx=S.shifts.indexOf(sh);
+  if(!confirm('Delete "'+(sh.label||'this shift')+'"? This cannot be undone.'))return;
+  S.shifts.splice(idx,1);
+  S.selShift=S.shifts[Math.max(0,idx-1)].id;
+  renderShiftTabs(); renderShiftFields(); renderHoursTable(); renderAll();
+ });
+ $('shiftbar').addEventListener('click',function(e){
+  var id=e.target.closest('[data-shift]'); if(!id)return; id=id.getAttribute('data-shift');
+  S.selShift=id; renderShiftTabs(); renderShiftFields(); renderHoursTable(); renderAll();
+ });
+
+ $('bBlank').addEventListener('click',function(){
+  if(!confirm('Replace the sample data with a blank sheet?'))return;
+  S=blank(); hydrateInputs(); fullRender(); save();
+ });
+ $('bClear').addEventListener('click',function(){
+  if(!confirm('Clear all saved data? This cannot be undone.'))return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  S=blank(); hydrateInputs(); fullRender(); save();
+  msgFlash('All data cleared.',false);
+ });
+
+ $('bPrint').addEventListener('click',function(){renderPrint(); setTimeout(function(){window.print();},30);});
+ window.addEventListener('beforeprint',renderPrint);
+
+ $('bCsv').addEventListener('click',exportCsv);
+ $('bJson').addEventListener('click',exportJson);
+ $('bImport').addEventListener('click',function(){$('fImport').click();});
+ $('fImport').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(){
+   try{
+    var p=JSON.parse(String(reader.result));
+    if(!p||!Array.isArray(p.roles)||!Array.isArray(p.staff)||!Array.isArray(p.shifts))throw new Error('bad shape');
+    if(!p.shifts.length)throw new Error('no shifts');
+    S=p; if(!findShift(S.selShift))S.selShift=S.shifts[0].id;
+    hydrateInputs(); fullRender(); save();
+    msgFlash('Imported '+f.name+'.',false);
+   }catch(err){ msgFlash('Could not read that file — is it a JSON export from this tool?',true); }
+  };
+  reader.readAsText(f);
+  e.target.value='';
+ });
+}
+
+/* ── csv / json export ────────────────────────────────────────── */
+function csvCell(v){
+ v=v==null?'':String(v);
+ if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
+ return v;
+}
+function download(filename,mime,content){
+ var blob=new Blob([content],{type:mime});
+ var url=URL.createObjectURL(blob);
+ var a=document.createElement('a');
+ a.href=url; a.download=filename;
+ document.body.appendChild(a); a.click(); document.body.removeChild(a);
+ setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+function exportCsv(){
+ var isWeek=S.view==='week';
+ var data= isWeek ? computeWeek() : computeShift(curShift());
+ var rows=[];
+ rows.push(['Tip Pooling Calculator']);
+ rows.push(['View', isWeek?'Week total':('Shift: '+(curShift().label||''))]);
+ rows.push(['Method', ({equal:'Equal split',hours:'Hours-weighted',points:'Points-weighted'})[S.method]]);
+ rows.push(['Currency', sym()]);
+ rows.push(['Cash tips', data.cashTips.toFixed(2)]);
+ rows.push(['Card tips (net of fee)', data.netCard.toFixed(2)]);
+ if(!isWeek) rows.push(['Card fee deducted', data.feeAmt.toFixed(2)]);
+ rows.push(['Total pool', data.pool.toFixed(2)]);
+ rows.push(['Round to nearest', S.roundNote]);
+ rows.push([]);
+ rows.push(['#','Name','Role','Hours','Points','Share %','Cash share','Card share','Total (exact)','Payout (rounded)']);
+ var sumR=0;
+ data.rows.forEach(function(r,i){
+  var rounded=roundTo(r.total,S.roundNote); sumR+=rounded;
+  rows.push([i+1,r.name,r.role,r.hours,round2(r.points),(r.share*100).toFixed(2),r.cash.toFixed(2),r.card.toFixed(2),r.total.toFixed(2),rounded.toFixed(2)]);
+ });
+ sumR=round2(sumR);
+ var remainder=round2(data.pool-sumR);
+ rows.push(['','','','','','','','Totals',data.pool.toFixed(2),sumR.toFixed(2)]);
+ rows.push(['','','','','','','','Rounding remainder','',remainder.toFixed(2)]);
+ var csv=rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n');
+ download('tip-pool-'+(isWeek?'week':(curShift().label||'shift').replace(/[^a-z0-9]+/gi,'-').toLowerCase())+'.csv','text/csv;charset=utf-8','﻿'+csv);
+}
+function exportJson(){
+ download('tip-pool-data.json','application/json;charset=utf-8',JSON.stringify(S,null,2));
+}
+
+/* ── messages ─────────────────────────────────────────────────── */
+var msgTimer=null;
+function msgFlash(text,isBad){
+ var el=$('msg'); el.textContent=text; el.className='msg'+(isBad?' bad':'');
+ if(msgTimer)clearTimeout(msgTimer);
+ msgTimer=setTimeout(function(){el.textContent='';},4000);
+}
+
+/* ── full render / hydrate ────────────────────────────────────── */
+function hydrateInputs(){
+ $('oCur').value=S.cur||'£'; $('wCustom').hidden=(S.cur!=='custom'); $('oCurC').value=S.curCustom||'';
+ $('oMethod').value=S.method||'points';
+ $('oRound').value=String(S.roundNote==null?1:S.roundNote);
+ $('oFeePct').value=S.feePct===''?'':S.feePct;
+ $('oFeeOn').checked=!!S.feeEnabled;
+ $('oOrg').value=S.org||''; $('oSite').value=S.site||''; $('oPeriod').value=S.period||''; $('oBy').value=S.by||'';
+ $('vShift').setAttribute('aria-pressed', S.view!=='week' ? 'true':'false');
+ $('vWeek').setAttribute('aria-pressed', S.view==='week' ? 'true':'false');
+ if(!findShift(S.selShift) && S.shifts.length) S.selShift=S.shifts[0].id;
+ renderShiftTabs(); renderShiftFields();
+}
+function fullRender(){
+ renderRoles(); renderStaff(); renderHoursTable();
+ renderAll();
+ $('sampleban').style.display = S.sample ? '' : 'none';
+}
+function renderAll(skipValidate){
+ renderShiftTabs();
+ renderFeebox();
+ var data=renderDist();
+ renderHero(data);
+ if(!skipValidate) validateAll();
+ save();
+}
+
+/* ── init ─────────────────────────────────────────────────────── */
+hydrateInputs();
+bindStatic();
+fullRender();
+
+})();
+</script>
+</body>
+</html>
