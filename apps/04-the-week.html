@@ -1,0 +1,1916 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Week — the grocery bill, planned before you spend it</title>
+<meta name="description" content="Plan seven dinners, watch the aisle-ordered shopping list and its running total assemble themselves, catch the part-packs that go to waste, and reconcile the till receipt afterwards. Works offline, on your own numbers.">
+<meta name="theme-color" content="#EDEFEA">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23101614'/%3E%3Cpath d='M6 9h4l3.2 12h11.2' fill='none' stroke='%23EDF1EC' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M11.4 12.5h14.2l-1.7 6.2H12.9' fill='none' stroke='%233EA974' stroke-width='2.4' stroke-linejoin='round'/%3E%3Ccircle cx='14' cy='25' r='1.8' fill='%23EDF1EC'/%3E%3Ccircle cx='23' cy='25' r='1.8' fill='%23EDF1EC'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=DM+Serif+Display:ital,wght@0,400;1,400&display=swap">
+<style>
+:root{
+  --worktop-bare:#EDEFEA; --worktop-leaf:#F8F9F5; --worktop-score:#E3E6DD;
+  --worktop-rule:#C7CCC0; --worktop-hair:#DCE0D5;
+  --worktop-graphite:#141A16; --worktop-pencil:#535B51; --worktop-faint:#656C61;
+  --trolley-deep:#101614; --trolley-raise:#18201D; --trolley-rail:#2B332F;
+  --trolley-edge:#3A443E; --trolley-chalk:#EDF1EC; --trolley-mute:#A6B0A8; --trolley-faint:#808C84;
+  --tally-under:#3EA974; --tally-over:#E4614A; --tally-risk:#E2A33C;
+  --tally-under-lit:#1B7A50; --tally-over-lit:#B0331C; --tally-risk-lit:#8A5A08;
+  --seam-thick:13px; --split-at:47%;
+  --rhythm-hair:4px; --rhythm-nick:8px; --rhythm-notch:14px; --rhythm-span:24px; --rhythm-reach:38px;
+  --swipe-snap:120ms cubic-bezier(.2,.7,.3,1); --swipe-settle:280ms cubic-bezier(.2,.7,.3,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.5; color:var(--worktop-graphite); background:var(--worktop-bare);
+  font-variant-numeric:tabular-nums lining-nums;
+  -webkit-font-smoothing:antialiased;
+}
+button,select,input,textarea{font:inherit;color:inherit;font-variant-numeric:inherit}
+:focus-visible{outline:2.5px solid #1B6BD6; outline-offset:2px; border-radius:2px}
+.trolley :focus-visible{outline-color:#7FC6FF}
+
+/* ── the bench: light worktop | seam | dark trolley ─────────────── */
+.bench{
+  display:grid; height:100dvh; min-height:100svh;
+  grid-template-columns:minmax(320px,var(--split-at)) var(--seam-thick) minmax(300px,1fr);
+  overflow:hidden;
+}
+.worktop{
+  background:var(--worktop-bare); overflow-y:auto; overflow-x:hidden;
+  padding:var(--rhythm-span) clamp(18px,2.4vw,34px) 90px;
+  scrollbar-color:var(--worktop-rule) transparent;
+}
+.trolley{
+  background:var(--trolley-deep); color:var(--trolley-chalk);
+  overflow-y:auto; overflow-x:hidden; padding:var(--rhythm-span) clamp(16px,2vw,30px) 90px;
+  scrollbar-color:var(--trolley-rail) transparent;
+}
+.worktop::-webkit-scrollbar,.trolley::-webkit-scrollbar{width:10px}
+.worktop::-webkit-scrollbar-thumb{background:var(--worktop-rule);border-radius:6px}
+.trolley::-webkit-scrollbar-thumb{background:var(--trolley-rail);border-radius:6px}
+
+/* ── the seam (the only chrome) ─────────────────────────────────── */
+.seam{
+  background:var(--worktop-score); border-left:1px solid var(--worktop-rule);
+  border-right:1px solid var(--trolley-deep);
+  cursor:col-resize; position:relative; touch-action:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:background var(--swipe-snap);
+}
+.seam:hover,.seam:focus-visible,.seam[data-grab="1"]{background:var(--worktop-rule)}
+.seamgrip{display:block;width:3px;height:44px;border-radius:2px;background:var(--worktop-faint);opacity:.55;
+  box-shadow:-5px 0 0 -1px var(--worktop-faint),5px 0 0 -1px var(--worktop-faint);transition:opacity var(--swipe-snap)}
+.seam:hover .seamgrip,.seam[data-grab="1"] .seamgrip{opacity:1}
+
+/* ── masthead ───────────────────────────────────────────────────── */
+.masthead{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px var(--rhythm-notch);margin-bottom:var(--rhythm-span)}
+.wordmark{font-size:.76rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin:0}
+.wordsub{font-size:.8rem;color:var(--worktop-pencil);margin:0}
+.samplechip{
+  font-size:.66rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  padding:4px 9px;border:1px solid var(--worktop-rule);background:var(--worktop-leaf);
+  color:var(--worktop-faint);white-space:nowrap;
+}
+.samplechip[hidden]{display:none}
+
+/* ── the number ─────────────────────────────────────────────────── */
+.numlabel{font-size:.72rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--worktop-pencil);margin:0 0 2px}
+.bignumber{
+  font-family:"DM Serif Display",Georgia,serif;font-weight:400;
+  font-size:clamp(3.1rem,7.4vw,5rem);line-height:.86;letter-spacing:-.022em;
+  margin:0; display:flex; align-items:baseline; gap:.14em; flex-wrap:wrap;
+}
+.bignumber .cents{font-size:.5em;letter-spacing:-.01em}
+.numagainst{font-size:.95rem;color:var(--worktop-pencil);margin:12px 0 0}
+.numagainst b{font-weight:500;color:var(--worktop-graphite)}
+.deltaflag{
+  display:inline-block;font-size:.78rem;font-weight:700;letter-spacing:.04em;
+  padding:3px 8px;margin-left:6px;border:1.5px solid currentColor;
+}
+.is-under{color:var(--tally-under-lit)} .is-over{color:var(--tally-over-lit)}
+
+.budgetrule{margin:18px 0 0;position:relative;height:38px}
+.rulebed{position:absolute;inset:0 0 20px 0;background:var(--worktop-score);border:1px solid var(--worktop-rule)}
+.rulefill{position:absolute;left:1px;top:1px;bottom:21px;background:var(--worktop-graphite);
+  transition:width var(--swipe-settle)}
+.rulefill.over{background:var(--tally-over-lit)}
+.ruleticks{position:absolute;inset:0 0 20px 0;display:flex;pointer-events:none}
+.ruleticks i{flex:1;border-right:1px solid rgba(255,255,255,.62)}
+.ruleticks i:last-child{border-right:0}
+.rulemark{position:absolute;right:0;bottom:0;font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--worktop-faint);white-space:nowrap}
+.rulemark.left{left:0;right:auto}
+
+.basketline{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:16px 0 0;
+  border-top:1px solid var(--worktop-hair);padding-top:13px;font-size:.84rem;color:var(--worktop-pencil)}
+.basketline label{flex:1 1 200px;min-width:0}
+.basketline label b{display:block;font-weight:700;color:var(--worktop-graphite);font-size:.9rem}
+.basketsum{display:inline-flex;align-items:baseline;gap:3px;border:1px solid var(--worktop-rule);background:var(--worktop-leaf);padding:5px 9px}
+.basketsum span{font-weight:700}
+.basketsum input{width:72px;border:0;background:none;padding:0;font-family:"DM Serif Display",Georgia,serif;font-size:1.2rem;text-align:right}
+.basketsum input:focus{outline:none}
+.basketsum:focus-within{border-color:var(--worktop-graphite);box-shadow:inset 0 -2px 0 var(--worktop-graphite)}
+.basketband{margin:22px 0 4px;border:1px solid var(--trolley-rail);background:var(--trolley-raise);padding:12px 14px;
+  display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.basketband b{font-size:.7rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--trolley-mute)}
+.basketband i{font-style:normal;font-size:.75rem;color:var(--trolley-faint);flex:1 1 100%;line-height:1.45}
+.basketband em{font-style:normal;font-family:"DM Serif Display",Georgia,serif;font-size:1.3rem;color:var(--trolley-chalk)}
+.factline{display:flex;flex-wrap:wrap;gap:0;margin:var(--rhythm-span) 0 0;border-top:1px solid var(--worktop-hair);border-bottom:1px solid var(--worktop-hair)}
+.factbit{padding:11px 16px 11px 0;margin-right:16px;border-right:1px solid var(--worktop-hair);font-size:.82rem;color:var(--worktop-pencil)}
+.factbit:last-child{border-right:0;margin-right:0;padding-right:0}
+.factbit b{display:block;font-family:"DM Serif Display",Georgia,serif;font-size:1.32rem;font-weight:400;color:var(--worktop-graphite);line-height:1.15}
+.factbit.risky b{color:var(--tally-risk-lit)}
+
+/* ── sections ───────────────────────────────────────────────────── */
+.slab{margin-top:var(--rhythm-reach)}
+.slabhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:2px solid var(--worktop-graphite);padding-bottom:7px}
+.slabtitle{font-family:"DM Serif Display",Georgia,serif;font-weight:400;font-size:clamp(1.3rem,2.1vw,1.62rem);line-height:1.1;margin:0}
+.slabnote{font-size:.76rem;color:var(--worktop-faint);text-align:right}
+.foldbtn{
+  background:none;border:1px solid var(--worktop-rule);padding:5px 10px;cursor:pointer;
+  font-size:.68rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--worktop-pencil);
+  transition:background var(--swipe-snap),color var(--swipe-snap);white-space:nowrap;
+}
+.foldbtn:hover{background:var(--worktop-graphite);color:var(--worktop-bare);border-color:var(--worktop-graphite)}
+.foldbody[hidden]{display:none}
+
+/* ── the seven nights ───────────────────────────────────────────── */
+.nightlist{list-style:none;margin:0;padding:0}
+.night{display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 14px;padding:13px 0;border-bottom:1px solid var(--worktop-hair);align-items:start}
+.night:last-child{border-bottom:0}
+.night.gap{background:linear-gradient(90deg,rgba(226,163,60,.16),rgba(226,163,60,0) 62%)}
+.nightglyph{font-family:"DM Serif Display",Georgia,serif;font-size:1.42rem;line-height:1;padding-top:9px;color:var(--worktop-graphite)}
+.nightglyph small{display:block;font-family:"DM Sans",sans-serif;font-size:.64rem;font-weight:500;letter-spacing:.08em;color:var(--worktop-faint);margin-top:4px}
+.nightbody{display:flex;flex-direction:column;gap:8px;min-width:0}
+.nightpick{display:flex;gap:10px;align-items:center}
+.slotname{flex:0 0 62px;font-size:.63rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--worktop-faint)}
+.dish{
+  flex:1 1 auto;min-width:0;appearance:none;-webkit-appearance:none;
+  background:var(--worktop-leaf) no-repeat right 10px center;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1l4.5 5L10 1' fill='none' stroke='%23535B51' stroke-width='1.6'/%3E%3C/svg%3E");
+  border:1px solid var(--worktop-rule);padding:9px 32px 9px 11px;cursor:pointer;
+  font-size:.94rem;font-weight:500;text-overflow:ellipsis;
+  transition:border-color var(--swipe-snap),background-color var(--swipe-snap);
+}
+.dish:hover{border-color:var(--worktop-graphite)}
+.dish.empty{color:var(--worktop-faint);font-style:italic;font-weight:400;background-color:transparent;border-style:dashed}
+.nightcost{font-family:"DM Serif Display",Georgia,serif;font-size:1.1rem;white-space:nowrap;min-width:62px;text-align:right}
+.nightcost.blank{color:var(--worktop-faint)}
+.nightmeta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.76rem;color:var(--worktop-pencil)}
+.tick{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.tick svg{flex:none}
+.eaters{display:inline-flex;align-items:center;border:1px solid var(--worktop-rule);background:var(--worktop-leaf)}
+.eaters button{width:26px;height:26px;border:0;background:none;cursor:pointer;font-size:1rem;line-height:1;color:var(--worktop-pencil);transition:background var(--swipe-snap)}
+.eaters button:hover{background:var(--worktop-score);color:var(--worktop-graphite)}
+.eaters span{min-width:34px;text-align:center;font-size:.78rem;font-weight:700}
+.linkish{background:none;border:0;padding:2px 0;cursor:pointer;font-size:.76rem;font-weight:500;color:var(--worktop-pencil);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.linkish:hover{color:var(--worktop-graphite)}
+.linkish[aria-pressed="true"]{color:var(--tally-under-lit);font-weight:700}
+.leftovertag{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tally-under-lit);border:1.5px solid currentColor;padding:2px 6px}
+.slotswitch{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}
+
+/* ── pack risk / routing ────────────────────────────────────────── */
+.risklist{list-style:none;margin:0;padding:0}
+.riskline{padding:13px 0;border-bottom:1px solid var(--worktop-hair);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px}
+.riskline:last-child{border-bottom:0}
+.riskwhat{grid-column:1;grid-row:1;font-weight:700;font-size:.95rem;margin:0}
+.risksum{grid-column:1;grid-row:2;font-size:.83rem;color:var(--worktop-pencil);margin:0}
+.riskfig{grid-column:2;grid-row:1 / span 2;align-self:center;font-family:"DM Serif Display",Georgia,serif;font-size:1.24rem;color:var(--tally-risk-lit);white-space:nowrap;text-align:right}
+.riskfix{grid-column:1 / -1;grid-row:3;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:5px;
+  background:var(--worktop-leaf);border-left:3px solid var(--tally-under-lit);padding:8px 11px;font-size:.83rem}
+.riskfix b{font-weight:700}
+.usebtn{
+  border:1.5px solid var(--worktop-graphite);background:var(--worktop-graphite);color:var(--worktop-bare);
+  padding:6px 12px;cursor:pointer;font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  transition:transform var(--swipe-snap),background var(--swipe-snap);white-space:nowrap;
+}
+.usebtn:hover{background:var(--tally-under-lit);border-color:var(--tally-under-lit)}
+.usebtn:active{transform:translateY(1px)}
+.allused{display:flex;align-items:center;gap:9px;padding:12px 0;font-size:.88rem;color:var(--tally-under-lit);font-weight:500}
+
+/* ── driver / plain tables ──────────────────────────────────────── */
+.plainrows{width:100%;border-collapse:collapse;font-size:.86rem}
+.plainrows th{text-align:left;font-size:.68rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--worktop-faint);padding:9px 8px 7px 0;border-bottom:1px solid var(--worktop-rule)}
+.plainrows td{padding:8px 8px 8px 0;border-bottom:1px solid var(--worktop-hair);vertical-align:top}
+.plainrows th.rt,.plainrows td.rt{text-align:right;padding-right:0}
+.plainrows tbody tr:hover{background:var(--worktop-leaf)}
+.rankno{color:var(--worktop-faint);font-size:.78rem}
+
+/* ── pantry & shelf ─────────────────────────────────────────────── */
+.stockline{display:grid;grid-template-columns:minmax(0,1fr) 78px 74px 30px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--worktop-hair)}
+.stockline:last-of-type{border-bottom:0}
+.jot{background:var(--worktop-leaf);border:1px solid var(--worktop-rule);padding:7px 9px;font-size:.85rem;width:100%;min-width:0}
+.jot:hover{border-color:var(--worktop-faint)}
+.binbtn{width:28px;height:28px;border:1px solid var(--worktop-rule);background:none;cursor:pointer;color:var(--worktop-faint);line-height:1;font-size:.9rem;transition:background var(--swipe-snap),color var(--swipe-snap)}
+.binbtn:hover{background:var(--tally-over-lit);border-color:var(--tally-over-lit);color:#fff}
+.addrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.addbtn{border:1px dashed var(--worktop-rule);background:none;padding:8px 14px;cursor:pointer;font-size:.78rem;font-weight:500;color:var(--worktop-pencil)}
+.addbtn:hover{border-style:solid;border-color:var(--worktop-graphite);color:var(--worktop-graphite)}
+
+.shelffilter{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.hunt{flex:1 1 170px;min-width:0}
+.sift{border:1px solid var(--worktop-rule);background:var(--worktop-leaf);padding:7px 11px;cursor:pointer;font-size:.75rem;font-weight:500;color:var(--worktop-pencil);white-space:nowrap}
+.sift[aria-pressed="true"]{background:var(--worktop-graphite);color:var(--worktop-bare);border-color:var(--worktop-graphite);font-weight:700}
+.shelfroll{max-height:340px;overflow-y:auto;border-top:1px solid var(--worktop-hair)}
+.shelfline{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 12px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--worktop-hair)}
+.shelfname{grid-column:1;grid-row:1;font-weight:500;font-size:.9rem;min-width:0}
+.shelfmeta{grid-column:1;grid-row:2;font-size:.75rem;color:var(--worktop-faint)}
+.shelfcost{grid-column:2;grid-row:1 / span 2;font-family:"DM Serif Display",Georgia,serif;font-size:1.02rem;white-space:nowrap;text-align:right}
+.shelfcost small{display:block;font-family:"DM Sans",sans-serif;font-size:.64rem;letter-spacing:.06em;color:var(--worktop-faint);text-transform:uppercase}
+.shelfadd{grid-column:3;grid-row:1 / span 2;border:1px solid var(--worktop-rule);background:var(--worktop-leaf);cursor:pointer;padding:7px 10px;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--worktop-pencil);white-space:nowrap}
+.shelfadd:hover{background:var(--worktop-graphite);color:var(--worktop-bare);border-color:var(--worktop-graphite)}
+.shelfadd:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── after the shop ─────────────────────────────────────────────── */
+.tillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0 0}
+.tilllab{display:block;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--worktop-faint);margin-bottom:5px}
+.moved{display:grid;grid-template-columns:minmax(0,1fr) 92px 30px;gap:8px;align-items:center;margin-top:8px}
+.tillverdict{margin:16px 0 0;padding:13px 15px;background:var(--worktop-leaf);border-left:3px solid var(--worktop-graphite);font-size:.88rem}
+.tillverdict b{font-family:"DM Serif Display",Georgia,serif;font-size:1.14rem;font-weight:400}
+.driftup{color:var(--tally-over-lit);font-weight:700}
+.driftdown{color:var(--tally-under-lit);font-weight:700}
+
+/* ── the year ───────────────────────────────────────────────────── */
+.yearband{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--worktop-hair);margin-top:6px}
+.yearfig{padding:14px 18px 14px 0;margin-right:18px;border-right:1px solid var(--worktop-hair)}
+.yearfig:last-child{border-right:0;margin-right:0;padding-right:0}
+.yearfig i{display:block;font-style:normal;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--worktop-faint);margin-bottom:3px}
+.yearfig b{font-family:"DM Serif Display",Georgia,serif;font-size:1.7rem;font-weight:400;line-height:1}
+.trendbox{margin:18px 0 8px}
+.trendbox svg{display:block;width:100%;height:auto}
+.tabflip{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap}
+
+/* ── the trolley (dark, right) ──────────────────────────────────── */
+.listhead{border-bottom:1px solid var(--trolley-rail);padding-bottom:18px}
+.listkicker{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.listkicker h2{font-size:.76rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin:0;color:var(--trolley-chalk)}
+.listcount{font-size:.76rem;color:var(--trolley-faint)}
+.listtotal{font-family:"DM Serif Display",Georgia,serif;font-size:clamp(2.5rem,5.6vw,3.5rem);line-height:.9;letter-spacing:-.02em;margin:12px 0 0;color:var(--trolley-chalk)}
+.listtotal .cents{font-size:.52em}
+.listsub{font-size:.86rem;color:var(--trolley-mute);margin:9px 0 0}
+.listsub .good{color:var(--tally-under);font-weight:700}
+.listsub .bad{color:var(--tally-over);font-weight:700}
+.warnstrip{margin:16px 0 0;border:1px solid var(--trolley-edge);border-left:3px solid var(--tally-risk);
+  background:var(--trolley-raise);padding:10px 12px;font-size:.79rem;color:var(--trolley-mute);line-height:1.45}
+.warnstrip b{color:var(--trolley-chalk);font-weight:700}
+
+.aisleband{margin-top:26px}
+.aislename{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  font-size:.7rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--tally-under);
+  border-bottom:1px solid var(--trolley-rail);padding-bottom:6px;margin:0}
+.aislename em{font-style:normal;color:var(--trolley-faint);letter-spacing:.06em;font-weight:400}
+.itemline{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:2px 11px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);align-items:start}
+.itemline:last-child{border-bottom:0}
+.itembox{grid-column:1;grid-row:1 / span 2;width:15px;height:15px;margin-top:3px;border:1.5px solid var(--trolley-edge);background:none;cursor:pointer;padding:0;transition:background var(--swipe-snap),border-color var(--swipe-snap)}
+.itembox[aria-pressed="true"]{background:var(--tally-under);border-color:var(--tally-under)}
+.itembox[aria-pressed="true"]::after{content:"";display:block;width:4px;height:8px;margin:0 auto;border:solid var(--trolley-deep);border-width:0 2px 2px 0;transform:rotate(42deg) translate(-1px,-1px)}
+.itemname{grid-column:2;grid-row:1;font-size:.92rem;color:var(--trolley-chalk);min-width:0;overflow-wrap:anywhere}
+.itemname b{font-weight:700}
+.itemline[data-got="1"] .itemname{color:var(--trolley-faint);text-decoration:line-through}
+.itemwhy{grid-column:2;grid-row:2;font-size:.73rem;color:var(--trolley-faint);line-height:1.4}
+.itemwhy .spare{color:var(--tally-risk)}
+.itemcost{grid-column:3;grid-row:1 / span 2;text-align:right;white-space:nowrap;font-size:.92rem;color:var(--trolley-chalk)}
+.itemcost small{display:block;font-size:.68rem;color:var(--trolley-faint);margin-top:2px}
+.itemcost.nocost{color:var(--trolley-faint)}
+.flashed{animation:sweep 900ms ease-out 1}
+@keyframes sweep{0%{background:rgba(62,169,116,.34)}100%{background:transparent}}
+.crossline{display:flex;align-items:center;gap:10px;margin:14px 0 2px;color:var(--tally-over);
+  font-size:.7rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
+.crossline::before,.crossline::after{content:"";flex:1;height:2px;background:var(--tally-over)}
+.crossline.clear{color:var(--tally-under)}
+.crossline.clear::before,.crossline.clear::after{background:var(--tally-under)}
+.coveredband{margin-top:26px;border-top:1px dashed var(--trolley-rail);padding-top:12px}
+.coveredband h3{font-size:.7rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--trolley-faint);margin:0 0 8px}
+.coveredline{font-size:.83rem;color:var(--trolley-faint);padding:4px 0;text-decoration:line-through}
+.actionsrow{display:flex;flex-wrap:wrap;gap:9px;margin-top:30px;padding-top:20px;border-top:1px solid var(--trolley-rail)}
+.press{
+  border:1px solid var(--trolley-edge);background:var(--trolley-raise);color:var(--trolley-chalk);
+  padding:10px 15px;cursor:pointer;font-size:.73rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  transition:background var(--swipe-snap),border-color var(--swipe-snap),transform var(--swipe-snap);
+}
+.press:hover{background:var(--trolley-rail);border-color:var(--trolley-faint)}
+.press:active{transform:translateY(1px)}
+.press.loud{background:var(--tally-under);border-color:var(--tally-under);color:#06120C}
+.press.loud:hover{background:#4FC287;border-color:#4FC287}
+.colophon{margin-top:26px;font-size:.72rem;color:var(--trolley-faint);line-height:1.6}
+.hushed{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.saidplain{font-size:.8rem;color:var(--worktop-pencil);margin:10px 0 0;line-height:1.5}
+.disclaimline{font-weight:700;color:var(--worktop-graphite)}
+
+/* ── mobile: the bench folds, seam turns horizontal ─────────────── */
+@media (max-width:900px){
+  body{font-size:15.5px}
+  .bench{grid-template-columns:1fr;grid-template-rows:minmax(0,var(--split-at)) var(--seam-thick) minmax(0,1fr)}
+  .seam{cursor:row-resize;border-left:0;border-right:0;border-top:1px solid var(--worktop-rule);border-bottom:1px solid var(--trolley-deep)}
+  .seamgrip{width:44px;height:3px;box-shadow:0 -5px 0 -1px var(--worktop-faint),0 5px 0 -1px var(--worktop-faint)}
+  .worktop,.trolley{padding-left:16px;padding-right:16px;padding-bottom:60px;padding-top:16px}
+  .masthead{margin-bottom:16px;gap:6px 10px}
+  .wordsub{font-size:.76rem;flex:1 1 100%;order:3;margin-top:-2px}
+  .samplechip{font-size:.6rem;padding:3px 7px}
+  .numagainst{margin-top:10px;font-size:.88rem}
+  .budgetrule{margin-top:14px}
+  .basketline{margin-top:13px;padding-top:11px;font-size:.79rem}
+  .basketline label b{font-size:.86rem}
+  .factline{margin-top:16px}
+  .factbit{padding:9px 13px 9px 0;margin-right:13px;font-size:.76rem}
+  .factbit b{font-size:1.18rem}
+  .slab{margin-top:28px}
+  .listtotal{margin-top:8px}
+  .night{grid-template-columns:38px minmax(0,1fr);gap:0 10px}
+  .nightpick{flex-wrap:wrap}
+  .dish{flex:1 1 100%}
+  .nightcost{min-width:0;margin-left:auto}
+  .stockline{grid-template-columns:minmax(0,1fr) 64px 62px 30px;gap:6px}
+  .yearfig{padding:12px 14px 12px 0;margin-right:14px}
+  .yearfig b{font-size:1.45rem}
+  .shelfroll{max-height:none}
+}
+@media (max-width:420px){
+  .factbit{padding-right:12px;margin-right:12px}
+  .moved{grid-template-columns:minmax(0,1fr) 78px 30px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+
+/* ── the printed deliverable ────────────────────────────────────── */
+.printsheet{display:none}
+@media print{
+  @page{size:A4 portrait;margin:14mm}
+  html,body{background:#fff;color:#000;font-size:10.5pt;height:auto;overflow:visible}
+  .bench{display:none!important}
+  .printsheet{display:block}
+  .psheet{page-break-after:always}
+  .psheet:last-child{page-break-after:auto}
+  .phead{border-bottom:2.5pt solid #000;padding-bottom:5pt;margin-bottom:11pt;display:flex;justify-content:space-between;align-items:baseline;gap:12pt}
+  .phead h2{font-family:"DM Serif Display",Georgia,serif;font-weight:400;font-size:23pt;margin:0;line-height:1}
+  .phead span{font-size:9pt;text-align:right}
+  .ptable{width:100%;border-collapse:collapse;margin-bottom:12pt}
+  .ptable th{text-align:left;font-size:7.6pt;letter-spacing:.1em;text-transform:uppercase;border-bottom:1pt solid #000;padding:4pt 6pt 4pt 0}
+  .ptable td{padding:6pt 6pt 6pt 0;border-bottom:.5pt solid #bbb;vertical-align:top;font-size:10pt}
+  .ptable td.rt,.ptable th.rt{text-align:right;padding-right:0}
+  .ptable .pday{font-family:"DM Serif Display",Georgia,serif;font-size:12pt;white-space:nowrap}
+  .paisle{font-size:8pt;font-weight:700;letter-spacing:.14em;text-transform:uppercase;border-bottom:1pt solid #000;padding:9pt 0 3pt}
+  .pitem{display:flex;gap:7pt;align-items:baseline;padding:3.4pt 0;border-bottom:.4pt dotted #999;font-size:10pt}
+  .pbox{flex:none;width:9pt;height:9pt;border:1pt solid #000;display:inline-block}
+  .pitem .pn{flex:1}
+  .pitem .pc{white-space:nowrap;font-weight:700}
+  .pitem .pr{white-space:nowrap;color:#555;font-size:8.4pt;min-width:44pt;text-align:right}
+  .ppayback{border:1.6pt solid #000;padding:9pt 11pt;margin-top:12pt}
+  .ppayback h3{margin:0 0 6pt;font-size:8pt;letter-spacing:.14em;text-transform:uppercase}
+  .ppayback dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:3pt 12pt;font-size:10pt}
+  .ppayback dt{margin:0}
+  .ppayback dd{margin:0;text-align:right;font-weight:700}
+  .pdisc{margin-top:10pt;border-top:1.6pt solid #000;padding-top:6pt;font-size:10pt;font-weight:700}
+  .pdisc small{display:block;font-weight:400;font-size:8.4pt;margin-top:3pt}
+  .pcross{border-top:1.4pt solid #000;margin:5pt 0;padding-top:3pt;font-size:8.4pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+}
+</style>
+</head>
+<body>
+<div class="bench" id="bench">
+
+  <main class="worktop" id="worktop" aria-label="The week and what it costs">
+
+    <div class="masthead">
+      <h1 class="wordmark">The Week</h1>
+      <p class="wordsub">Your grocery bill, decided before you spend it.</p>
+      <span class="samplechip" id="samplechip">Sample family loaded</span>
+    </div>
+
+    <section aria-labelledby="numhead">
+      <h2 class="numlabel" id="numhead">Planned this week</h2>
+      <p class="bignumber" id="bignumber"><span>$0</span><span class="cents">.00</span></p>
+      <p class="numagainst" id="numagainst">against a <b>$250</b> budget <span class="deltaflag is-under">—</span></p>
+      <div class="budgetrule" aria-hidden="true">
+        <div class="rulebed"></div>
+        <div class="rulefill" id="rulefill" style="width:0"></div>
+        <div class="ruleticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="rulemark left">$0</span>
+        <span class="rulemark" id="rulemarkend">budget</span>
+      </div>
+      <p class="basketline">
+        <label for="basketin"><b>The standing basket</b>Breakfasts, lunchboxes, snacks, milk, cleaning — the part of the shop you buy every week without planning it.</label>
+        <span class="basketsum"><span>$</span><input id="basketin" type="number" min="0" step="1" inputmode="decimal" aria-describedby="numhead"></span>
+      </p>
+      <div class="factline" id="factline"></div>
+      <p class="saidplain"><span class="disclaimline">Costs are only as good as the prices you enter.</span>
+        Prices start as rough estimates and only become yours once you type what the till actually charged.</p>
+    </section>
+
+    <section class="slab" aria-labelledby="nightshead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="nightshead">Seven nights</h2>
+        <p class="slabnote" id="nightsnote"></p>
+      </div>
+      <ul class="nightlist" id="nightlist"></ul>
+      <div class="slotswitch">
+        <button type="button" class="sift" id="slotstoggle" aria-pressed="false">Also plan breakfast &amp; lunch</button>
+        <button type="button" class="sift" id="clearweek">Empty the week</button>
+      </div>
+    </section>
+
+    <section class="slab" aria-labelledby="riskhead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="riskhead">Part-packs at risk</h2>
+        <p class="slabnote" id="risknote"></p>
+      </div>
+      <div id="riskbody"></div>
+    </section>
+
+    <section class="slab" aria-labelledby="drivehead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="drivehead">What the money went on</h2>
+        <button type="button" class="foldbtn" data-fold="drivebody" aria-expanded="true" aria-controls="drivebody">Hide</button>
+      </div>
+      <div class="foldbody" id="drivebody"></div>
+    </section>
+
+    <section class="slab" aria-labelledby="cuphead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="cuphead">Already in the cupboard</h2>
+        <button type="button" class="foldbtn" data-fold="cupbody" aria-expanded="false" aria-controls="cupbody">Show</button>
+      </div>
+      <div class="foldbody" id="cupbody" hidden>
+        <p class="saidplain">Anything listed here comes off the shopping list before it is costed.</p>
+        <div id="pantryrows"></div>
+        <div class="addrow"><button type="button" class="addbtn" id="addpantry">+ Add a cupboard item</button></div>
+      </div>
+    </section>
+
+    <section class="slab" aria-labelledby="shelfhead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="shelfhead">The recipe shelf</h2>
+        <button type="button" class="foldbtn" data-fold="shelfbody" aria-expanded="false" aria-controls="shelfbody">Show</button>
+      </div>
+      <div class="foldbody" id="shelfbody" hidden>
+        <div class="shelffilter">
+          <label class="hushed" for="hunt">Search the recipe shelf</label>
+          <input class="jot hunt" id="hunt" type="search" placeholder="Search 48 meals…" autocomplete="off">
+          <button type="button" class="sift" data-sift="kid" aria-pressed="false">Kids eat it</button>
+          <button type="button" class="sift" data-sift="freeze" aria-pressed="false">Freezes</button>
+          <button type="button" class="sift" data-sift="quick" aria-pressed="false">Under 30 min</button>
+        </div>
+        <div class="shelfroll" id="shelfroll"></div>
+      </div>
+    </section>
+
+    <section class="slab" aria-labelledby="tillhead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="tillhead">After the shop</h2>
+        <button type="button" class="foldbtn" data-fold="tillbody" aria-expanded="false" aria-controls="tillbody">Show</button>
+      </div>
+      <div class="foldbody" id="tillbody" hidden>
+        <p class="saidplain">You do not keep a price book. You come home, type the till total, and correct the two or
+          three prices that moved. Every shop you log sharpens next week's number.</p>
+        <div class="tillgrid">
+          <div><label class="tilllab" for="tilldate">Shop date</label><input class="jot" id="tilldate" type="date"></div>
+          <div><label class="tilllab" for="tilltotal">Till total ($)</label><input class="jot" id="tilltotal" type="number" min="0" step="0.01" placeholder="0.00"></div>
+          <div><label class="tilllab" for="tillpeople">People fed</label><input class="jot" id="tillpeople" type="number" min="1" max="20" step="1" value="4"></div>
+        </div>
+        <h3 class="tilllab" style="margin-top:18px">Prices that moved</h3>
+        <div id="movedrows"></div>
+        <div class="addrow">
+          <button type="button" class="addbtn" id="addmoved">+ A price changed</button>
+          <button type="button" class="usebtn" id="logshop">Log this shop</button>
+        </div>
+        <div class="tillverdict" id="tillverdict"></div>
+        <h3 class="tilllab" style="margin-top:20px">Price drift, last three shops</h3>
+        <div id="driftbody"></div>
+      </div>
+    </section>
+
+    <section class="slab" aria-labelledby="yearhead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="yearhead">The year so far</h2>
+        <button type="button" class="foldbtn" data-fold="yearbody" aria-expanded="false" aria-controls="yearbody">Show</button>
+      </div>
+      <div class="foldbody" id="yearbody" hidden>
+        <div class="yearband" id="yearband"></div>
+        <div class="trendbox" id="trendbox"></div>
+        <div id="yearnote"></div>
+        <div class="tabflip">
+          <button type="button" class="sift" id="mealsort" aria-pressed="true">Dearest per serving first</button>
+        </div>
+        <div id="mealtable"></div>
+      </div>
+    </section>
+
+    <section class="slab" aria-labelledby="datahead">
+      <div class="slabhead">
+        <h2 class="slabtitle" id="datahead">Your data</h2>
+        <button type="button" class="foldbtn" data-fold="databody" aria-expanded="false" aria-controls="databody">Show</button>
+      </div>
+      <div class="foldbody" id="databody" hidden>
+        <p class="saidplain">Everything lives in this browser on this device. Nothing is sent anywhere — there is nowhere
+          for it to go. Export a copy before you change computers.</p>
+        <div class="tillgrid">
+          <div><label class="tilllab" for="budgetin">Weekly grocery budget ($)</label><input class="jot" id="budgetin" type="number" min="0" step="1"></div>
+          <div><label class="tilllab" for="housein">Household name</label><input class="jot" id="housein" type="text" maxlength="40"></div>
+        </div>
+        <div class="addrow">
+          <button type="button" class="addbtn" id="expjson">Export everything (JSON)</button>
+          <button type="button" class="addbtn" id="impjson">Import a JSON backup</button>
+          <button type="button" class="addbtn" id="wipesample">Clear the sample family</button>
+        </div>
+        <input type="file" id="filepick" accept="application/json,.json" class="hushed" aria-label="Choose a JSON backup file to import" tabindex="-1">
+        <p class="saidplain" id="datasay" role="status"></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="seam" id="seam" role="separator" tabindex="0" aria-label="Drag to resize the plan and the list"
+       aria-orientation="vertical" aria-valuemin="24" aria-valuemax="74" aria-valuenow="47"><span class="seamgrip"></span></div>
+
+  <aside class="trolley" id="trolley" aria-label="The shopping list, assembled from the plan">
+    <div class="listhead">
+      <div class="listkicker">
+        <h2>The list</h2>
+        <span class="listcount" id="listcount"></span>
+      </div>
+      <p class="listtotal" id="listtotal"><span>$0</span><span class="cents">.00</span></p>
+      <p class="listsub" id="listsub"></p>
+      <div class="warnstrip">
+        <b>Costs are only as good as the prices you enter.</b> These are pack prices you have typed or that came
+        with the sample. Log a receipt in <span style="white-space:nowrap">“After the shop”</span> and the numbers become yours.
+      </div>
+    </div>
+    <div class="basketband" id="basketband"></div>
+    <div id="aisles"></div>
+    <div class="coveredband" id="coveredband" hidden>
+      <h3>Not buying — already in the cupboard</h3>
+      <div id="coveredrows"></div>
+    </div>
+    <div class="actionsrow">
+      <button type="button" class="press loud" id="printbtn">Print the week</button>
+      <button type="button" class="press" id="csvbtn">List as CSV</button>
+      <button type="button" class="press" id="jsonbtn">Backup JSON</button>
+    </div>
+    <p class="colophon" id="colophon"></p>
+  </aside>
+</div>
+
+<div class="printsheet" id="printsheet"></div>
+<script>
+"use strict";
+(function(){
+
+/* ═══ AISLES: the route through the shop, in order ═══════════════ */
+var AISLES = ["Fruit & veg","Bakery","Meat & fish","Dairy & eggs","Chilled","Frozen","Cupboard","Herbs & spices","Drinks","Household"];
+
+/* ═══ INGREDIENT CATALOG  name|aisle|packQty|packUnit|packPrice|keeps|gramsEach ═══ */
+var CAT_RAW = [
+"onion|0|1000|g|2.20|s|150","red onion|0|750|g|2.60|s|140","garlic|0|30|clove|1.50|s",
+"carrot|0|1000|g|1.80|s|70","potato|0|2270|g|4.50|s|200","sweet potato|0|900|g|3.60|s|220",
+"broccoli|0|400|g|2.40|f","green beans|0|340|g|2.90|f","bell pepper|0|3|ea|3.50|f|120",
+"mushroom|0|227|g|2.60|f","zucchini|0|2|ea|1.90|f|200","cherry tomato|0|280|g|3.20|f",
+"tomato|0|6|ea|3.40|f|95","cucumber|0|1|ea|1.20|f","lettuce|0|1|ea|2.40|f",
+"baby spinach|0|142|g|3.30|f","cabbage|0|1|ea|2.10|s","cauliflower|0|1|ea|3.30|f",
+"celery|0|10|stalk|2.20|f","scallion|0|8|ea|1.30|f","leek|0|3|ea|3.00|f|180",
+"butternut squash|0|1|ea|3.20|s","lemon|0|4|ea|2.40|s","apple|0|6|ea|4.20|s",
+"banana|0|6|ea|2.10|f","avocado|0|3|ea|3.90|f","ginger|0|150|g|1.60|s",
+"parsley|0|30|g|1.80|f","cilantro|0|30|g|1.60|f","basil|0|25|g|2.60|f",
+"bread|1|800|g|3.20|f","burger bun|1|8|ea|3.40|f","tortilla|1|8|ea|3.10|s",
+"pita|1|6|ea|2.80|f","naan|1|4|ea|3.00|s",
+"ground beef|2|500|g|6.40|f","ground turkey|2|500|g|5.80|f","stewing beef|2|900|g|12.40|f",
+"chicken thigh|2|900|g|8.40|f","chicken breast|2|700|g|9.60|f","whole chicken|2|1800|g|11.50|f",
+"pork sausage|2|450|g|5.60|f","bacon|2|340|g|6.20|f","pork loin|2|700|g|8.90|f",
+"lamb mince|2|450|g|8.20|f","salmon fillet|2|400|g|11.80|f","white fish fillet|2|450|g|9.40|f",
+"shrimp|2|300|g|9.20|f","chorizo|2|225|g|5.40|s","ham|2|200|g|4.30|f",
+"milk|3|3780|ml|4.20|s","butter|3|454|g|4.80|s","cheddar|3|400|g|5.40|s",
+"mozzarella|3|340|g|4.20|f","parmesan|3|150|g|5.60|s","greek yogurt|3|900|g|5.20|s",
+"cream|3|473|ml|3.60|f","egg|3|12|ea|4.10|s","feta|3|200|g|4.40|s","sour cream|3|400|g|2.90|s",
+"pesto|4|190|g|4.10|s","tofu|4|350|g|3.20|f","halloumi|4|225|g|4.60|s","hummus|4|280|g|3.80|f",
+"frozen peas|5|900|g|3.10|s","frozen corn|5|750|g|2.80|s","puff pastry|5|450|g|4.60|s","frozen fries|5|900|g|3.90|s",
+"pasta|6|500|g|1.90|s","spaghetti|6|500|g|1.90|s","rice|6|1000|g|3.40|s","noodles|6|375|g|2.60|s",
+"couscous|6|500|g|2.90|s","chopped tomatoes|6|400|g|1.20|s","passata|6|680|g|2.10|s",
+"tomato puree|6|156|g|1.30|s","coconut milk|6|400|ml|2.20|s","chickpeas|6|400|g|1.30|s",
+"black beans|6|400|g|1.30|s","kidney beans|6|400|g|1.30|s","baked beans|6|415|g|1.30|s",
+"lentils|6|500|g|3.20|s","canned tuna|6|142|g|1.70|s","sweetcorn can|6|340|g|1.40|s",
+"stock cube|6|8|ea|2.40|s","olive oil|6|750|ml|9.80|s","vegetable oil|6|1000|ml|4.20|s",
+"soy sauce|6|300|ml|3.40|s","honey|6|340|g|5.20|s","flour|6|1000|g|2.60|s",
+"breadcrumbs|6|250|g|2.40|s","curry paste|6|180|g|3.30|s","salsa|6|450|g|3.40|s",
+"salt|7|750|g|1.60|s","black pepper|7|100|g|3.40|s","paprika|7|60|g|2.40|s","cumin|7|55|g|2.40|s",
+"chili powder|7|65|g|2.30|s","oregano|7|20|g|2.20|s","mixed herbs|7|20|g|2.10|s",
+"curry powder|7|85|g|2.90|s","garam masala|7|50|g|3.10|s","orange juice|8|1750|ml|4.40|s"];
+
+/* ═══ RECIPES  name|serves|mins|kidEats|freezes|method|ing:qty:unit;… ═══ */
+var REC_RAW = [
+"Spaghetti bolognese|4|40|1|1|Brown the beef hard before anything else goes in, then leave it at a mutter for 25 minutes.|ground beef:500:g;spaghetti:400:g;onion:1:ea;carrot:2:ea;garlic:3:clove;chopped tomatoes:800:g;tomato puree:30:g;olive oil:2:tbsp;oregano:3:g;parmesan:40:g",
+"Beef chili|6|50|0|1|Make the full batch. Half of it is tomorrow night and nobody has to cook.|ground beef:500:g;kidney beans:800:g;chopped tomatoes:800:g;onion:2:ea;bell pepper:1:ea;garlic:3:clove;chili powder:8:g;cumin:6:g;rice:300:g",
+"Chicken traybake|4|45|1|0|One tray, 200C, forty minutes, shake it once halfway.|chicken thigh:800:g;potato:800:g;bell pepper:2:ea;red onion:1:ea;olive oil:3:tbsp;paprika:6:g;lemon:1:ea",
+"Beef burgers and fries|4|30|1|1|Shape them thin and do not press them in the pan.|ground beef:600:g;burger bun:4:ea;cheddar:100:g;lettuce:1:ea;tomato:2:ea;red onion:1:ea;frozen fries:600:g",
+"Roast chicken|5|90|1|0|Sunday. Keep the carcass, it is Monday's soup.|whole chicken:1800:g;potato:1200:g;carrot:400:g;broccoli:400:g;olive oil:2:tbsp;butter:30:g",
+"Tomato pasta bake|4|35|1|1|Boil the pasta two minutes short of done or the bake turns to paste.|pasta:400:g;passata:680:g;mozzarella:200:g;cheddar:100:g;onion:1:ea;garlic:2:clove;mixed herbs:4:g;olive oil:2:tbsp",
+"Breaded fish and oven fries|4|30|1|0|The one nobody argues about.|white fish fillet:450:g;breadcrumbs:120:g;egg:1:ea;flour:60:g;frozen fries:600:g;frozen peas:300:g;lemon:1:ea",
+"Sausages and mash|4|40|1|0|Onion gravy made in the sausage pan, nothing else.|pork sausage:450:g;potato:1000:g;butter:50:g;milk:100:ml;onion:1:ea;stock cube:1:ea;frozen peas:300:g",
+"Mild chicken curry|4|40|1|1|Paste, coconut milk, patience. Rice on at the same time.|chicken thigh:700:g;curry paste:80:g;coconut milk:400:ml;onion:1:ea;rice:300:g;ginger:15:g;garlic:2:clove;cilantro:15:g",
+"Tacos|4|25|1|0|Everything on the table, everyone builds their own.|ground beef:500:g;tortilla:8:ea;cheddar:150:g;lettuce:1:ea;tomato:2:ea;sour cream:150:g;salsa:200:g;cumin:6:g",
+"Chicken and rice soup|4|30|1|1|Built on yesterday's roast, costs almost nothing.|chicken breast:300:g;rice:150:g;carrot:2:ea;celery:3:stalk;onion:1:ea;stock cube:2:ea;parsley:15:g",
+"Macaroni cheese|4|30|1|1|Roux first, cheese off the heat, breadcrumbs on top.|pasta:400:g;cheddar:250:g;milk:600:ml;butter:50:g;flour:50:g;breadcrumbs:60:g",
+"Salmon, potatoes and greens|4|30|0|0|Fifteen minutes in a hot oven and it is done.|salmon fillet:500:g;potato:800:g;green beans:340:g;lemon:1:ea;olive oil:2:tbsp;butter:20:g",
+"Veggie chili|6|45|0|1|Half the price of the beef one and nobody notices.|black beans:800:g;chopped tomatoes:800:g;sweet potato:600:g;onion:1:ea;bell pepper:1:ea;cumin:6:g;chili powder:6:g;rice:300:g",
+"Shepherd's pie|6|70|1|1|Make two dishes. Freeze the second one before it is baked.|lamb mince:450:g;potato:1200:g;carrot:3:ea;onion:1:ea;frozen peas:200:g;stock cube:2:ea;butter:50:g;milk:100:ml",
+"Chicken noodle stir fry|4|20|1|0|Everything chopped before the pan gets hot.|noodles:375:g;chicken breast:400:g;broccoli:300:g;carrot:2:ea;soy sauce:3:tbsp;ginger:15:g;garlic:2:clove;vegetable oil:2:tbsp",
+"Pizza night|4|40|1|0|Dough in the morning, oven as hot as it will go.|flour:500:g;passata:340:g;mozzarella:340:g;olive oil:2:tbsp;basil:10:g",
+"Jacket potatoes|4|75|1|0|The oven does all of it while you do something else.|potato:1200:g;cheddar:200:g;butter:40:g;baked beans:830:g;sour cream:150:g",
+"Chicken fajitas|4|30|1|0|Peppers charred properly, not steamed.|chicken breast:600:g;tortilla:8:ea;bell pepper:2:ea;onion:1:ea;paprika:6:g;cumin:4:g;sour cream:150:g;cheddar:100:g",
+"Tuna pasta|4|20|1|0|The cupboard rescue. Twenty minutes and no shopping.|pasta:400:g;canned tuna:284:g;sweetcorn can:340:g;cream:150:ml;parmesan:40:g;parsley:1:bunch",
+"Lentil dal and naan|5|40|0|1|Cheap, freezes, and the children eat it with bread.|lentils:400:g;coconut milk:400:ml;onion:1:ea;garlic:3:clove;ginger:20:g;garam masala:8:g;cumin:5:g;naan:4:ea;cilantro:15:g",
+"Sausage and bean traybake|4|45|1|1|One tray. No washing up worth the name.|pork sausage:450:g;kidney beans:400:g;chopped tomatoes:400:g;onion:1:ea;bell pepper:1:ea;paprika:5:g;bread:200:g",
+"Chicken pie|5|60|1|1|Puff pastry lid, nothing clever underneath it.|chicken breast:600:g;puff pastry:320:g;leek:2:ea;carrot:2:ea;cream:200:ml;stock cube:1:ea;flour:30:g;butter:40:g",
+"Fish pie|5|60|0|1|Assemble it, then freeze it before it is baked.|white fish fillet:450:g;shrimp:200:g;potato:1000:g;milk:500:ml;butter:60:g;flour:50:g;frozen peas:200:g;cheddar:100:g",
+"Falafel wraps|4|30|1|0|Chickpeas, blitzed, fried hard on one side only.|chickpeas:800:g;pita:6:ea;hummus:200:g;cucumber:1:ea;tomato:2:ea;cumin:6:g;garlic:2:clove;flour:40:g",
+"Halloumi and couscous|4|25|0|0|No oven, no pans worth scrubbing.|halloumi:225:g;couscous:300:g;cherry tomato:280:g;cucumber:1:ea;lemon:1:ea;olive oil:3:tbsp;parsley:15:g",
+"Pesto pasta and peas|4|15|1|0|Fifteen minutes, one pan, for the bad days.|pasta:400:g;pesto:190:g;frozen peas:300:g;parmesan:40:g",
+"Toad in the hole|4|50|1|0|The batter has to hit a screaming hot tin.|pork sausage:450:g;flour:200:g;egg:3:ea;milk:300:ml;frozen peas:300:g;onion:1:ea;stock cube:1:ea",
+"Bacon and egg spaghetti|4|25|1|0|Off the heat before the eggs go in, or it scrambles.|spaghetti:400:g;bacon:200:g;egg:4:ea;parmesan:80:g;black pepper:3:g",
+"Warm chicken salad|4|20|0|0|Hot chicken, cold leaves, croutons out of stale bread.|chicken breast:500:g;lettuce:2:ea;parmesan:60:g;bread:200:g;greek yogurt:150:g;lemon:1:ea;olive oil:2:tbsp",
+"Beef stew|6|150|0|1|Low oven, all afternoon, no stirring, no thinking.|stewing beef:900:g;potato:800:g;carrot:400:g;onion:2:ea;celery:3:stalk;stock cube:2:ea;flour:40:g;tomato puree:30:g",
+"Pork and apple traybake|4|50|0|0|The apple is the part that makes it work.|pork loin:700:g;apple:2:ea;potato:800:g;red onion:1:ea;olive oil:2:tbsp;mixed herbs:4:g",
+"Chorizo and chickpea stew|4|35|0|1|Smoky, thirty-five minutes, better the next day.|chorizo:225:g;chickpeas:800:g;chopped tomatoes:400:g;onion:1:ea;baby spinach:142:g;paprika:5:g;garlic:2:clove",
+"Veggie lasagne|6|75|1|1|The assembly is the whole job. Do it once, eat twice.|pasta:250:g;passata:680:g;zucchini:2:ea;mushroom:227:g;mozzarella:200:g;cheddar:100:g;milk:500:ml;butter:50:g;flour:50:g",
+"Egg fried rice|4|20|1|0|Yesterday's rice, cold from the fridge, or it goes claggy.|rice:300:g;egg:4:ea;frozen peas:200:g;scallion:4:ea;soy sauce:3:tbsp;vegetable oil:2:tbsp;ham:200:g",
+"Butternut soup and bread|4|40|0|1|Freezes in jars. Good for the week after a hard one.|butternut squash:1:ea;onion:1:ea;stock cube:2:ea;cream:100:ml;bread:400:g;olive oil:2:tbsp",
+"Sweet potato quesadillas|4|30|1|1|Crisped in a dry pan and cut into triangles.|sweet potato:600:g;black beans:400:g;tortilla:8:ea;cheddar:200:g;cumin:5:g;salsa:200:g",
+"Baked chicken katsu|4|35|1|0|Breadcrumbed and baked, not fried.|chicken breast:600:g;breadcrumbs:150:g;egg:2:ea;flour:60:g;rice:300:g;curry paste:60:g;cabbage:1:ea",
+"Tomato and lentil soup|5|35|0|1|The cheapest thing in this book by a distance.|lentils:300:g;chopped tomatoes:800:g;carrot:3:ea;onion:1:ea;stock cube:2:ea;bread:400:g;cumin:4:g",
+"Salmon and soy noodles|4|25|0|0|Soy, ginger, scallions, one pan.|salmon fillet:400:g;noodles:375:g;broccoli:300:g;soy sauce:3:tbsp;ginger:15:g;scallion:4:ea",
+"Cauliflower cheese and ham|4|40|1|0|Half a vegetable, half a treat, entirely eaten.|cauliflower:1:ea;cheddar:250:g;milk:600:ml;butter:50:g;flour:50:g;ham:200:g;breadcrumbs:40:g",
+"Turkey meatballs|5|40|1|1|Freeze them raw on a tray, then bag them.|ground turkey:500:g;breadcrumbs:80:g;egg:1:ea;passata:680:g;spaghetti:400:g;garlic:2:clove;oregano:3:g;parmesan:40:g",
+"Tofu vegetable stir fry|4|25|0|0|Press the tofu first or it will never brown.|tofu:350:g;noodles:375:g;bell pepper:2:ea;broccoli:300:g;soy sauce:3:tbsp;honey:30:g;garlic:2:clove;vegetable oil:2:tbsp",
+"Lemon chicken and rice|4|45|0|0|Lemon, oregano, one dish, forty-five minutes.|chicken thigh:800:g;rice:300:g;lemon:2:ea;oregano:4:g;feta:200:g;cherry tomato:280:g;olive oil:3:tbsp",
+"Pancake supper|4|25|1|0|Friday. Nobody has ever once complained.|flour:300:g;egg:4:ea;milk:600:ml;butter:50:g;bacon:200:g;banana:3:ea;honey:60:g",
+"Minestrone|5|40|0|1|Whatever the drawer has, plus a tin and a stock cube.|pasta:150:g;chopped tomatoes:400:g;kidney beans:400:g;carrot:2:ea;celery:3:stalk;onion:1:ea;zucchini:1:ea;stock cube:2:ea;parmesan:40:g;bread:200:g",
+"Sticky chicken and corn|4|45|1|0|Sticky, hot, eaten with hands and no cutlery.|chicken thigh:900:g;honey:60:g;soy sauce:3:tbsp;paprika:5:g;frozen corn:400:g;potato:800:g",
+"Mushroom rice|4|40|0|0|Stir it, but do not stand over it.|rice:350:g;mushroom:454:g;onion:1:ea;parmesan:60:g;butter:50:g;stock cube:2:ea;garlic:2:clove"];
+
+/* ═══ UNITS ═════════════════════════════════════════════════════ */
+var UNITS = {
+  g:{fam:"mass",k:1}, kg:{fam:"mass",k:1000},
+  ml:{fam:"vol",k:1}, l:{fam:"vol",k:1000}, tsp:{fam:"vol",k:5}, tbsp:{fam:"vol",k:15},
+  ea:{fam:"ea",k:1}, clove:{fam:"clove",k:1}, stalk:{fam:"stalk",k:1}, bunch:{fam:"bunch",k:1}
+};
+var UNIT_LIST = ["g","kg","ml","l","tsp","tbsp","ea","clove","stalk","bunch"];
+function fam(u){ return UNITS[u] ? UNITS[u].fam : "other:"+u; }
+function toBase(q,u){ return UNITS[u] ? q*UNITS[u].k : q; }
+
+/* ═══ NUMBER PLUMBING ═══════════════════════════════════════════ */
+var DASH = "—";
+function cents(n){ return Math.round((Number(n)||0)*100); }
+function money(n){ var c = cents(n); return (c/100).toFixed(2); }
+function usdGrouped(n){ var c = cents(n); var neg = c<0; c = Math.abs(c);
+  var s = (c/100).toFixed(2); var parts = s.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return (neg?"-$":"$") + parts[0] + "." + parts[1]; }
+function safeDiv(a,b){ if(!isFinite(a)||!isFinite(b)||b===0) return null; var r=a/b; return isFinite(r)?r:null; }
+function trimNum(n,dp){ if(!isFinite(n)) return DASH; var s=n.toFixed(dp); return s.replace(/\.?0+$/,""); }
+
+/* Round a scaled amount to something a person would actually measure. */
+function tidy(q,u){
+  if(!isFinite(q)||q<=0) return 0;
+  var f = fam(u);
+  if(f==="mass"||f==="vol"){
+    if(u==="tsp"||u==="tbsp") return Math.round(q*2)/2;
+    if(q<40) return Math.round(q);
+    if(q<100) return Math.round(q/5)*5;
+    if(q<1000) return Math.round(q/10)*10;
+    return Math.round(q/25)*25;
+  }
+  if(q<1) return Math.round(q*2)/2 || 0.5;
+  return Math.round(q);
+}
+/* Pick a readable unit for a base amount. */
+function countish(base,family,unit){
+  /* how a countable line is written on a list: 3 × bell pepper, 6 cloves garlic */
+  if(family === "ea") return trimNum(Math.round(base*100)/100,2)+" ×";
+  return speak(base,family,unit);
+}
+function packWords(cat){
+  var pb = packBaseOf(cat), f = fam(cat.packUnit);
+  return f === "ea" ? "pack of "+trimNum(Math.round(pb*100)/100,2) : speak(pb,f,cat.packUnit)+" pack";
+}
+function speak(base,family,unit){
+  if(family==="mass") return base>=1000 ? trimNum(base/1000,2)+" kg" : Math.round(base)+" g";
+  if(family==="vol")  return base>=1000 ? trimNum(base/1000,2)+" l"  : Math.round(base)+" ml";
+  var n = Math.round(base*100)/100;
+  var word = unit==="ea" ? "" : " "+unit+(n===1?"":"s");
+  return trimNum(n,2)+word;
+}
+
+/* ═══ PARSE THE SHIPPED LIBRARY ═════════════════════════════════ */
+var CATALOG = {};
+CAT_RAW.forEach(function(row){
+  var p = row.split("|");
+  CATALOG[p[0]] = { name:p[0], aisle:+p[1], packQty:+p[2], packUnit:p[3],
+    seedPrice:+p[4], keeps:p[5], each: p[6]?+p[6]:0 };
+});
+var CAT_NAMES = Object.keys(CATALOG).sort();
+
+var LIBRARY = REC_RAW.map(function(row,i){
+  var p = row.split("|");
+  return { id:"r"+i, name:p[0], serves:+p[1], mins:+p[2], kid:p[3]==="1", freeze:p[4]==="1",
+    method:p[5],
+    ings: p[6].split(";").map(function(s){ var a=s.split(":"); return {name:a[0], qty:+a[1], unit:a[2]}; }) };
+});
+var BY_ID = {}; LIBRARY.forEach(function(r){ BY_ID[r.id]=r; });
+
+/* ═══ DATES ═════════════════════════════════════════════════════ */
+var DAYNAME = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+var DAYSHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+function ymd(d){ return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0"); }
+function parseYMD(s){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||"")); if(!m) return null;
+  var d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  if(d.getUTCFullYear()!==+m[1]||d.getUTCMonth()!==+m[2]-1||d.getUTCDate()!==+m[3]) return null; return d; }
+function addDays(d,n){ return new Date(d.getTime()+n*86400000); }
+function mondayOf(d){ var day=(d.getUTCDay()+6)%7; return addDays(d,-day); }
+function todayUTC(){ var n=new Date(); return new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())); }
+function prettyDay(d){ return d.getUTCDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()]; }
+/* Whole days between two UTC dates — leap years included, because UTC midnights have no DST jumps. */
+function daysBetween(a,b){ return Math.round((b.getTime()-a.getTime())/86400000); }
+
+/* ═══ STATE ═════════════════════════════════════════════════════ */
+var KEY = "the-week.v1";
+var SLOTS = [["d","Dinner"],["b","Breakfast"],["l","Lunch"]];
+var state = null, lastCosts = {}, sortDear = true;
+
+function blankPlan(){ var a=[]; for(var i=0;i<7;i++) a.push({b:null,l:null,d:null}); return a; }
+
+function sampleState(){
+  var ws = ymd(mondayOf(todayUTC()));
+  var plan = blankPlan();
+  plan[0].d = {r:"r0", eat:4};      /* Spaghetti bolognese */
+  plan[1].d = {r:"r1", eat:6};      /* Beef chili, cooked big */
+  plan[2].d = {lo:1};               /* Wednesday eats Tuesday */
+  plan[3].d = {r:"r2", eat:4};      /* Chicken traybake */
+  plan[4].d = null;                 /* Friday still open */
+  plan[5].d = {r:"r3", eat:4};      /* Burgers */
+  plan[6].d = {r:"r4", eat:5};      /* Sunday roast */
+  var shopSeed = [
+    [238.40,244.10,4.20,21,7],[252.10,268.35,3.10,19,10],[246.90,251.80,6.40,22,6],
+    [235.60,239.90,8.10,24,5],[255.20,262.15,5.50,20,8],[244.75,247.60,7.30,23,6],
+    [230.10,233.25,9.60,25,4],[249.80,258.40,6.80,22,7],[238.95,241.05,8.90,24,5],
+    [233.40,236.70,10.20,26,4],[250.60,254.90,7.40,23,6],[228.30,229.85,11.30,27,3],
+    [245.15,248.30,9.10,25,5],[240.05,243.15,10.60,26,4],[229.70,231.60,12.40,28,3],
+    [234.20,237.45,11.80,27,3]];
+  var start = addDays(parseYMD(ws), -7*shopSeed.length);
+  var shops = shopSeed.map(function(s,i){
+    return { d:ymd(addDays(start, i*7 + 5)), planned:s[0], actual:s[1], people:4, avoided:s[2], full:s[3], part:s[4] };
+  });
+  return {
+    v:1, sample:true, house:"The Hartleys", budget:250, people:4, basket:140, weekStart:ws,
+    showAllSlots:false, plan:plan, got:{},
+    pantry:[
+      {name:"rice",qty:400,unit:"g"},{name:"pasta",qty:300,unit:"g"},{name:"olive oil",qty:400,unit:"ml"},
+      {name:"flour",qty:800,unit:"g"},{name:"frozen peas",qty:500,unit:"g"},{name:"stock cube",qty:6,unit:"ea"},
+      {name:"salt",qty:400,unit:"g"},{name:"black pepper",qty:60,unit:"g"},{name:"cumin",qty:30,unit:"g"},
+      {name:"paprika",qty:30,unit:"g"},{name:"chili powder",qty:40,unit:"g"},{name:"oregano",qty:12,unit:"g"},
+      {name:"butter",qty:200,unit:"g"},{name:"onion",qty:3,unit:"ea"}],
+    obs:{
+      "ground beef":[5.90,6.20,6.55], "chicken thigh":[8.90,8.60,8.40], "butter":[4.40,4.65,5.10],
+      "milk":[3.95,4.10,4.20], "cheddar":[5.10,5.25,5.40], "potato":[4.20,4.35,4.50],
+      "egg":[3.60,3.95,4.35], "pasta":[1.80,1.85,1.90], "olive oil":[8.90,9.40,9.80],
+      "chopped tomatoes":[1.10,1.15,1.20], "whole chicken":[10.90,11.20,11.50],
+      "frozen peas":[2.95,3.05,3.10], "burger bun":[3.10,3.25,3.40], "bell pepper":[3.20,3.35,3.50]},
+    shops:shops,
+    till:{date:"", total:"", people:4, moved:[]}
+  };
+}
+
+function load(){
+  var raw = null;
+  try { raw = window.localStorage.getItem(KEY); } catch(e){ raw = null; }
+  if(!raw) return sampleState();
+  try {
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object") return sampleState();
+    return repair(o);
+  } catch(e){ return sampleState(); }
+}
+function repair(o){
+  var s = sampleState();
+  var out = {
+    v:1, sample:!!o.sample, house:typeof o.house==="string"?o.house:s.house,
+    budget:isFinite(+o.budget)&&+o.budget>0?+o.budget:s.budget,
+    basket:isFinite(+o.basket)&&+o.basket>=0?Math.round(+o.basket*100)/100:s.basket,
+    people:isFinite(+o.people)&&+o.people>0?Math.min(20,Math.round(+o.people)):4,
+    weekStart:parseYMD(o.weekStart)?o.weekStart:s.weekStart,
+    showAllSlots:!!o.showAllSlots,
+    plan:blankPlan(), got:(o.got&&typeof o.got==="object")?o.got:{},
+    pantry:[], obs:{}, shops:[], till:{date:"",total:"",people:4,moved:[]}
+  };
+  if(Array.isArray(o.plan)) for(var i=0;i<7;i++){
+    var src = o.plan[i]||{};
+    ["b","l","d"].forEach(function(k){
+      var c = src[k];
+      if(!c) return;
+      if(typeof c.lo === "number" && c.lo>=0 && c.lo<7 && c.lo!==i) out.plan[i][k] = {lo:c.lo};
+      else if(typeof c.r === "string" && BY_ID[c.r]) out.plan[i][k] = {r:c.r, eat:Math.max(1,Math.min(30,Math.round(+c.eat||4)))};
+    });
+  }
+  if(Array.isArray(o.pantry)) out.pantry = o.pantry.filter(function(p){ return p && typeof p.name==="string" && CATALOG[p.name]; })
+    .map(function(p){ return {name:p.name, qty:Math.max(0,+p.qty||0), unit:UNITS[p.unit]?p.unit:"g"}; }).slice(0,300);
+  if(o.obs && typeof o.obs==="object") Object.keys(o.obs).forEach(function(k){
+    if(!CATALOG[k]) return;
+    var arr = (o.obs[k]||[]).filter(function(n){ return isFinite(+n)&&+n>0; }).map(Number).slice(-3);
+    if(arr.length) out.obs[k]=arr;
+  });
+  if(Array.isArray(o.shops)) out.shops = o.shops.filter(function(x){ return x&&parseYMD(x.d); })
+    .map(function(x){ return {d:x.d, planned:+x.planned||0, actual:+x.actual||0,
+      people:Math.max(1,Math.round(+x.people||4)), avoided:+x.avoided||0,
+      full:Math.max(0,Math.round(+x.full||0)), part:Math.max(0,Math.round(+x.part||0))}; }).slice(-260);
+  if(o.till && typeof o.till==="object") out.till = {
+    date: parseYMD(o.till.date)?o.till.date:"", total: o.till.total==null?"":String(o.till.total),
+    people: Math.max(1,Math.round(+o.till.people||4)),
+    moved: Array.isArray(o.till.moved)? o.till.moved.filter(function(m){return m&&CATALOG[m.name];})
+      .map(function(m){ return {name:m.name, price:m.price==null?"":String(m.price)}; }).slice(0,40) : [] };
+  return out;
+}
+var saveNotice = "";
+function save(){
+  try { window.localStorage.setItem(KEY, JSON.stringify(state)); saveNotice=""; }
+  catch(e){ saveNotice = "This browser is not storing data (private mode or storage full). The week still works, it just will not survive a reload."; }
+}
+
+/* ═══ PRICING ═══════════════════════════════════════════════════ */
+function effPrice(name){
+  var cat = CATALOG[name]; if(!cat) return 0;
+  var o = state.obs[name];
+  if(o && o.length){
+    var last = o.slice(-3), sum = 0;
+    for(var i=0;i<last.length;i++) sum += last[i];
+    return sum/last.length;
+  }
+  return cat.seedPrice;
+}
+function packBaseOf(cat){ return toBase(cat.packQty, cat.packUnit); }
+
+/* Bridge a base amount from one unit family into the pack's family, if the
+   catalog knows what one of them weighs. Returns null when it honestly cannot. */
+function bridge(cat, base, family){
+  var target = fam(cat.packUnit);
+  if(family === target) return base;
+  if(cat.each > 0){
+    if(family === "mass" && target === "ea") return base / cat.each;
+    if(family === "ea" && target === "mass") return base * cat.each;
+  }
+  return null;
+}
+/* Proportional ingredient cost — what the amount actually used is worth. */
+function costOf(name, qty, unit){
+  var cat = CATALOG[name]; if(!cat) return null;
+  var b = bridge(cat, toBase(qty,unit), fam(unit));
+  if(b === null) return null;
+  var pb = packBaseOf(cat); if(!(pb > 0)) return null;
+  return b / pb * effPrice(name);
+}
+
+/* ═══ THE PLAN → THE LIST ═══════════════════════════════════════ */
+function plannedMeals(){
+  var out = [];
+  state.plan.forEach(function(day, di){
+    SLOTS.forEach(function(sl){
+      var key = sl[0];
+      if(key!=="d" && !state.showAllSlots) return;
+      var c = day[key];
+      if(c && c.r && BY_ID[c.r]) out.push({day:di, slot:key, slotName:sl[1], rec:BY_ID[c.r], eat:c.eat||4});
+    });
+  });
+  return out;
+}
+function leftoverCount(){
+  var n = 0;
+  state.plan.forEach(function(day,di){ SLOTS.forEach(function(sl){
+    if(sl[0]!=="d" && !state.showAllSlots) return;
+    var c = day[sl[0]]; if(c && typeof c.lo==="number") n++; }); });
+  return n;
+}
+
+function compute(){
+  var meals = plannedMeals();
+
+  /* 1 — scale every recipe to the number eating, with sensible rounding */
+  meals.forEach(function(m){
+    var f = safeDiv(m.eat, m.rec.serves);
+    m.factor = f === null ? 1 : f;
+    m.lines = m.rec.ings.map(function(ing){
+      var q = tidy(ing.qty * m.factor, ing.unit);
+      return {name:ing.name, qty:q, unit:ing.unit, cost:costOf(ing.name, q, ing.unit)};
+    });
+    var c = 0, unpriced = 0;
+    m.lines.forEach(function(l){ if(l.cost===null) unpriced++; else c += l.cost; });
+    m.cost = c; m.unpriced = unpriced;
+    m.perServing = safeDiv(c, m.eat);
+  });
+
+  /* 2 — consolidate across every meal, converting compatible units */
+  var need = {};   /* name → family → {base, unit, from:[]} */
+  meals.forEach(function(m, mi){
+    m.lines.forEach(function(l){
+      var f = fam(l.unit);
+      var slot = need[l.name] || (need[l.name] = {});
+      var g = slot[f] || (slot[f] = {base:0, grossBase:0, unit:l.unit, fams:f, from:[], byMeal:{}});
+      var add = toBase(l.qty, l.unit);
+      g.base += add; g.grossBase += add;
+      g.byMeal[mi] = (g.byMeal[mi] || 0) + add;
+      if(g.from.indexOf(m.rec.name) < 0) g.from.push(m.rec.name);
+      if(fam(g.unit)==="mass" && l.unit==="kg") g.unit = "g";
+      if(fam(g.unit)==="vol" && (l.unit==="l"||l.unit==="tbsp"||l.unit==="tsp")) g.unit = "ml";
+    });
+  });
+
+  /* 3 — fold bridgeable families into the pack's family */
+  Object.keys(need).forEach(function(name){
+    var cat = CATALOG[name]; if(!cat) return;
+    var target = fam(cat.packUnit);
+    var slot = need[name];
+    Object.keys(slot).forEach(function(f){
+      if(f === target) return;
+      var moved = bridge(cat, slot[f].base, f);
+      if(moved === null) return;
+      var t = slot[target] || (slot[target] = {base:0, grossBase:0, unit:cat.packUnit, fams:target, from:[], byMeal:{}});
+      t.base += moved; t.grossBase += moved;
+      var ratio = slot[f].grossBase > 0 ? moved / slot[f].grossBase : 0;
+      Object.keys(slot[f].byMeal).forEach(function(mk){
+        t.byMeal[mk] = (t.byMeal[mk] || 0) + slot[f].byMeal[mk] * ratio; });
+      slot[f].from.forEach(function(n){ if(t.from.indexOf(n)<0) t.from.push(n); });
+      delete slot[f];
+    });
+  });
+
+  /* 4 — take the cupboard off */
+  var covered = [];
+  state.pantry.forEach(function(p){
+    if(!(p.qty > 0)) return;
+    var slot = need[p.name]; if(!slot) return;
+    var cat = CATALOG[p.name];
+    var f = fam(p.unit), base = toBase(p.qty, p.unit);
+    var g = slot[f];
+    if(!g && cat){
+      var target = fam(cat.packUnit);
+      var moved = bridge(cat, base, f);
+      if(moved !== null && slot[target]){ g = slot[target]; base = moved; }
+    }
+    if(!g) return;
+    var take = Math.min(g.base, base);
+    g.base -= take;
+    covered.push({name:p.name, base:take, family:g.fams, unit:g.unit});
+  });
+
+  /* 5 — price each line against the pack it is actually sold in */
+  var items = [], uncosted = 0, shopCents = 0, riskCents = 0, packsFull = 0, packsPart = 0,
+      grossCents = 0, saveConsCents = 0;
+  Object.keys(need).forEach(function(name){
+    var cat = CATALOG[name];
+    var slot = need[name];
+    Object.keys(slot).forEach(function(f){
+      var g = slot[f];
+      /* what this line would have cost with nothing in the cupboard */
+      if(cat && f === fam(cat.packUnit) && g.grossBase > 0){
+        var pbG = packBaseOf(cat);
+        if(pbG > 0) grossCents += cents(Math.ceil(g.grossBase / pbG - 1e-9) * effPrice(name));
+      }
+      if(g.base <= 0.0000001) return;
+      var it = { name:name, base:g.base, family:f, unit:g.unit, from:g.from,
+        aisle: cat ? cat.aisle : 6, keeps: cat ? cat.keeps : "s",
+        packs:null, packText:"", cost:null, leftover:0, risk:0, oddUnit:false };
+      if(cat && f === fam(cat.packUnit)){
+        var pb = packBaseOf(cat);
+        if(pb > 0){
+          var packs = Math.ceil(g.base / pb - 1e-9);
+          var price = effPrice(name);
+          it.packs = packs;
+          it.cost = packs * price;
+          it.leftover = packs * pb - g.base;
+          it.packSize = pb;
+          it.packText = packs + " × " + packWords(cat);
+          if(it.leftover > 0.0000001 && cat.keeps === "f"){
+            it.risk = it.leftover / pb * price;
+          }
+          if(it.leftover <= 0.0000001 || cat.keeps !== "f") packsFull += packs;
+          else { packsFull += Math.max(0, packs-1); packsPart += 1; }
+          shopCents += cents(it.cost);
+          riskCents += cents(it.risk);
+          /* shopping recipe by recipe would buy whole packs for each one */
+          if(g.from.length > 1){
+            var loose = 0;
+            Object.keys(g.byMeal).forEach(function(mk){
+              if(g.byMeal[mk] > 0.0000001) loose += Math.ceil(g.byMeal[mk] / pb - 1e-9); });
+            if(loose > packs) saveConsCents += cents((loose - packs) * price);
+          }
+        }
+      } else {
+        it.oddUnit = true; uncosted++;
+      }
+      items.push(it);
+    });
+  });
+
+  items.sort(function(a,b){
+    if(a.aisle !== b.aisle) return a.aisle - b.aisle;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+
+  var servings = 0, mealCents = 0;
+  meals.forEach(function(m){ servings += m.eat; mealCents += cents(m.cost); });
+  var lo = leftoverCount();
+  var loServings = 0;
+  state.plan.forEach(function(day,di){ SLOTS.forEach(function(sl){
+    if(sl[0]!=="d" && !state.showAllSlots) return;
+    var c = day[sl[0]];
+    if(c && typeof c.lo === "number"){
+      var src = state.plan[c.lo] && state.plan[c.lo][sl[0]];
+      if(src && src.r) loServings += (src.eat||4)/2;
+    } }); });
+
+  return {
+    meals:meals, items:items, covered:covered, uncosted:uncosted,
+    shopTotal: shopCents/100, riskTotal: riskCents/100,
+    basket: (+state.basket)||0, weekTotal: (shopCents + cents(state.basket))/100,
+    grossTotal: grossCents/100,
+    savedConsolidation: saveConsCents/100,
+    savedCupboard: Math.max(0, grossCents - shopCents)/100,
+    mealTotal: mealCents/100, servings: servings, leftovers: lo,
+    packsFull:packsFull, packsPart:packsPart,
+    perServing: safeDiv(mealCents/100, servings + loServings),
+    slotsFilled: meals.length, slotsTotal: (state.showAllSlots?21:7), loServings:loServings
+  };
+}
+
+/* ═══ PERISHABLE ROUTING ════════════════════════════════════════ */
+function routeSpares(model){
+  var planned = {};
+  model.meals.forEach(function(m){ planned[m.rec.id]=true; });
+  var eaters = state.people || 4;
+  var out = [];
+  model.items.forEach(function(it){
+    if(!(it.risk >= 0.40)) return;
+    var cat = CATALOG[it.name]; if(!cat) return;
+    var best = null;
+    LIBRARY.forEach(function(r){
+      if(planned[r.id]) return;
+      var ing = null;
+      for(var i=0;i<r.ings.length;i++) if(r.ings[i].name === it.name){ ing = r.ings[i]; break; }
+      if(!ing) return;
+      var f = safeDiv(eaters, r.serves); if(f===null) f = 1;
+      var q = tidy(ing.qty * f, ing.unit);
+      var b = bridge(cat, toBase(q, ing.unit), fam(ing.unit));
+      if(b === null || !(b > 0)) return;
+      if(b > it.leftover * 3) return;
+      var used = Math.min(b, it.leftover);
+      var score = used - Math.max(0, b - it.leftover) * 0.35 + (r.kid ? it.leftover*0.05 : 0);
+      if(!best || score > best.score) best = {rec:r, uses:b, used:used, score:score};
+    });
+    out.push({ item:it, fix:best });
+  });
+  out.sort(function(a,b){ return b.item.risk - a.item.risk; });
+  return out;
+}
+
+/* ═══ THE YEAR ══════════════════════════════════════════════════ */
+var WASTE_AVERAGE = 2913;
+function yearModel(){
+  var shops = state.shops.slice();
+  var weeks = shops.length;
+  var actual = 0, planned = 0, avoided = 0, full = 0, part = 0, people = 0;
+  shops.forEach(function(s){ actual += cents(s.actual); planned += cents(s.planned);
+    avoided += cents(s.avoided); full += s.full; part += s.part; people += s.people; });
+  var budgetTotal = cents(state.budget) * weeks;
+  var avgPeople = safeDiv(people, weeks);
+  return {
+    weeks:weeks, actual:actual/100, planned:planned/100, avoided:avoided/100,
+    budgetTotal:budgetTotal/100, delta:(budgetTotal-actual)/100,
+    perWeek: safeDiv(actual/100, weeks),
+    perPersonWeek: (avgPeople && avgPeople>0) ? safeDiv(safeDiv(actual/100, weeks), avgPeople) : null,
+    packsFull:full, packsPart:part,
+    packShare: safeDiv(full, full+part),
+    shops:shops
+  };
+}
+
+/* ═══ DOM HELPERS ═══════════════════════════════════════════════ */
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function moneyParts(n){ var s = usdGrouped(n).split("."); return {big:s[0], small:"."+s[1]}; }
+var TICK = '<svg width="11" height="9" viewBox="0 0 11 9" aria-hidden="true"><path d="M1 4.6L4 7.6 10 1.3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+var LAST = null;
+
+function rememberFocus(){
+  var a = document.activeElement;
+  if(!a || !a.getAttribute) return null;
+  var k = a.getAttribute("data-fk");
+  if(!k) return null;
+  var o = {k:k};
+  try { if(a.selectionStart!=null){ o.s=a.selectionStart; o.e=a.selectionEnd; } } catch(err){}
+  return o;
+}
+function restoreFocus(f){
+  if(!f) return;
+  var n = document.querySelector('[data-fk="'+f.k.replace(/"/g,'')+'"]');
+  if(!n) return;
+  try { n.focus({preventScroll:true}); if(f.s!=null && n.setSelectionRange) n.setSelectionRange(f.s,f.e); } catch(err){}
+}
+
+/* ═══ RENDER ════════════════════════════════════════════════════ */
+function renderAll(skip){
+  skip = skip || {};
+  var f = rememberFocus();
+  var model = compute();
+  LAST = model;
+  paintNumber(model);
+  if(!skip.nights) paintNights(model);
+  paintRisk(model);
+  paintDrivers(model);
+  if(!skip.pantry) paintPantry();
+  if(!skip.shelf) paintShelf(model);
+  if(!skip.till) paintTill(model);
+  paintYear(model);
+  paintList(model);
+  paintPrint(model);
+  el("samplechip").hidden = !state.sample;
+  restoreFocus(f);
+}
+
+function weekDates(){
+  var m = parseYMD(state.weekStart) || mondayOf(todayUTC());
+  var out = []; for(var i=0;i<7;i++) out.push(addDays(m,i));
+  return out;
+}
+
+/* ── the number ─────────────────────────────────────────────── */
+function paintNumber(model){
+  var p = moneyParts(model.weekTotal);
+  el("bignumber").innerHTML = '<span>'+esc(p.big)+'</span><span class="cents">'+esc(p.small)+'</span>';
+  var d = state.budget - model.weekTotal;
+  var under = cents(d) >= 0;
+  el("numagainst").innerHTML = 'against a <b>'+esc(usdGrouped(state.budget))+'</b> weekly budget'+
+    '<span class="deltaflag '+(under?"is-under":"is-over")+'">'+esc(usdGrouped(Math.abs(d)))+" "+(under?"under":"over")+'</span>';
+  var pct = safeDiv(model.weekTotal, state.budget);
+  var w = pct===null ? 0 : Math.max(0, Math.min(100, pct*100));
+  var fill = el("rulefill");
+  fill.style.width = w.toFixed(2)+"%";
+  fill.className = "rulefill" + (under?"":" over");
+  el("rulemarkend").textContent = usdGrouped(state.budget)+" budget";
+
+  var ps = model.perServing;
+  el("factline").innerHTML =
+    fact("On the meal plan", usdGrouped(model.shopTotal), "") +
+    fact("Standing basket", usdGrouped(model.basket), "") +
+    fact("Cost per serving", ps===null?DASH:usdGrouped(ps), "") +
+    fact("At risk in part-packs", usdGrouped(model.riskTotal), model.riskTotal>0?"risky":"");
+  el("nightsnote").innerHTML = esc(state.house) + " · week of " + esc(prettyDay(weekDates()[0])) + "<br>" +
+    (model.slotsFilled+model.leftovers) + " of " + model.slotsTotal + " planned · " +
+    ((model.servings + model.loServings) || 0) + " servings";
+}
+function fact(label, value, cls){
+  return '<div class="factbit '+cls+'"><b>'+esc(value)+'</b>'+esc(label)+'</div>';
+}
+
+/* ── the seven nights ───────────────────────────────────────── */
+function optionsFor(dayIndex, slotKey, cell){
+  var chosen = cell && cell.r ? cell.r : "";
+  var lo = cell && typeof cell.lo==="number" ? cell.lo : null;
+  var out = ['<option value=""'+(!chosen&&lo===null?" selected":"")+'>— nothing planned —</option>'];
+  var loOpts = [];
+  for(var d=0; d<dayIndex; d++){
+    var src = state.plan[d][slotKey];
+    if(src && src.r && BY_ID[src.r]){
+      loOpts.push('<option value="lo:'+d+'"'+(lo===d?" selected":"")+'>Leftovers of '+esc(DAYNAME[d])+"'s "+esc(BY_ID[src.r].name)+'</option>');
+    }
+  }
+  if(loOpts.length) out.push('<optgroup label="Leftovers — buys nothing">'+loOpts.join("")+'</optgroup>');
+  var meals = LIBRARY.slice().sort(function(a,b){ return a.name<b.name?-1:1; }).map(function(r){
+    return '<option value="'+r.id+'"'+(chosen===r.id?" selected":"")+'>'+esc(r.name)+'</option>';
+  });
+  out.push('<optgroup label="Meals">'+meals.join("")+'</optgroup>');
+  return out.join("");
+}
+function paintNights(model){
+  var dates = weekDates();
+  var costByCell = {};
+  model.meals.forEach(function(m){ costByCell[m.day+"|"+m.slot] = m; });
+  var html = state.plan.map(function(day, i){
+    var slots = state.showAllSlots ? SLOTS : [SLOTS[0]];
+    var rows = slots.map(function(sl){
+      var key = sl[0], cell = day[key], m = costByCell[i+"|"+key];
+      var costHTML, meta;
+      if(m){
+        costHTML = '<span class="nightcost">'+esc(usdGrouped(m.cost))+'</span>';
+        var per = m.perServing;
+        meta = '<span>'+m.rec.mins+' min</span>'+
+          (m.rec.kid?'<span class="tick">'+TICK+' kids eat it</span>':'')+
+          (m.rec.freeze?'<span class="tick">'+TICK+' freezes</span>':'')+
+          '<span>'+(per===null?DASH:esc(usdGrouped(per)))+' a serving</span>'+
+          '<span class="eaters"><button type="button" data-act="eat-" data-day="'+i+'" data-slot="'+key+'" aria-label="One fewer eating on '+esc(DAYNAME[i])+'">&minus;</button>'+
+          '<span>'+m.eat+' eating</span>'+
+          '<button type="button" data-act="eat+" data-day="'+i+'" data-slot="'+key+'" aria-label="One more eating on '+esc(DAYNAME[i])+'">+</button></span>';
+      } else if(cell && typeof cell.lo === "number"){
+        var srcCell = state.plan[cell.lo][key];
+        var srcName = srcCell && srcCell.r && BY_ID[srcCell.r] ? BY_ID[srcCell.r].name : "an earlier night";
+        costHTML = '<span class="nightcost blank">'+esc(usdGrouped(0))+'</span>';
+        meta = '<span class="leftovertag">Leftovers</span><span>'+esc(DAYNAME[cell.lo])+"'s "+esc(srcName)+' stretches to two nights — the list buys nothing twice.</span>';
+      } else {
+        costHTML = '<span class="nightcost blank">'+DASH+'</span>';
+        meta = key === "d"
+          ? '<span>Open. Pick a meal, or let the spare-pack routing below fill it.</span>'
+          : '';
+      }
+      var empty = !m && !(cell && typeof cell.lo==="number");
+      return '<div class="nightpick">'+
+        (state.showAllSlots ? '<span class="slotname" aria-hidden="true">'+esc(sl[1])+'</span>' : '')+
+        '<label class="hushed" for="pick-'+i+'-'+key+'">'+esc(sl[1])+' on '+esc(DAYNAME[i])+'</label>'+
+        '<select class="dish'+(empty?" empty":"")+'" id="pick-'+i+'-'+key+'" data-fk="pick-'+i+'-'+key+'" data-day="'+i+'" data-slot="'+key+'">'+
+        optionsFor(i, key, cell)+'</select>'+costHTML+'</div>'+
+        (meta ? '<div class="nightmeta">'+meta+'</div>' : '');
+    }).join("");
+    var isGap = !state.plan[i].d;
+    return '<li class="night'+(isGap?" gap":"")+'">'+
+      '<div class="nightglyph" aria-hidden="true">'+DAYSHORT[i]+'<small>'+dates[i].getUTCDate()+'</small></div>'+
+      '<div class="nightbody">'+rows+'</div></li>';
+  }).join("");
+  el("nightlist").innerHTML = html;
+}
+
+/* ── part-packs at risk ─────────────────────────────────────── */
+function firstOpenSlot(){
+  for(var i=0;i<7;i++){ if(!state.plan[i].d) return {day:i, slot:"d"}; }
+  if(state.showAllSlots) for(var j=0;j<7;j++){ if(!state.plan[j].l) return {day:j, slot:"l"}; }
+  return null;
+}
+function paintRisk(model){
+  var routes = routeSpares(model);
+  var planned = {};
+  model.meals.forEach(function(m){ planned[m.rec.id] = true; });
+  el("risknote").innerHTML = esc(usdGrouped(model.riskTotal))+" at risk<br>"+model.packsPart+
+    " fresh pack"+(model.packsPart===1?"":"s")+" part-used · "+model.packsFull+" go home fully used";
+  if(!routes.length){
+    el("riskbody").innerHTML = '<p class="allused">'+TICK+' Every pack this plan buys gets used up. Nothing over $0.40 is going in the bin.</p>'+
+      '<p class="saidplain">Fresh items only. Cupboard stock that keeps is not counted as waste.</p>';
+    return;
+  }
+  var open = firstOpenSlot();
+  var html = '<ul class="risklist">' + routes.map(function(r){
+    var it = r.item, cat = CATALOG[it.name];
+    var pack = it.packText || speak(it.packSize, fam(cat.packUnit), cat.packUnit);
+    var uses = speak(it.base, it.family, it.unit);
+    var spare = speak(it.leftover, it.family, it.unit);
+    var fix;
+    if(r.fix){
+      var usedTxt = speak(Math.min(r.fix.uses, it.leftover), it.family, it.unit);
+      var extra = r.fix.uses > it.leftover + 0.0000001
+        ? ' It wants '+esc(speak(r.fix.uses, it.family, it.unit))+' in all, so you would buy a little more.'
+        : '';
+      fix = '<div class="riskfix"><span><b>'+esc(r.fix.rec.name)+'</b> would use '+esc(usedTxt)+' of the spare.'+extra+'</span>'+
+        (open ? '<button type="button" class="usebtn" data-act="useup" data-rec="'+r.fix.rec.id+'" data-day="'+open.day+'" data-slot="'+open.slot+'">Put it on '+esc(DAYSHORT[open.day])+'</button>'
+              : '<span>Every night is taken — worth remembering next week.</span>')+'</div>';
+    } else {
+      var anywhere = LIBRARY.some(function(r){ return r.ings.some(function(x){ return x.name === it.name; }) && !planned[r.id]; });
+      fix = '<div class="riskfix"><span>'+(anywhere
+        ? 'Too little left to build a meal on. Freeze it, or buy the smaller pack if the shop has one.'
+        : 'Nothing else on the shelf uses '+esc(it.name)+'. Buy the smaller pack if the shop has one.')+'</span></div>';
+    }
+    return '<li class="riskline">'+
+      '<p class="riskwhat">'+esc(it.name)+' — '+esc(pack)+', the plan uses '+esc(uses)+'</p>'+
+      '<p class="risksum">'+esc(spare)+' spare, and it is fresh, so it will not keep to next week.</p>'+
+      '<span class="riskfig">'+esc(usdGrouped(it.risk))+'<br><span style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase">at risk</span></span>'+
+      fix + '</li>';
+  }).join("") + '</ul>';
+  el("riskbody").innerHTML = html;
+}
+
+/* ── what the money went on ─────────────────────────────────── */
+function paintDrivers(model){
+  var meals = model.meals.slice().sort(function(a,b){ return cents(b.cost)-cents(a.cost); });
+  if(!meals.length){ el("drivebody").innerHTML = '<p class="saidplain">Nothing is planned yet, so there is nothing to explain.</p>'; return; }
+  var over = model.shopTotal - state.budget;
+  var lead;
+  if(cents(over) > 0){
+    var run = 0, blame = [];
+    for(var i=0;i<meals.length && run < over; i++){ run += meals[i].cost; blame.push(meals[i].rec.name); }
+    lead = '<p class="saidplain">You are <b>'+esc(usdGrouped(over))+' over</b>. '+
+      esc(blame.slice(0,4).join(", "))+' '+(blame.length===1?"is":"are")+' what carries it. Move one of them to a cheaper night and the number comes back.</p>';
+  } else {
+    lead = '<p class="saidplain">You are <b>'+esc(usdGrouped(Math.abs(over)))+' under</b> the budget. The dearest night is <b>'+
+      esc(meals[0].rec.name)+'</b> at '+esc(usdGrouped(meals[0].cost))+'.</p>';
+  }
+  var rows = meals.map(function(m,i){
+    var per = m.perServing;
+    return '<tr><td class="rankno">'+(i+1)+'</td><td><b>'+esc(m.rec.name)+'</b><br><span class="rankno">'+esc(DAYNAME[m.day])+
+      (m.slot!=="d"?" · "+esc(m.slotName):"")+' · '+m.eat+' eating</span></td>'+
+      '<td class="rt">'+esc(usdGrouped(m.cost))+'</td>'+
+      '<td class="rt">'+(per===null?DASH:esc(usdGrouped(per)))+'</td></tr>';
+  }).join("");
+  el("drivebody").innerHTML = lead +
+    '<table class="plainrows"><caption class="hushed">Planned meals ranked by what they cost</caption>'+
+    '<thead><tr><th></th><th>Meal</th><th class="rt">Cost</th><th class="rt">Per serving</th></tr></thead><tbody>'+
+    rows+'</tbody></table>';
+}
+
+/* ── the cupboard ───────────────────────────────────────────── */
+function catOptions(sel){
+  return CAT_NAMES.map(function(n){ return '<option value="'+esc(n)+'"'+(n===sel?" selected":"")+'>'+esc(n)+'</option>'; }).join("");
+}
+function unitOptions(sel){
+  return UNIT_LIST.map(function(u){ return '<option value="'+u+'"'+(u===sel?" selected":"")+'>'+u+'</option>'; }).join("");
+}
+function paintPantry(){
+  if(!state.pantry.length){
+    el("pantryrows").innerHTML = '<p class="saidplain">Nothing logged. Everything on the plan gets bought.</p>'; return;
+  }
+  el("pantryrows").innerHTML = state.pantry.map(function(p,i){
+    return '<div class="stockline">'+
+      '<label class="hushed" for="pn'+i+'">Cupboard item '+(i+1)+'</label>'+
+      '<select class="jot" id="pn'+i+'" data-fk="pn'+i+'" data-act="pname" data-i="'+i+'">'+catOptions(p.name)+'</select>'+
+      '<label class="hushed" for="pq'+i+'">Amount</label>'+
+      '<input class="jot" id="pq'+i+'" data-fk="pq'+i+'" data-act="pqty" data-i="'+i+'" type="number" min="0" step="any" value="'+esc(p.qty)+'">'+
+      '<label class="hushed" for="pu'+i+'">Unit</label>'+
+      '<select class="jot" id="pu'+i+'" data-fk="pu'+i+'" data-act="punit" data-i="'+i+'">'+unitOptions(p.unit)+'</select>'+
+      '<button type="button" class="binbtn" data-act="pdel" data-i="'+i+'" aria-label="Remove '+esc(p.name)+' from the cupboard">×</button>'+
+      '</div>';
+  }).join("");
+}
+
+/* ── the recipe shelf ───────────────────────────────────────── */
+var shelfQ = "", shelfKid = false, shelfFreeze = false, shelfQuick = false;
+function paintShelf(model){
+  var open = firstOpenSlot();
+  var q = shelfQ.trim().toLowerCase();
+  var rows = LIBRARY.slice().sort(function(a,b){ return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; }).filter(function(r){
+    if(shelfKid && !r.kid) return false;
+    if(shelfFreeze && !r.freeze) return false;
+    if(shelfQuick && r.mins > 30) return false;
+    if(q){
+      if(r.name.toLowerCase().indexOf(q) >= 0) return true;
+      for(var i=0;i<r.ings.length;i++) if(r.ings[i].name.indexOf(q) >= 0) return true;
+      return false;
+    }
+    return true;
+  });
+  var html = rows.map(function(r){
+    var c = 0, miss = 0;
+    r.ings.forEach(function(ing){ var v = costOf(ing.name, ing.qty, ing.unit); if(v===null) miss++; else c += v; });
+    var per = safeDiv(c, r.serves);
+    return '<div class="shelfline">'+
+      '<span class="shelfname">'+esc(r.name)+'</span>'+
+      '<span class="shelfcost">'+(per===null?DASH:esc(usdGrouped(per)))+'<small>a serving</small></span>'+
+      '<button type="button" class="shelfadd" data-act="shelfadd" data-rec="'+r.id+'"'+(open?"":" disabled")+'>'+
+        (open ? "Add to "+esc(DAYSHORT[open.day]) : "Week full")+'</button>'+
+      '<span class="shelfmeta">'+r.mins+' min · serves '+r.serves+
+        (r.kid?' · kids eat it':'')+(r.freeze?' · freezes':'')+
+        (miss?' · '+miss+' item'+(miss===1?"":"s")+' not costed':'')+'</span>'+
+      '</div>';
+  }).join("");
+  el("shelfroll").innerHTML = html || '<p class="saidplain">Nothing on the shelf matches that.</p>';
+  var hunt = el("hunt");
+  if(hunt && hunt.value !== shelfQ) hunt.value = shelfQ;
+  hunt.setAttribute("placeholder", "Search "+LIBRARY.length+" meals…");
+}
+
+/* ── after the shop ─────────────────────────────────────────── */
+function paintTill(model){
+  var t = state.till;
+  var wantDate = t.date || ymd(todayUTC());
+  if(el("tilldate").value !== wantDate && document.activeElement !== el("tilldate")) el("tilldate").value = wantDate;
+  if(el("tilltotal").value !== t.total) el("tilltotal").value = t.total;
+  if(el("tillpeople").value !== String(t.people)) el("tillpeople").value = t.people;
+  el("movedrows").innerHTML = t.moved.length ? t.moved.map(function(m,i){
+    return '<div class="moved">'+
+      '<label class="hushed" for="mv'+i+'">Item whose price moved</label>'+
+      '<select class="jot" id="mv'+i+'" data-fk="mv'+i+'" data-act="mvname" data-i="'+i+'">'+catOptions(m.name)+'</select>'+
+      '<label class="hushed" for="mp'+i+'">Pack price paid</label>'+
+      '<input class="jot" id="mp'+i+'" data-fk="mp'+i+'" data-act="mvprice" data-i="'+i+'" type="number" min="0" step="0.01" placeholder="'+esc(money(effPrice(m.name)))+'" value="'+esc(m.price)+'">'+
+      '<button type="button" class="binbtn" data-act="mvdel" data-i="'+i+'" aria-label="Remove this price change">×</button></div>';
+  }).join("") : '<p class="saidplain">None yet. Most weeks it is two or three things.</p>';
+
+  var last = state.shops[state.shops.length-1];
+  if(last){
+    var gap = last.actual - last.planned;
+    var pp = safeDiv(last.actual, last.people);
+    el("tillverdict").innerHTML = 'Last logged shop, '+esc(prettyDay(parseYMD(last.d)))+': planned <b>'+esc(usdGrouped(last.planned))+
+      '</b>, till said <b>'+esc(usdGrouped(last.actual))+'</b> — '+
+      '<span class="'+(gap>0?"driftup":"driftdown")+'">'+esc(usdGrouped(Math.abs(gap)))+(gap>0?" over":" under")+' the plan</span>. '+
+      (pp===null?"":'That is '+esc(usdGrouped(pp))+' a head.');
+  } else {
+    el("tillverdict").innerHTML = 'No shop logged yet. The first receipt you type turns these estimates into your prices.';
+  }
+
+  var drifts = Object.keys(state.obs).filter(function(k){ return state.obs[k].length >= 2; }).map(function(k){
+    var a = state.obs[k], first = a[0], lastp = a[a.length-1];
+    var pct = safeDiv(lastp - first, first);
+    return {name:k, first:first, last:lastp, avg:effPrice(k), pct:pct};
+  }).sort(function(x,y){ return (y.pct===null?-9:y.pct) - (x.pct===null?-9:x.pct); });
+  el("driftbody").innerHTML = drifts.length ?
+    '<table class="plainrows"><caption class="hushed">Per-pack price drift across your last three shops</caption><thead><tr><th>Item</th><th class="rt">Then</th><th class="rt">Now</th><th class="rt">Used</th><th class="rt">Drift</th></tr></thead><tbody>'+
+    drifts.map(function(d){
+      var cls = d.pct===null?"":(d.pct>0.005?"driftup":(d.pct<-0.005?"driftdown":""));
+      var txt = d.pct===null?DASH:((d.pct>0?"+":"")+(d.pct*100).toFixed(1)+"%");
+      return '<tr><td>'+esc(d.name)+'</td><td class="rt">'+esc(usdGrouped(d.first))+'</td><td class="rt">'+esc(usdGrouped(d.last))+
+        '</td><td class="rt">'+esc(usdGrouped(d.avg))+'</td><td class="rt '+cls+'">'+esc(txt)+'</td></tr>';
+    }).join("")+'</tbody></table>'+
+    '<p class="saidplain">“Used” is the average of your last three shops — that is the price this week&rsquo;s number is built on.</p>'
+    : '<p class="saidplain">Log two shops and the drift table starts here.</p>';
+}
+
+/* ── the year ───────────────────────────────────────────────── */
+function paintYear(model){
+  var y = yearModel();
+  var avoidedYTD = y.avoided + model.savedConsolidation + model.savedCupboard;
+  el("yearband").innerHTML =
+    yfig("Weeks logged", y.weeks || DASH) +
+    yfig("Spent", y.weeks?usdGrouped(y.actual):DASH) +
+    yfig("Against budget", y.weeks?(usdGrouped(Math.abs(y.delta))+(y.delta>=0?" under":" over")):DASH) +
+    yfig("A week", y.perWeek===null?DASH:usdGrouped(y.perWeek)) +
+    yfig("Per person, per week", y.perPersonWeek===null?DASH:usdGrouped(y.perPersonWeek)) +
+    yfig("Packs fully used", y.packShare===null?DASH:(Math.round(y.packShare*100)+"%"));
+  el("trendbox").innerHTML = trendSVG(y);
+  el("yearnote").innerHTML = '<p class="saidplain">Waste avoided so far, this week included: <b>'+esc(usdGrouped(avoidedYTD))+
+    '</b>. The published US average household bins about '+esc(usdGrouped(WASTE_AVERAGE))+' of food a year — that figure is theirs, not yours. '+
+    esc(y.packsFull)+' packs came home and got used; '+esc(y.packsPart)+' were part-used.</p>';
+
+  var ranked = LIBRARY.map(function(r){
+    var c = 0, miss = 0;
+    r.ings.forEach(function(ing){ var v = costOf(ing.name, ing.qty, ing.unit); if(v===null) miss++; else c += v; });
+    return {r:r, cost:c, per:safeDiv(c, r.serves), miss:miss};
+  }).filter(function(x){ return x.per !== null; });
+  ranked.sort(function(a,b){ return sortDear ? cents(b.per)-cents(a.per) : cents(a.per)-cents(b.per); });
+  var top = ranked.slice(0,20);
+  el("mealtable").innerHTML = '<table class="plainrows"><caption class="hushed">Top twenty meals by true cost per serving</caption>'+
+    '<thead><tr><th></th><th>Meal</th><th class="rt">Whole dish</th><th class="rt">Per serving</th></tr></thead><tbody>'+
+    top.map(function(x,i){ return '<tr><td class="rankno">'+(i+1)+'</td><td>'+esc(x.r.name)+
+      '<br><span class="rankno">serves '+x.r.serves+' · '+x.r.mins+' min'+(x.r.kid?' · kids eat it':'')+'</span></td>'+
+      '<td class="rt">'+esc(usdGrouped(x.cost))+'</td><td class="rt"><b>'+esc(usdGrouped(x.per))+'</b></td></tr>'; }).join("")+
+    '</tbody></table>';
+  el("mealsort").textContent = sortDear ? "Dearest per serving first" : "Cheapest per serving first";
+}
+function yfig(label, value){ return '<div class="yearfig"><i>'+esc(label)+'</i><b>'+esc(value)+'</b></div>'; }
+
+function trendSVG(y){
+  var W = 640, H = 190, PL = 46, PR = 12, PT = 14, PB = 26;
+  if(!y.shops.length) return '<p class="saidplain">No shops logged yet — the trend line starts with your first receipt.</p>';
+  var vals = y.shops.map(function(s){ return s.actual; });
+  var hi = Math.max(state.budget, Math.max.apply(null, vals)) * 1.08;
+  var lo = Math.min(state.budget, Math.min.apply(null, vals)) * 0.92;
+  if(!(hi > lo)) { hi = lo + 1; }
+  var n = vals.length;
+  function X(i){ return n===1 ? (PL + (W-PL-PR)/2) : PL + (W-PL-PR) * (i/(n-1)); }
+  function Y(v){ return PT + (H-PT-PB) * (1 - (v-lo)/(hi-lo)); }
+  var pts = vals.map(function(v,i){ return X(i).toFixed(1)+","+Y(v).toFixed(1); }).join(" ");
+  var area = "M"+X(0).toFixed(1)+","+(H-PB)+" L"+vals.map(function(v,i){ return X(i).toFixed(1)+","+Y(v).toFixed(1); }).join(" L")+" L"+X(n-1).toFixed(1)+","+(H-PB)+" Z";
+  var by = Y(state.budget).toFixed(1);
+  var dots = vals.map(function(v,i){ return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.6" fill="#141A16"/>'; }).join("");
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weekly grocery spend across the last '+n+' shops, against a '+usdGrouped(state.budget)+' budget line. Average '+(y.perWeek===null?"unknown":usdGrouped(y.perWeek))+' a week.">'+
+    '<path d="'+area+'" fill="#141A16" opacity="0.07"/>'+
+    '<line x1="'+PL+'" y1="'+by+'" x2="'+(W-PR)+'" y2="'+by+'" stroke="#B0331C" stroke-width="1.6" stroke-dasharray="6 4"/>'+
+    '<text x="'+(W-PR)+'" y="'+(+by-6)+'" text-anchor="end" font-size="11" fill="#B0331C" font-family="DM Sans, sans-serif">'+esc(usdGrouped(state.budget))+' budget</text>'+
+    '<polyline points="'+pts+'" fill="none" stroke="#141A16" stroke-width="2.2" stroke-linejoin="round"/>'+dots+
+    '<text x="0" y="'+(Y(hi*0.995)+4).toFixed(1)+'" font-size="11" fill="#656C61" font-family="DM Sans, sans-serif">'+esc(usdGrouped(hi))+'</text>'+
+    '<text x="0" y="'+(H-PB)+'" font-size="11" fill="#656C61" font-family="DM Sans, sans-serif">'+esc(usdGrouped(lo))+'</text>'+
+    '<text x="'+PL+'" y="'+(H-6)+'" font-size="11" fill="#656C61" font-family="DM Sans, sans-serif">'+esc(prettyDay(parseYMD(y.shops[0].d)))+'</text>'+
+    '<text x="'+(W-PR)+'" y="'+(H-6)+'" text-anchor="end" font-size="11" fill="#656C61" font-family="DM Sans, sans-serif">'+esc(prettyDay(parseYMD(y.shops[n-1].d)))+'</text>'+
+    '</svg>';
+}
+
+/* ── THE LIST (right pane) ──────────────────────────────────── */
+function itemKey(it){ return it.name+"|"+it.family; }
+function paintList(model){
+  var aisleCount = {};
+  model.items.forEach(function(it){ aisleCount[it.aisle] = (aisleCount[it.aisle]||0)+1; });
+  el("listcount").textContent = model.items.length + " line" + (model.items.length===1?"":"s") +
+    " · " + Object.keys(aisleCount).length + " aisle" + (Object.keys(aisleCount).length===1?"":"s");
+  var p = moneyParts(model.weekTotal);
+  el("listtotal").innerHTML = '<span>'+esc(p.big)+'</span><span class="cents">'+esc(p.small)+'</span>';
+  var d = state.budget - model.weekTotal, under = cents(d)>=0;
+  el("basketband").innerHTML = '<b>The standing basket</b><em>'+esc(usdGrouped(model.basket))+'</em>'+
+    '<i>Milk, cereal, fruit, lunchboxes, cleaning. Not itemised, not planned — set on the left. The seven dinners below come to '+
+    esc(usdGrouped(model.shopTotal))+' on top of it.</i>';
+  el("listsub").innerHTML = '<span class="'+(under?"good":"bad")+'">'+esc(usdGrouped(Math.abs(d)))+" "+(under?"under":"over")+
+    '</span> the '+esc(usdGrouped(state.budget))+' budget · '+
+    (model.perServing===null?DASH:esc(usdGrouped(model.perServing)))+' a serving'+
+    (model.uncosted? ' · <b>'+model.uncosted+' line'+(model.uncosted===1?"":"s")+' not costed</b>':'');
+
+  var html = "", lastAisle = -1, run = cents(model.basket), crossed = false, budgetC = cents(state.budget);
+  var groupTotals = {};
+  model.items.forEach(function(it){ groupTotals[it.aisle] = (groupTotals[it.aisle]||0) + cents(it.cost||0); });
+
+  model.items.forEach(function(it){
+    if(it.aisle !== lastAisle){
+      if(lastAisle !== -1) html += '</div>';
+      lastAisle = it.aisle;
+      html += '<section class="aisleband"><h3 class="aislename">'+esc(AISLES[it.aisle])+
+        ' <em>'+esc(usdGrouped(groupTotals[it.aisle]/100))+'</em></h3><div>';
+    }
+    var key = itemKey(it);
+    var newC = cents(it.cost||0);
+    var moved = (lastCosts[key] !== undefined && lastCosts[key] !== newC);
+    run += newC;
+    var got = !!state.got[key];
+    var why = [];
+    if(it.oddUnit){
+      why.push('<span class="spare">listed on its own — '+esc(it.unit)+' will not convert to the '+esc(CATALOG[it.name]?CATALOG[it.name].packUnit:"pack")+' this is sold in, so it is not costed</span>');
+    } else if(it.packText){
+      why.push(esc(it.packText));
+      if(it.risk > 0.0000001) why.push('<span class="spare">'+esc(speak(it.leftover, it.family, it.unit))+' spare, '+esc(usdGrouped(it.risk))+' at risk</span>');
+      else if(it.leftover > 0.0000001) why.push(esc(speak(it.leftover, it.family, it.unit))+' spare, it keeps');
+    }
+    if(it.from.length) why.push(esc(it.from.slice(0,3).join(", ")) + (it.from.length>3?" +"+(it.from.length-3):""));
+    html += '<div class="itemline'+(moved?" flashed":"")+'" data-got="'+(got?1:0)+'">'+
+      '<button type="button" class="itembox" data-act="got" data-key="'+esc(key)+'" aria-pressed="'+(got?"true":"false")+
+        '" aria-label="'+esc(it.name)+' in the trolley"></button>'+
+      '<span class="itemname"><b>'+esc(countish(it.base, it.family, it.unit))+'</b> '+esc(it.name)+'</span>'+
+      '<span class="itemcost'+(it.cost===null?" nocost":"")+'">'+(it.cost===null?DASH:esc(usdGrouped(it.cost)))+
+        '<small>'+esc(usdGrouped(run/100))+'</small></span>'+
+      '<span class="itemwhy">'+why.join(" · ")+'</span></div>';
+    lastCosts[key] = newC;
+    if(!crossed && run > budgetC && budgetC > 0){
+      crossed = true;
+      html += '</div></section><p class="crossline">'+esc(usdGrouped(state.budget))+' budget crossed here</p>'+
+        '<section class="aisleband"><h3 class="aislename">'+esc(AISLES[it.aisle])+' <em>continued</em></h3><div>';
+    }
+  });
+  if(lastAisle !== -1) html += '</div></section>';
+  if(!model.items.length){
+    html = '<p class="listsub" style="margin-top:26px">Nothing planned yet, so there is nothing to buy. Pick a meal on the left and this list writes itself.</p>';
+  } else if(!crossed){
+    html += '<p class="crossline clear">finished '+esc(usdGrouped(Math.abs(d)))+' under the line</p>';
+  }
+  el("aisles").innerHTML = html;
+
+  var cov = {};
+  model.covered.forEach(function(c){
+    var k = c.name+"|"+c.family;
+    cov[k] = cov[k] || {name:c.name, base:0, family:c.family, unit:c.unit};
+    cov[k].base += c.base;
+  });
+  var covKeys = Object.keys(cov);
+  el("coveredband").hidden = covKeys.length === 0;
+  el("coveredrows").innerHTML = covKeys.map(function(k){
+    return '<div class="coveredline">'+esc(countish(cov[k].base, cov[k].family, cov[k].unit))+' '+esc(cov[k].name)+'</div>';
+  }).join("");
+
+  el("colophon").innerHTML = 'This week the list saved '+esc(usdGrouped(model.savedConsolidation))+
+    ' by buying shared ingredients once instead of once per recipe, and skipped '+
+    esc(usdGrouped(model.savedCupboard))+' that is already in the cupboard. '+
+    (saveNotice ? '<br><b>'+esc(saveNotice)+'</b>' : 'Saved in this browser only.');
+}
+
+/* ── the printed deliverable ────────────────────────────────── */
+function paintPrint(model){
+  var dates = weekDates();
+  var byCell = {}; model.meals.forEach(function(m){ byCell[m.day+"|"+m.slot] = m; });
+  var rows = "";
+  for(var i=0;i<7;i++){
+    var slots = state.showAllSlots ? SLOTS : [SLOTS[0]];
+    for(var s=0;s<slots.length;s++){
+      var key = slots[s][0], m = byCell[i+"|"+key], cell = state.plan[i][key];
+      var what, note, cost;
+      if(m){ what = m.rec.name; note = m.rec.method + " (" + m.rec.mins + " min, " + m.eat + " eating)"; cost = usdGrouped(m.cost); }
+      else if(cell && typeof cell.lo === "number"){
+        var src = state.plan[cell.lo][key];
+        what = "Leftovers"; note = "From " + DAYNAME[cell.lo] + "'s " + (src && src.r && BY_ID[src.r] ? BY_ID[src.r].name : "batch") + " — nothing to buy.";
+        cost = usdGrouped(0);
+      } else { what = "—"; note = "Nothing planned."; cost = "—"; }
+      rows += '<tr><td class="pday">'+(s===0?esc(DAYSHORT[i])+" "+dates[i].getUTCDate():"")+
+        (slots.length>1?'<br><span style="font-size:8pt">'+esc(slots[s][1])+'</span>':'')+'</td>'+
+        '<td><b>'+esc(what)+'</b><br><span style="font-size:8.4pt">'+esc(note)+'</span></td>'+
+        '<td class="rt">'+esc(cost)+'</td></tr>';
+    }
+  }
+  var d = state.budget - model.weekTotal, under = cents(d) >= 0;
+  var y = yearModel();
+  var avoidedYTD = y.avoided + model.savedConsolidation + model.savedCupboard;
+  var payback =
+    '<div class="ppayback"><h3>What the planning did this week</h3><dl>'+
+    '<dt>Seven dinners, itemised</dt><dd>'+esc(usdGrouped(model.shopTotal))+'</dd>'+
+    '<dt>Standing basket (breakfasts, lunches, household)</dt><dd>'+esc(usdGrouped(model.basket))+'</dd>'+
+    '<dt>Planned shop</dt><dd>'+esc(usdGrouped(model.weekTotal))+'</dd>'+
+    '<dt>Weekly budget</dt><dd>'+esc(usdGrouped(state.budget))+'</dd>'+
+    '<dt>'+(under?"Under budget":"Over budget")+'</dt><dd>'+esc(usdGrouped(Math.abs(d)))+'</dd>'+
+    '<dt>Saved by buying shared items once, not once per recipe</dt><dd>'+esc(usdGrouped(model.savedConsolidation))+'</dd>'+
+    '<dt>Not bought — already in the cupboard</dt><dd>'+esc(usdGrouped(model.savedCupboard))+'</dd>'+
+    '<dt>Still at risk in part-packs</dt><dd>'+esc(usdGrouped(model.riskTotal))+'</dd>'+
+    '<dt>Waste avoided so far this year</dt><dd>'+esc(usdGrouped(avoidedYTD))+'</dd>'+
+    '<dt>Published US household food waste, a year</dt><dd>'+esc(usdGrouped(WASTE_AVERAGE))+'</dd>'+
+    '</dl></div>';
+  var disc = '<p class="pdisc">Costs are only as good as the prices you enter.'+
+    '<small>Pack prices come from your own receipts (the last three shops, averaged) or from the starting estimates until you replace them. '+
+    'The waste average is a published national figure, not a measurement of your household.</small></p>';
+
+  var listHTML = "", lastA = -1, run = cents(model.basket), crossed = false;
+  listHTML = '<div class="paisle">The standing basket</div><div class="pitem"><span class="pbox"></span>'+
+    '<span class="pn"><b>Milk, cereal, fruit, lunchboxes, cleaning</b> <span style="font-size:8pt">(not itemised)</span></span>'+
+    '<span class="pc">'+esc(usdGrouped(model.basket))+'</span><span class="pr">'+esc(usdGrouped(model.basket))+'</span></div>';
+  model.items.forEach(function(it){
+    if(it.aisle !== lastA){ lastA = it.aisle; listHTML += '<div class="paisle">'+esc(AISLES[it.aisle])+'</div>'; }
+    run += cents(it.cost||0);
+    listHTML += '<div class="pitem"><span class="pbox"></span>'+
+      '<span class="pn"><b>'+esc(countish(it.base, it.family, it.unit))+'</b> '+esc(it.name)+
+      (it.packText?' <span style="font-size:8pt">('+esc(it.packText)+')</span>':'')+'</span>'+
+      '<span class="pc">'+(it.cost===null?"—":esc(usdGrouped(it.cost)))+'</span>'+
+      '<span class="pr">'+esc(usdGrouped(run/100))+'</span></div>';
+    if(!crossed && run > cents(state.budget) && state.budget > 0){
+      crossed = true;
+      listHTML += '<p class="pcross">'+esc(usdGrouped(state.budget))+' budget crossed here</p>';
+    }
+  });
+  if(!model.items.length) listHTML += '<p>No meals planned, so the list is just the standing basket.</p>';
+
+  el("printsheet").innerHTML =
+    '<div class="psheet"><div class="phead"><h2>The week &mdash; '+esc(state.house)+'</h2>'+
+      '<span>'+esc(prettyDay(dates[0]))+' to '+esc(prettyDay(dates[6]))+'<br>'+esc(usdGrouped(model.weekTotal))+' planned</span></div>'+
+      '<table class="ptable"><thead><tr><th>Day</th><th>On the table</th><th class="rt">Cost</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      payback + disc + '</div>'+
+    '<div class="psheet"><div class="phead"><h2>The list</h2><span>Aisle order · '+model.items.length+' lines<br>'+
+      esc(usdGrouped(model.weekTotal))+' running total</span></div>'+
+      listHTML +
+      '<div class="ppayback" style="margin-top:14pt"><h3>Total</h3><dl><dt>Meal plan, itemised</dt><dd>'+esc(usdGrouped(model.shopTotal))+'</dd>'+
+      '<dt>Standing basket</dt><dd>'+esc(usdGrouped(model.basket))+'</dd><dt>Shopping list</dt><dd>'+esc(usdGrouped(model.weekTotal))+'</dd>'+
+      '<dt>Budget</dt><dd>'+esc(usdGrouped(state.budget))+'</dd><dt>'+(under?"Under":"Over")+'</dt><dd>'+esc(usdGrouped(Math.abs(d)))+'</dd></dl></div>'+
+      disc + '</div>';
+}
+
+/* ═══ EXPORT ════════════════════════════════════════════════════ */
+function drop(name, mime, text){
+  try{
+    var blob = new Blob([text], {type:mime});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 4000);
+  } catch(e){ say("This browser blocked the download."); }
+}
+function q(v){ return '"' + String(v==null?"":v).replace(/"/g,'""') + '"'; }
+function csvOut(){
+  var m = LAST || compute();
+  var rows = [["Aisle","Item","Quantity","Unit","Packs","Pack size","Pack price","Line cost","Running total","For these meals"].map(q).join(",")];
+  var run = 0;
+  m.items.forEach(function(it){
+    var cat = CATALOG[it.name];
+    run += cents(it.cost||0);
+    var amount = it.family==="mass" || it.family==="vol" ? Math.round(it.base*100)/100 : Math.round(it.base*100)/100;
+    var unit = it.family==="mass" ? "g" : it.family==="vol" ? "ml" : it.unit;
+    rows.push([AISLES[it.aisle], it.name, amount, unit,
+      it.packs==null?"":it.packs,
+      cat?packWords(cat):"",
+      cat?money(effPrice(it.name)):"",
+      it.cost==null?"":money(it.cost),
+      money(run/100), it.from.join("; ")].map(q).join(","));
+  });
+  rows.push(["","","","","","","","","",""].map(q).join(","));
+  rows.push(["","MEAL PLAN SUBTOTAL","","","","","",money(m.shopTotal),money(m.shopTotal),""].map(q).join(","));
+  rows.push(["","STANDING BASKET (not itemised)","","","","","",money(m.basket),money(m.weekTotal),""].map(q).join(","));
+  rows.push(["","WEEK TOTAL","","","","","",money(m.weekTotal),money(m.weekTotal),""].map(q).join(","));
+  rows.push(["","BUDGET","","","","","",money(state.budget),"",""].map(q).join(","));
+  rows.push(["","Costs are only as good as the prices you enter.","","","","","","","",""].map(q).join(","));
+  return "﻿" + rows.join("\r\n") + "\r\n";
+}
+function say(msg){ var n = el("datasay"); if(n) n.textContent = msg; }
+
+/* ═══ ACTIONS ═══════════════════════════════════════════════════ */
+function setCell(day, slot, value){
+  if(value === "") state.plan[day][slot] = null;
+  else if(value.indexOf("lo:") === 0){
+    var d = +value.slice(3);
+    state.plan[day][slot] = (d>=0 && d<7 && d!==day) ? {lo:d} : null;
+  } else if(BY_ID[value]){
+    var prev = state.plan[day][slot];
+    state.plan[day][slot] = {r:value, eat:(prev && prev.eat) ? prev.eat : (state.people||4)};
+  }
+  /* a leftover pointing at a night that no longer cooks anything is just an empty night */
+  for(var i=0;i<7;i++) ["b","l","d"].forEach(function(k){
+    var c = state.plan[i][k];
+    if(c && typeof c.lo === "number" && !(state.plan[c.lo][k] && state.plan[c.lo][k].r)) state.plan[i][k] = null;
+  });
+  save(); renderAll();
+}
+function bumpEat(day, slot, by){
+  var c = state.plan[day][slot];
+  if(!c || !c.r) return;
+  c.eat = Math.max(1, Math.min(30, (c.eat||4) + by));
+  save(); renderAll();
+}
+function logShop(){
+  var t = state.till;
+  var total = parseFloat(t.total);
+  var d = parseYMD(t.date) ? t.date : ymd(todayUTC());
+  if(!(isFinite(total) && total > 0)){
+    el("tillverdict").innerHTML = '<b>Type the till total first.</b> Everything else is optional.';
+    return;
+  }
+  var m = LAST || compute();
+  t.moved.forEach(function(mv){
+    var p = parseFloat(mv.price);
+    if(!(isFinite(p) && p > 0) || !CATALOG[mv.name]) return;
+    var arr = state.obs[mv.name] ? state.obs[mv.name].slice() : [];
+    arr.push(Math.round(p*100)/100);
+    state.obs[mv.name] = arr.slice(-3);
+  });
+  state.shops.push({ d:d, planned:Math.round(m.weekTotal*100)/100, actual:Math.round(total*100)/100,
+    people:Math.max(1, Math.round(t.people||4)),
+    avoided:Math.round((m.savedConsolidation + m.savedCupboard)*100)/100,
+    full:m.packsFull, part:m.packsPart });
+  state.shops = state.shops.slice(-260);
+  state.till = {date:"", total:"", people:t.people, moved:[]};
+  state.sample = false;
+  save(); renderAll();
+  el("tillverdict").innerHTML = '<b>Logged.</b> That receipt is now part of the rolling average, and next week&rsquo;s estimate moved with it.';
+}
+function emptyState(){
+  var s = sampleState();
+  return { v:1, sample:false, house:s.house, budget:state?state.budget:250, people:state?state.people:4,
+    basket:state?state.basket:0,
+    weekStart:ymd(mondayOf(todayUTC())), showAllSlots:false, plan:blankPlan(), got:{},
+    pantry:[], obs:{}, shops:[], till:{date:"", total:"", people:4, moved:[]} };
+}
+
+/* ═══ WIRING ════════════════════════════════════════════════════ */
+function onClick(ev){
+  var b = ev.target.closest ? ev.target.closest("button") : null;
+  if(!b) return;
+  var act = b.getAttribute("data-act");
+  var fold = b.getAttribute("data-fold");
+  if(fold){
+    var body = el(fold);
+    var open = body.hidden;
+    body.hidden = !open;
+    b.setAttribute("aria-expanded", open ? "true" : "false");
+    b.textContent = open ? "Hide" : "Show";
+    return;
+  }
+  if(b.id === "slotstoggle"){
+    state.showAllSlots = !state.showAllSlots;
+    b.setAttribute("aria-pressed", state.showAllSlots ? "true":"false");
+    b.textContent = state.showAllSlots ? "Dinner only" : "Also plan breakfast & lunch";
+    save(); renderAll(); return;
+  }
+  if(b.id === "clearweek"){ state.plan = blankPlan(); state.sample = false; save(); renderAll(); return; }
+  if(b.id === "addpantry"){ state.pantry.push({name:CAT_NAMES[0], qty:0, unit:"g"}); save(); renderAll(); return; }
+  if(b.id === "addmoved"){ state.till.moved.push({name:"milk", price:""}); save(); renderAll(); return; }
+  if(b.id === "logshop"){ logShop(); return; }
+  if(b.id === "mealsort"){ sortDear = !sortDear; b.setAttribute("aria-pressed", sortDear?"true":"false"); renderAll(); return; }
+  if(b.id === "printbtn"){ window.print(); return; }
+  if(b.id === "csvbtn"){ drop("the-week-list-"+state.weekStart+".csv", "text/csv;charset=utf-8", csvOut()); return; }
+  if(b.id === "jsonbtn" || b.id === "expjson"){
+    drop("the-week-"+state.weekStart+".json", "application/json", JSON.stringify(state, null, 2));
+    say("Backup written to your downloads."); return; }
+  if(b.id === "impjson"){ el("filepick").click(); return; }
+  if(b.id === "wipesample"){
+    state = emptyState(); lastCosts = {}; save(); renderAll();
+    say("Sample family cleared. The week is empty and the history is gone."); return; }
+  if(b.getAttribute("data-sift")){
+    var k = b.getAttribute("data-sift");
+    var on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", on?"true":"false");
+    if(k==="kid") shelfKid = on; if(k==="freeze") shelfFreeze = on; if(k==="quick") shelfQuick = on;
+    renderAll(); return;
+  }
+  if(!act) return;
+  var i = +b.getAttribute("data-i");
+  if(act === "eat-") bumpEat(+b.getAttribute("data-day"), b.getAttribute("data-slot"), -1);
+  else if(act === "eat+") bumpEat(+b.getAttribute("data-day"), b.getAttribute("data-slot"), 1);
+  else if(act === "pdel"){ state.pantry.splice(i,1); save(); renderAll(); }
+  else if(act === "mvdel"){ state.till.moved.splice(i,1); save(); renderAll(); }
+  else if(act === "got"){
+    var key = b.getAttribute("data-key");
+    if(state.got[key]) delete state.got[key]; else state.got[key] = true;
+    save();
+    b.setAttribute("aria-pressed", state.got[key]?"true":"false");
+    var line = b.closest(".itemline"); if(line) line.setAttribute("data-got", state.got[key]?"1":"0");
+  }
+  else if(act === "useup" || act === "shelfadd"){
+    var day = b.getAttribute("data-day"), slot = b.getAttribute("data-slot");
+    if(day === null || slot === null){ var o = firstOpenSlot(); if(!o) return; day = o.day; slot = o.slot; }
+    state.sample = state.sample;
+    setCell(+day, slot, b.getAttribute("data-rec"));
+    var pick = el("pick-"+day+"-"+slot); if(pick) pick.focus({preventScroll:true});
+  }
+}
+function onChange(ev){
+  var t = ev.target;
+  var act = t.getAttribute && t.getAttribute("data-act");
+  if(t.classList && t.classList.contains("dish")){
+    setCell(+t.getAttribute("data-day"), t.getAttribute("data-slot"), t.value); return;
+  }
+  var i = +(t.getAttribute("data-i"));
+  if(act === "pname"){ state.pantry[i].name = t.value; save(); renderAll({pantry:true}); }
+  else if(act === "punit"){ state.pantry[i].unit = UNITS[t.value] ? t.value : "g"; save(); renderAll({pantry:true}); }
+  else if(act === "mvname"){ state.till.moved[i].name = t.value; save(); renderAll({till:true}); }
+}
+function onInput(ev){
+  var t = ev.target;
+  var act = t.getAttribute && t.getAttribute("data-act");
+  var i = +(t.getAttribute("data-i"));
+  if(act === "pqty"){ state.pantry[i].qty = Math.max(0, parseFloat(t.value)||0); save(); renderAll({pantry:true}); return; }
+  if(act === "mvprice"){ state.till.moved[i].price = t.value; save(); return; }
+  if(t.id === "hunt"){ shelfQ = t.value; renderAll({shelf:false}); return; }
+  if(t.id === "budgetin"){
+    var v = parseFloat(t.value);
+    state.budget = (isFinite(v) && v > 0) ? Math.round(v*100)/100 : 0;
+    save(); renderAll(); return; }
+  if(t.id === "basketin"){
+    var bv = parseFloat(t.value);
+    state.basket = (isFinite(bv) && bv >= 0) ? Math.round(bv*100)/100 : 0;
+    save(); renderAll(); return; }
+  if(t.id === "housein"){ state.house = t.value.slice(0,40) || "Your house"; save(); renderAll(); return; }
+  if(t.id === "tilldate"){ state.till.date = t.value; save(); return; }
+  if(t.id === "tilltotal"){ state.till.total = t.value; save(); return; }
+  if(t.id === "tillpeople"){ state.till.people = Math.max(1, Math.round(parseFloat(t.value)||4)); save(); return; }
+}
+
+/* ═══ THE SEAM ══════════════════════════════════════════════════ */
+var SPLITKEY = "the-week.seam";
+function applySplit(pct){
+  pct = Math.max(24, Math.min(74, pct));
+  el("bench").style.setProperty("--split-at", pct.toFixed(2)+"%");
+  var s = el("seam");
+  s.setAttribute("aria-valuenow", Math.round(pct));
+  s.setAttribute("aria-valuetext", Math.round(pct)+"% of the bench given to the plan");
+  try { window.localStorage.setItem(SPLITKEY, String(Math.round(pct))); } catch(e){}
+  return pct;
+}
+function seamSetup(){
+  var seam = el("seam"), bench = el("bench");
+  function vertical(){ return window.matchMedia("(max-width:900px)").matches; }
+  var cur = vertical() ? 54 : 47;
+  try { var st = window.localStorage.getItem(SPLITKEY); if(st && isFinite(+st)) cur = +st; } catch(e){}
+  function sync(){ seam.setAttribute("aria-orientation", vertical() ? "horizontal" : "vertical"); }
+  sync();
+  cur = applySplit(cur);
+  window.addEventListener("resize", sync);
+  var dragging = false;
+  seam.addEventListener("pointerdown", function(e){
+    dragging = true; seam.setAttribute("data-grab","1");
+    try { seam.setPointerCapture(e.pointerId); } catch(err){}
+    e.preventDefault();
+  });
+  seam.addEventListener("pointermove", function(e){
+    if(!dragging) return;
+    var r = bench.getBoundingClientRect();
+    var pct = vertical() ? ((e.clientY - r.top) / (r.height||1)) * 100
+                         : ((e.clientX - r.left) / (r.width||1)) * 100;
+    cur = applySplit(pct);
+  });
+  function stop(e){ if(!dragging) return; dragging = false; seam.removeAttribute("data-grab");
+    try { seam.releasePointerCapture(e.pointerId); } catch(err){} }
+  seam.addEventListener("pointerup", stop);
+  seam.addEventListener("pointercancel", stop);
+  seam.addEventListener("keydown", function(e){
+    var k = e.key, step = e.shiftKey ? 8 : 2, moved = true;
+    if(k === "ArrowLeft" || k === "ArrowUp") cur = applySplit(cur - step);
+    else if(k === "ArrowRight" || k === "ArrowDown") cur = applySplit(cur + step);
+    else if(k === "Home") cur = applySplit(28);
+    else if(k === "End") cur = applySplit(70);
+    else if(k === "Enter" || k === " ") cur = applySplit(cur > 50 ? 34 : 60);
+    else moved = false;
+    if(moved) e.preventDefault();
+  });
+}
+
+/* ═══ BOOT ══════════════════════════════════════════════════════ */
+function boot(){
+  state = load();
+  var m = parseYMD(state.weekStart), now = mondayOf(todayUTC());
+  if(!m || daysBetween(m, now) >= 7){ state.weekStart = ymd(now); }
+  el("budgetin").value = state.budget;
+  el("housein").value = state.house;
+  el("basketin").value = state.basket;
+  el("slotstoggle").setAttribute("aria-pressed", state.showAllSlots ? "true":"false");
+  el("slotstoggle").textContent = state.showAllSlots ? "Dinner only" : "Also plan breakfast & lunch";
+  renderAll();
+  save();
+  document.addEventListener("click", onClick);
+  document.addEventListener("change", onChange);
+  document.addEventListener("input", onInput);
+  el("filepick").addEventListener("change", function(ev){
+    var f = ev.target.files && ev.target.files[0];
+    if(!f) return;
+    var fr = new FileReader();
+    fr.onload = function(){
+      try {
+        var o = JSON.parse(String(fr.result));
+        state = repair(o); lastCosts = {};
+        el("budgetin").value = state.budget; el("housein").value = state.house; el("basketin").value = state.basket;
+        save(); renderAll();
+        say("Backup imported — " + state.shops.length + " shops and " + state.pantry.length + " cupboard items restored.");
+      } catch(err){ say("That file was not a backup this app wrote."); }
+      ev.target.value = "";
+    };
+    fr.onerror = function(){ say("That file could not be read."); ev.target.value = ""; };
+    fr.readAsText(f);
+  });
+  seamSetup();
+}
+if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+
+})();
+</script>
+</body>
+</html>

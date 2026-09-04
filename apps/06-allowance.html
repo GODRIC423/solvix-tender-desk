@@ -1,0 +1,2522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pocket Deck — chores, pocket money and the three pots</title>
+<meta name="description" content="A family allowance deck: chores your child marks done and you approve, every payout split into save, spend and give, parent-bank interest compounded on a schedule, family loans, savings goals and a printable quarterly statement per child. Works offline, nothing leaves your house.">
+<meta name="theme-color" content="#06584A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2306584A'/%3E%3Crect x='14' y='11' width='30' height='42' rx='5' fill='%23FBF4E6'/%3E%3Ccircle cx='40' cy='40' r='13' fill='%23F2B01E' stroke='%2306584A' stroke-width='3'/%3E%3Cpath d='M40 33v14M36 37h6a3 3 0 010 6h-4a3 3 0 000 6h6' stroke='%2306584A' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fjalla+One&family=Manrope:wght@400;600;800&display=swap">
+<style>
+:root{
+  --display:'Fjalla One','Haettenschweiler','Arial Narrow',system-ui,sans-serif;
+  --plain:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;
+
+  --felt-deep:#06584A; --felt-lift:#0a7460; --felt-sink:#03392f;
+
+  --leaf-face:#FBF4E6; --leaf-tint:#F1E7D2; --leaf-crease:#DDCEB0;
+  --leaf-lip:rgba(255,255,255,.72); --leaf-sink:#EAE0C8;
+
+  --figure-full:#181410; --figure-half:#4A4034; --figure-quiet:#6B5D4C;
+  --figure-bone:#FBF4E6;
+
+  --pot-save:#0F7A5A; --pot-spend:#B4451B; --pot-give:#6B3FA0; --pot-screen:#1E5AA8;
+
+  --coin:#F2B01E; --coin-sink:#B87F05; --flag:#C22E1F; --gain:#0F7A5A;
+
+  --swing:420ms cubic-bezier(.2,.85,.24,1); --snap:180ms cubic-bezier(.3,.9,.3,1);
+  --leaf-round:20px; --leaf-gutter:clamp(16px,4.4vw,30px); --strip:44px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;font-family:var(--plain);font-weight:400;
+  background:var(--felt-deep);color:var(--figure-bone);
+  overflow:hidden;overscroll-behavior:none;
+  font-size:16px;line-height:1.45;
+}
+h1,h2,h3,h4,p,ul,ol,figure{margin:0}
+ul{list-style:none;padding:0}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--coin);outline-offset:2px;border-radius:4px}
+.hushed{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skipto{position:fixed;left:8px;top:-60px;z-index:40;background:var(--leaf-face);color:var(--figure-full);
+  padding:9px 14px;border-radius:9px;font-weight:800;text-decoration:none;transition:top var(--snap)}
+.skipto:focus{top:10px}
+
+/* ── the ground: a saturated field that belongs to whoever the deck is showing ── */
+.felt{position:fixed;inset:0;z-index:0;background:var(--felt-deep);transition:background var(--swing)}
+.felt::after{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(128% 76% at 50% -14%, rgba(255,255,255,.17), rgba(255,255,255,0) 62%),
+    radial-gradient(90% 60% at 50% 118%, rgba(0,0,0,.34), rgba(0,0,0,0) 64%),
+    repeating-linear-gradient(46deg, rgba(255,255,255,.035) 0 2px, rgba(255,255,255,0) 2px 8px);
+}
+
+/* ── the only chrome: one thin progress hairline ── */
+.hairline{position:fixed;top:0;left:0;right:0;height:3px;z-index:12;background:rgba(0,0,0,.32)}
+.hairline-run{display:block;height:100%;width:0;background:var(--coin);
+  box-shadow:0 0 12px rgba(242,176,30,.6);transition:width var(--swing)}
+
+/* ── deck stage ── */
+.deck{position:relative;z-index:2;height:100vh;height:100svh;
+  display:grid;place-items:center;overflow:hidden;padding:30px 0 var(--strip)}
+.stage{position:relative;width:min(552px,100vw - 26px);
+  height:min(786px,100svh - var(--strip) - 50px);   /* a card, roughly 1:1.42 */
+  perspective:1400px;transform-style:preserve-3d}
+.stage.jump-up{animation:leafUp 380ms cubic-bezier(.2,.85,.24,1)}
+.stage.jump-down{animation:leafDown 380ms cubic-bezier(.2,.85,.24,1)}
+@keyframes leafUp{from{transform:translateY(34px);opacity:.15}to{transform:none;opacity:1}}
+@keyframes leafDown{from{transform:translateY(-34px);opacity:.15}to{transform:none;opacity:1}}
+
+.leaf{position:absolute;inset:0;background:var(--leaf-face);color:var(--figure-full);
+  border-radius:var(--leaf-round);display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 30px 62px -22px rgba(0,0,0,.62), 0 0 0 1px rgba(0,0,0,.16),
+             inset 0 1px 0 var(--leaf-lip);
+  transition:transform var(--swing),opacity var(--swing);will-change:transform;
+  contain:paint}
+.leaf[data-far="1"]{pointer-events:none;filter:saturate(.5) blur(2.6px)}
+.leaf[data-far="2"]{pointer-events:none;visibility:hidden}
+
+.leaf-head{flex:0 0 auto;background:var(--felt-deep);color:var(--figure-bone);
+  padding:11px var(--leaf-gutter) 12px;display:flex;align-items:center;gap:10px;
+  transition:background var(--swing)}
+.who{display:flex;align-items:baseline;gap:9px;min-width:0;flex:1 1 auto}
+.who-name{flex:0 0 auto;font-family:var(--display);font-size:1.32rem;letter-spacing:.045em;
+  text-transform:uppercase;white-space:nowrap}
+.who-age{flex:0 1 auto;min-width:0;font-size:.72rem;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turn{flex:0 0 auto;display:flex;gap:6px}
+.turn button{width:34px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.34);
+  background:rgba(255,255,255,.1);color:var(--figure-bone);cursor:pointer;display:grid;place-items:center;
+  transition:background var(--snap),transform var(--snap)}
+.turn button:hover{background:rgba(255,255,255,.24)}
+.turn button:active{transform:scale(.92)}
+.turn svg{width:13px;height:13px;display:block}
+
+.leaf-body{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding:var(--leaf-gutter);
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin;
+  /* a whisper of shadow only while there is more card below or above */
+  background:
+    linear-gradient(var(--leaf-face) 34%, rgba(251,244,230,0)) top/100% 24px no-repeat local,
+    linear-gradient(rgba(251,244,230,0), var(--leaf-face) 66%) bottom/100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(24,20,16,.17), rgba(24,20,16,0)) top/100% 11px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(24,20,16,.17), rgba(24,20,16,0)) bottom/100% 11px no-repeat scroll}
+.leaf-foot{flex:0 0 auto;padding:9px var(--leaf-gutter) 12px;border-top:1px solid var(--leaf-crease);
+  background:var(--leaf-tint);display:flex;align-items:center;gap:10px;justify-content:space-between}
+
+.kicker{font-size:.68rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--figure-quiet)}
+.leaf-title{font-family:var(--display);font-size:clamp(1.62rem,5.6vw,2.16rem);line-height:1.02;
+  letter-spacing:.005em;margin:5px 0 2px}
+.sub{color:var(--figure-half);font-size:.92rem;margin-top:6px}
+.rule{height:1px;background:var(--leaf-crease);margin:16px 0;border:0}
+
+/* the hero figure */
+.figure{font-family:var(--display);line-height:.86;letter-spacing:-.01em;margin-top:.24em;
+  font-size:clamp(3.5rem,17vw,5.4rem);font-feature-settings:"tnum" 1}
+.figure.mid{font-size:clamp(2.5rem,11vw,3.4rem)}
+.tick{display:inline-flex;align-items:center;gap:8px;background:var(--coin);color:#2A1D00;
+  font-weight:800;font-size:.94rem;padding:7px 13px 7px 11px;border-radius:999px;
+  box-shadow:0 2px 0 var(--coin-sink);margin-top:2px}
+.tick svg{width:15px;height:15px;flex:0 0 auto}
+
+/* pots as ruled statement lines, not tiles */
+.pots{margin:2px 0 0}
+.pot{display:grid;grid-template-columns:1fr auto;align-items:end;gap:6px 12px;
+  padding:11px 0 9px;border-bottom:1px solid var(--leaf-crease);position:relative}
+.pot:first-child{border-top:1px solid var(--leaf-crease)}
+.pot-name{grid-column:1;grid-row:1;font-size:.74rem;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase;display:flex;align-items:center;gap:8px;color:var(--figure-half);
+  align-self:center}
+.dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto;background:var(--pot-save)}
+.pot-note{grid-column:1;grid-row:2;font-size:.8rem;color:var(--figure-quiet);margin-top:2px}
+.pot-fig{grid-column:2;grid-row:1 / span 2;font-family:var(--display);
+  font-size:clamp(1.7rem,7.4vw,2.3rem);line-height:.9;align-self:center;text-align:right;
+  white-space:nowrap}
+.pot-bar{grid-column:1 / -1;grid-row:3;height:5px;border-radius:3px;background:var(--leaf-sink);overflow:hidden;margin-top:8px}
+.pot-bar i{display:block;height:100%;border-radius:3px;background:var(--pot-save);
+  transition:width var(--swing)}
+
+.metre{height:11px;border-radius:6px;background:var(--leaf-sink);overflow:hidden;
+  border:1px solid var(--leaf-crease);margin:11px 0 8px}
+.metre i{display:block;height:100%;background:linear-gradient(90deg,var(--pot-save),#17a07a);
+  transition:width var(--swing)}
+
+.lines{margin:0}
+.fact{display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+  padding:9px 0;border-bottom:1px dotted var(--leaf-crease)}
+.fact:last-child{border-bottom:0}
+.fact dt{font-size:.86rem;color:var(--figure-half);font-weight:600}
+.fact dd{margin:0;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.fact dd.gain{color:var(--gain)}
+.fact dd.owe{color:var(--flag)}
+
+.press{appearance:none;border:0;border-radius:13px;font-family:var(--display);letter-spacing:.03em;
+  font-size:1.24rem;padding:16px 18px;width:100%;cursor:pointer;background:var(--figure-full);
+  color:var(--leaf-face);box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform var(--snap),box-shadow var(--snap),filter var(--snap)}
+.press:hover{filter:brightness(1.12)}
+.press:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.press-yes{background:var(--pot-save);color:#fff;box-shadow:0 4px 0 #075740}
+.press-no{background:var(--leaf-tint);color:var(--figure-full);box-shadow:0 4px 0 var(--leaf-crease)}
+.press-coin{background:var(--coin);color:#2A1D00;box-shadow:0 4px 0 var(--coin-sink)}
+.press-small{font-family:var(--plain);font-weight:800;font-size:.86rem;padding:10px 14px;width:auto;
+  border-radius:10px;box-shadow:0 3px 0 rgba(0,0,0,.28)}
+.presses{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.presses.side{flex-direction:row}
+.presses.side .press{flex:1 1 0}
+
+.chiprow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{appearance:none;border:1.5px solid var(--leaf-crease);background:var(--leaf-face);
+  color:var(--figure-half);border-radius:999px;padding:7px 13px;font-size:.82rem;font-weight:800;
+  cursor:pointer;transition:background var(--snap),color var(--snap),border-color var(--snap)}
+.chip:hover{border-color:var(--figure-quiet)}
+.chip[aria-pressed="true"]{background:var(--figure-full);border-color:var(--figure-full);color:var(--leaf-face)}
+
+.fieldline{display:block;margin:12px 0 0}
+.fieldline > span{display:block;font-size:.7rem;font-weight:800;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--figure-quiet);margin-bottom:5px}
+.fieldline input,.fieldline select{width:100%;background:var(--leaf-tint);border:1.5px solid var(--leaf-crease);
+  border-radius:10px;padding:11px 12px;font-weight:700;font-size:1rem}
+.fieldline input:focus,.fieldline select:focus{border-color:var(--figure-quiet);background:#fff}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+.tab-note{background:var(--leaf-tint);border-left:4px solid var(--coin);border-radius:0 10px 10px 0;
+  padding:11px 13px;font-size:.87rem;color:var(--figure-half);margin-top:14px}
+.tab-note strong{color:var(--figure-full)}
+.tab-note.warn{border-left-color:var(--flag)}
+
+.stub{padding:13px 0;border-bottom:1px solid var(--leaf-crease);display:grid;
+  grid-template-columns:1fr auto;gap:4px 14px;align-items:center}
+.stub:last-of-type{border-bottom:0}
+.stub-what{grid-column:1;grid-row:1;font-weight:800;font-size:1.02rem;line-height:1.25}
+.stub-who{grid-column:1;grid-row:2;font-size:.76rem;color:var(--figure-quiet);font-weight:600}
+.stub-amt{grid-column:2;grid-row:1 / span 2;font-family:var(--display);font-size:1.42rem;
+  text-align:right;align-self:center;white-space:nowrap}
+.stub-acts{grid-column:1 / -1;grid-row:3;display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+
+.ledger-line{display:grid;grid-template-columns:auto 1fr auto;gap:3px 12px;padding:9px 0;
+  border-bottom:1px dotted var(--leaf-crease);align-items:baseline}
+.lg-when{font-size:.72rem;font-weight:800;letter-spacing:.06em;color:var(--figure-quiet);
+  text-transform:uppercase;white-space:nowrap}
+.lg-what{font-size:.9rem;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.lg-amt{font-weight:800;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.money-in{color:var(--gain)}
+.money-out{color:var(--flag)}
+.lg-tag{grid-column:2;font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--figure-quiet)}
+
+.badge{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;background:var(--leaf-sink);color:var(--figure-half)}
+.badge.hot{background:var(--coin);color:#2A1D00}
+.badge.cold{background:var(--flag);color:#fff}
+
+.swipehint{display:inline-flex;align-items:center;gap:8px;font-size:.74rem;font-weight:800;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--figure-quiet);background:none;
+  border:0;padding:4px 2px;cursor:pointer;text-align:left;font-family:var(--plain);
+  transition:color var(--snap)}
+button.swipehint:hover{color:var(--figure-full)}
+.swipehint .badge{pointer-events:none}
+.swipehint svg{width:22px;height:11px}
+.deck-count{font-size:.72rem;font-weight:800;letter-spacing:.12em;color:var(--figure-quiet);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* edge paddles on the felt */
+.paddle{position:fixed;top:50%;transform:translateY(-50%);z-index:10;width:46px;height:46px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.26);
+  color:var(--figure-bone);cursor:pointer;display:grid;place-items:center;
+  backdrop-filter:blur(3px);transition:background var(--snap),transform var(--snap)}
+.paddle:hover{background:rgba(0,0,0,.46)}
+.paddle:active{transform:translateY(-50%) scale(.9)}
+.paddle[hidden]{display:none}
+.paddle.back{left:max(6px,calc(50vw - 340px))}
+.paddle.fwd{right:max(6px,calc(50vw - 340px))}
+.paddle svg{width:17px;height:17px}
+
+.disclaim{position:fixed;left:0;right:0;bottom:0;z-index:11;background:rgba(0,0,0,.44);
+  color:#fff;font-size:.72rem;font-weight:600;letter-spacing:.015em;
+  padding:7px 12px calc(7px + env(safe-area-inset-bottom));text-align:center;line-height:1.3}
+.disclaim b{font-weight:800;color:var(--coin)}
+
+.coin-fly{position:fixed;z-index:30;width:26px;height:26px;border-radius:50%;background:var(--coin);
+  box-shadow:0 2px 0 var(--coin-sink), 0 6px 16px rgba(0,0,0,.4);pointer-events:none;
+  transition:transform 620ms cubic-bezier(.35,.15,.2,1),opacity 620ms ease-in}
+.toast{position:fixed;left:50%;bottom:52px;transform:translateX(-50%) translateY(14px);z-index:31;
+  background:var(--figure-full);color:var(--leaf-face);padding:11px 17px;border-radius:11px;
+  font-weight:800;font-size:.88rem;opacity:0;pointer-events:none;
+  transition:opacity var(--snap),transform var(--snap);box-shadow:0 12px 30px rgba(0,0,0,.45);
+  max-width:min(420px,92vw);text-align:center}
+.toast.up{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.samplemark{position:fixed;right:10px;top:7px;z-index:11;font-size:.62rem;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.9);
+  background:rgba(0,0,0,.38);padding:4px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.28)}
+.samplemark[hidden]{display:none}
+
+@media (max-width:820px){
+  /* the card owns the full width here, so the edge paddles would sit on top of it:
+     swiping, the arrow keys and the footer control do the job instead */
+  .paddle{display:none}
+}
+@media (max-width:430px){
+  .leaf-body{padding-bottom:18px}
+  :root{--leaf-round:17px;--strip:62px}
+  .who-name{font-size:1.14rem}
+  .who-age{font-size:.64rem;letter-spacing:.1em}
+}
+@media (min-width:1040px){
+  .stage{width:min(560px,42vw)}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important;
+    animation-iteration-count:1!important}
+}
+
+/* ── the printed statement: the thing that goes on the fridge ── */
+.sheet{display:none}
+@media print{
+  html,body{overflow:visible;background:#fff;color:#000;font-size:11pt}
+  .felt,.deck,.hairline,.paddle,.disclaim,.skipto,.toast,.samplemark,.coin-fly{display:none!important}
+  .sheet{display:block;font-family:var(--plain)}
+  @page{margin:14mm 13mm}
+  .st{page-break-after:always;break-after:page}
+  .st:last-child{page-break-after:auto;break-after:auto}
+  .st-top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;
+    border-bottom:2.5px solid #000;padding-bottom:8px}
+  .st-mark{font-family:var(--display);font-size:20pt;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+  .st-mark small{display:block;font-family:var(--plain);font-size:8pt;font-weight:800;
+    letter-spacing:.2em;margin-top:4px}
+  .st-for{text-align:right;font-size:9.5pt}
+  .st-for b{display:block;font-family:var(--display);font-size:17pt;letter-spacing:.03em;text-transform:uppercase}
+  .st-band{display:flex;gap:0;border:1.5px solid #000;border-top:0;margin-bottom:12px}
+  .st-band div{flex:1 1 0;padding:7px 9px;border-right:1px solid #000}
+  .st-band div:last-child{border-right:0}
+  .st-band span{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+  .st-band b{font-family:var(--display);font-size:15pt;font-weight:400}
+  .st-h{font-family:var(--display);font-size:12pt;letter-spacing:.06em;text-transform:uppercase;
+    margin:14px 0 5px;border-bottom:1px solid #000;padding-bottom:3px}
+  table.st-t{width:100%;border-collapse:collapse;font-size:8.6pt}
+  table.st-t{table-layout:auto}
+  table.st-t thead{display:table-header-group}
+  table.st-t th{text-align:left;font-size:7.5pt;letter-spacing:.12em;text-transform:uppercase;
+    border-bottom:1.2px solid #000;padding:4px 5px}
+  table.st-t tr{break-inside:avoid;page-break-inside:avoid}
+  table.st-t td{padding:2.8px 5px;border-bottom:.4px solid #bbb;vertical-align:top}
+  .st-run{break-before:page;page-break-before:always;padding-top:2mm}
+  table.st-t td.n,table.st-t th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.st-t tr.int td{font-weight:800}
+  table.st-t tr.tot td{border-top:1.4px solid #000;border-bottom:2.4px double #000;font-weight:800}
+  .st-two{display:flex;gap:16px}
+  .st-two > *{flex:1 1 0}
+  .st-sign{margin-top:16px;display:flex;gap:26px}
+  .st-sign div{flex:1 1 0;border-top:1px solid #000;padding-top:4px;font-size:8pt;
+    font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+  .st-note{margin-top:12px;border:1.5px solid #000;padding:8px 10px;font-size:9pt;font-weight:800}
+  .st-foot{margin-top:8px;font-size:7.5pt;color:#333}
+}
+</style>
+</head>
+<body>
+<a class="skipto" href="#deck">Skip to the deck</a>
+<div class="felt" id="felt" aria-hidden="true"></div>
+<header class="hairline" role="banner" aria-hidden="true"><i class="hairline-run" id="hairline"></i></header>
+<p class="samplemark" id="samplemark">Sample family</p>
+
+<button class="paddle back" id="paddleBack" type="button" aria-label="Previous card">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+</button>
+<button class="paddle fwd" id="paddleFwd" type="button" aria-label="Next card">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+</button>
+
+<main class="deck" id="deck">
+  <h1 class="hushed">Pocket Deck — family allowance, chores and the three pots</h1>
+  <div class="stage" id="stage" role="region" aria-live="polite" aria-label="Card deck"></div>
+</main>
+
+<p class="disclaim"><b>A record-keeping and teaching aid.</b> No real money moves; you settle up yourselves.</p>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="picker" accept="application/json,.json" class="hushed" tabindex="-1" aria-label="Choose a Pocket Deck JSON backup to import">
+<section class="sheet" id="sheet" aria-label="Printable statements"></section>
+<script>
+"use strict";
+(function(){
+
+/* ══════════════════════════════════════════════════════════════
+   1. NUMBERS AND DATES
+   ══════════════════════════════════════════════════════════════ */
+var EM = "—";
+function r2(n){
+  if(typeof n !== "number" || !isFinite(n)) return 0;
+  var s = n < 0 ? -1 : 1;
+  return s * Math.round(Math.abs(n) * 100 + 1e-9) / 100;
+}
+function usd(n){
+  if(typeof n !== "number" || !isFinite(n)) return EM;
+  var v = r2(n);
+  return (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+}
+function usdPlain(n){
+  if(typeof n !== "number" || !isFinite(n)) return "";
+  return r2(n).toFixed(2);
+}
+function mins(n){
+  if(typeof n !== "number" || !isFinite(n)) return EM;
+  var v = Math.round(n);
+  if(Math.abs(v) < 60) return v + " min";
+  var h = Math.floor(Math.abs(v)/60), m = Math.abs(v)%60;
+  return (v<0?"-":"") + h + "h" + (m ? " " + m + "m" : "");
+}
+/* guarded divide: never NaN, never Infinity */
+function div(a, b){
+  if(typeof a !== "number" || typeof b !== "number") return null;
+  if(!isFinite(a) || !isFinite(b) || b === 0) return null;
+  var q = a / b;
+  return isFinite(q) ? q : null;
+}
+
+/* Dates are handled as UTC-noon Date objects keyed by ISO yyyy-mm-dd, so
+   daylight saving and leap years never shift a day. */
+function dParse(iso){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||""));
+  if(!m) return null;
+  var d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3], 12, 0, 0));
+  if(d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2]-1 || d.getUTCDate() !== +m[3]) return null;
+  return d;
+}
+function dIso(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return "";
+  var y = d.getUTCFullYear(), m = d.getUTCMonth()+1, x = d.getUTCDate();
+  return y + "-" + (m<10?"0":"") + m + "-" + (x<10?"0":"") + x;
+}
+function today(){
+  var n = new Date();
+  return dIso(new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(), 12)));
+}
+function addDays(iso, n){
+  var d = dParse(iso); if(!d) return iso;
+  return dIso(new Date(d.getTime() + n*86400000));
+}
+/* month arithmetic that clamps: 31 Jan + 1 month = 28/29 Feb */
+function addMonths(iso, n){
+  var d = dParse(iso); if(!d) return iso;
+  var y = d.getUTCFullYear(), m = d.getUTCMonth() + n, day = d.getUTCDate();
+  var target = new Date(Date.UTC(y, m, 1, 12));
+  var last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth()+1, 0, 12)).getUTCDate();
+  return dIso(new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(day, last), 12)));
+}
+function daysBetween(a, b){
+  var x = dParse(a), y = dParse(b);
+  if(!x || !y) return 0;
+  return Math.round((y.getTime() - x.getTime()) / 86400000);
+}
+function dow(iso){ var d = dParse(iso); return d ? d.getUTCDay() : 0; }      /* 0 Sun … 6 Sat */
+function mondayOf(iso){
+  var w = dow(iso);
+  return addDays(iso, w === 0 ? -6 : 1 - w);
+}
+var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var DAYN = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function pretty(iso){
+  var d = dParse(iso); if(!d) return EM;
+  return d.getUTCDate() + " " + MON[d.getUTCMonth()];
+}
+function prettyFull(iso){
+  var d = dParse(iso); if(!d) return EM;
+  return DAYN[d.getUTCDay()] + " " + d.getUTCDate() + " " + MON[d.getUTCMonth()] + " " + d.getUTCFullYear();
+}
+/* Calendar age, leap-year safe. A 29 Feb child turns a year older on 1 March
+   in non-leap years, which is the convention this counts. */
+function ageOn(dobIso, onIso){
+  var b = dParse(dobIso), o = dParse(onIso);
+  if(!b || !o) return null;
+  var a = o.getUTCFullYear() - b.getUTCFullYear();
+  var bm = b.getUTCMonth(), bd = b.getUTCDate(), om = o.getUTCMonth(), od = o.getUTCDate();
+  if(om < bm || (om === bm && od < bd)) a--;
+  return a < 0 ? null : a;
+}
+function nextBirthday(dobIso, fromIso){
+  var b = dParse(dobIso), f = dParse(fromIso);
+  if(!b || !f) return null;
+  for(var y = f.getUTCFullYear(); y <= f.getUTCFullYear()+4; y++){
+    var last = new Date(Date.UTC(y, b.getUTCMonth()+1, 0, 12)).getUTCDate();
+    var iso = dIso(new Date(Date.UTC(y, b.getUTCMonth(), Math.min(b.getUTCDate(), last), 12)));
+    if(daysBetween(fromIso, iso) >= 0) return iso;
+  }
+  return null;
+}
+function quarterOf(iso){
+  var d = dParse(iso); if(!d) return null;
+  var q = Math.floor(d.getUTCMonth()/3);
+  return { y: d.getUTCFullYear(), q: q,
+           from: dIso(new Date(Date.UTC(d.getUTCFullYear(), q*3, 1, 12))),
+           to: dIso(new Date(Date.UTC(d.getUTCFullYear(), q*3+3, 0, 12))),
+           label: "Q" + (q+1) + " " + d.getUTCFullYear() };
+}
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function uid(p){ return (p||"x") + Math.random().toString(36).slice(2,9) + (uid.n = (uid.n||0)+1); }
+
+/* deterministic PRNG so the sample family looks the same on every first load */
+function seeded(seed){
+  var t = seed >>> 0;
+  return function(){
+    t += 0x6D2B79F5; t = t >>> 0;
+    var x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. STATE
+   ══════════════════════════════════════════════════════════════ */
+var KEY = "pocketdeck.v1";
+var PERIODS = { week:{ n:52, label:"a week", unit:"week", adj:"weekly" },
+                month:{ n:12, label:"a month", unit:"month", adj:"monthly" },
+                quarter:{ n:4, label:"a quarter", unit:"quarter", adj:"quarterly" } };
+var FELTS = ["#06584A", "#1B3C8C", "#7A1350", "#8C3A10", "#0F5E6E", "#5C2A86"];
+var DESK_FELT = "#2E1A66";
+
+var S = null;      /* the whole family */
+var storageOk = true;
+
+function blank(){
+  return { v:1, sample:false, opened: mondayOf(addDays(today(), -7)),
+           house:"Our house", kids:[], chores:[], cards:[], entries:[], loans:[],
+           loanEvents:[], commits:[], perks:defaultPerks(), done:{} };
+}
+function defaultPerks(){
+  return [
+    { id:uid("p"), title:"30 minutes extra screen", cost:30 },
+    { id:uid("p"), title:"An hour of console time", cost:60 },
+    { id:uid("p"), title:"Friend over after school", cost:45 },
+    { id:uid("p"), title:"Pick the Friday film", cost:20 },
+    { id:uid("p"), title:"Skip one chore, no argument", cost:75 }
+  ];
+}
+function load(){
+  var raw = null;
+  try { raw = window.localStorage.getItem(KEY); }
+  catch(e){ storageOk = false; raw = null; }
+  if(!raw) return null;
+  try {
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object" || !Array.isArray(o.kids)) return null;
+    return normalise(o);
+  } catch(e){ return null; }
+}
+function save(){
+  if(!storageOk) return;
+  try { window.localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ storageOk = false; }
+}
+function normalise(o){
+  var b = blank();
+  var out = {
+    v:1,
+    sample: !!o.sample,
+    opened: dParse(o.opened) ? o.opened : b.opened,
+    house: typeof o.house === "string" && o.house.trim() ? o.house.slice(0,60) : b.house,
+    kids:[], chores:[], cards:[], entries:[], loans:[], loanEvents:[], commits:[],
+    perks: Array.isArray(o.perks) && o.perks.length ? o.perks.map(function(p){
+      return { id: p.id || uid("p"), title: String(p.title||"Perk").slice(0,70),
+               cost: Math.max(0, Math.round(Number(p.cost)||0)) };
+    }) : b.perks,
+    done: (o.done && typeof o.done === "object") ? o.done : {}
+  };
+  (Array.isArray(o.kids)?o.kids:[]).forEach(function(k, i){
+    var sp = k.split || {};
+    var sv = Math.max(0, Math.round(Number(sp.save))||0),
+        gv = Math.max(0, Math.round(Number(sp.give))||0);
+    if(sv + gv > 100){ sv = Math.min(sv,100); gv = Math.max(0, 100 - sv); }
+    out.kids.push({
+      id: k.id || uid("k"),
+      name: String(k.name||"Child").slice(0,28),
+      dob: dParse(k.dob) ? k.dob : addDays(today(), -3650),
+      felt: k.felt || FELTS[i % FELTS.length],
+      split: { save: sv, give: gv, spend: 100 - sv - gv },
+      rate: Math.max(0, Math.min(50, Number(k.rate)||0)),
+      period: PERIODS[k.period] ? k.period : "week",
+      match: { pct: Math.max(0, Math.min(200, Number(k.match && k.match.pct)||0)),
+               cap: Math.max(0, Number(k.match && k.match.cap)||0) },
+      goals: (Array.isArray(k.goals)?k.goals:[]).map(function(g){
+        return { id: g.id||uid("g"), title:String(g.title||"A goal").slice(0,60),
+                 price: Math.max(0, r2(Number(g.price)||0)) };
+      })
+    });
+  });
+  var kidIds = {}; out.kids.forEach(function(k){ kidIds[k.id] = true; });
+  (Array.isArray(o.chores)?o.chores:[]).forEach(function(c){
+    if(!kidIds[c.kid]) return;
+    out.chores.push({
+      id: c.id||uid("c"), kid: c.kid, title:String(c.title||"Chore").slice(0,64),
+      value: Math.max(0, r2(Number(c.value)||0)),
+      screen: Math.max(0, Math.round(Number(c.screen)||0)),
+      cadence: (c.cadence === "once" || c.cadence === "daily") ? c.cadence : "weekly",
+      day: Math.max(0, Math.min(6, Math.round(Number(c.day)||6))),
+      bandLo: Math.max(2, Math.min(19, Math.round(Number(c.bandLo)||5))),
+      bandHi: Math.max(2, Math.min(21, Math.round(Number(c.bandHi)||18))),
+      since: dParse(c.since) ? c.since : out.opened,
+      fresh: dParse(c.fresh) ? c.fresh : (dParse(c.since) ? c.since : out.opened),
+      retired: dParse(c.retired) ? c.retired : null,
+      why: c.why || null
+    });
+  });
+  var chIds = {}; out.chores.forEach(function(c){ chIds[c.id] = true; });
+  (Array.isArray(o.cards)?o.cards:[]).forEach(function(c){
+    if(!kidIds[c.kid]) return;
+    var st = ["todo","done","paid","back"].indexOf(c.state) >= 0 ? c.state : "todo";
+    out.cards.push({ id:c.id||uid("d"), kid:c.kid, chore: chIds[c.chore] ? c.chore : null,
+      title:String(c.title||"Chore").slice(0,64),
+      value: Math.max(0, r2(Number(c.value)||0)),
+      screen: Math.max(0, Math.round(Number(c.screen)||0)),
+      due: dParse(c.due) ? c.due : today(), state: st,
+      markedOn: dParse(c.markedOn) ? c.markedOn : null,
+      note: c.note ? String(c.note).slice(0,80) : null });
+  });
+  (Array.isArray(o.entries)?o.entries:[]).forEach(function(e){
+    if(!kidIds[e.kid]) return;
+    var pot = ["save","spend","give","screen"].indexOf(e.pot) >= 0 ? e.pot : "spend";
+    out.entries.push({ id:e.id||uid("e"), kid:e.kid, on: dParse(e.on)?e.on:today(),
+      pot: pot, kind: String(e.kind||"adjust").slice(0,16),
+      what: String(e.what||"Entry").slice(0,90),
+      amt: pot === "screen" ? Math.round(Number(e.amt)||0) : r2(Number(e.amt)||0),
+      ref: e.ref || null, key: e.key || null, seq: Number(e.seq)||0 });
+  });
+  (Array.isArray(o.loans)?o.loans:[]).forEach(function(l){
+    if(!kidIds[l.kid]) return;
+    out.loans.push({ id:l.id||uid("l"), kid:l.kid, title:String(l.title||"Loan").slice(0,60),
+      principal: Math.max(0, r2(Number(l.principal)||0)),
+      apr: Math.max(0, Math.min(60, Number(l.apr)||0)),
+      weekly: Math.max(0, r2(Number(l.weekly)||0)),
+      from: dParse(l.from) ? l.from : today(),
+      closed: dParse(l.closed) ? l.closed : null });
+  });
+  var loanIds = {}; out.loans.forEach(function(l){ loanIds[l.id] = true; });
+  (Array.isArray(o.loanEvents)?o.loanEvents:[]).forEach(function(v){
+    if(!loanIds[v.loan]) return;
+    out.loanEvents.push({ id:v.id||uid("v"), loan:v.loan, on: dParse(v.on)?v.on:today(),
+      kind: ["draw","charge","pay"].indexOf(v.kind)>=0 ? v.kind : "pay",
+      amt: r2(Number(v.amt)||0), key: v.key||null });
+  });
+  (Array.isArray(o.commits)?o.commits:[]).forEach(function(m){
+    if(!kidIds[m.kid]) return;
+    out.commits.push({ id:m.id||uid("m"), kid:m.kid, title:String(m.title||"Commitment").slice(0,60),
+      amt: Math.max(0, r2(Number(m.amt)||0)),
+      every: m.every === "week" ? "week" : "month",
+      from: dParse(m.from) ? m.from : out.opened,
+      ended: dParse(m.ended) ? m.ended : null });
+  });
+  return out;
+}
+
+/* ── ledger reads ─────────────────────────────────────────── */
+function potAt(kid, pot, onIso){
+  var t = 0, i, e;
+  for(i = 0; i < S.entries.length; i++){
+    e = S.entries[i];
+    if(e.kid !== kid || e.pot !== pot) continue;
+    if(onIso && daysBetween(e.on, onIso) < 0) continue;
+    t += e.amt;
+  }
+  return pot === "screen" ? Math.round(t) : r2(t);
+}
+function potBefore(kid, pot, isoExclusive){
+  var t = 0, i, e;
+  for(i = 0; i < S.entries.length; i++){
+    e = S.entries[i];
+    if(e.kid !== kid || e.pot !== pot) continue;
+    if(daysBetween(e.on, isoExclusive) <= 0) continue;   /* strictly before */
+    t += e.amt;
+  }
+  return pot === "screen" ? Math.round(t) : r2(t);
+}
+function cashAt(kid){ return r2(potAt(kid,"save") + potAt(kid,"spend") + potAt(kid,"give")); }
+function sumEntries(kid, test){
+  var t = 0;
+  S.entries.forEach(function(e){ if(e.kid === kid && test(e)) t += e.amt; });
+  return r2(t);
+}
+function loanBalance(loanId, onIso){
+  var t = 0;
+  S.loanEvents.forEach(function(v){
+    if(v.loan !== loanId) return;
+    if(onIso && daysBetween(v.on, onIso) < 0) return;
+    t += (v.kind === "pay") ? -v.amt : v.amt;
+  });
+  return r2(t);
+}
+function pushEntry(o){
+  o.id = o.id || uid("e");
+  o.seq = S.entries.length;
+  S.entries.push(o);
+  return o;
+}
+function hasKey(k){
+  for(var i=0;i<S.entries.length;i++) if(S.entries[i].key === k) return true;
+  for(var j=0;j<S.loanEvents.length;j++) if(S.loanEvents[j].key === k) return true;
+  return false;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. THE MONEY RULES
+   ══════════════════════════════════════════════════════════════ */
+/* THE SPLIT. Every payout divides by percentage into save, spend and give.
+   save and give are rounded to the cent; spend takes the remainder, so the
+   three parts always add back to exactly the gross. */
+function splitOf(kid, gross){
+  var g = r2(gross);
+  var sv = r2(g * kid.split.save / 100);
+  var gv = r2(g * kid.split.give / 100);
+  var sp = r2(g - sv - gv);
+  return { save: sv, give: gv, spend: sp, gross: g };
+}
+/* PARENT MATCH: a percentage of the save share, capped per calendar week. */
+function matchFor(kid, saveShare, onIso){
+  if(!kid.match || !kid.match.pct || saveShare <= 0) return 0;
+  var wk = mondayOf(onIso);
+  var used = sumEntries(kid.id, function(e){
+    return e.kind === "match" && mondayOf(e.on) === wk;
+  });
+  var want = r2(saveShare * kid.match.pct / 100);
+  var room = kid.match.cap > 0 ? r2(kid.match.cap - used) : want;
+  var got = Math.min(want, Math.max(0, room));
+  return r2(got);
+}
+/* Post a payout: three pot entries sharing one reference, plus the match. */
+function payout(kid, gross, what, onIso, kind, screenMins){
+  var sp = splitOf(kid, gross), ref = uid("r"), made = [];
+  if(sp.save !== 0) made.push(pushEntry({kid:kid.id,on:onIso,pot:"save",kind:kind||"earn",
+      what:what,amt:sp.save,ref:ref}));
+  if(sp.spend !== 0) made.push(pushEntry({kid:kid.id,on:onIso,pot:"spend",kind:kind||"earn",
+      what:what,amt:sp.spend,ref:ref}));
+  if(sp.give !== 0) made.push(pushEntry({kid:kid.id,on:onIso,pot:"give",kind:kind||"earn",
+      what:what,amt:sp.give,ref:ref}));
+  var m = matchFor(kid, sp.save, onIso);
+  if(m > 0) made.push(pushEntry({kid:kid.id,on:onIso,pot:"save",kind:"match",
+      what:"Parent match on " + what,amt:m,ref:ref}));
+  if(screenMins) pushEntry({kid:kid.id,on:onIso,pot:"screen",kind:kind||"earn",
+      what:what,amt:Math.round(screenMins),ref:ref});
+  return { split: sp, match: m, ref: ref, entries: made };
+}
+
+/* INTEREST. Rate is an annual percentage; it is divided by the number of
+   compounding periods in a year and applied to the save-pot balance standing
+   at the start of that period. Each tick is posted as its own ledger line. */
+function ratePerPeriod(kid){
+  var p = PERIODS[kid.period] || PERIODS.week;
+  return (kid.rate / 100) / p.n;
+}
+function interestBoundaries(kid, uptoIso){
+  var out = [], guard = 0, at = S.opened;
+  var step = kid.period;
+  at = (step === "week") ? addDays(S.opened, 7)
+     : addMonths(S.opened, step === "month" ? 1 : 3);
+  while(daysBetween(at, uptoIso) >= 0 && guard++ < 4000){
+    out.push(at);
+    at = (step === "week") ? addDays(at, 7) : addMonths(at, step === "month" ? 1 : 3);
+  }
+  return out;
+}
+function nextInterestDate(kid, uptoIso){
+  var at = (kid.period === "week") ? addDays(S.opened, 7)
+         : addMonths(S.opened, kid.period === "month" ? 1 : 3);
+  var guard = 0;
+  while(daysBetween(at, uptoIso) >= 0 && guard++ < 4000){
+    at = (kid.period === "week") ? addDays(at, 7) : addMonths(at, kid.period === "month" ? 1 : 3);
+  }
+  return at;
+}
+
+/* Every dated, automatic thing the bank does — interest ticks, loan interest
+   charges, loan repayments — is collected, sorted, and applied in order, so
+   compounding and repayment see each other's effects. Idempotent by key. */
+function runBank(uptoIso){
+  var jobs = [];
+  S.kids.forEach(function(k){
+    if(k.rate > 0){
+      interestBoundaries(k, uptoIso).forEach(function(b){
+        jobs.push({ on:b, ord:1, key:"int:"+k.id+":"+b, run:function(){
+          var base = potBefore(k.id, "save", b);
+          if(base <= 0) return;
+          var amt = r2(base * ratePerPeriod(k));
+          if(amt < 0.01) return;
+          pushEntry({kid:k.id,on:b,pot:"save",kind:"interest",
+            what:"Interest on " + usd(base) + " at " + k.rate.toFixed(2) + "% a year",
+            amt:amt,key:"int:"+k.id+":"+b});
+        }});
+      });
+    }
+  });
+  S.loans.forEach(function(l){
+    var k = kidById(l.kid); if(!k) return;
+    /* the draw */
+    jobs.push({ on:l.from, ord:0, key:"draw:"+l.id, run:function(){
+      S.loanEvents.push({id:uid("v"),loan:l.id,on:l.from,kind:"draw",amt:l.principal,key:"draw:"+l.id});
+      pushEntry({kid:l.kid,on:l.from,pot:"spend",kind:"loan",
+        what:"Family loan for " + l.title,amt:l.principal,key:"drawcash:"+l.id});
+    }});
+    /* monthly interest charge on what is still owed */
+    var at = addMonths(l.from, 1), g = 0;
+    while(daysBetween(at, uptoIso) >= 0 && g++ < 400){
+      (function(when){
+        jobs.push({ on:when, ord:1, key:"lint:"+l.id+":"+when, run:function(){
+          var bal = loanBalance(l.id, when);
+          if(bal <= 0.004 || l.apr <= 0) return;
+          var chg = r2(bal * (l.apr/100) / 12);
+          if(chg < 0.01) return;
+          S.loanEvents.push({id:uid("v"),loan:l.id,on:when,kind:"charge",amt:chg,
+            key:"lint:"+l.id+":"+when});
+        }});
+      })(at);
+      at = addMonths(at, 1);
+    }
+    /* weekly repayment, taken from spend first then save */
+    var pd = addDays(l.from, 7), g2 = 0;
+    while(daysBetween(pd, uptoIso) >= 0 && g2++ < 1200){
+      (function(when){
+        jobs.push({ on:when, ord:2, key:"lpay:"+l.id+":"+when, run:function(){
+          var bal = loanBalance(l.id, when);
+          if(bal <= 0.004) return;
+          var want = Math.min(l.weekly, bal);
+          var sp = potBefore(l.kid,"spend",addDays(when,1)),
+              sv = potBefore(l.kid,"save",addDays(when,1));
+          var have = r2(Math.max(0,sp) + Math.max(0,sv));
+          var pay = r2(Math.min(want, have));
+          if(pay < 0.01) return;
+          var fromSpend = r2(Math.min(pay, Math.max(0, sp)));
+          var fromSave  = r2(pay - fromSpend);
+          if(fromSpend > 0) pushEntry({kid:l.kid,on:when,pot:"spend",kind:"repay",
+            what:"Loan repayment — " + l.title,amt:-fromSpend,key:"lpaya:"+l.id+":"+when});
+          if(fromSave > 0) pushEntry({kid:l.kid,on:when,pot:"save",kind:"repay",
+            what:"Loan repayment (from save) — " + l.title,amt:-fromSave,key:"lpayb:"+l.id+":"+when});
+          S.loanEvents.push({id:uid("v"),loan:l.id,on:when,kind:"pay",amt:pay,
+            key:"lpay:"+l.id+":"+when});
+        }});
+      })(pd);
+      pd = addDays(pd, 7);
+    }
+  });
+  commitJobs(uptoIso, jobs);
+  jobs.sort(function(a,b){
+    var c = daysBetween(b.on, a.on);
+    if(c !== 0) return c > 0 ? 1 : -1;
+    return a.ord - b.ord;
+  });
+  jobs.forEach(function(j){ if(!hasKey(j.key)) j.run(); });
+  S.loans.forEach(function(l){
+    if(!l.closed && loanBalance(l.id) <= 0.004){
+      var last = null;
+      S.loanEvents.forEach(function(v){ if(v.loan === l.id) last = (!last || daysBetween(last, v.on) > 0) ? v.on : last; });
+      l.closed = last || uptoIso;
+    }
+  });
+}
+
+function kidById(id){
+  for(var i=0;i<S.kids.length;i++) if(S.kids[i].id === id) return S.kids[i];
+  return null;
+}
+function choreById(id){
+  for(var i=0;i<S.chores.length;i++) if(S.chores[i].id === id) return S.chores[i];
+  return null;
+}
+
+/* ── weekly completion rate (the parent's number, not the child's) ────── */
+function weekRate(kid, weekMondayIso){
+  var due = 0, got = 0;
+  S.cards.forEach(function(c){
+    if(c.kid !== kid) return;
+    if(mondayOf(c.due) !== weekMondayIso) return;
+    due++;
+    if(c.state === "paid") got++;
+  });
+  var q = div(got, due);
+  return { due: due, got: got, pct: q === null ? null : Math.round(q * 100) };
+}
+/* Forgiving form: the best of the last four completed weeks, so one bad week
+   never resets anything to zero. */
+function bestOfFour(kid, fromIso){
+  var best = null, weeks = [];
+  for(var i = 1; i <= 4; i++){
+    var wk = addDays(mondayOf(fromIso), -7*i);
+    var r = weekRate(kid, wk);
+    weeks.push(r);
+    if(r.pct !== null && (best === null || r.pct > best)) best = r.pct;
+  }
+  return { best: best, weeks: weeks };
+}
+/* Average weekly money arriving in the save pot over the last 4 weeks. */
+function saveRate(kid, fromIso){
+  var since = addDays(fromIso, -28);
+  var t = sumEntries(kid.id, function(e){
+    return e.pot === "save" && e.amt > 0 && daysBetween(since, e.on) >= 0;
+  });
+  var q = div(t, 4);
+  return q === null ? 0 : r2(q);
+}
+function weeksToGoal(kid, price, fromIso){
+  var have = potAt(kid.id, "save");
+  var need = r2(price - have);
+  if(need <= 0) return { need:0, weeks:0, rate:saveRate(kid, fromIso), done:true };
+  var rate = saveRate(kid, fromIso);
+  if(rate <= 0) return { need:need, weeks:null, rate:0, done:false };
+  var q = div(need, rate);
+  return { need:need, weeks: q === null ? null : Math.ceil(q), rate:rate, done:false };
+}
+/* ══════════════════════════════════════════════════════════════
+   4. AGE BANDS — used, not just filtered
+   ══════════════════════════════════════════════════════════════ */
+var LIB = [
+  { t:"Put your shoes and coat away",      v:0.50, s:10, lo:4,  hi:8  },
+  { t:"Feed the goldfish",                 v:0.25, s:5,  lo:4,  hi:9  },
+  { t:"Water the tomatoes",                v:0.50, s:10, lo:4,  hi:9  },
+  { t:"Help fold the towels",              v:0.75, s:10, lo:5,  hi:9  },
+  { t:"Match the socks",                   v:0.50, s:10, lo:4,  hi:8  },
+  { t:"Set the table for dinner",          v:0.75, s:10, lo:5,  hi:11 },
+  { t:"Feed the cat, morning and night",   v:1.00, s:15, lo:6,  hi:12 },
+  { t:"Tidy your room properly",           v:2.00, s:15, lo:6,  hi:14 },
+  { t:"Empty the dishwasher",              v:1.50, s:15, lo:7,  hi:12 },
+  { t:"Take the bins out to the kerb",     v:1.50, s:15, lo:9,  hi:18 },
+  { t:"Strip and remake your own bed",     v:1.50, s:15, lo:8,  hi:16 },
+  { t:"Walk the dog after school",         v:4.00, s:20, lo:10, hi:18 },
+  { t:"Load and run the dishwasher",       v:2.00, s:15, lo:10, hi:18 },
+  { t:"Vacuum the upstairs",               v:3.00, s:20, lo:11, hi:18 },
+  { t:"Clean the bathroom sink and mirror",v:2.50, s:20, lo:11, hi:18 },
+  { t:"Cook dinner one night a week",      v:5.00, s:30, lo:13, hi:18 },
+  { t:"Mow the lawn",                      v:8.00, s:30, lo:13, hi:18 },
+  { t:"Do a full load of your own washing",v:3.00, s:20, lo:12, hi:18 },
+  { t:"Wash the car inside and out",       v:7.00, s:30, lo:12, hi:18 },
+  { t:"Batch-cook lunches for the week",   v:6.00, s:30, lo:14, hi:18 }
+];
+function suggestFor(kid, ageNow){
+  var taken = {};
+  S.chores.forEach(function(c){ if(c.kid === kid.id) taken[c.title.toLowerCase()] = true; });
+  return LIB.filter(function(x){
+    return ageNow >= x.lo && ageNow <= x.hi && !taken[x.t.toLowerCase()];
+  });
+}
+var ROTATE_DAYS = 42;   /* six weeks: the point at which a chore chart goes stale */
+
+/* Retire what a child has grown out of. Runs on every boot, so a birthday
+   quietly clears the list without anyone having to remember. */
+function retireOutgrown(nowIso){
+  var fired = [];
+  S.chores.forEach(function(c){
+    if(c.retired) return;
+    var k = kidById(c.kid); if(!k) return;
+    var a = ageOn(k.dob, nowIso);
+    if(a === null) return;
+    if(a > c.bandHi){
+      c.retired = nowIso;
+      c.why = "outgrown";
+      fired.push({ chore:c, kid:k, age:a });
+    }
+  });
+  return fired;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5. CHORE CARDS — the deck itself
+   ══════════════════════════════════════════════════════════════ */
+function cardId(choreId, dueIso){ return "d:" + choreId + ":" + dueIso; }
+function haveCard(id){
+  for(var i=0;i<S.cards.length;i++) if(S.cards[i].id === id) return S.cards[i];
+  return null;
+}
+function dueInWeek(chore, mondayIso){
+  var off = (chore.day === 0) ? 6 : chore.day - 1;      /* Monday-first week */
+  return addDays(mondayIso, off);
+}
+/* Deal this week's cards for every live chore. Idempotent. */
+function dealWeek(nowIso){
+  var wk = mondayOf(nowIso);
+  S.chores.forEach(function(c){
+    if(c.retired) return;
+    if(c.cadence === "once"){
+      if(!haveCard(cardId(c.id, c.since))) newCard(c, c.since);
+      return;
+    }
+    if(c.cadence === "daily"){
+      for(var i=0;i<7;i++){
+        var d = addDays(wk, i);
+        if(daysBetween(c.since, d) < 0) continue;
+        if(!haveCard(cardId(c.id, d))) newCard(c, d);
+      }
+      return;
+    }
+    var due = dueInWeek(c, wk);
+    if(daysBetween(c.since, due) < 0) return;
+    if(!haveCard(cardId(c.id, due))) newCard(c, due);
+  });
+}
+function newCard(c, dueIso){
+  S.cards.push({ id:cardId(c.id, dueIso), kid:c.kid, chore:c.id, title:c.title,
+    value:c.value, screen:c.screen, due:dueIso, state:"todo", markedOn:null, note:null });
+}
+function cardsFor(kid, states){
+  return S.cards.filter(function(c){
+    return c.kid === kid && states.indexOf(c.state) >= 0;
+  }).sort(function(a,b){ return daysBetween(b.due, a.due); });
+}
+/* Only this week's and last week's cards are live. A chore missed a month ago
+   has lapsed — putting it back in the deck would only breed guilt. */
+function openFor(kid, nowIso){
+  return S.cards.filter(function(c){
+    return c.kid === kid && (c.state === "todo" || c.state === "back") &&
+           daysBetween(mondayOf(c.due), mondayOf(nowIso)) <= 7 &&
+           daysBetween(mondayOf(nowIso), mondayOf(c.due)) <= 7;
+  }).sort(function(a,b){ return daysBetween(b.due, a.due); });
+}
+function waitingAll(){
+  return S.cards.filter(function(c){ return c.state === "done"; })
+    .sort(function(a,b){ return daysBetween(b.due, a.due); });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. THE SAMPLE FAMILY
+   ══════════════════════════════════════════════════════════════ */
+function dobForAge(age, month, day){
+  var t = dParse(today());
+  var y = t.getUTCFullYear() - age;
+  var had = (t.getUTCMonth()+1 > month) || (t.getUTCMonth()+1 === month && t.getUTCDate() >= day);
+  if(!had) y -= 1;
+  return dIso(new Date(Date.UTC(y, month-1, day, 12)));
+}
+function leapFeb29Near(age){
+  var t = dParse(today()).getUTCFullYear() - age;
+  for(var y = t; y > t - 8; y--){
+    if((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) return y + "-02-29";
+  }
+  return dobForAge(age, 3, 1);
+}
+
+function buildSample(){
+  var now = today();
+  var st = blank();
+  st.sample = true;
+  st.house = "The Brennans";
+  st.opened = addDays(mondayOf(now), -7 * 26);
+
+  var maya = { id:"k-maya", name:"Maya", dob:dobForAge(15, 3, 18), felt:FELTS[0],
+    split:{save:40,give:10,spend:50}, rate:5, period:"week",
+    match:{pct:50,cap:2}, goals:[{id:"g1",title:"Interrail pass, next summer",price:420}] };
+  var theo = { id:"k-theo", name:"Theo", dob:dobForAge(9, 6, 2), felt:FELTS[1],
+    split:{save:30,give:10,spend:60}, rate:4, period:"week",
+    match:{pct:0,cap:0}, goals:[{id:"g2",title:"The new Zelda game",price:59.99}] };
+  var nell = { id:"k-nell", name:"Nell", dob:leapFeb29Near(6), felt:FELTS[2],
+    split:{save:25,give:10,spend:65}, rate:6, period:"week",
+    match:{pct:0,cap:0}, goals:[{id:"g3",title:"The big LEGO flower set",price:34.99}] };
+  st.kids = [maya, theo, nell];
+
+  function ch(kid, t, v, s, day, lo, hi){
+    return { id:uid("c"), kid:kid, title:t, value:v, screen:s, cadence:"weekly", day:day,
+             bandLo:lo, bandHi:hi, since:st.opened, fresh:addDays(now, -19), retired:null, why:null };
+  }
+  st.chores = [
+    ch("k-maya","Cook dinner one night a week",5.00,15,3,13,18),
+    ch("k-maya","Load and run the dishwasher",2.00,10,2,10,18),
+    ch("k-maya","Mow the lawn",8.00,15,6,13,18),
+    ch("k-maya","Vacuum the upstairs",3.00,10,0,11,18),
+    ch("k-theo","Empty the dishwasher",1.50,10,1,7,12),
+    ch("k-theo","Feed the cat, morning and night",1.00,10,0,6,12),
+    ch("k-theo","Tidy your room properly",2.00,10,6,6,14),
+    ch("k-theo","Set the table for dinner",0.75,5,5,5,11),
+    ch("k-theo","Match the socks",0.50,5,4,4,8),
+    ch("k-nell","Put your shoes and coat away",0.50,5,5,4,8),
+    ch("k-nell","Help fold the towels",0.75,10,0,5,9),
+    ch("k-nell","Water the tomatoes",0.50,5,3,4,9)
+  ];
+  /* stagger how long each has been on the list; two are past the six-week mark,
+     which is exactly when a chore chart starts dying */
+  [12, 61, 19, 47, 26, 8, 33, 19, 160, 12, 40, 26].forEach(function(d, i){
+    if(st.chores[i]) st.chores[i].fresh = addDays(now, -d);
+  });
+
+  st.commits = [
+    { id:uid("m"), kid:"k-maya", title:"Phone plan — her share", amt:12, every:"month",
+      from: addMonths(st.opened, 1), ended:null }
+  ];
+  st.loans = [
+    { id:"l-bike", kid:"k-maya", title:"Second-hand mountain bike", principal:180,
+      apr:6, weekly:6, from: addDays(mondayOf(now), -7*14), closed:null }
+  ];
+
+  S = st;
+
+  /* ── deal and settle 26 weeks of history ─────────────────── */
+  var rnd = seeded(20260904);
+  var stick = { "k-maya":0.80, "k-theo":0.70, "k-nell":0.88 };
+  var thisWk = mondayOf(now);
+  for(var w = 26; w >= 0; w--){
+    var wk = addDays(thisWk, -7*w);
+    S.chores.forEach(function(c){
+      var due = dueInWeek(c, wk);
+      if(daysBetween(S.opened, due) < 0) return;
+      if(daysBetween(due, now) < 0) return;                 /* not yet due */
+      var k = kidById(c.kid);
+      var age = ageOn(k.dob, due);
+      if(age === null || age < c.bandLo || age > c.bandHi) return;
+      var id = cardId(c.id, due);
+      if(haveCard(id)) return;
+      newCard(c, due);
+      var card = haveCard(id);
+      var roll = rnd();
+      if(w === 0){
+        /* this week: a couple already marked done and waiting on a parent */
+        if(roll < 0.34){ card.state = "done"; card.markedOn = due; }
+        return;
+      }
+      if(roll < stick[c.kid]){
+        card.state = "paid";
+        card.markedOn = due;
+        payout(k, c.value, c.title, due, "earn", c.screen);
+      }
+    });
+
+    /* the money that is not chore money */
+    if(w === 26) pushEntry({kid:"k-maya",on:addDays(wk,2),pot:"spend",kind:"open",
+      what:"Opening float from the piggy bank",amt:11.40});
+    if(w === 26) pushEntry({kid:"k-theo",on:addDays(wk,2),pot:"spend",kind:"open",
+      what:"Opening float from the piggy bank",amt:6.25});
+    if(w === 26) pushEntry({kid:"k-nell",on:addDays(wk,2),pot:"spend",kind:"open",
+      what:"Opening float from the money box",amt:3.10});
+    if(w === 22) payout(kidById("k-maya"), 50, "Birthday money from Grandma Pat", addDays(wk,4), "gift", 0);
+    if(w === 20) payout(kidById("k-theo"), 20, "Birthday money from Grandma Pat", addDays(wk,3), "gift", 0);
+    if(w === 19) payout(kidById("k-maya"), 46.80, "Saturday shift at the café", addDays(wk,6), "job", 0);
+    if(w === 15) payout(kidById("k-maya"), 46.80, "Saturday shift at the café", addDays(wk,6), "job", 0);
+    if(w === 12) payout(kidById("k-nell"), 10, "Tooth fairy, second molar", addDays(wk,1), "gift", 0);
+    if(w === 9)  payout(kidById("k-maya"), 46.80, "Saturday shift at the café", addDays(wk,6), "job", 0);
+    if(w === 7)  payout(kidById("k-theo"), 15, "Cash from Uncle Dan", addDays(wk,5), "gift", 0);
+    if(w === 4)  payout(kidById("k-maya"), 46.80, "Saturday shift at the café", addDays(wk,6), "job", 0);
+
+    if(w === 21) pushEntry({kid:"k-maya",on:addDays(wk,5),pot:"spend",kind:"spend",
+      what:"Cinema with Priya",amt:-14.50});
+    if(w === 18) pushEntry({kid:"k-theo",on:addDays(wk,4),pot:"spend",kind:"spend",
+      what:"Pokémon card pack",amt:-6.99});
+    if(w === 16) pushEntry({kid:"k-nell",on:addDays(wk,3),pot:"spend",kind:"spend",
+      what:"Unicorn sticker book",amt:-3.99});
+    if(w === 13) pushEntry({kid:"k-maya",on:addDays(wk,2),pot:"give",kind:"give",
+      what:"Dogs Trust — sponsored a kennel",amt:-12.00});
+    if(w === 11) pushEntry({kid:"k-theo",on:addDays(wk,6),pot:"spend",kind:"spend",
+      what:"Ice cream van, twice",amt:-4.50});
+    if(w === 8)  pushEntry({kid:"k-maya",on:addDays(wk,3),pot:"spend",kind:"spend",
+      what:"New headphones",amt:-32.00});
+    if(w === 6)  pushEntry({kid:"k-nell",on:addDays(wk,5),pot:"give",kind:"give",
+      what:"School fundraiser — red nose",amt:-2.00});
+    if(w === 5)  pushEntry({kid:"k-theo",on:addDays(wk,2),pot:"give",kind:"give",
+      what:"Class collection for the food bank",amt:-3.50});
+    if(w === 3)  pushEntry({kid:"k-nell",on:addDays(wk,4),pot:"spend",kind:"spend",
+      what:"Ice lolly at the park",amt:-1.50});
+    /* Screen minutes get spent almost as fast as they are earned — children
+       cash them in. Without this the sample would show an implausible bank. */
+    if(w > 0) S.kids.forEach(function(kk){
+      if(rnd() > 0.82) return;
+      var when = addDays(wk, 6);
+      for(var pi = 0; pi < 4; pi++){
+        var have = potAt(kk.id, "screen", when);   /* balance ON that day, so it never goes negative */
+        if(have < 20) break;
+        var can = S.perks.filter(function(p){ return p.cost <= have; })
+          .sort(function(a,b){ return b.cost - a.cost; });
+        if(!can.length) break;
+        pushEntry({kid:kk.id, on:when, pot:"screen", kind:"perk",
+          what:can[0].title, amt:-can[0].cost});
+      }
+    });
+    if(w === 1)  pushEntry({kid:"k-maya",on:addDays(wk,4),pot:"spend",kind:"spend",
+      what:"Bubble tea after school",amt:-5.20});
+  }
+  /* she bought the bike the day after the money landed, not before it */
+  var bikeDay = addDays(S.loans[0].from, 1);
+  pushEntry({kid:"k-maya",on:bikeDay,pot:"spend",kind:"spend",
+    what:"Bought the bike from the Kellys",amt:-180});
+
+  runBank(now);
+  return S;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. RECURRING COMMITMENTS (the teen years)
+   ══════════════════════════════════════════════════════════════ */
+function commitJobs(uptoIso, jobs){
+  (S.commits||[]).forEach(function(m){
+    var k = kidById(m.kid); if(!k) return;
+    var at = m.every === "week" ? addDays(m.from, 7) : addMonths(m.from, 1), g = 0;
+    while(daysBetween(at, uptoIso) >= 0 && g++ < 1200){
+      if(m.ended && daysBetween(m.ended, at) > 0) break;
+      (function(when){
+        jobs.push({ on:when, ord:3, key:"cm:"+m.id+":"+when, run:function(){
+          var sp = potBefore(m.kid,"spend",addDays(when,1)),
+              sv = potBefore(m.kid,"save",addDays(when,1));
+          var have = r2(Math.max(0,sp) + Math.max(0,sv));
+          var pay = r2(Math.min(m.amt, have));
+          if(pay < 0.01) return;
+          var a = r2(Math.min(pay, Math.max(0, sp))), b = r2(pay - a);
+          if(a > 0) pushEntry({kid:m.kid,on:when,pot:"spend",kind:"commit",
+            what:m.title,amt:-a,key:"cm:"+m.id+":"+when});
+          if(b > 0) pushEntry({kid:m.kid,on:when,pot:"save",kind:"commit",
+            what:m.title + " (from save)",amt:-b,key:"cmb:"+m.id+":"+when});
+        }});
+      })(at);
+      at = m.every === "week" ? addDays(at, 7) : addMonths(at, 1);
+    }
+  });
+}
+/* ══════════════════════════════════════════════════════════════
+   8. THE DECK — one lane per person, one card per decision
+   ══════════════════════════════════════════════════════════════ */
+var nav = { lane:0, idx:0 };
+var lanes = [];
+var stage = document.getElementById("stage");
+var felt  = document.getElementById("felt");
+var hair  = document.getElementById("hairline");
+var toastEl = document.getElementById("toast");
+
+var ICON = {
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg>',
+  coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7v10M9.4 9.4h4a2.3 2.3 0 010 4.6h-2.8a2.3 2.3 0 000 4.6h4" stroke-linecap="round"/></svg>',
+  swipe:'<svg viewBox="0 0 40 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h30M26 3l7 7-7 7"/></svg>'
+};
+var POTNAME = { save:"Save", spend:"Spend", give:"Give", screen:"Screen time" };
+
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("up");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(function(){ toastEl.classList.remove("up"); }, 2600);
+}
+
+/* ── leaf shell ───────────────────────────────────────────── */
+function shell(o, laneMeta, i, total){
+  var head =
+    '<div class="leaf-head" style="background:' + laneMeta.felt + '">' +
+      '<div class="who">' +
+        '<span class="who-name">' + esc(laneMeta.name) + '</span>' +
+        '<span class="who-age">' + esc(laneMeta.tag) + '</span>' +
+      '</div>' +
+      '<div class="turn">' +
+        '<button type="button" data-act="lane" data-d="-1" aria-label="Previous person">' + ICON.up + '</button>' +
+        '<button type="button" data-act="lane" data-d="1" aria-label="Next person">' + ICON.down + '</button>' +
+      '</div>' +
+    '</div>';
+  var last = i >= total - 1;
+  var foot = '<div class="leaf-foot">' +
+      (o.foot ? '<span class="swipehint">' + o.foot + '</span>' : "") +
+      '<button class="swipehint" type="button" data-act="turn" data-d="' + (last ? "0" : "1") +
+        '" aria-label="' + (last ? "Back to the first card" : "Next card") + '">' +
+        (last ? "Back to the start" : (o.hint || "Next") + " " + ICON.swipe) + '</button>' +
+      '<span class="deck-count">' + (i+1) + " / " + total + '</span>' +
+    '</div>';
+  return '<article class="leaf" role="group" aria-label="' + esc(o.title) + '">' + head +
+    '<div class="leaf-body"><p class="kicker">' + esc(o.kicker) + '</p>' +
+    '<h2 class="leaf-title">' + o.title + '</h2>' + o.body + '</div>' + foot + '</article>';
+}
+
+/* ── pieces ───────────────────────────────────────────────── */
+function potRow(pot, amount, note, share){
+  var isScreen = pot === "screen";
+  return '<div class="pot">' +
+    '<span class="pot-name"><i class="dot" style="background:var(--pot-' + pot + ')"></i>' +
+      POTNAME[pot] + '</span>' +
+    '<span class="pot-fig">' + (isScreen ? mins(amount) : usd(amount)) + '</span>' +
+    (note ? '<span class="pot-note">' + note + '</span>' : '') +
+    '<span class="pot-bar"><i style="width:' + Math.max(0, Math.min(100, share||0)).toFixed(1) +
+      '%;background:var(--pot-' + pot + ')"></i></span></div>';
+}
+function fact(dt, dd, cls){
+  return '<div class="fact"><dt>' + dt + '</dt><dd' + (cls?' class="'+cls+'"':'') + '>' + dd + '</dd></div>';
+}
+function field(label, attrs, k){
+  return '<label class="fieldline"><span>' + esc(label) + '</span>' +
+    '<input ' + attrs + ' data-k="' + esc(k) + '"></label>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. A CHILD'S LANE
+   ══════════════════════════════════════════════════════════════ */
+function kidLeaves(k, now){
+  var out = [];
+  var sv = potAt(k.id,"save"), sp = potAt(k.id,"spend"), gv = potAt(k.id,"give"),
+      sc = potAt(k.id,"screen");
+  var cash = r2(sv + sp + gv);
+  var big = Math.max(Math.abs(sv), Math.abs(sp), Math.abs(gv), 0.01);
+  var owed = 0;
+  S.loans.forEach(function(l){ if(l.kid === k.id) owed = r2(owed + Math.max(0, loanBalance(l.id))); });
+
+  /* ── 1. THE FRONT DOOR: the balance and the interest tick ── */
+  var since = addDays(now, -7);
+  var tickNow = sumEntries(k.id, function(e){
+    return e.kind === "interest" && daysBetween(since, e.on) >= 0;
+  });
+  var matchNow = sumEntries(k.id, function(e){
+    return e.kind === "match" && daysBetween(since, e.on) >= 0;
+  });
+  var nextTick = nextInterestDate(k, now);
+  var dueTick = r2(sv * ratePerPeriod(k));
+  var tickLine = tickNow > 0
+    ? "Your save pot grew " + usd(tickNow) + " this week."
+    : (k.rate > 0
+        ? "Next tick " + prettyFull(nextTick) + ": about " + usd(dueTick) + "."
+        : "Parent bank interest is switched off.");
+
+  out.push({ key:"bal", kicker:"Where you stand today",
+    title: esc(k.name) + "&rsquo;s money",
+    body:
+      '<p class="tick">' + ICON.coin + '<span>' + esc(tickLine) + '</span></p>' +
+      '<div class="pots">' +
+        potRow("save", sv, k.rate > 0
+            ? "Earning " + k.rate.toFixed(2) + "% a year, added " + (PERIODS[k.period]||PERIODS.week).adj
+            : "No interest set", Math.abs(sv)/big*100) +
+        potRow("spend", sp, "Yours to spend", Math.abs(sp)/big*100) +
+        potRow("give", gv, "Set aside to give away", Math.abs(gv)/big*100) +
+        potRow("screen", sc, "Earned, and spent on perks", Math.min(100, Math.abs(sc)/240*100)) +
+      '</div>' +
+      '<dl class="lines">' +
+        fact("All three money pots together", usd(cash)) +
+        (matchNow > 0 ? fact("Parent match added this week", "+" + usd(matchNow), "gain") : "") +
+        (owed > 0 ? fact("Still owed to the family bank", usd(owed), "owe") : "") +
+      '</dl>' +
+      '<p class="tab-note"><strong>A record-keeping and teaching aid.</strong> No real money moves here; ' +
+      'you settle up between yourselves.</p>',
+    hint:"The save pot"
+  });
+
+  /* ── 2. THE SAVE POT: interest, match, and what it becomes ── */
+  var intAll = sumEntries(k.id, function(e){ return e.kind === "interest"; });
+  var matAll = sumEntries(k.id, function(e){ return e.kind === "match"; });
+  var wkIn = saveRate(k, now);
+  var proj = sv, projInt = 0, pp = PERIODS[k.period] || PERIODS.week;
+  var ticksAYear = pp.n, rpp = ratePerPeriod(k);
+  for(var ti = 0; ti < ticksAYear; ti++){
+    var add = r2(proj * rpp);
+    projInt = r2(projInt + add);
+    proj = r2(proj + add + r2(wkIn * (52 / ticksAYear)));
+  }
+  out.push({ key:"grow", kicker:"The lesson in one number",
+    title:"Money that earns money",
+    body:
+      '<p class="figure">' + usd(sv) + '</p>' +
+      '<p class="sub">in the save pot right now</p>' +
+      '<dl class="lines">' +
+        fact("Interest earned since day one", "+" + usd(intAll), "gain") +
+        fact("Parent match earned since day one", "+" + usd(matAll), "gain") +
+        fact("Next interest lands", prettyFull(nextTick)) +
+        fact("And it should be about", "+" + usd(dueTick), "gain") +
+        fact("Going into save, on average", usd(wkIn) + " a week") +
+        fact("At this rate, twelve months from now",
+             usd(proj) + " <span class=\"badge\">" + usd(projInt) + " of it interest</span>") +
+      '</dl>' +
+      '<hr class="rule">' +
+      '<p class="kicker">The parent bank, set by you</p>' +
+      '<div class="duo">' +
+        field("Interest, % a year", 'type="number" min="0" max="50" step="0.25" value="' +
+          k.rate + '" data-live="rate" data-kid="' + k.id + '" inputmode="decimal"', "rate:"+k.id) +
+        '<label class="fieldline"><span>Added how often</span><select data-live="period" data-kid="' +
+          k.id + '" data-k="per:' + k.id + '">' +
+          ['week','month','quarter'].map(function(p){
+            return '<option value="' + p + '"' + (k.period===p?' selected':'') + '>Every ' + p + '</option>';
+          }).join("") + '</select></label>' +
+      '</div>' +
+      '<div class="duo">' +
+        field("Parent match, % of save", 'type="number" min="0" max="200" step="5" value="' +
+          k.match.pct + '" data-live="matchpct" data-kid="' + k.id + '" inputmode="decimal"', "mp:"+k.id) +
+        field("Match cap, $ a week", 'type="number" min="0" step="0.5" value="' +
+          usdPlain(k.match.cap) + '" data-live="matchcap" data-kid="' + k.id + '" inputmode="decimal"', "mc:"+k.id) +
+      '</div>' +
+      '<p class="tab-note">Interest is worked out on the balance standing at the start of each ' +
+      esc(pp.unit) + ', then added as its own line in the ledger so it can be seen and argued with.</p>'
+  });
+
+  /* ── 3. THE SPLIT ─────────────────────────────────────────── */
+  var demo = splitOf(k, 10);
+  var demoMatch = k.match.pct ? r2(demo.save * k.match.pct / 100) : 0;
+  out.push({ key:"split", kicker:"Every payout, every time",
+    title:"Save, spend, give",
+    body:
+      '<p class="sub">Of every <strong>' + usd(10) + '</strong> ' + esc(k.name) + ' earns:</p>' +
+      '<div class="pots">' +
+        potRow("save", demo.save, k.split.save + "% of everything", demo.save/10*100) +
+        potRow("spend", demo.spend, k.split.spend + "% of everything", demo.spend/10*100) +
+        potRow("give", demo.give, k.split.give + "% of everything", demo.give/10*100) +
+      '</div>' +
+      (demoMatch > 0 ? '<dl class="lines">' + fact("…and the parent match adds", "+" + usd(demoMatch),
+        "gain") + '</dl>' : "") +
+      '<hr class="rule">' +
+      '<div class="duo">' +
+        field("Save %", 'type="number" min="0" max="100" step="1" value="' + k.split.save +
+          '" data-live="save" data-kid="' + k.id + '" inputmode="numeric"', "sv:"+k.id) +
+        field("Give %", 'type="number" min="0" max="100" step="1" value="' + k.split.give +
+          '" data-live="give" data-kid="' + k.id + '" inputmode="numeric"', "gv:"+k.id) +
+      '</div>' +
+      '<p class="tab-note">Spend takes whatever is left — <strong>' + k.split.spend +
+      '%</strong> — and carries the odd cent, so the three parts always add back to the exact amount earned.</p>'
+  });
+
+  /* ── 4. GOALS ─────────────────────────────────────────────── */
+  var goalBody = "";
+  if(!k.goals.length){
+    goalBody = '<p class="sub">Nothing being saved for yet. Put a price on something and the ' +
+      'arithmetic does the arguing.</p>';
+  } else {
+    k.goals.forEach(function(g, gi){
+      var w = weeksToGoal(k, g.price, now);
+      var pct = g.price > 0 ? Math.max(0, Math.min(100, (sv / g.price) * 100)) : 0;
+      goalBody += (gi ? '<hr class="rule">' : "") +
+        '<p class="kicker" style="margin-top:' + (gi ? 0 : 14) + 'px">Goal ' + (gi+1) + '</p>' +
+        '<p class="leaf-title" style="font-size:1.42rem;margin-top:3px">' + esc(g.title) + '</p>' +
+        '<p class="figure mid" style="margin-top:.16em">' +
+          (w.done ? "Paid for" : usd(w.need)) + '</p>' +
+        '<p class="sub" style="margin-top:2px">' +
+          (w.done ? "there is enough in the save pot already"
+                  : (w.weeks === null ? "still to find, and nothing is going in yet"
+                     : "still to find &mdash; about " + w.weeks + " more week" +
+                       (w.weeks === 1 ? "" : "s") + " at this rate")) + '</p>' +
+        '<p class="metre"><i style="width:' + pct.toFixed(1) + '%"></i></p>' +
+        '<dl class="lines">' +
+          fact("Price", usd(g.price)) +
+          fact("In the save pot", usd(sv)) +
+          fact("Still to find", w.done ? "Nothing — it is paid for" : usd(w.need),
+               w.done ? "gain" : "") +
+          fact("Going in each week", w.rate > 0 ? usd(w.rate) : EM) +
+          fact("Weeks at that rate", w.done ? "0" :
+               (w.weeks === null ? EM + " <span class=\"badge\">nothing going in yet</span>"
+                                 : String(w.weeks))) +
+          (w.weeks ? fact("Which lands about", prettyFull(addDays(now, w.weeks * 7))) : "") +
+        '</dl>' +
+        '<div class="duo">' +
+          field("Price, $", 'type="number" min="0" step="0.01" value="' + usdPlain(g.price) +
+            '" data-live="goalprice" data-kid="' + k.id + '" data-id="' + g.id +
+            '" inputmode="decimal"', "gp:"+g.id) +
+          '<label class="fieldline"><span>&nbsp;</span>' +
+          '<button class="press press-no press-small" type="button" data-act="delgoal" data-kid="' +
+          k.id + '" data-id="' + g.id + '" style="width:100%">Remove this goal</button></label>' +
+        '</div>';
+    });
+  }
+  out.push({ key:"goal", kicker:"Wanting it now, priced up",
+    title:"Saving up for",
+    body: goalBody + '<hr class="rule">' +
+      field("Add a goal", 'type="text" maxlength="60" placeholder="A skateboard, a game, a trip…" ' +
+        'data-hold="goaltitle" data-kid="' + k.id + '"', "ngt:"+k.id) +
+      '<div class="duo">' +
+        field("Its price, $", 'type="number" min="0" step="0.01" placeholder="0.00" ' +
+          'data-hold="goalprice" data-kid="' + k.id + '" inputmode="decimal"', "ngp:"+k.id) +
+        '<label class="fieldline"><span>&nbsp;</span><button class="press press-coin press-small" ' +
+          'type="button" data-act="addgoal" data-kid="' + k.id + '" style="width:100%">Add goal</button></label>' +
+      '</div>'
+  });
+
+  /* ── 5. THE CHORE CARDS THEMSELVES ────────────────────────── */
+  var mine = openFor(k.id, now);
+  mine.slice(0, 8).forEach(function(c){
+    var late = daysBetween(c.due, now);
+    out.push({ key:"do:"+c.id, kicker: late > 0 ? "Due " + pretty(c.due) + " — " + late + " day" +
+        (late===1?"":"s") + " ago" : (late === 0 ? "Due today" : "Due " + pretty(c.due)),
+      title: esc(c.title),
+      body:
+        '<p class="figure mid">' + usd(c.value) + '</p>' +
+        '<p class="sub">' + (c.screen ? "plus " + mins(c.screen) + " of screen time" :
+          "no screen time on this one") + '</p>' +
+        (c.note ? '<p class="tab-note warn">Sent back: <strong>' + esc(c.note) + '</strong></p>' : "") +
+        '<div class="presses">' +
+          '<button class="press press-yes" type="button" data-act="done" data-id="' + c.id +
+            '">I&rsquo;ve done it</button>' +
+          '<button class="press press-no" type="button" data-act="later" data-id="' + c.id +
+            '">Not yet</button>' +
+        '</div>' +
+        '<p class="tab-note">Marking it done does not move any money. A parent has to approve it first ' +
+        '— that is the whole point of the two steps.</p>',
+      foot:'<span class="badge">' + esc(k.name) + '&rsquo;s to do</span>'
+    });
+  });
+
+  /* ── 6. LOANS RUNNING THE OTHER WAY ───────────────────────── */
+  S.loans.forEach(function(l){
+    if(l.kid !== k.id) return;
+    var bal = loanBalance(l.id);
+    var charged = 0, paid = 0, lastPay = null;
+    S.loanEvents.forEach(function(v){
+      if(v.loan !== l.id) return;
+      if(v.kind === "charge") charged = r2(charged + v.amt);
+      if(v.kind === "pay"){ paid = r2(paid + v.amt); lastPay = v.on; }
+    });
+    var left = (bal > 0 && l.weekly > 0) ? Math.ceil(bal / l.weekly) : 0;
+    out.push({ key:"loan:"+l.id, kicker: bal <= 0.004 ? "Paid off in full" : "Owed to the family bank",
+      title: esc(l.title),
+      body:
+        '<p class="figure mid"' + (bal > 0 ? ' style="color:var(--flag)"' : '') + '>' +
+          usd(Math.max(0, bal)) + '</p>' +
+        '<p class="sub">' + (bal <= 0.004 ? "Cleared on " + prettyFull(l.closed || lastPay || now) :
+          "still to pay back") + '</p>' +
+        '<dl class="lines">' +
+          fact("Borrowed", usd(l.principal)) +
+          fact("Interest charged so far", usd(charged), "owe") +
+          fact("Paid back so far", usd(paid), "gain") +
+          fact("Coming out each week", usd(l.weekly)) +
+          fact("Interest rate charged", l.apr.toFixed(2) + "% a year") +
+          (bal > 0 ? fact("Weeks left at that rate", String(left)) : "") +
+          (bal > 0 ? fact("Clear by", prettyFull(addDays(now, left*7))) : "") +
+        '</dl>' +
+        (bal > 0 ?
+          '<hr class="rule"><div class="duo">' +
+            field("Pay extra now, $", 'type="number" min="0" step="0.5" placeholder="0.00" ' +
+              'data-hold="extra" data-kid="' + k.id + '" inputmode="decimal"', "ex:"+l.id) +
+            '<label class="fieldline"><span>&nbsp;</span><button class="press press-coin press-small" ' +
+            'type="button" data-act="loanextra" data-id="' + l.id + '" style="width:100%">' +
+            'Pay it off faster</button></label></div>' +
+          '<p class="tab-note">Every week the bank charges nothing extra for paying early — but every ' +
+          'week it is not paid, <strong>' + usd(r2(bal * (l.apr/100) / 12)) +
+          '</strong> of interest goes on in a month. That is the lesson.</p>'
+          : '<p class="tab-note">Paid off. ' + esc(k.name) + ' borrowed ' + usd(l.principal) +
+            ' and it cost ' + usd(charged) + ' in interest to do it.</p>')
+    });
+  });
+
+  /* ── 7. MONEY THAT IS NOT CHORE MONEY ─────────────────────── */
+  out.push({ key:"in", kicker:"Birthdays, grandparents, payslips",
+    title:"Money in",
+    body:
+      '<p class="sub">Anything that arrives gets split the same way — ' + k.split.save +
+      '% save, ' + k.split.spend + '% spend, ' + k.split.give + '% give — unless you say otherwise.</p>' +
+      '<div class="chiprow">' +
+        ["Birthday money","Grandparent cash","Wages","Sold something","Tooth fairy"].map(function(t){
+          return '<button class="chip" type="button" data-act="preset" data-kid="' + k.id +
+            '" data-t="' + esc(t) + '">' + esc(t) + '</button>';
+        }).join("") +
+      '</div>' +
+      field("What was it?", 'type="text" maxlength="70" placeholder="Birthday money from Nan" ' +
+        'data-hold="inwhat" data-kid="' + k.id + '"', "iw:"+k.id) +
+      '<div class="duo">' +
+        field("How much, $", 'type="number" min="0" step="0.01" placeholder="0.00" ' +
+          'data-hold="inamt" data-kid="' + k.id + '" inputmode="decimal"', "ia:"+k.id) +
+        field("On what date", 'type="date" value="' + now + '" data-hold="indate" data-kid="' +
+          k.id + '"', "id:"+k.id) +
+      '</div>' +
+      '<div class="presses side">' +
+        '<button class="press press-yes" type="button" data-act="income" data-kid="' + k.id +
+          '" data-split="1">Split it three ways</button>' +
+        '<button class="press press-no" type="button" data-act="income" data-kid="' + k.id +
+          '" data-split="0">All to spend</button>' +
+      '</div>'
+  });
+
+  /* ── 8. MONEY OUT ─────────────────────────────────────────── */
+  out.push({ key:"out", kicker:"Spent it, gave it away",
+    title:"Money out",
+    body:
+      '<p class="sub">Take money out of a pot so the ledger tells the truth.</p>' +
+      field("What for?", 'type="text" maxlength="70" placeholder="Cinema ticket" ' +
+        'data-hold="outwhat" data-kid="' + k.id + '"', "ow:"+k.id) +
+      '<div class="duo">' +
+        field("How much, $", 'type="number" min="0" step="0.01" placeholder="0.00" ' +
+          'data-hold="outamt" data-kid="' + k.id + '" inputmode="decimal"', "oa:"+k.id) +
+        '<label class="fieldline"><span>Out of which pot</span><select data-hold="outpot" data-kid="' +
+          k.id + '" data-k="op:' + k.id + '">' +
+          '<option value="spend">Spend — ' + usd(sp) + '</option>' +
+          '<option value="give">Give — ' + usd(gv) + '</option>' +
+          '<option value="save">Save — ' + usd(sv) + '</option>' +
+        '</select></label>' +
+      '</div>' +
+      '<div class="presses"><button class="press" type="button" data-act="spendout" data-kid="' +
+        k.id + '">Take it out</button></div>' +
+      '<hr class="rule">' +
+      '<p class="kicker">Screen time — the other currency</p>' +
+      '<p class="sub">' + esc(k.name) + ' has <strong>' + mins(sc) + '</strong> banked.</p>' +
+      S.perks.map(function(p){
+        return '<div class="stub"><span class="stub-what">' + esc(p.title) + '</span>' +
+          '<span class="stub-amt">' + mins(p.cost) + '</span>' +
+          '<span class="stub-acts"><button class="press press-no press-small" type="button" ' +
+          'data-act="perk" data-kid="' + k.id + '" data-id="' + p.id + '"' +
+          (sc < p.cost ? ' disabled style="opacity:.45"' : '') + '>' +
+          (sc < p.cost ? "Not enough banked" : "Spend " + mins(p.cost)) + '</button></span></div>';
+      }).join("")
+  });
+
+  /* ── 9. THE LEDGER ────────────────────────────────────────── */
+  var recent = S.entries.filter(function(e){ return e.kid === k.id; })
+    .sort(function(a,b){ var c = daysBetween(b.on, a.on); return c !== 0 ? (c>0?1:-1) : b.seq - a.seq; })
+    .slice(0, 14);
+  var q = quarterOf(now);
+  out.push({ key:"ledger", kicker:"Every credit and every debit",
+    title:"The ledger",
+    body:
+      (recent.length ? recent.map(function(e){
+        var amtTxt = e.pot === "screen" ? (e.amt > 0 ? "+" : "") + mins(e.amt)
+                                        : (e.amt > 0 ? "+" : "") + usd(e.amt);
+        return '<div class="ledger-line"><span class="lg-when">' + pretty(e.on) + '</span>' +
+          '<span class="lg-what">' + esc(e.what) + '</span>' +
+          '<span class="lg-amt ' + (e.amt >= 0 ? "money-in" : "money-out") + '">' + amtTxt + '</span>' +
+          '<span class="lg-tag">' + esc(POTNAME[e.pot]) + ' &middot; ' + esc(e.kind) + '</span></div>';
+      }).join("") : '<p class="sub">Nothing in the ledger yet.</p>') +
+      '<hr class="rule">' +
+      '<dl class="lines">' +
+        fact("Chores approved, all time",
+          String(S.cards.filter(function(c){ return c.kid === k.id && c.state === "paid"; }).length)) +
+        fact("Earned from chores, all time",
+          usd(sumEntries(k.id, function(e){ return e.kind === "earn" && e.amt > 0 && e.pot !== "screen"; }))) +
+        fact("Interest and match, all time", usd(r2(intAll + matAll)), "gain") +
+      '</dl>' +
+      '<div class="presses">' +
+        '<button class="press press-coin" type="button" data-act="print" data-kid="' + k.id +
+          '">Print ' + esc(k.name) + '&rsquo;s ' + esc(q.label) + ' statement</button>' +
+        '<button class="press press-no" type="button" data-act="csv" data-kid="' + k.id +
+          '">Export ' + esc(k.name) + '&rsquo;s ledger as CSV</button>' +
+      '</div>',
+    foot:'<span class="badge">' + esc(q.label) + '</span>'
+  });
+
+  return out;
+}
+/* ══════════════════════════════════════════════════════════════
+   10. THE PARENTS' DESK
+   ══════════════════════════════════════════════════════════════ */
+var hold = {};
+function held(name, id){
+  var v = hold[name + ":" + id];
+  return v === undefined ? "" : v;
+}
+var BACK_REASONS = ["Not finished properly","Do it again tomorrow","That was your brother",
+  "Already paid for that one"];
+
+function deskLeaves(now){
+  var out = [];
+
+  /* ── the approval queue: five cards in twenty seconds ────── */
+  var q = waitingAll();
+  out.push({ key:"queue", kicker: q.length ? q.length + " waiting on you" : "Nothing waiting",
+    title:"Approve or send back",
+    body: q.length ? q.slice(0, 12).map(function(c){
+      var k = kidById(c.kid); if(!k) return "";
+      var sp = splitOf(k, c.value);
+      var chosen = held("reason", c.id);
+      return '<div class="stub">' +
+        '<span class="stub-what">' + esc(c.title) + '</span>' +
+        '<span class="stub-amt">' + usd(c.value) + '</span>' +
+        '<span class="stub-who">' + esc(k.name) + ' &middot; marked done ' +
+          pretty(c.markedOn || c.due) + ' &middot; ' + usd(sp.save) + ' save / ' +
+          usd(sp.spend) + ' spend / ' + usd(sp.give) + ' give' +
+          (c.screen ? ' &middot; ' + mins(c.screen) : '') + '</span>' +
+        '<span class="stub-acts">' +
+          '<button class="press press-yes press-small" type="button" data-act="approve" data-id="' +
+            c.id + '">Approve ' + usd(c.value) + '</button>' +
+          '<button class="press press-no press-small" type="button" data-act="backopen" data-id="' +
+            c.id + '">Send back</button>' +
+        '</span>' +
+        (chosen === "open" ? '<span class="stub-acts" style="flex-wrap:wrap">' +
+          BACK_REASONS.map(function(r){
+            return '<button class="chip" type="button" data-act="back" data-id="' + c.id +
+              '" data-r="' + esc(r) + '">' + esc(r) + '</button>';
+          }).join("") + '</span>' : "") +
+      '</div>';
+    }).join("")
+    : (S.kids.length
+      ? '<p class="sub">Every card is either done and paid or still out there. ' +
+        'Nothing needs a decision from you right now.</p>' +
+        '<p class="tab-note">This is the point. The deck should be empty most days &mdash; ' +
+        'the interest ticks on a calendar whether or not anybody did a chore.</p>'
+      : '<p class="sub">There is nobody in the deck yet, so there is nothing to approve. ' +
+        'Add a child first.</p>'),
+    foot:'<span class="badge' + (q.length ? ' hot' : '') + '">' + q.length + ' to approve</span>'
+  });
+
+  /* ── the children ─────────────────────────────────────────── */
+  var peopleBody = S.kids.length ? S.kids.map(function(k){
+    var a = ageOn(k.dob, now);
+    var wk = weekRate(k.id, mondayOf(now));
+    var b4 = bestOfFour(k.id, now);
+    var bd = nextBirthday(k.dob, now);
+    var dLeft = bd ? daysBetween(now, bd) : null;
+    return '<div class="stub">' +
+      '<span class="stub-what">' + esc(k.name) + '</span>' +
+      '<span class="stub-amt">' + usd(cashAt(k.id)) + '</span>' +
+      '<span class="stub-who">' + (a === null ? EM : a + " years old") +
+        (dLeft !== null ? " &middot; " + (dLeft === 0 ? "birthday today" :
+          dLeft + " day" + (dLeft===1?"":"s") + " to their birthday") : "") +
+        ' &middot; save ' + k.split.save + " / spend " + k.split.spend + " / give " + k.split.give +
+      '</span>' +
+      '<span class="stub-acts" style="flex-wrap:wrap;align-items:center;gap:10px">' +
+        '<span class="badge">This week ' + (wk.pct === null ? EM : wk.pct + "%") +
+          ' (' + wk.got + " of " + wk.due + ')</span>' +
+        '<span class="badge">Best of last 4 weeks ' + (b4.best === null ? EM : b4.best + "%") + '</span>' +
+        '<button class="press press-no press-small" type="button" data-act="delkid" data-kid="' +
+          k.id + '">Remove</button>' +
+      '</span>' +
+    '</div>';
+  }).join("") : "";
+
+  out.push({ key:"people",
+    kicker: S.kids.length ? "For your eyes, not theirs" : "Nobody in the deck yet",
+    title: S.kids.length ? "The children" : "Start with a child",
+    body: (S.kids.length ? "" :
+      '<p class="sub">Give the deck one child and a date of birth. The date of birth is what ' +
+      'keeps chores age-appropriate and retires them on their own as they grow.</p>') +
+      peopleBody +
+      (S.kids.length ? '<p class="tab-note">Completion rate is a parent&rsquo;s number. There is ' +
+        'deliberately no streak counter on the children&rsquo;s cards &mdash; a chain that breaks is ' +
+        'the week a family quits.</p><hr class="rule">' : "") +
+      '<p class="kicker">Add a child</p>' +
+      '<div class="duo">' +
+        field("Their name", 'type="text" maxlength="28" placeholder="Name" data-hold="kidname" ' +
+          'data-kid="new"', "kn") +
+        field("Date of birth", 'type="date" data-hold="kiddob" data-kid="new"', "kd") +
+      '</div>' +
+      '<div class="presses"><button class="press press-coin" type="button" data-act="addkid">' +
+        'Add them to the deck</button>' +
+        (S.kids.length ? "" : '<button class="press press-no" type="button" data-act="resample">' +
+          'Or look at the sample family again</button>') + '</div>'
+  });
+
+  /* ── chores, age bands and rotation ───────────────────────── */
+  var live = S.chores.filter(function(c){ return !c.retired; });
+  var gone = S.chores.filter(function(c){ return c.retired; });
+  var stale = live.filter(function(c){ return daysBetween(c.fresh, now) >= ROTATE_DAYS; });
+  var sugg = [];
+  S.kids.forEach(function(k){
+    var a = ageOn(k.dob, now);
+    if(a === null) return;
+    suggestFor(k, a).slice(0, 2).forEach(function(x){ sugg.push({ kid:k, item:x, age:a }); });
+  });
+
+  out.push({ key:"chores", kicker: live.length + " live, " + gone.length + " retired",
+    title:"The chore list",
+    body:
+      (gone.length ? '<p class="tab-note warn"><strong>' + gone.length + ' chore' +
+        (gone.length===1?" has":"s have") + ' been retired</strong> because the child grew past the ' +
+        'age band: ' + gone.map(function(c){
+          var k = kidById(c.kid);
+          return esc(c.title) + " (" + esc(k ? k.name : "?") + ", ages " + c.bandLo + "&ndash;" + c.bandHi + ")";
+        }).join("; ") + '.</p>' : "") +
+      (stale.length ? '<p class="tab-note"><strong>Time to rotate.</strong> ' + stale.length +
+        ' chore' + (stale.length===1?" has":"s have") + ' been on the list unchanged for six weeks ' +
+        'or more. Swapping them is the one thing that stops a chore chart dying at week six.</p>' : "") +
+      live.map(function(c){
+        var k = kidById(c.kid);
+        var days = daysBetween(c.fresh, now);
+        return '<div class="stub">' +
+          '<span class="stub-what">' + esc(c.title) + '</span>' +
+          '<span class="stub-amt">' + usd(c.value) + '</span>' +
+          '<span class="stub-who">' + esc(k ? k.name : "?") + ' &middot; ' + DAYN[c.day] +
+            ' &middot; ages ' + c.bandLo + "&ndash;" + c.bandHi +
+            (c.screen ? ' &middot; ' + mins(c.screen) : '') +
+            ' &middot; on the list ' + days + ' day' + (days===1?"":"s") + '</span>' +
+          '<span class="stub-acts">' +
+            (days >= ROTATE_DAYS ? '<button class="press press-coin press-small" type="button" ' +
+              'data-act="rotate" data-id="' + c.id + '">Rotated &mdash; mark it fresh</button>' : '') +
+            '<button class="press press-no press-small" type="button" data-act="retire" data-id="' +
+              c.id + '">Retire</button>' +
+          '</span></div>';
+      }).join("") +
+      (gone.length ? '<hr class="rule"><p class="kicker">Retired</p>' + gone.map(function(c){
+        var k = kidById(c.kid);
+        return '<div class="stub"><span class="stub-what" style="opacity:.6">' + esc(c.title) +
+          '</span><span class="stub-amt" style="opacity:.5">' + usd(c.value) + '</span>' +
+          '<span class="stub-who">' + esc(k ? k.name : "?") + ' &middot; ' +
+          (c.why === "outgrown" ? "outgrew the band" : "retired by you") + ' ' + pretty(c.retired) +
+          '</span><span class="stub-acts"><button class="press press-no press-small" type="button" ' +
+          'data-act="unretire" data-id="' + c.id + '">Put it back</button></span></div>';
+      }).join("") : "") +
+      (sugg.length ? '<hr class="rule"><p class="kicker">Right for their age now</p>' +
+        sugg.map(function(s, si){
+          return '<div class="stub"><span class="stub-what">' + esc(s.item.t) + '</span>' +
+            '<span class="stub-amt">' + usd(s.item.v) + '</span>' +
+            '<span class="stub-who">' + esc(s.kid.name) + ' is ' + s.age + ' &middot; suits ages ' +
+            s.item.lo + "&ndash;" + s.item.hi + '</span>' +
+            '<span class="stub-acts"><button class="press press-yes press-small" type="button" ' +
+            'data-act="addlib" data-kid="' + s.kid.id + '" data-i="' + si + '" data-t="' +
+            esc(s.item.t) + '">Add for ' + esc(s.kid.name) + '</button></span></div>';
+        }).join("") : "") +
+      '<hr class="rule"><p class="kicker">Write your own</p>' +
+      field("What is the chore?", 'type="text" maxlength="64" placeholder="Clean out the rabbit hutch" ' +
+        'data-hold="chtitle" data-kid="new"', "ct") +
+      '<div class="trio">' +
+        field("Pays, $", 'type="number" min="0" step="0.25" placeholder="1.50" data-hold="chval" ' +
+          'data-kid="new" inputmode="decimal"', "cv") +
+        field("Screen, min", 'type="number" min="0" step="5" placeholder="15" data-hold="chscr" ' +
+          'data-kid="new" inputmode="numeric"', "cs") +
+        '<label class="fieldline"><span>Day</span><select data-hold="chday" data-kid="new" data-k="cd">' +
+          DAYN.map(function(d,i){ return '<option value="' + i + '"' + (i===6?" selected":"") +
+            '>' + d + '</option>'; }).join("") + '</select></label>' +
+      '</div>' +
+      '<div class="trio">' +
+        '<label class="fieldline"><span>Who</span><select data-hold="chkid" data-kid="new" data-k="ck">' +
+          S.kids.map(function(k){ return '<option value="' + k.id + '">' + esc(k.name) + '</option>'; })
+          .join("") + '</select></label>' +
+        field("Ages from", 'type="number" min="2" max="19" step="1" placeholder="6" data-hold="chlo" ' +
+          'data-kid="new" inputmode="numeric"', "cl") +
+        field("Ages to", 'type="number" min="2" max="21" step="1" placeholder="12" data-hold="chhi" ' +
+          'data-kid="new" inputmode="numeric"', "ch") +
+      '</div>' +
+      '<div class="presses"><button class="press press-coin" type="button" data-act="addchore">' +
+        'Add the chore</button></div>'
+  });
+
+  /* ── the second currency ──────────────────────────────────── */
+  out.push({ key:"perks", kicker:"Screen time and privileges",
+    title:"The other currency",
+    body:
+      '<p class="sub">Chores can pay in minutes as well as money. Minutes are earned in the same deck ' +
+      'and spent here — so the product still has a job on the day you stop paying cash for chores.</p>' +
+      S.perks.map(function(p){
+        return '<div class="stub"><span class="stub-what">' + esc(p.title) + '</span>' +
+          '<span class="stub-amt">' + mins(p.cost) + '</span>' +
+          '<span class="stub-acts"><button class="press press-no press-small" type="button" ' +
+          'data-act="delperk" data-id="' + p.id + '">Remove</button></span></div>';
+      }).join("") +
+      '<hr class="rule">' +
+      '<div class="duo">' +
+        field("A new privilege", 'type="text" maxlength="70" placeholder="Stay up an extra half hour" ' +
+          'data-hold="pktitle" data-kid="new"', "pt") +
+        field("Costs, minutes", 'type="number" min="0" step="5" placeholder="30" data-hold="pkcost" ' +
+          'data-kid="new" inputmode="numeric"', "pc") +
+      '</div>' +
+      '<div class="presses"><button class="press press-coin" type="button" data-act="addperk">' +
+        'Add it to the list</button></div>' +
+      '<hr class="rule">' +
+      '<p class="kicker">Standing commitments</p>' +
+      ((S.commits||[]).length ? S.commits.map(function(m){
+        var k = kidById(m.kid);
+        return '<div class="stub"><span class="stub-what">' + esc(m.title) + '</span>' +
+          '<span class="stub-amt">' + usd(m.amt) + '</span>' +
+          '<span class="stub-who">' + esc(k ? k.name : "?") + ' &middot; every ' + esc(m.every) +
+          ' &middot; out of spend</span>' +
+          '<span class="stub-acts"><button class="press press-no press-small" type="button" ' +
+          'data-act="delcommit" data-id="' + m.id + '">Stop it</button></span></div>';
+      }).join("") : '<p class="sub">Nothing standing. A phone plan share or a car contribution goes ' +
+        'here and comes out on its own every month.</p>')
+  });
+
+  /* ── data, print, and the disclaimer in full ──────────────── */
+  out.push({ key:"data", kicker:"It never leaves this device",
+    title:"Print, keep, start again",
+    body:
+      '<p class="sub">Everything lives in this browser. There is no account, no server and nothing ' +
+      'to leak.' + (storageOk ? "" : " <strong>This browser is blocking storage, so changes will not " +
+      "survive a reload.</strong>") + '</p>' +
+      '<div class="presses">' +
+        '<button class="press press-coin" type="button" data-act="printall">' +
+          'Print a statement for every child</button>' +
+        '<button class="press press-no" type="button" data-act="csvall">Export the whole ledger (CSV)</button>' +
+        '<button class="press press-no" type="button" data-act="json">Export everything (JSON)</button>' +
+        '<button class="press press-no" type="button" data-act="import">Import a JSON backup</button>' +
+      '</div>' +
+      '<hr class="rule">' +
+      '<dl class="lines">' +
+        fact("Family", esc(S.house)) +
+        fact("Ledger opened", prettyFull(S.opened)) +
+        fact("Entries on file", String(S.entries.length)) +
+        fact("Chore cards on file", String(S.cards.length)) +
+      '</dl>' +
+      (S.sample ? '<p class="tab-note warn"><strong>You are looking at a sample family.</strong> ' +
+        'The Brennans are made up, so you can see how the whole thing behaves before typing anything. ' +
+        'Clear them and the deck is yours.</p>' +
+        '<div class="presses"><button class="press" type="button" data-act="clear">' +
+        'Clear the sample and start with my family</button></div>'
+      : '<div class="presses"><button class="press press-no" type="button" data-act="resample">' +
+        'Load the sample family again</button></div>') +
+      '<p class="tab-note"><strong>A record-keeping and teaching aid.</strong> No real money moves ' +
+      'here; you settle up between yourselves. Nothing on these cards is a bank account, and the ' +
+      '&ldquo;interest&rdquo; is whatever you have promised to pay out of your own pocket.</p>'
+  });
+
+  if(!S.kids.length){
+    /* nothing to approve and nobody to approve it for: open on the one thing to do */
+    for(var pi = 0; pi < out.length; pi++){
+      if(out[pi].key === "people"){ out.unshift(out.splice(pi, 1)[0]); break; }
+    }
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   11. RENDER AND NAVIGATE
+   ══════════════════════════════════════════════════════════════ */
+function buildLanes(){
+  var now = today();
+  lanes = S.kids.map(function(k){
+    var a = ageOn(k.dob, now);
+    return { id:k.id, name:k.name, tag:(a === null ? "" : a + " years old"),
+             felt:k.felt || FELTS[0], leaves:kidLeaves(k, now) };
+  });
+  lanes.push({ id:"desk", name:S.house, tag:"The parents' desk", felt:DESK_FELT,
+               leaves:deskLeaves(now) });
+}
+function render(keepKey){
+  var act = document.activeElement;
+  var fk = act && act.dataset ? act.dataset.k : null;
+  var selA = null, selB = null;
+  try { if(act && act.selectionStart !== undefined && act.type !== "date" && act.type !== "number"){
+    selA = act.selectionStart; selB = act.selectionEnd; } } catch(e){}
+
+  buildLanes();
+  if(nav.lane >= lanes.length) nav.lane = lanes.length - 1;
+  if(nav.lane < 0) nav.lane = 0;
+  var lane = lanes[nav.lane];
+  if(keepKey){
+    var at = -1;
+    lane.leaves.forEach(function(l, i){ if(l.key === keepKey) at = i; });
+    if(at >= 0) nav.idx = at;
+  }
+  if(nav.idx >= lane.leaves.length) nav.idx = lane.leaves.length - 1;
+  if(nav.idx < 0) nav.idx = 0;
+
+  felt.style.background = lane.felt;
+  document.documentElement.style.setProperty("--felt-deep", lane.felt);
+  var tc = document.querySelector('meta[name="theme-color"]');
+  if(tc) tc.setAttribute("content", lane.felt);
+  var mark = document.getElementById("samplemark");
+  if(mark) mark.hidden = !S.sample;
+
+  stage.innerHTML = lane.leaves.map(function(l, i){
+    return shell(l, lane, i, lane.leaves.length);
+  }).join("");
+  place();
+
+  if(fk){
+    var back = stage.querySelector('[data-k="' + (window.CSS && CSS.escape ? CSS.escape(fk) : fk) + '"]');
+    if(back){
+      try {
+        back.focus({ preventScroll:true });
+        if(selA !== null && back.setSelectionRange) back.setSelectionRange(selA, selB);
+      } catch(e){}
+    }
+  }
+}
+function place(){
+  var kids = stage.children, lane = lanes[nav.lane];
+  for(var i = 0; i < kids.length; i++){
+    var el = kids[i], off = i - nav.idx, a = Math.abs(off);
+    var far = a === 0 ? 0 : (a === 1 ? 1 : 2);
+    el.style.transform = "translateX(" + (off * 93) + "%) scale(" + (a === 0 ? 1 : 0.88) + ")";
+    el.style.opacity = a === 0 ? "1" : (a === 1 ? "0.26" : "0");
+    el.style.zIndex = String(50 - a);
+    el.dataset.far = String(far);
+    el.setAttribute("aria-hidden", a === 0 ? "false" : "true");
+    try { el.inert = a !== 0; } catch(e){}
+  }
+  var pct = lane.leaves.length > 1 ? ((nav.idx + 1) / lane.leaves.length) * 100 : 100;
+  hair.style.width = pct.toFixed(2) + "%";
+  hair.style.background = "var(--coin)";
+  document.getElementById("paddleBack").hidden = nav.idx === 0;
+  document.getElementById("paddleFwd").hidden = nav.idx >= lane.leaves.length - 1;
+}
+function goCard(d){
+  var n = nav.idx + d, max = lanes[nav.lane].leaves.length - 1;
+  nav.idx = Math.max(0, Math.min(max, n));
+  place();
+}
+function goLane(d){
+  var n = nav.lane + d;
+  if(n < 0) n = lanes.length - 1;
+  if(n >= lanes.length) n = 0;
+  nav.lane = n; nav.idx = 0;
+  render();
+  stage.classList.remove("jump-up","jump-down");
+  void stage.offsetWidth;
+  stage.classList.add(d > 0 ? "jump-down" : "jump-up");
+}
+/* ══════════════════════════════════════════════════════════════
+   12. DOING THINGS
+   ══════════════════════════════════════════════════════════════ */
+function coinFly(fromEl){
+  if(!fromEl || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var r = fromEl.getBoundingClientRect();
+  var c = document.createElement("i");
+  c.className = "coin-fly";
+  c.style.left = (r.left + r.width/2 - 13) + "px";
+  c.style.top = (r.top + r.height/2 - 13) + "px";
+  document.body.appendChild(c);
+  requestAnimationFrame(function(){
+    c.style.transform = "translate(" + (window.innerWidth/2 - r.left - r.width/2) + "px," +
+      (-r.top + 120) + "px) scale(.4)";
+    c.style.opacity = "0";
+  });
+  setTimeout(function(){ if(c.parentNode) c.parentNode.removeChild(c); }, 700);
+}
+function num(v, dflt){
+  var n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  return isFinite(n) ? n : (dflt === undefined ? 0 : dflt);
+}
+function findCard(id){
+  for(var i=0;i<S.cards.length;i++) if(S.cards[i].id === id) return S.cards[i];
+  return null;
+}
+function commit(keepKey){ save(); render(keepKey); }
+
+function approveCard(c, btn){
+  var k = kidById(c.kid); if(!k) return;
+  var now = today();
+  var res = payout(k, c.value, c.title, now, "earn", c.screen);
+  c.state = "paid"; c.markedOn = c.markedOn || now; c.note = null;
+  coinFly(btn);
+  var msg = k.name + ": " + usd(res.split.save) + " to save, " + usd(res.split.spend) +
+    " to spend, " + usd(res.split.give) + " to give";
+  if(res.match > 0) msg += ", plus " + usd(res.match) + " matched";
+  toast(msg + ".");
+}
+
+document.addEventListener("click", function(ev){
+  var b = ev.target.closest ? ev.target.closest("[data-act]") : null;
+  if(!b) return;
+  var a = b.dataset.act, id = b.dataset.id, kid = b.dataset.kid, now = today();
+  var k = kid ? kidById(kid) : null;
+
+  if(a === "lane"){ goLane(num(b.dataset.d, 1)); return; }
+  if(a === "turn"){
+    var dd = num(b.dataset.d, 1);
+    if(dd === 0){ nav.idx = 0; place(); } else goCard(dd);
+    return;
+  }
+
+  if(a === "done"){
+    var c = findCard(id); if(!c) return;
+    c.state = "done"; c.markedOn = now; c.note = null;
+    toast("Marked done. A parent has to approve it before any money moves.");
+    commit(); return;
+  }
+  if(a === "later"){
+    var c2 = findCard(id); if(!c2) return;
+    c2.state = "todo"; c2.markedOn = null;
+    toast("Left for later.");
+    commit(); return;
+  }
+  if(a === "approve"){
+    var c3 = findCard(id); if(!c3) return;
+    approveCard(c3, b); commit("queue"); return;
+  }
+  if(a === "backopen"){
+    hold["reason:" + id] = hold["reason:" + id] === "open" ? "" : "open";
+    render("queue"); return;
+  }
+  if(a === "back"){
+    var c4 = findCard(id); if(!c4) return;
+    c4.state = "back"; c4.note = b.dataset.r || "Not finished properly"; c4.markedOn = null;
+    hold["reason:" + id] = "";
+    toast("Sent back: " + c4.note);
+    commit("queue"); return;
+  }
+  if(a === "addgoal"){
+    if(!k) return;
+    var t = String(held("goaltitle", kid)).trim(), p = r2(num(held("goalprice", kid), 0));
+    if(!t || p <= 0){ toast("A goal needs a name and a price."); return; }
+    k.goals.push({ id:uid("g"), title:t.slice(0,60), price:p });
+    hold["goaltitle:" + kid] = ""; hold["goalprice:" + kid] = "";
+    toast("Goal added.");
+    commit("goal"); return;
+  }
+  if(a === "delgoal"){
+    if(!k) return;
+    k.goals = k.goals.filter(function(g){ return g.id !== id; });
+    commit("goal"); return;
+  }
+  if(a === "preset"){
+    hold["inwhat:" + kid] = b.dataset.t;
+    var box = stage.querySelector('[data-hold="inwhat"][data-kid="' + kid + '"]');
+    if(box) { box.value = b.dataset.t; box.focus(); }
+    stage.querySelectorAll('[data-act="preset"][data-kid="' + kid + '"]').forEach(function(x){
+      x.setAttribute("aria-pressed", x === b ? "true" : "false");
+    });
+    return;
+  }
+  if(a === "income"){
+    if(!k) return;
+    var what = String(held("inwhat", kid)).trim() || "Money in";
+    var amt = r2(num(held("inamt", kid), 0));
+    var on = held("indate", kid) || now;
+    if(!dParse(on)) on = now;
+    if(amt <= 0){ toast("Put in an amount first."); return; }
+    if(b.dataset.split === "1"){
+      var res2 = payout(k, amt, what, on, "gift", 0);
+      toast(usd(amt) + " in — " + usd(res2.split.save) + " save, " + usd(res2.split.spend) +
+        " spend, " + usd(res2.split.give) + " give" +
+        (res2.match > 0 ? ", plus " + usd(res2.match) + " matched" : "") + ".");
+    } else {
+      pushEntry({ kid:kid, on:on, pot:"spend", kind:"gift", what:what, amt:amt });
+      toast(usd(amt) + " straight into spend.");
+    }
+    hold["inwhat:" + kid] = ""; hold["inamt:" + kid] = "";
+    runBankAll();
+    commit("in"); return;
+  }
+  if(a === "spendout"){
+    if(!k) return;
+    var w2 = String(held("outwhat", kid)).trim() || "Money out";
+    var am2 = r2(num(held("outamt", kid), 0));
+    var pot = held("outpot", kid) || "spend";
+    if(am2 <= 0){ toast("Put in an amount first."); return; }
+    pushEntry({ kid:kid, on:now, pot:pot, kind: pot === "give" ? "give" : "spend",
+      what:w2, amt:-am2 });
+    hold["outwhat:" + kid] = ""; hold["outamt:" + kid] = "";
+    toast(usd(am2) + " out of " + POTNAME[pot].toLowerCase() + ".");
+    commit("out"); return;
+  }
+  if(a === "perk"){
+    if(!k) return;
+    var p2 = null;
+    S.perks.forEach(function(x){ if(x.id === id) p2 = x; });
+    if(!p2) return;
+    if(potAt(kid, "screen") < p2.cost){ toast("Not enough screen time banked."); return; }
+    pushEntry({ kid:kid, on:now, pot:"screen", kind:"perk", what:p2.title, amt:-p2.cost });
+    toast(p2.title + " — " + mins(p2.cost) + " spent.");
+    commit("out"); return;
+  }
+  if(a === "loanextra"){
+    var l = null;
+    S.loans.forEach(function(x){ if(x.id === id) l = x; });
+    if(!l) return;
+    var ex = r2(num(held("extra", l.kid), 0));
+    var bal = loanBalance(l.id);
+    if(ex <= 0){ toast("Put in an amount first."); return; }
+    var pay = r2(Math.min(ex, bal));
+    var sp3 = potAt(l.kid, "spend"), sv3 = potAt(l.kid, "save");
+    if(r2(Math.max(0,sp3) + Math.max(0,sv3)) < pay){ toast("There isn't that much in the pots."); return; }
+    var fa = r2(Math.min(pay, Math.max(0, sp3))), fb = r2(pay - fa);
+    if(fa > 0) pushEntry({kid:l.kid,on:now,pot:"spend",kind:"repay",
+      what:"Extra loan repayment — " + l.title, amt:-fa});
+    if(fb > 0) pushEntry({kid:l.kid,on:now,pot:"save",kind:"repay",
+      what:"Extra loan repayment (from save) — " + l.title, amt:-fb});
+    S.loanEvents.push({ id:uid("v"), loan:l.id, on:now, kind:"pay", amt:pay, key:uid("xk") });
+    if(loanBalance(l.id) <= 0.004) l.closed = now;
+    hold["extra:" + l.kid] = "";
+    toast(usd(pay) + " off the loan. " + usd(Math.max(0, loanBalance(l.id))) + " still owed.");
+    commit("loan:" + l.id); return;
+  }
+  if(a === "addkid"){
+    var nm = String(held("kidname", "new")).trim();
+    var db = held("kiddob", "new");
+    if(!nm){ toast("They need a name."); return; }
+    if(!dParse(db)){ toast("A date of birth keeps the age bands honest."); return; }
+    S.kids.push({ id:uid("k"), name:nm.slice(0,28), dob:db, felt:FELTS[S.kids.length % FELTS.length],
+      split:{save:30,give:10,spend:60}, rate:4, period:"week", match:{pct:0,cap:0}, goals:[] });
+    hold["kidname:new"] = ""; hold["kiddob:new"] = "";
+    toast(nm + " added. Their lane is above the desk.");
+    commit("people"); return;
+  }
+  if(a === "delkid"){
+    S.kids = S.kids.filter(function(x){ return x.id !== kid; });
+    S.chores = S.chores.filter(function(x){ return x.kid !== kid; });
+    S.cards = S.cards.filter(function(x){ return x.kid !== kid; });
+    S.entries = S.entries.filter(function(x){ return x.kid !== kid; });
+    S.loans = S.loans.filter(function(x){ return x.kid !== kid; });
+    S.commits = (S.commits||[]).filter(function(x){ return x.kid !== kid; });
+    if(nav.lane >= S.kids.length) nav.lane = S.kids.length;
+    toast("Removed, along with their ledger.");
+    commit("people"); return;
+  }
+  if(a === "addchore" || a === "addlib"){
+    var ck, ct, cvv, cs, cday, clo, chi;
+    if(a === "addlib"){
+      var item = null;
+      LIB.forEach(function(x){ if(x.t === b.dataset.t) item = x; });
+      if(!item || !k) return;
+      ck = kid; ct = item.t; cvv = item.v; cs = item.s; cday = 6; clo = item.lo; chi = item.hi;
+    } else {
+      ck = held("chkid", "new") || (S.kids[0] && S.kids[0].id);
+      ct = String(held("chtitle", "new")).trim();
+      cvv = r2(num(held("chval", "new"), 0));
+      cs = Math.round(num(held("chscr", "new"), 0));
+      cday = Math.round(num(held("chday", "new"), 6));
+      clo = Math.round(num(held("chlo", "new"), 5));
+      chi = Math.round(num(held("chhi", "new"), 18));
+      if(!ck){ toast("Add a child first."); return; }
+      if(!ct){ toast("The chore needs a name."); return; }
+      if(chi < clo){ var sw = clo; clo = chi; chi = sw; }
+    }
+    S.chores.push({ id:uid("c"), kid:ck, title:ct.slice(0,64), value:Math.max(0,cvv),
+      screen:Math.max(0,cs), cadence:"weekly", day:Math.max(0,Math.min(6,cday)),
+      bandLo:Math.max(2,Math.min(19,clo)), bandHi:Math.max(2,Math.min(21,chi)),
+      since:now, fresh:now, retired:null, why:null });
+    ["chtitle","chval","chscr"].forEach(function(x){ hold[x + ":new"] = ""; });
+    dealWeek(now);
+    toast("Added. It is in the deck from this week.");
+    commit("chores"); return;
+  }
+  if(a === "retire" || a === "unretire" || a === "rotate"){
+    var ch = choreById(id); if(!ch) return;
+    if(a === "retire"){ ch.retired = now; ch.why = "parent"; toast("Retired."); }
+    if(a === "unretire"){ ch.retired = null; ch.why = null; ch.fresh = now; dealWeek(now); toast("Back on the list."); }
+    if(a === "rotate"){ ch.fresh = now; toast("Marked fresh. Six more weeks before it goes stale."); }
+    commit("chores"); return;
+  }
+  if(a === "addperk"){
+    var pt = String(held("pktitle", "new")).trim(), pc = Math.round(num(held("pkcost", "new"), 0));
+    if(!pt || pc <= 0){ toast("A privilege needs a name and a cost in minutes."); return; }
+    S.perks.push({ id:uid("p"), title:pt.slice(0,70), cost:pc });
+    hold["pktitle:new"] = ""; hold["pkcost:new"] = "";
+    commit("perks"); return;
+  }
+  if(a === "delperk"){
+    S.perks = S.perks.filter(function(x){ return x.id !== id; });
+    commit("perks"); return;
+  }
+  if(a === "delcommit"){
+    S.commits = (S.commits||[]).filter(function(x){ return x.id !== id; });
+    toast("Stopped. Past deductions stay in the ledger.");
+    commit("perks"); return;
+  }
+  if(a === "print"){ printFor([kid]); return; }
+  if(a === "printall"){ printFor(S.kids.map(function(x){ return x.id; })); return; }
+  if(a === "csv"){ downloadCsv([kid]); return; }
+  if(a === "csvall"){ downloadCsv(S.kids.map(function(x){ return x.id; })); return; }
+  if(a === "json"){ downloadJson(); return; }
+  if(a === "import"){ document.getElementById("picker").click(); return; }
+  if(a === "clear"){
+    S = blank(); S.sample = false; S.house = "Our house";
+    nav = { lane:0, idx:0 };
+    toast("Cleared. Add your first child on the desk.");
+    commit(); return;
+  }
+  if(a === "resample"){
+    S = buildSample(); dealWeek(today());
+    nav = { lane:0, idx:0 };
+    toast("Sample family loaded.");
+    commit(); return;
+  }
+});
+
+/* live inputs: recompute on every keystroke */
+document.addEventListener("input", function(ev){
+  var t = ev.target;
+  if(!t || !t.dataset) return;
+  if(t.dataset.hold){
+    hold[t.dataset.hold + ":" + (t.dataset.kid || "new")] = t.value;
+    return;
+  }
+  var live = t.dataset.live;
+  if(!live) return;
+  var k = kidById(t.dataset.kid);
+  if(!k) return;
+  var key = lanes[nav.lane].leaves[nav.idx] ? lanes[nav.lane].leaves[nav.idx].key : null;
+  if(live === "rate"){ k.rate = Math.max(0, Math.min(50, num(t.value, 0))); runBankAll(); }
+  else if(live === "period"){ k.period = PERIODS[t.value] ? t.value : "week"; runBankAll(); }
+  else if(live === "matchpct"){ k.match.pct = Math.max(0, Math.min(200, num(t.value, 0))); }
+  else if(live === "matchcap"){ k.match.cap = Math.max(0, r2(num(t.value, 0))); }
+  else if(live === "save" || live === "give"){
+    var sv = live === "save" ? Math.max(0, Math.min(100, Math.round(num(t.value, 0)))) : k.split.save;
+    var gv = live === "give" ? Math.max(0, Math.min(100, Math.round(num(t.value, 0)))) : k.split.give;
+    if(sv + gv > 100){ if(live === "save") gv = 100 - sv; else sv = 100 - gv; }
+    k.split.save = sv; k.split.give = gv; k.split.spend = 100 - sv - gv;
+  }
+  else if(live === "goalprice"){
+    k.goals.forEach(function(g){ if(g.id === t.dataset.id) g.price = Math.max(0, r2(num(t.value, 0))); });
+  }
+  save();
+  render(key);
+});
+document.addEventListener("change", function(ev){
+  var t = ev.target;
+  if(t && t.dataset && t.dataset.hold) hold[t.dataset.hold + ":" + (t.dataset.kid || "new")] = t.value;
+});
+
+function runBankAll(){ runBank(today()); }
+
+/* ── keyboard: the signature interaction has to work without a mouse ── */
+document.addEventListener("keydown", function(ev){
+  var t = ev.target;
+  var typing = t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+  if(ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if(ev.key === "ArrowRight" && !typing){ ev.preventDefault(); goCard(1); }
+  else if(ev.key === "ArrowLeft" && !typing){ ev.preventDefault(); goCard(-1); }
+  else if(ev.key === "ArrowDown" && !typing){ ev.preventDefault(); goLane(1); }
+  else if(ev.key === "ArrowUp" && !typing){ ev.preventDefault(); goLane(-1); }
+  else if(ev.key === "Home" && !typing){ ev.preventDefault(); nav.idx = 0; place(); }
+  else if(ev.key === "End" && !typing){ ev.preventDefault(); nav.idx = lanes[nav.lane].leaves.length - 1; place(); }
+});
+document.getElementById("paddleBack").addEventListener("click", function(){ goCard(-1); });
+document.getElementById("paddleFwd").addEventListener("click", function(){ goCard(1); });
+
+/* ── swipe ────────────────────────────────────────────────── */
+(function(){
+  var x0 = null, y0 = null, on = false;
+  stage.addEventListener("pointerdown", function(e){
+    if(e.target.closest("input,select,button,a")) return;
+    x0 = e.clientX; y0 = e.clientY; on = true;
+  });
+  stage.addEventListener("pointerup", function(e){
+    if(!on) return; on = false;
+    var dx = e.clientX - x0, dy = e.clientY - y0;
+    if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 46) goCard(dx < 0 ? 1 : -1);
+    else if(Math.abs(dy) > 60) goLane(dy < 0 ? 1 : -1);
+  });
+  stage.addEventListener("pointercancel", function(){ on = false; });
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   13. TAKING IT WITH YOU
+   ══════════════════════════════════════════════════════════════ */
+function csvCell(v){
+  var s = String(v == null ? "" : v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function grab(name, text, mime){
+  try {
+    var blob = new Blob([text], { type:mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); if(a.parentNode) a.parentNode.removeChild(a); }, 400);
+    toast("Saved " + name);
+  } catch(e){ toast("This browser would not let the file save."); }
+}
+function ledgerRows(kidIds){
+  var run = {};
+  var rows = S.entries.filter(function(e){ return kidIds.indexOf(e.kid) >= 0; })
+    .sort(function(a,b){ var c = daysBetween(b.on, a.on); return c !== 0 ? (c>0?1:-1) : a.seq - b.seq; });
+  return rows.map(function(e){
+    var rk = e.kid + "|" + e.pot;
+    run[rk] = (run[rk] || 0) + e.amt;
+    if(e.pot !== "screen") run[rk] = r2(run[rk]);
+    var k = kidById(e.kid);
+    return { child: k ? k.name : "?", on:e.on, pot:POTNAME[e.pot], kind:e.kind, what:e.what,
+      amt:e.amt, unit: e.pot === "screen" ? "minutes" : "dollars",
+      bal: e.pot === "screen" ? Math.round(run[rk]) : r2(run[rk]) };
+  });
+}
+function downloadCsv(kidIds){
+  var head = ["Child","Date","Pot","Type","Description","Amount","Unit","Running balance in that pot"];
+  var lines = [head.map(csvCell).join(",")];
+  ledgerRows(kidIds).forEach(function(r){
+    lines.push([r.child, r.on, r.pot, r.kind, r.what,
+      r.unit === "minutes" ? String(Math.round(r.amt)) : usdPlain(r.amt), r.unit,
+      r.unit === "minutes" ? String(Math.round(r.bal)) : usdPlain(r.bal)].map(csvCell).join(","));
+  });
+  lines.push("");
+  lines.push(csvCell("A record-keeping and teaching aid. No real money moves; you settle up yourselves."));
+  grab("pocket-deck-ledger-" + today() + ".csv", "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
+}
+function downloadJson(){
+  grab("pocket-deck-" + today() + ".json", JSON.stringify(S, null, 2), "application/json");
+}
+(function(){
+  var p = document.getElementById("picker");
+  p.addEventListener("change", function(){
+    var f = p.files && p.files[0];
+    if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      try {
+        var o = JSON.parse(String(rd.result));
+        var next = normalise(o);
+        if(!next.kids.length && !next.entries.length) throw new Error("empty");
+        S = next;
+        if(!S.commits) S.commits = [];
+        nav = { lane:0, idx:0 };
+        dealWeek(today()); runBankAll(); save(); render();
+        toast("Imported " + S.kids.length + " child" + (S.kids.length===1?"":"ren") + " and " +
+          S.entries.length + " ledger entries.");
+      } catch(e){ toast("That file could not be read as a Pocket Deck backup."); }
+      p.value = "";
+    };
+    rd.onerror = function(){ toast("That file could not be read."); p.value = ""; };
+    rd.readAsText(f);
+  });
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   14. THE PRINTED STATEMENT
+   ══════════════════════════════════════════════════════════════ */
+function statementFor(kidId, q){
+  var k = kidById(kidId); if(!k) return "";
+  var pots = ["save","spend","give"];
+  var open = {}, close = {}, inSum = 0, outSum = 0;
+  pots.concat(["screen"]).forEach(function(p){
+    open[p] = potBefore(k.id, p, q.from);
+    close[p] = potAt(k.id, p, q.to);
+  });
+  var rows = S.entries.filter(function(e){
+    return e.kid === k.id && daysBetween(q.from, e.on) >= 0 && daysBetween(e.on, q.to) >= 0;
+  }).sort(function(a,b){ var c = daysBetween(b.on, a.on); return c !== 0 ? (c>0?1:-1) : a.seq - b.seq; });
+
+  /* One line per event, with the three pot balances marching down the page —
+     so the split is visible on every payout instead of buried three rows deep. */
+  var groups = [], byRef = {}, screenRows = [];
+  rows.forEach(function(e){
+    if(e.pot === "screen"){ screenRows.push(e); return; }
+    var split = e.ref && (e.kind === "earn" || e.kind === "gift" || e.kind === "job");
+    var key = split ? "r:" + e.ref : "e:" + e.id;
+    if(!byRef[key]){
+      byRef[key] = { on:e.on, what:e.what, kind:e.kind, save:0, spend:0, give:0 };
+      groups.push(byRef[key]);
+    }
+    byRef[key][e.pot] = r2(byRef[key][e.pot] + e.amt);
+  });
+  var run = { save:open.save, spend:open.spend, give:open.give };
+  var body = groups.map(function(g){
+    var move = r2(g.save + g.spend + g.give);
+    run.save = r2(run.save + g.save);
+    run.spend = r2(run.spend + g.spend);
+    run.give = r2(run.give + g.give);
+    if(move >= 0) inSum = r2(inSum + move); else outSum = r2(outSum - move);
+    var flag = g.kind === "interest" || g.kind === "match";
+    return '<tr' + (flag ? ' class="int"' : '') + '><td>' + pretty(g.on) + '</td>' +
+      '<td>' + esc(g.what) + '</td>' +
+      '<td class="n">' + (move > 0 ? usd(move) : "") + '</td>' +
+      '<td class="n">' + (move < 0 ? usd(-move) : "") + '</td>' +
+      '<td class="n">' + usd(run.save) + '</td>' +
+      '<td class="n">' + usd(run.spend) + '</td>' +
+      '<td class="n">' + usd(run.give) + '</td></tr>';
+  }).join("");
+  var srun = open.screen;
+  var screenBody = screenRows.map(function(e){
+    srun = Math.round(srun + e.amt);
+    return '<tr><td>' + pretty(e.on) + '</td><td>' + esc(e.what) + '</td>' +
+      '<td class="n">' + (e.amt > 0 ? "+" + Math.round(e.amt) : Math.round(e.amt)) + ' min</td>' +
+      '<td class="n">' + srun + ' min</td></tr>';
+  }).join("");
+
+  var intQ = 0, matQ = 0, earnQ = 0;
+  rows.forEach(function(e){
+    if(e.kind === "interest") intQ = r2(intQ + e.amt);
+    if(e.kind === "match") matQ = r2(matQ + e.amt);
+    if(e.kind === "earn" && e.pot !== "screen" && e.amt > 0) earnQ = r2(earnQ + e.amt);
+  });
+  var doneQ = S.cards.filter(function(c){
+    return c.kid === k.id && c.state === "paid" &&
+      daysBetween(q.from, c.due) >= 0 && daysBetween(c.due, q.to) >= 0;
+  }).length;
+  var dueQ = S.cards.filter(function(c){
+    return c.kid === k.id && daysBetween(q.from, c.due) >= 0 && daysBetween(c.due, q.to) >= 0;
+  }).length;
+  var rateQ = div(doneQ, dueQ);
+  var openTot = r2(open.save + open.spend + open.give);
+  var closeTot = r2(close.save + close.spend + close.give);
+  var owed = 0;
+  S.loans.forEach(function(l){ if(l.kid === k.id) owed = r2(owed + Math.max(0, loanBalance(l.id, q.to))); });
+  var age = ageOn(k.dob, q.to);
+
+  var asAt = daysBetween(today(), q.to) > 0 ? today() : q.to;   /* never measure a rate into the future */
+  var goals = k.goals.map(function(g){
+    var pct = g.price > 0 ? Math.min(100, (close.save / g.price) * 100) : null;
+    var w = weeksToGoal(k, g.price, asAt);
+    return '<tr><td>' + esc(g.title) + '</td><td class="n">' + usd(g.price) + '</td>' +
+      '<td class="n">' + usd(close.save) + '</td>' +
+      '<td class="n">' + (pct === null ? EM : pct.toFixed(0) + "%") + '</td>' +
+      '<td class="n">' + (w.done ? "reached" : (w.weeks === null ? EM : w.weeks + " wks")) + '</td></tr>';
+  }).join("");
+
+  return '<article class="st">' +
+    '<div class="st-top"><div class="st-mark">Pocket Deck<small>' + esc(S.house) +
+      ' &middot; family bank statement</small></div>' +
+      '<div class="st-for"><b>' + esc(k.name) + '</b>' +
+      (age === null ? "" : age + " years old") + '<br>' + esc(q.label) + ' &middot; ' +
+      prettyFull(q.from) + ' to ' + prettyFull(q.to) + '</div></div>' +
+    '<section class="st-face">' +
+    '<div class="st-band">' +
+      '<div><span>Opening balance</span><b>' + usd(openTot) + '</b></div>' +
+      '<div><span>Paid in</span><b>' + usd(inSum) + '</b></div>' +
+      '<div><span>Paid out</span><b>' + usd(outSum) + '</b></div>' +
+      '<div><span>Closing balance</span><b>' + usd(closeTot) + '</b></div>' +
+    '</div>' +
+    '<div class="st-two">' +
+      '<div><h3 class="st-h">The three pots</h3><table class="st-t">' +
+        '<tr><th>Pot</th><th class="n">Opening</th><th class="n">Closing</th></tr>' +
+        pots.map(function(p){
+          return '<tr><td>' + POTNAME[p] + '</td><td class="n">' + usd(open[p]) +
+            '</td><td class="n">' + usd(close[p]) + '</td></tr>';
+        }).join("") +
+        '<tr class="tot"><td>All three</td><td class="n">' + usd(openTot) + '</td>' +
+        '<td class="n">' + usd(closeTot) + '</td></tr>' +
+        '<tr><td>Screen time</td><td class="n">' + Math.round(open.screen) + ' min</td>' +
+        '<td class="n">' + Math.round(close.screen) + ' min</td></tr>' +
+      '</table></div>' +
+      '<div><h3 class="st-h">This quarter</h3><table class="st-t">' +
+        '<tr><td>Chores approved</td><td class="n">' + doneQ + ' of ' + dueQ + '</td></tr>' +
+        '<tr><td>Completion rate</td><td class="n">' +
+          (rateQ === null ? EM : Math.round(rateQ * 100) + "%") + '</td></tr>' +
+        '<tr><td>Earned from chores</td><td class="n">' + usd(earnQ) + '</td></tr>' +
+        '<tr class="int"><td>Interest paid by the parent bank</td><td class="n">' + usd(intQ) + '</td></tr>' +
+        '<tr class="int"><td>Parent match added</td><td class="n">' + usd(matQ) + '</td></tr>' +
+        '<tr><td>Interest rate</td><td class="n">' + k.rate.toFixed(2) + '% a year, ' +
+          esc((PERIODS[k.period]||PERIODS.week).adj) + '</td></tr>' +
+        (owed > 0 ? '<tr class="tot"><td>Owed to the family bank</td><td class="n">' +
+          usd(owed) + '</td></tr>' : '') +
+      '</table></div>' +
+    '</div>' +
+    (goals ? '<h3 class="st-h">Saving up for</h3><table class="st-t">' +
+      '<tr><th>Goal</th><th class="n">Price</th><th class="n">In save</th><th class="n">There</th>' +
+      '<th class="n">At this rate</th></tr>' + goals + '</table>' : '') +
+    '<div class="st-note">A record-keeping and teaching aid. No real money moves; ' +
+      'you settle up yourselves.</div>' +
+    '<div class="st-sign"><div>Signed &mdash; ' + esc(k.name) + '</div>' +
+      '<div>Signed &mdash; the family bank</div><div>Date</div></div>' +
+    '<p class="st-foot">Prepared ' + prettyFull(today()) + ' &middot; ' + esc(S.house) +
+      '. Interest is calculated on the balance standing at the start of each ' +
+      esc((PERIODS[k.period]||PERIODS.week).unit) + ' and posted as its own line overleaf.</p>' +
+    '</section><section class="st-run">' +
+    '<h3 class="st-h">Every credit and debit, ' + esc(q.label) + '</h3>' +
+    '<table class="st-t"><thead><tr><th>Date</th><th>What it was</th>' +
+      '<th class="n">In</th><th class="n">Out</th>' +
+      '<th class="n">Save</th><th class="n">Spend</th><th class="n">Give</th></tr></thead><tbody>' +
+      '<tr class="tot"><td>' + pretty(q.from) + '</td><td>Balances brought forward</td>' +
+      '<td class="n"></td><td class="n"></td><td class="n">' + usd(open.save) + '</td>' +
+      '<td class="n">' + usd(open.spend) + '</td><td class="n">' + usd(open.give) + '</td></tr>' +
+      (body || '<tr><td colspan="7">Nothing moved this quarter.</td></tr>') +
+      '<tr class="tot"><td>' + pretty(q.to) + '</td><td>Closing balances &mdash; ' +
+      usd(closeTot) + ' across all three pots</td><td class="n"></td><td class="n"></td>' +
+      '<td class="n">' + usd(close.save) + '</td><td class="n">' + usd(close.spend) + '</td>' +
+      '<td class="n">' + usd(close.give) + '</td></tr></tbody></table>' +
+    (screenBody ? '<h3 class="st-h">Screen time, the other currency</h3>' +
+      '<table class="st-t"><thead><tr><th>Date</th><th>What it was</th>' +
+      '<th class="n">Change</th><th class="n">Balance</th></tr></thead><tbody>' +
+      '<tr class="tot"><td>' + pretty(q.from) + '</td><td>Brought forward</td>' +
+      '<td class="n"></td><td class="n">' + Math.round(open.screen) + ' min</td></tr>' +
+      screenBody + '</tbody></table>' : '') +
+    '<p class="st-foot">' + esc(k.name) + ' &middot; ' + esc(q.label) +
+      ' &middot; a record-keeping and teaching aid; no real money moves.</p>' +
+    '</section></article>';
+}
+function printFor(kidIds){
+  var q = quarterOf(today());
+  var sheet = document.getElementById("sheet");
+  sheet.innerHTML = kidIds.map(function(id){ return statementFor(id, q); }).join("");
+  if(!sheet.innerHTML){ toast("There is nobody to print a statement for yet."); return; }
+  setTimeout(function(){ window.print(); }, 60);
+}
+window.addEventListener("beforeprint", function(){
+  var sheet = document.getElementById("sheet");
+  if(!sheet.innerHTML){
+    var q = quarterOf(today());
+    var who = lanes[nav.lane] && lanes[nav.lane].id !== "desk" ? [lanes[nav.lane].id]
+              : S.kids.map(function(x){ return x.id; });
+    sheet.innerHTML = who.map(function(id){ return statementFor(id, q); }).join("");
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   15. BOOT
+   ══════════════════════════════════════════════════════════════ */
+function boot(){
+  var loaded = load();
+  if(loaded && (loaded.kids.length || loaded.entries.length)){
+    S = loaded;
+    if(!S.commits) S.commits = [];
+  } else {
+    S = buildSample();
+  }
+  var now = today();
+  retireOutgrown(now);
+  dealWeek(now);
+  runBank(now);
+  save();
+  render();
+}
+try { boot(); }
+catch(err){
+  try {
+    S = blank(); S.sample = false;
+    render();
+  } catch(e2){}
+}
+})();
+</script>
+</body>
+</html>
