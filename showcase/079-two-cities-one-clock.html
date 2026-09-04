@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two Cities, One Clock — Lisbon &amp; Auckland, twelve hours apart</title>
+<meta name="description" content="A split-screen story of one day in two cities on opposite sides of the clock: Lisbon in warm daylight on the left, Auckland at night on the right, aligned by a shared live clock.">
+<meta name="theme-color" content="#14213D">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2314213D'/%3E%3Cpath d='M32 2a30 30 0 0 1 0 60z' fill='%23FFF5E1'/%3E%3Cpath d='M32 32 20 20' stroke='%23F2B84B' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M32 32 44 44' stroke='%23CBD5E1' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23F2B84B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#F2B84B; --cream:#FFF5E1; --night:#14213D; --silver:#CBD5E1;
+    --gold-deep:#B9822A; --gold-ink:#3E2A06; --night-deep:#0B1326; --silver-dim:#8E9BB0;
+    --spine:104px; --H:100vh;
+    --serif:"DM Serif Display", Georgia, "Times New Roman", serif;
+    --sans:"DM Sans", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-snap-type:y proximity;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:var(--gold) var(--night-deep)}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{font-family:var(--sans);background:linear-gradient(90deg,var(--cream) 50%,var(--night) 50%);color:var(--cream);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  ::selection{background:var(--gold);color:var(--night)}
+
+  /* ---- stage ---- */
+  .stage{position:fixed;inset:0;display:grid;grid-template-columns:1fr var(--spine) 1fr;overflow:hidden}
+  .pane{position:relative;height:100vh;overflow:hidden;isolation:isolate}
+  .pane--day{background:linear-gradient(180deg,var(--cream) 0%,var(--cream) 55%,color-mix(in srgb,var(--cream) calc(100% - var(--dusk,0)*55%),var(--gold)) 100%);color:var(--gold-ink)}
+  .pane--night{background:linear-gradient(180deg,var(--night-deep) 0%,var(--night) 60%,color-mix(in srgb,var(--night) calc(100% - var(--dawn,0)*45%),var(--silver-dim)) 100%);color:var(--silver)}
+  .pane--night::before{ /* stars */
+    content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:calc(1 - var(--dawn,0)*.9);
+    background-image:
+      radial-gradient(1.2px 1.2px at 12% 18%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 28% 9%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1.5px 1.5px at 44% 22%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 61% 6%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1.3px 1.3px at 73% 27%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 88% 14%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 35% 38%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1.4px 1.4px at 80% 42%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 8% 48%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 55% 52%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1.2px 1.2px at 93% 60%,var(--silver) 60%,transparent 61%),
+      radial-gradient(1px 1px at 20% 63%,var(--silver) 60%,transparent 61%);
+  }
+
+  /* orbs */
+  .orb{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;z-index:0;will-change:transform}
+  .orb--sun{width:24vmin;height:24vmin;background:var(--gold);box-shadow:0 0 6vmin 2vmin color-mix(in srgb,var(--gold) 55%,transparent),0 0 24vmin 10vmin color-mix(in srgb,var(--gold) 22%,transparent)}
+  .orb--moon{width:14vmin;height:14vmin;background:radial-gradient(circle at 38% 36%,#fff 0%,var(--silver) 45%,var(--silver-dim) 100%);box-shadow:0 0 5vmin 1vmin color-mix(in srgb,var(--silver) 30%,transparent),0 0 20vmin 6vmin color-mix(in srgb,var(--silver) 10%,transparent)}
+
+  /* skylines */
+  .skyline{position:absolute;left:0;right:0;bottom:0;width:100%;height:22vh;z-index:0;pointer-events:none}
+  .pane--day .skyline{color:var(--gold-deep);opacity:.42}
+  .pane--night .skyline{color:var(--night-deep);opacity:1}
+
+  /* pane headers */
+  .pane__head{position:absolute;z-index:3;top:0;padding:1.75rem 2rem;display:flex;flex-direction:column;gap:.15rem;line-height:1.15}
+  .pane--day .pane__head{left:0}
+  .pane--night .pane__head{right:0;text-align:right;align-items:flex-end}
+  .pane__city{font-family:var(--serif);font-size:1.5rem;letter-spacing:-.01em}
+  .pane__zone{font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;font-weight:500;opacity:.8}
+  .pane__time{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-size:1.5rem;font-weight:500;margin-top:.35rem;letter-spacing:.02em}
+  .pane__time small{font-size:.65em;font-weight:400;opacity:.7;margin-left:.2em}
+  .pane--day .pane__city{color:var(--night)}
+  .pane--night .pane__city{color:var(--gold)}
+
+  /* tracks */
+  .track{position:relative;z-index:2;display:flex;flex-direction:column;will-change:transform}
+  .pane--night .track{flex-direction:column-reverse}
+  .beat{height:var(--H);display:flex;align-items:center;padding:0 clamp(1.25rem,5vw,5rem)}
+  .pane--day .beat{justify-content:flex-end;padding-right:clamp(1.5rem,3.2vw,3.5rem)}
+  .pane--night .beat{justify-content:flex-start;padding-left:clamp(1.5rem,3.2vw,3.5rem)}
+  .beat__in{max-width:min(36ch,100%);display:flex;flex-direction:column}
+  .pane--day .beat__in{align-items:flex-end;text-align:right}
+  .pane--night .beat__in{align-items:flex-start;text-align:left}
+  .beat__hour{font-family:var(--serif);font-size:clamp(4.25rem,13vh,9rem);line-height:.88;letter-spacing:-.035em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .pane--day .beat__hour{color:var(--night)}
+  .pane--night .beat__hour{color:var(--gold)}
+  .beat__hour i{font-style:normal;font-size:.28em;letter-spacing:.14em;vertical-align:.45em;margin-left:.15em;font-family:var(--sans);font-weight:500}
+  .beat__eyebrow{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;font-weight:500;margin-bottom:.9rem;opacity:.85}
+  .beat__title{font-family:var(--serif);font-size:clamp(1.65rem,2.6vw,2.4rem);line-height:1.1;letter-spacing:-.015em;margin:.9rem 0 .8rem;font-weight:400}
+  .beat__title em{font-style:italic}
+  .beat__body{font-size:clamp(.98rem,1.05vw,1.1rem);line-height:1.62;max-width:36ch}
+  .beat__body + .beat__body{margin-top:.75rem}
+  .beat--intro .beat__hour,.beat--outro .beat__hour{font-size:clamp(2.6rem,5.8vh,4rem);line-height:1;letter-spacing:-.025em;margin-bottom:1.1rem}
+  .beat--intro .beat__in,.beat--outro .beat__in{max-width:min(40ch,100%)}
+  .pane--day .beat__body{color:var(--gold-ink)}
+  .beat__body a{color:inherit;text-decoration-color:var(--gold);text-underline-offset:.2em}
+  .beat__body kbd{font-family:var(--sans);font-size:.85em;padding:.05em .4em;border:1px solid currentColor;border-radius:.3em;opacity:.9}
+
+  /* ---- spine ---- */
+  .spine{position:relative;z-index:5;background:linear-gradient(90deg,var(--cream) 0 50%,var(--night) 50% 100%);display:flex;flex-direction:column;align-items:center}
+  .spine__rule{position:absolute;left:50%;top:6.5rem;bottom:4.6rem;width:2px;margin-left:-1px;background:linear-gradient(180deg,var(--gold),var(--silver))}
+  .spine__tickwrap{position:absolute;left:50%;top:6.5rem;bottom:4.6rem;width:14px;margin-left:-7px;overflow:hidden;pointer-events:none}
+  .spine__ticks{position:absolute;left:0;top:-48px;bottom:-48px;width:14px;
+    background:repeating-linear-gradient(180deg,transparent 0 23px,var(--gold) 23px 24px) left top/7px 100% no-repeat,
+               repeating-linear-gradient(180deg,transparent 0 23px,var(--silver) 23px 24px) right top/7px 100% no-repeat;
+    will-change:transform;opacity:.75}
+  .spine__clock{position:absolute;top:50%;left:50%;width:calc(var(--spine) + 40px);height:calc(var(--spine) + 40px);transform:translate(-50%,-50%);border-radius:50%;
+    filter:drop-shadow(0 8px 30px rgba(11,19,38,.35))}
+  .spine__clock svg{width:100%;height:100%;display:block}
+  .spine__nav{position:absolute;left:50%;top:calc(50% + var(--spine)/2 + 48px);transform:translateX(-50%);display:flex;flex-direction:column;gap:14px;list-style:none}
+  .spine__nav li{display:flex;line-height:0}
+  .spine__nav button{width:14px;height:14px;border-radius:50%;border:2px solid var(--gold);background:var(--night);cursor:pointer;padding:0;position:relative;transition:transform .2s ease,background .2s ease}
+  .spine__nav button::after{content:attr(data-label);position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:0;pointer-events:none;white-space:nowrap;font:500 .68rem/1 var(--sans);letter-spacing:.12em;color:var(--cream);background:var(--night);border:1px solid var(--gold);padding:.35rem .5rem;border-radius:2px;transition:opacity .15s}
+  .spine__nav button:hover::after,.spine__nav button:focus-visible::after{opacity:1}
+  .spine__nav button:hover{transform:scale(1.25)}
+  .spine__nav button[aria-current="true"]{background:var(--gold);transform:scale(1.25)}
+  .spine__nav button:focus-visible{outline:3px solid var(--silver);outline-offset:3px}
+  .spine__label{position:absolute;left:50%;transform:translateX(-50%);top:1.9rem;width:var(--spine);text-align:center;font-size:.62rem;letter-spacing:.3em;text-transform:uppercase;font-weight:500;line-height:1.6;
+    background:linear-gradient(90deg,var(--night) 50%,var(--cream) 50%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .spine__label span{display:block}
+  .spine__diff{position:absolute;left:50%;transform:translateX(-50%);bottom:1.75rem;font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;font-weight:500;text-align:center;line-height:1.5;white-space:nowrap;
+    background:linear-gradient(90deg,var(--night) 50%,var(--cream) 50%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* dial */
+  .dial-h{stroke-linecap:round}
+  .hand{transform-origin:100px 100px;transform-box:view-box}
+
+  /* scroller */
+  .scroller{position:relative;z-index:-1;visibility:hidden}
+  .scroller div{height:var(--H);scroll-snap-align:start}
+
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+
+  /* ---- stacked (mobile) ---- */
+  @media (max-width:760px), (max-aspect-ratio:9/10){
+    :root{--spine:92px}
+    .stage{grid-template-columns:1fr;grid-template-rows:1fr var(--spine) 1fr}
+    .pane{height:auto;min-height:0}
+    .pane__head{padding:.9rem 1.25rem;flex-direction:row;align-items:baseline;gap:.7rem;left:0;right:0;width:100%}
+    .pane__city{order:1}.pane__time{order:2;margin-top:0}.pane__zone{order:3;margin-left:auto}
+    .pane--night .pane__head{justify-content:flex-start;text-align:left}
+    .pane--night .pane__zone{margin-left:auto}
+    .pane--night .pane__head{top:auto;bottom:0}
+    .pane__city{font-size:1.15rem}.pane__time{font-size:1.1rem;margin-top:.2rem}.pane__zone{font-size:.6rem}
+    .beat{padding:0 1.25rem;align-items:flex-end}
+    .pane--day .beat{justify-content:flex-start;padding-bottom:1rem;padding-top:3.4rem}
+    .pane--night .beat{justify-content:flex-start;align-items:flex-start;padding-top:1rem;padding-bottom:3.4rem}
+    .pane--day .beat__in{align-items:flex-start;text-align:left}
+    .beat__in{max-width:100%}
+    .beat__hour{font-size:clamp(2.6rem,10vw,3.6rem)}
+    .beat--intro .beat__hour,.beat--outro .beat__hour{font-size:clamp(1.9rem,8vw,2.6rem)}
+    .beat__title{font-size:1.25rem;margin:.55rem 0 .45rem}
+    .beat__body{font-size:.88rem;line-height:1.45;max-width:100%}
+    .beat__body + .beat__body{margin-top:.5rem}
+    .beat--intro .beat__hour,.beat--outro .beat__hour{margin-bottom:.6rem}
+    .beat__eyebrow{font-size:.62rem;margin-bottom:.4rem}
+    .skyline{height:14vh;opacity:.35}
+    .pane--day .skyline{opacity:.3}
+    .orb--sun{width:30vmin;height:30vmin}.orb--moon{width:13vmin;height:13vmin}
+    .spine{background:linear-gradient(180deg,var(--cream) 0 50%,var(--night) 50% 100%);flex-direction:row}
+    .spine__rule{left:0;right:0;top:50%;bottom:auto;width:auto;height:2px;margin:-1px 0 0;background:linear-gradient(90deg,var(--gold),var(--silver))}
+        .spine__clock{width:calc(var(--spine) - 8px);height:calc(var(--spine) - 8px)}
+    .spine__nav{flex-direction:row;gap:12px;top:50%;left:auto;right:1rem;transform:translateY(-50%)}
+    .spine__nav button::after{display:none}
+    .spine__label{transform:none;top:auto;left:1rem;bottom:calc(50% + 10px);width:auto;text-align:left;background:none;color:var(--night);-webkit-text-fill-color:var(--night);line-height:1.2}
+    .spine__label span+span{display:none}
+    .spine__tickwrap{display:none}
+    .pane--night .pane__head{background:linear-gradient(0deg,var(--night-deep) 60%,transparent);padding-top:1.6rem}
+    .pane--day .pane__head{background:linear-gradient(180deg,var(--cream) 60%,transparent);padding-bottom:1.4rem}
+    body{background:linear-gradient(180deg,var(--cream) 50%,var(--night) 50%)}
+    .spine__diff{left:1rem;transform:none;bottom:auto;top:calc(50% + 10px);text-align:left;background:none;color:var(--silver);-webkit-text-fill-color:var(--silver)}
+  }
+  @media (max-height:640px){
+    .beat__body{font-size:.9rem;line-height:1.45}
+    .beat__hour{font-size:clamp(3rem,9vh,5rem)}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .spine__nav button,.spine__nav button::after{transition:none}
+    .orb{transition:none}
+  }
+
+  /* no-JS fallback: plain stacked document */
+  html:not(.js) .stage{position:static;display:block}
+  html:not(.js) .pane{height:auto;overflow:visible}
+  html:not(.js) .pane--night .track{flex-direction:column}
+  html:not(.js) .beat{height:auto;padding:3rem}
+  html:not(.js) .spine,html:not(.js) .scroller,html:not(.js) .orb{display:none}
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add('js')</script>
+
+<main class="stage" id="top">
+
+  <!-- ========== LISBON / DAY ========== -->
+  <section class="pane pane--day" aria-labelledby="lisbon-name">
+    <div class="orb orb--sun" id="sun" aria-hidden="true"></div>
+    <svg class="skyline" viewBox="0 0 1000 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
+        <!-- Ponte 25 de Abril -->
+        <rect x="120" y="40" width="10" height="160"/><rect x="230" y="40" width="10" height="160"/>
+        <path d="M0 150 Q125 20 250 150 L250 158 Q125 30 0 158Z"/>
+        <rect x="0" y="150" width="380" height="6"/>
+        <path d="M60 150v-40M90 150v-70M160 150v-70M190 150v-40M280 150v-40M320 150v-20" stroke="currentColor" stroke-width="2"/>
+        <!-- Torre de Belém -->
+        <rect x="420" y="110" width="50" height="90"/><rect x="430" y="80" width="30" height="30"/><rect x="437" y="66" width="16" height="14"/>
+        <!-- Alfama hill with castle -->
+        <path d="M520 200 L520 170 Q640 90 760 130 L760 200Z"/>
+        <path d="M600 150 h14 v-30 h6 v-6 h6 v6 h6 v-6 h6 v6 h6 v-6 h6 v6 h6 v30 h14 v50 h-70Z"/>
+        <path d="M680 140 h50 v60 h-50Z M740 152 h40 v48 h-40Z M790 160 h60 v40 h-60Z M860 145 h30 v55 h-30Z M900 165 h100 v35 h-100Z"/>
+        <!-- tram -->
+        <rect x="830" y="178" width="46" height="18" rx="3"/><path d="M853 178v-10" stroke="currentColor" stroke-width="2"/>
+      </g>
+    </svg>
+    <header class="pane__head">
+      <span class="pane__zone" id="lisbon-zone">Portugal · Europe/Lisbon</span>
+      <h2 class="pane__city" id="lisbon-name">Lisbon</h2>
+      <time class="pane__time" id="lisbon-time" aria-live="off">--:--<small>:--</small></time>
+    </header>
+
+    <div class="track" id="track-day">
+
+      <article class="beat beat--intro">
+        <div class="beat__in">
+          <p class="beat__eyebrow">A split day · 38.7° N, 9.1° W</p>
+          <h1 class="beat__hour">Two Cities,<br>One Clock</h1>
+          <p class="beat__body">Lisbon and Auckland sit almost exactly opposite each other on the face of the clock. For a few weeks each spring and autumn, when both cities keep summer time, the gap is precisely twelve hours; the rest of the year it is eleven.</p>
+          <p class="beat__body">Scroll to walk through one Lisbon day. The night beside it belongs to Auckland, and it runs the other way.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">07<i>00</i></h2>
+          <p class="beat__title">Bica, <em>standing</em></p>
+          <p class="beat__body">The first 28 tram grinds up Rua da Graça with its bell going. At the counter of a pastelaria on Rua da Madalena the coffee comes small, black and hot, drunk on your feet, with a pastel de nata the baker pulled out twenty minutes ago. The Tagus is still the colour of tin.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">10<i>00</i></h2>
+          <p class="beat__title">Laundry <em>light</em></p>
+          <p class="beat__body">By ten the sun has cleared the castle hill and the Alfama is strung with washing. The Elevador da Bica hauls its yellow car up towards Bairro Alto for the fortieth time this morning. Tour groups gather at the Sé; the locals cut through the alleys they know.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">13<i>00</i></h2>
+          <p class="beat__title">Sardines and <em>shade</em></p>
+          <p class="beat__body">Lunch is grilled sardines on bread at a table under an awning, the smoke drifting across the Mercado da Ribeira. The light is white and total. Shutters come down for two hours; the azulejos throw the glare straight back at anyone who stays outside.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">16<i>00</i></h2>
+          <p class="beat__title">Miradouro <em>hour</em></p>
+          <p class="beat__body">At four the heat softens and people drift to the miradouros: Santa Catarina, Senhora do Monte, anywhere with a wall to sit on and the river below. A Super Bock sweats in the sun. Across the water the Cristo Rei holds out his arms over Almada.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">19<i>00</i></h2>
+          <p class="beat__title">Golden hour, fado <em>warming up</em></p>
+          <p class="beat__body">The sun swings out over the Atlantic and the whole city turns the colour of this side of the page. In Alfama a guitarra portuguesa is being tuned behind a half-open door. Dinner is still two hours off; this is the hour for a walk down to the river.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">22<i>00</i></h2>
+          <p class="beat__title">Dinner, <em>finally</em></p>
+          <p class="beat__body">Bairro Alto eats late. Bacalhau à Brás, a carafe of vinho verde, a shot of ginjinha from the hatch on Largo de São Domingos on the way home. The trams have thinned to one every twenty minutes, and the river has gone back to the colour of tin.</p>
+        </div>
+      </article>
+
+      <article class="beat beat--outro">
+        <div class="beat__in">
+          <p class="beat__eyebrow">End of the Lisbon day</p>
+          <h2 class="beat__hour">Neither city waits</h2>
+          <p class="beat__body">There is no hour in which both cities are asleep, and no hour in which both are at lunch. That is the whole story: two places, one set of minutes, the hour hand split down the middle. The clock in the spine runs on real time. Look up and check where each city is right now.</p>
+          <p class="beat__body"><a href="#top">Back to the beginning</a></p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ========== SPINE / CLOCK ========== -->
+  <aside class="spine" aria-label="Shared clock">
+    <div class="spine__rule" aria-hidden="true"></div>
+    <div class="spine__tickwrap" aria-hidden="true"><div class="spine__ticks" id="ticks"></div></div>
+    <p class="spine__label" aria-hidden="true"><span>one clock</span><span>live</span></p>
+
+    <figure class="spine__clock" id="clock" role="img" aria-labelledby="clock-desc">
+      <figcaption class="sr-only" id="clock-desc">Twenty-four-hour clock showing the current time in Lisbon and Auckland, with a shared minute and second hand.</figcaption>
+      <svg viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+        <defs>
+          <clipPath id="clipL"><rect x="0" y="0" width="100" height="200"/></clipPath>
+          <clipPath id="clipR"><rect x="100" y="0" width="100" height="200"/></clipPath>
+        </defs>
+        <!-- inverted halves -->
+        <path d="M100 4 A96 96 0 0 0 100 196 Z" fill="#14213D"/>
+        <path d="M100 4 A96 96 0 0 1 100 196 Z" fill="#FFF5E1"/>
+        <circle cx="100" cy="100" r="96" fill="none" stroke="#F2B84B" stroke-width="1.5"/>
+        <!-- ticks -->
+        <g id="ticks-svg" stroke-width="1.5"></g>
+        <!-- glyphs: sun at 12 (top), moon at 24 (bottom) -->
+        <g fill="none" stroke="#F2B84B" stroke-width="1.6" transform="translate(100 28)">
+          <circle r="4.2"/>
+          <path d="M0 -7.5v-2.5M0 7.5v2.5M-7.5 0h-2.5M7.5 0h2.5M-5.3 -5.3l-1.8 -1.8M5.3 5.3l1.8 1.8M-5.3 5.3l-1.8 1.8M5.3 -5.3l1.8 -1.8"/>
+        </g>
+        <path transform="translate(100 172)" d="M2 -7 A7.5 7.5 0 1 0 2 7 A5.6 5.6 0 1 1 2 -7Z" fill="#CBD5E1"/>
+        <text x="30" y="104" font-family="DM Sans, system-ui, sans-serif" font-size="10" font-weight="500" fill="#CBD5E1" text-anchor="middle" letter-spacing="1">06</text>
+        <text x="170" y="104" font-family="DM Sans, system-ui, sans-serif" font-size="10" font-weight="500" fill="#14213D" text-anchor="middle" letter-spacing="1">18</text>
+
+        <!-- hour hands -->
+        <g class="hand" id="h-akl">
+          <line class="dial-h" x1="100" y1="100" x2="100" y2="50" stroke="#14213D" stroke-width="7"/>
+          <line class="dial-h" x1="100" y1="100" x2="100" y2="50" stroke="#CBD5E1" stroke-width="4"/>
+        </g>
+        <g class="hand" id="h-lis">
+          <line class="dial-h" x1="100" y1="100" x2="100" y2="50" stroke="#14213D" stroke-width="7"/>
+          <line class="dial-h" x1="100" y1="100" x2="100" y2="50" stroke="#F2B84B" stroke-width="4"/>
+        </g>
+        <!-- shared minute hand: inverted per half -->
+        <g class="hand" id="h-min">
+          <line class="dial-h" x1="100" y1="112" x2="100" y2="26" stroke="#FFF5E1" stroke-width="2.6" clip-path="url(#clipL)"/>
+          <line class="dial-h" x1="100" y1="112" x2="100" y2="26" stroke="#14213D" stroke-width="2.6" clip-path="url(#clipR)"/>
+        </g>
+        <!-- shared second hand -->
+        <g class="hand" id="h-sec">
+          <line class="dial-h" x1="100" y1="118" x2="100" y2="20" stroke="#F2B84B" stroke-width="1.2"/>
+        </g>
+        <circle cx="100" cy="100" r="5" fill="#F2B84B"/>
+        <circle cx="100" cy="100" r="2" fill="#14213D"/>
+      </svg>
+    </figure>
+
+    <ol class="spine__nav" id="nav" aria-label="Jump to an hour"></ol>
+    <p class="spine__diff" id="diff" aria-live="off">Auckland<br>— h ahead</p>
+  </aside>
+
+  <!-- ========== AUCKLAND / NIGHT ========== -->
+  <section class="pane pane--night" aria-labelledby="auckland-name">
+    <div class="orb orb--moon" id="moon" aria-hidden="true"></div>
+    <svg class="skyline" viewBox="0 0 1000 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
+        <!-- Rangitoto -->
+        <path d="M0 200 L0 190 Q140 120 300 150 Q420 168 520 200Z"/>
+        <!-- Harbour Bridge -->
+        <path d="M540 200 L540 175 Q660 95 780 175 L780 200 L770 200 L770 178 Q660 110 550 178 L550 200Z"/>
+        <path d="M570 175v25M600 160v40M630 150v50M660 146v54M690 150v50M720 160v40M750 175v25" stroke="currentColor" stroke-width="3"/>
+        <!-- CBD -->
+        <path d="M800 200v-60h22v60Z M826 200v-90h18v90Z M848 200v-50h26v50Z M878 200v-75h16v75Z"/>
+        <!-- Sky Tower -->
+        <path d="M936 200v-105h6v105Z"/>
+        <path d="M925 95 h28 l-5 -18 h-18Z"/>
+        <path d="M921 77 h36 l-3 -8 h-30Z"/>
+        <path d="M938 69 h2 v-60 h-2Z"/>
+        <path d="M960 200v-40h40v40Z"/>
+      </g>
+    </svg>
+    <header class="pane__head">
+      <span class="pane__zone" id="auckland-zone">Aotearoa · Pacific/Auckland</span>
+      <h2 class="pane__city" id="auckland-name">Auckland</h2>
+      <time class="pane__time" id="auckland-time" aria-live="off">--:--<small>:--</small></time>
+    </header>
+
+    <div class="track" id="track-night">
+
+      <article class="beat beat--intro">
+        <div class="beat__in">
+          <p class="beat__eyebrow">Read the other way · 36.8° S, 174.8° E</p>
+          <h2 class="beat__hour">The Same Minute, Half a World Later</h2>
+          <p class="beat__body">Everything on this side is happening at the very same moment as the events opposite. The minute hand is shared; only the hour hand splits.</p>
+          <p class="beat__body">This column runs the opposite direction. Scroll down and Auckland's day arrives from above to meet Lisbon's morning.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">19<i>00</i></h2>
+          <p class="beat__title">Ferries <em>home</em></p>
+          <p class="beat__body">The Devonport ferry noses back into Britomart under a Sky Tower already lit. On Ponsonby Road the tables are filling; someone has ordered the whole snapper. Out past the Harbour Bridge the Waitematā has gone from green to ink.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">22<i>00</i></h2>
+          <p class="beat__title">Last call on <em>K’ Road</em></p>
+          <p class="beat__body">Karangahape Road is loud in the way only a Thursday can be. The last western-line train pulls out of Britomart; on the bridge the headlights run in pairs towards the North Shore. In the suburbs the tūī have stopped, and the kitchens have gone dark.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">01<i>00</i></h2>
+          <p class="beat__title">The harbour <em>breathes</em></p>
+          <p class="beat__body">The city is asleep except for the port. Cranes swing containers off a ship from Tauranga under floodlights, and across the Domain a ruru, the morepork, calls twice and is answered. The tide is turning under the wharves at Wynyard.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">04<i>00</i></h2>
+          <p class="beat__title">Flour and <em>diesel</em></p>
+          <p class="beat__body">The bakers on Dominion Road have the ovens up and the first loaves out. At Westhaven, fishing boats slip their moorings and motor out past North Head. Rangitoto is a shape, then a darker shape, against a sky that is not yet grey.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">07<i>00</i></h2>
+          <p class="beat__title">Sunrise over <em>Rangitoto</em></p>
+          <p class="beat__body">The sun comes up behind Rangitoto and runs straight down Tamaki Drive, where the joggers have already been out for an hour. The first ferries cross from Waiheke. Flat whites appear on every corner, and the city gets on with its Friday.</p>
+        </div>
+      </article>
+
+      <article class="beat">
+        <div class="beat__in">
+          <h2 class="beat__hour">10<i>00</i></h2>
+          <p class="beat__title">Market <em>morning</em></p>
+          <p class="beat__body">Mid-morning in the Domain: the Wintergardens are open and the glasshouse is sweating. At La Cigale the queue for croissants curls round the corner. Someone in a Lisbon kitchen is going to bed; someone in an Auckland kitchen is only just deciding on lunch.</p>
+        </div>
+      </article>
+
+      <article class="beat beat--outro">
+        <div class="beat__in">
+          <p class="beat__eyebrow">Colophon</p>
+          <h2 class="beat__hour">How this page keeps time</h2>
+          <p class="beat__body">Set in DM Serif Display and DM Sans. Both times are read live from your device using the Europe/Lisbon and Pacific/Auckland zones, so the daylight-saving shifts take care of themselves. Use the dots on the spine, or <kbd>↑</kbd> <kbd>↓</kbd>, to move between hours.</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+</main>
+
+<div class="scroller" id="scroller" aria-hidden="true"></div>
+
+<script>
+(() => {
+  'use strict';
+  const doc = document.documentElement;
+  const dayTrack = document.getElementById('track-day');
+  const nightTrack = document.getElementById('track-night');
+  const scroller = document.getElementById('scroller');
+  const ticks = document.getElementById('ticks');
+  const nav = document.getElementById('nav');
+  const sun = document.getElementById('sun');
+  const moon = document.getElementById('moon');
+  const dayPane = dayTrack.parentElement;
+  const nightPane = nightTrack.parentElement;
+  const beats = dayTrack.querySelectorAll('.beat');
+  const N = beats.length;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const stackedMQ = matchMedia('(max-width:760px), (max-aspect-ratio:9/10)');
+
+  // story hour (Lisbon) per beat; Auckland is +12 in the story
+  const HOURS = [6.2, 7, 10, 13, 16, 19, 22, 23.2];
+  const LABELS = ['Start', '07:00 · 19:00', '10:00 · 22:00', '13:00 · 01:00', '16:00 · 04:00', '19:00 · 07:00', '22:00 · 10:00', 'End'];
+
+  // ---- nav dots ----
+  const dots = [];
+  LABELS.forEach((label, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.label = label;
+    b.setAttribute('aria-label', label === 'Start' || label === 'End' ? label : 'Lisbon ' + label.split(' · ')[0] + ', Auckland ' + label.split(' · ')[1]);
+    b.addEventListener('click', () => {
+      window.scrollTo({ top: i * H, behavior: reduce.matches ? 'auto' : 'smooth' });
+    });
+    li.appendChild(b); nav.appendChild(li); dots.push(b);
+  });
+
+  // ---- scroller snap points ----
+  for (let i = 0; i < N; i++) scroller.appendChild(document.createElement('div'));
+
+  // ---- layout ----
+  let H = innerHeight, maxScroll = 0, spineH = 104;
+  function layout() {
+    const vh = innerHeight;
+    const stacked = stackedMQ.matches;
+    spineH = parseFloat(getComputedStyle(doc).getPropertyValue('--spine')) || 104;
+    H = stacked ? Math.floor((vh - spineH) / 2) : vh;
+    doc.style.setProperty('--H', H + 'px');
+    maxScroll = (N - 1) * H;
+    scroller.style.height = (maxScroll + vh) + 'px';
+    update(true);
+  }
+
+  // ---- scroll-driven update ----
+  let queued = false, lastIdx = -1;
+  function onScroll() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; update(); }); } }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+  function update(force) {
+    const s = clamp(scrollY, 0, maxScroll);
+    dayTrack.style.transform = 'translate3d(0,' + (-s) + 'px,0)';
+    nightTrack.style.transform = 'translate3d(0,' + (s - maxScroll) + 'px,0)';
+    ticks.style.transform = 'translate3d(0,' + (-(s % 24)) + 'px,0)';
+
+    const p = s / H;
+    const i = Math.floor(p), t = p - i;
+    const h = lerp(HOURS[i], HOURS[Math.min(i + 1, N - 1)], t);
+    sky(h);
+
+    const idx = Math.round(p);
+    if (idx !== lastIdx || force) {
+      dots.forEach((d, k) => k === idx ? d.setAttribute('aria-current', 'true') : d.removeAttribute('aria-current'));
+      lastIdx = idx;
+    }
+  }
+
+  function sky(h) {
+    const stacked = stackedMQ.matches;
+    const W = dayPane.clientWidth, PH = dayPane.clientHeight;
+    // sun: rises 06, sets 22
+    const su = clamp((h - 6) / 16, 0, 1);
+    const sa = Math.sin(Math.PI * su);
+    const sunSize = sun.offsetWidth;
+    const sx = lerp(0.06, 0.94, su) * W - sunSize / 2;
+    const horizon = PH * (stacked ? 0.98 : 0.86);
+    const sy = horizon - sa * PH * 0.62 - sunSize * 0.35;
+    sun.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
+    dayPane.style.setProperty('--dusk', clamp((h - 17) / 5, 0, 1).toFixed(3));
+
+    // moon: Auckland hour = h + 12; night 18 -> 30
+    const ah = h + 12;
+    const mu = (ah - 18) / 12;
+    const ma = Math.sin(Math.PI * clamp(mu, 0, 1.4));
+    const NW = nightPane.clientWidth, NH = nightPane.clientHeight;
+    const moonSize = moon.offsetWidth;
+    const mx = (stacked ? lerp(0.86, 0.6, clamp(mu, 0, 1.15)) : lerp(0.9, 0.12, clamp(mu, 0, 1.15))) * NW - moonSize / 2;
+    const mhor = NH * (stacked ? 0.9 : 0.84);
+    const my = mhor - ma * NH * (stacked ? 0.28 : 0.58) - moonSize * 0.3;
+    moon.style.transform = 'translate3d(' + mx.toFixed(1) + 'px,' + my.toFixed(1) + 'px,0)';
+    nightPane.style.setProperty('--dawn', clamp((ah - 28.5) / 4.5, 0, 1).toFixed(3));
+  }
+
+  // ---- dial ticks ----
+  const tg = document.getElementById('ticks-svg');
+  let tickMarkup = '';
+  for (let k = 0; k < 24; k++) {
+    const ang = 180 + k * 15; // hour 0 at bottom, 12 at top, 6 left, 18 right
+    const major = k % 6 === 0;
+    const r1 = 96, r0 = major ? 86 : 90;
+    const rad = ang * Math.PI / 180;
+    const x0 = 100 + Math.sin(rad) * r0, y0 = 100 - Math.cos(rad) * r0;
+    const x1 = 100 + Math.sin(rad) * r1, y1 = 100 - Math.cos(rad) * r1;
+    const leftHalf = ang % 360 > 180; // hours 0-12 sit on the left (dark) half
+    const col = (k === 0 || k === 12) ? '#F2B84B' : (leftHalf ? '#CBD5E1' : '#14213D');
+    tickMarkup += '<line x1="' + x0.toFixed(2) + '" y1="' + y0.toFixed(2) + '" x2="' + x1.toFixed(2) + '" y2="' + y1.toFixed(2) + '" stroke="' + col + '"' + (major ? ' stroke-width="2.2"' : '') + '/>';
+  }
+  tg.innerHTML = tickMarkup;
+
+  // ---- live clock ----
+  const hLis = document.getElementById('h-lis');
+  const hAkl = document.getElementById('h-akl');
+  const hMin = document.getElementById('h-min');
+  const hSec = document.getElementById('h-sec');
+  const tLis = document.getElementById('lisbon-time');
+  const tAkl = document.getElementById('auckland-time');
+  const zLis = document.getElementById('lisbon-zone');
+  const zAkl = document.getElementById('auckland-zone');
+  const diff = document.getElementById('diff');
+
+  function fmt(tz) {
+    try {
+      return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'shortOffset' });
+    } catch (e) { return null; }
+  }
+  const fLis = fmt('Europe/Lisbon'), fAkl = fmt('Pacific/Auckland');
+
+  function read(f, d) {
+    if (!f) { return { h: d.getUTCHours(), m: d.getUTCMinutes(), s: d.getUTCSeconds(), z: 'UTC' }; }
+    const parts = f.formatToParts(d), o = {};
+    for (const p of parts) o[p.type] = p.value;
+    return { h: (+o.hour) % 24, m: +o.minute, s: +o.second, z: (o.timeZoneName || '').replace(/^GMT/, 'UTC').replace(/^UTC$/, 'UTC+0') };
+  }
+
+  let lastSec = -1;
+  function tick() {
+    const d = new Date();
+    const sec = d.getSeconds();
+    if (sec !== lastSec) {
+      lastSec = sec;
+      const L = read(fLis, d), A = read(fAkl, d);
+      const pad = n => String(n).padStart(2, '0');
+      tLis.innerHTML = pad(L.h) + ':' + pad(L.m) + '<small>:' + pad(L.s) + '</small>';
+      tAkl.innerHTML = pad(A.h) + ':' + pad(A.m) + '<small>:' + pad(A.s) + '</small>';
+      tLis.setAttribute('datetime', pad(L.h) + ':' + pad(L.m) + ':' + pad(L.s));
+      tAkl.setAttribute('datetime', pad(A.h) + ':' + pad(A.m) + ':' + pad(A.s));
+      zLis.textContent = 'Portugal · ' + (L.z || 'Europe/Lisbon');
+      zAkl.textContent = 'Aotearoa · ' + (A.z || 'Pacific/Auckland');
+      const gap = (((A.h * 60 + A.m) - (L.h * 60 + L.m)) + 1440) % 1440;
+      diff.innerHTML = 'Auckland<br>' + Math.round(gap / 60) + ' h ahead';
+
+      const rot = deg => 'rotate(' + deg.toFixed(2) + 'deg)';
+      const hourAngle = (hh, mm) => 180 + ((hh + mm / 60) / 24) * 360;
+      hLis.style.transform = rot(hourAngle(L.h, L.m));
+      hAkl.style.transform = rot(hourAngle(A.h, A.m));
+      hMin.style.transform = rot((L.m + L.s / 60) * 6);
+      hSec.style.transform = rot(L.s * 6);
+    }
+    if (!document.hidden) rafId = requestAnimationFrame(tick);
+  }
+  let rafId = requestAnimationFrame(tick);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) cancelAnimationFrame(rafId);
+    else { lastSec = -1; rafId = requestAnimationFrame(tick); }
+  });
+
+  // ---- events ----
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', layout);
+  stackedMQ.addEventListener && stackedMQ.addEventListener('change', layout);
+  layout();
+  // second pass once fonts/metrics settle
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => update(true));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reading Record — the nightly school reading log, typed in one line</title>
+<meta name="description" content="Type one line a night. Reading Record parses it, chains your page numbers, writes the diary comment for you, and scores a weekly 60-second fluency check against the published Hasbrouck &amp; Tindal oral reading fluency norms. Prints a catch-up crib, a term booklet and a parents' evening sheet. Offline, no account.">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='3' y='6' width='26' height='2.6' fill='%230a0a0a'/%3E%3Crect x='3' y='12' width='18' height='2.6' fill='%230a0a0a'/%3E%3Crect x='3' y='18' width='22' height='2.6' fill='%230a0a0a'/%3E%3Crect x='3' y='24' width='8' height='2.6' fill='%23b3001b'/%3E%3Crect x='13' y='23.4' width='2.6' height='4' fill='%230a0a0a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   READING RECORD — console
+   custom-property scheme:
+     --slate-*  ink levels        --sheet-*  paper stock
+     --score-*  ruled lines       --mark-*   functional inks
+     --set-*    typefaces         --beat-*   motion
+     --stride/--gutter-x/--band-h  metrics
+   ============================================================ */
+:root{
+  --slate-full:#0a0a0a; --slate-mid:#4a4a4a; --slate-dim:#767676; --slate-ghost:#8a8a8a;
+  --sheet-white:#ffffff; --sheet-tint:#f4f4f2; --sheet-band:#ebebe8; --sheet-deep:#e2e2de;
+  --score-hair:#dcdcd8; --score-firm:#b9b9b4; --score-heavy:#0a0a0a;
+  --mark-red:#b3001b; --mark-red-wash:#fcecee; --mark-good:#12603a; --mark-good-wash:#eaf3ee;
+  --set-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --set-grot:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --beat-tap:110ms cubic-bezier(.2,.7,.3,1); --beat-ease:220ms cubic-bezier(.2,.7,.3,1);
+  --stride:1.55; --gutter-x:clamp(12px,2.4vw,26px); --band-h:66px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--sheet-white); color:var(--slate-full);
+  font-family:var(--set-mono); font-size:13.5px; line-height:var(--stride);
+  height:100dvh; min-height:100svh; display:flex; flex-direction:column; overflow:hidden;
+  font-variant-ligatures:none; -webkit-font-smoothing:antialiased;
+}
+@supports not (height:100dvh){ body{height:100vh} }
+a{color:inherit}
+:focus-visible{outline:2.5px solid var(--mark-red); outline-offset:2px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+h1,h2,h3,h4{margin:0;font-family:var(--set-grot);font-weight:700;letter-spacing:-.02em}
+p{margin:0}
+table{border-collapse:collapse}
+.offscreen{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* ---------- masthead ---------- */
+.masthead{
+  flex:none; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  padding:10px var(--gutter-x) 8px; border-bottom:2.5px solid var(--score-heavy);
+}
+.wordmark{
+  font-family:var(--set-grot); font-weight:800; font-size:clamp(19px,4.4vw,29px);
+  letter-spacing:-.045em; text-transform:uppercase; line-height:1; white-space:nowrap;
+}
+.wordmark em{font-style:normal;color:var(--mark-red)}
+.mast-note{
+  margin-left:auto; font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--slate-dim); white-space:nowrap; display:flex; align-items:center; gap:9px;
+}
+.samplechip{
+  border:1.5px solid var(--mark-red); color:var(--mark-red); padding:1px 6px;
+  letter-spacing:.1em; font-weight:700; white-space:nowrap;
+}
+.samplechip[hidden]{display:none}
+.mast-note button{
+  border-bottom:1px solid var(--score-firm); letter-spacing:.1em; text-transform:uppercase;
+  transition:color var(--beat-tap), border-color var(--beat-tap);
+}
+.mast-note button:hover{color:var(--mark-red);border-color:var(--mark-red)}
+
+/* ---------- who band ---------- */
+.whoband{flex:none;padding:9px var(--gutter-x) 0}
+.wholine{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;row-gap:2px}
+.whoname{
+  font-family:var(--set-grot); font-weight:800; text-transform:uppercase;
+  font-size:clamp(15px,2.6vw,19px); letter-spacing:-.02em; line-height:1.15;
+  border-bottom:2px solid transparent; transition:border-color var(--beat-tap);
+}
+.whoname[data-many="1"]{border-bottom-color:var(--score-firm)}
+.whoname[data-many="1"]:hover{border-bottom-color:var(--mark-red)}
+.whoname::after{content:attr(data-hint);font-family:var(--set-mono);font-size:9.5px;font-weight:400;letter-spacing:.12em;color:var(--slate-dim);margin-left:8px;text-transform:none}
+.whoyear{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate-dim)}
+.whomode{
+  font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+  border:1px solid var(--score-firm);padding:0 5px;color:var(--slate-mid);
+}
+.statusline{
+  margin-top:1px; font-size:13px; line-height:1.65; color:var(--slate-dim);
+  overflow-wrap:anywhere;
+}
+.statusline b{color:var(--slate-full);font-weight:700}
+.statusline .sep{color:var(--score-firm);padding:0 5px}
+.statusline .alarm{color:var(--mark-red);font-weight:700}
+.alarmline{font-size:13px;line-height:1.5;color:var(--mark-red);margin-top:2px;overflow-wrap:anywhere}
+.alarmline b{font-weight:700}
+.alarmline[hidden]{display:none}
+.alarmline .go{border-bottom:1px solid var(--mark-red);font-weight:700}
+.statusline .ok{color:var(--mark-good);font-weight:700}
+
+/* ---------- norm ribbon (the hero) ---------- */
+.ribbonwrap{flex:none;padding:9px var(--gutter-x) 11px;border-bottom:1px solid var(--score-hair)}
+.ribbonhead,.ribbon,.ribbon-empty{max-width:880px}
+.ribbonhead{
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--slate-dim);
+  margin-bottom:5px;
+}
+.ribbonhead b{color:var(--slate-full);letter-spacing:.08em}
+.ribbon{position:relative;height:26px;margin-top:23px;margin-bottom:22px}
+.rib-track{position:absolute;left:0;right:0;top:11px;height:9px;background:var(--sheet-tint);border:1px solid var(--score-hair)}
+.rib-zone{position:absolute;top:12px;height:7px;background:var(--sheet-band)}
+.rib-tick{position:absolute;top:6px;width:1px;height:19px;background:var(--score-firm)}
+.rib-tick.mid{background:var(--slate-full);width:1.5px;top:3px;height:25px}
+.rib-lab{position:absolute;top:27px;font-size:10px;letter-spacing:.03em;color:var(--slate-dim);transform:translateX(-50%);white-space:nowrap;text-align:center;line-height:1.25}
+.rib-lab u{display:block;font-size:8px;letter-spacing:.1em;text-decoration:none;color:var(--slate-ghost)}
+.rib-lab b{color:var(--slate-full);font-weight:700}
+.rib-trail{position:absolute;top:13.5px;width:4px;height:4px;border:1.5px solid #8a8a8a;border-radius:50%;transform:translateX(-50%);background:var(--sheet-white)}
+.rib-you{position:absolute;top:-16px;transform:translateX(-50%);text-align:center;transition:left var(--beat-ease)}
+.rib-you .val{font-size:15px;font-weight:700;line-height:1;white-space:nowrap}
+.rib-you .caretdown{width:0;height:0;margin:3px auto 0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--slate-full)}
+.rib-you .stem{width:1.5px;height:11px;background:var(--slate-full);margin:0 auto}
+.ribbon.norefs .rib-you .val{color:var(--mark-red)}
+.ribbon-empty{font-size:11.5px;color:var(--slate-dim);padding:6px 0 2px}
+.ribbon-empty b{color:var(--mark-red)}
+
+/* ---------- scrollback ---------- */
+.scrollback{
+  flex:1 1 auto; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+  padding:0 var(--gutter-x) 14px; scrollbar-width:thin;
+  display:flex; flex-direction:column;
+}
+.scrollback > .cell:first-child{margin-top:auto}
+.cell{border-bottom:1px solid var(--score-hair);padding:11px 0 12px}
+.cell:last-child{border-bottom:0}
+.echo{color:var(--slate-dim);font-size:12px;margin-bottom:7px;overflow-wrap:anywhere}
+.echo .caret{color:var(--mark-red);font-weight:700;margin-right:6px}
+.celltitle{
+  font-family:var(--set-grot);font-weight:700;font-size:11px;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--slate-full);margin-bottom:8px;
+  display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+}
+.celltitle .qual{font-family:var(--set-mono);font-weight:400;letter-spacing:.04em;text-transform:none;color:var(--slate-dim);font-size:10.5px}
+.prose{font-size:13px;color:var(--slate-mid);line-height:1.62;max-width:74ch;overflow-wrap:anywhere}
+.prose b{color:var(--slate-full)}
+.prose + .prose{margin-top:6px}
+
+/* logged night */
+.logline{display:flex;gap:10px;align-items:flex-start;padding:2px 0}
+.logline .lday{flex:none;width:76px;font-size:11.5px;color:var(--slate-dim);letter-spacing:.02em;padding-top:2px;white-space:nowrap}
+.logline .lbody{flex:1 1 auto;min-width:0}
+.logline .lbook{font-weight:700}
+.logline .lmeta{color:var(--slate-dim)}
+.logline .lcomment{color:var(--slate-mid);display:block;font-size:12px;line-height:1.55}
+.fresh{animation:landin var(--beat-ease) both}
+.fresh .lbody{box-shadow:-9px 0 0 -6px var(--mark-red)}
+@keyframes landin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* generic dense tables */
+.slip{width:100%;font-size:12px;margin-top:4px}
+.slip th{
+  text-align:left;font-family:var(--set-grot);font-weight:700;font-size:9.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--slate-dim);border-bottom:1.5px solid var(--score-heavy);
+  padding:0 8px 4px 0;white-space:nowrap;vertical-align:bottom;
+}
+.slip td{padding:4px 8px 4px 0;border-bottom:1px solid var(--score-hair);vertical-align:top}
+.slip td:last-child,.slip th:last-child{padding-right:0}
+.slip .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.slip tr:last-child td{border-bottom:0}
+.slip .strong{font-weight:700}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* heat weave */
+.heatweave{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:2px}
+.weavegrid{display:grid;grid-template-columns:30px repeat(7,22px);gap:2px;flex:0 0 auto}
+.weavegrid .wlab{font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--slate-dim);text-align:center;line-height:13px}
+.weavegrid .wwk{font-size:9px;color:var(--slate-dim);line-height:22px;text-align:right;padding-right:4px;letter-spacing:.01em}
+.pip{height:22px;border:1px solid var(--score-hair);background:var(--sheet-white);position:relative}
+.pip.on{background:var(--slate-full);border-color:var(--slate-full)}
+.pip.half{background:var(--sheet-deep);border-color:var(--score-firm)}
+.pip.chk::after{content:"";position:absolute;inset:5px;border:1.5px solid var(--mark-red);border-radius:50%}
+.pip.on.chk::after{border-color:#fff}
+.pip.future{border-style:dotted;border-color:var(--sheet-deep)}
+.pip.today{outline:1.5px solid var(--mark-red);outline-offset:1px}
+.weavekey{font-size:11px;color:var(--slate-dim);flex:1 1 210px;min-width:190px}
+.weavekey div{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.weavekey i{width:13px;height:13px;display:inline-block;flex:none;border:1px solid var(--score-hair);font-style:normal;position:relative}
+.weavekey i.on{background:var(--slate-full);border-color:var(--slate-full)}
+.weavekey i.chk::after{content:"";position:absolute;inset:2px;border:1.5px solid var(--mark-red);border-radius:50%}
+
+/* flags */
+.flagitem{border-left:3px solid var(--mark-red);padding:0 0 0 11px;margin:0 0 13px}
+.flagitem:last-child{margin-bottom:0}
+.flagitem.soft{border-left-color:var(--score-firm)}
+.flaghead{font-family:var(--set-grot);font-weight:700;font-size:13.5px;letter-spacing:-.01em;line-height:1.35}
+.flagwhy{font-size:12px;color:var(--slate-mid);line-height:1.55;margin-top:3px;max-width:70ch}
+.flagask{font-size:12px;color:var(--slate-full);margin-top:6px;padding-left:13px;border-left:1px solid var(--score-hair);line-height:1.55;max-width:70ch}
+.flagask::before{content:"ASK:";font-family:var(--set-grot);font-size:9px;letter-spacing:.15em;color:var(--mark-red);margin-right:7px;font-weight:700}
+.allclear{border-left:3px solid var(--mark-good);padding-left:11px}
+.allclear .flaghead{color:var(--mark-good)}
+
+/* sparkline */
+.sparkbox{margin-top:6px;border:1px solid var(--score-hair);padding:8px 6px 4px;background:var(--sheet-white)}
+.sparkbox svg{display:block;width:100%;height:auto}
+.sparkkey{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-dim);margin-top:5px;padding:0 2px}
+.sparkkey span{display:flex;align-items:center;gap:5px}
+.sparkkey b{display:inline-block;width:14px;height:0;border-top:2px solid var(--slate-full)}
+.sparkkey b.dash{border-top:2px dashed var(--slate-ghost)}
+
+/* keycaps + action chips */
+.keycap{
+  display:inline-block;border:1.5px solid var(--slate-full);padding:0 5px;font-size:10.5px;
+  font-weight:700;line-height:16px;letter-spacing:.03em;white-space:nowrap;
+}
+.acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.act{
+  border:1.5px solid var(--slate-full);padding:4px 11px;font-size:10.5px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;background:var(--sheet-white);
+  transition:background var(--beat-tap),color var(--beat-tap),transform var(--beat-tap);
+}
+.act:hover{background:var(--slate-full);color:var(--sheet-white)}
+.act:active{transform:translateY(1px)}
+.act.hot{border-color:var(--mark-red);color:var(--mark-red)}
+.act.hot:hover{background:var(--mark-red);color:var(--sheet-white)}
+.act[aria-pressed="true"]{background:var(--slate-full);color:var(--sheet-white)}
+.cmdlist{columns:2 220px;column-gap:26px;font-size:12px;margin-top:2px}
+.cmdlist div{break-inside:avoid;padding:1.5px 0;color:var(--slate-dim);overflow-wrap:anywhere}
+.cmdlist code{font-weight:700;color:var(--slate-full);font-family:var(--set-mono)}
+
+/* fluency check widget */
+.checkbox2{border:1.5px solid var(--slate-full);padding:13px;margin-top:4px;max-width:430px}
+.bigclock{
+  font-size:clamp(40px,11vw,60px);font-weight:700;line-height:.95;letter-spacing:-.05em;
+  font-variant-numeric:tabular-nums;display:block;
+}
+.bigclock.running{color:var(--mark-red)}
+.clockbar{height:5px;background:var(--sheet-band);margin:9px 0 11px;position:relative;overflow:hidden}
+.clockbar i{position:absolute;inset:0 auto 0 0;background:var(--mark-red);width:0%}
+.tally{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+.tally label{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-dim);margin-bottom:3px;font-family:var(--set-grot);font-weight:700}
+.tally input{
+  width:88px;border:0;border-bottom:2px solid var(--slate-full);background:var(--sheet-white);
+  font-size:22px;font-weight:700;padding:1px 2px;font-variant-numeric:tabular-nums;
+}
+.tally input:focus{outline:none;border-bottom-color:var(--mark-red)}
+.tally input::-webkit-outer-spin-button,.tally input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.tally input[type=number]{-moz-appearance:textfield}
+.checkout{font-size:12.5px;margin-top:11px;color:var(--slate-mid);line-height:1.6}
+.checkout b{color:var(--slate-full)}
+.bignum{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+
+/* composer */
+.composer{flex:none;border-top:2.5px solid var(--score-heavy);background:var(--sheet-white)}
+.parsestrip{
+  border-bottom:1px solid var(--score-hair);padding:6px var(--gutter-x);background:var(--sheet-tint);
+  display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:31px;
+}
+.parsestrip[hidden]{display:none}
+.chit{
+  border:1px solid var(--slate-full);background:var(--sheet-white);padding:1px 7px;font-size:10.5px;
+  letter-spacing:.05em;white-space:nowrap;animation:chitin var(--beat-tap) both;
+}
+.chit b{font-weight:700}
+.chit.dim{border-color:var(--score-firm);color:var(--slate-dim)}
+.chit.bad{border-color:var(--mark-red);color:var(--mark-red);background:var(--mark-red-wash);font-weight:700}
+.chit.lead{background:var(--slate-full);color:var(--sheet-white);font-weight:700}
+@keyframes chitin{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.parsenote{font-size:11px;color:var(--slate-dim);width:100%;line-height:1.45}
+.parsenote.bad{color:var(--mark-red);font-weight:500}
+.readline{display:flex;align-items:center;gap:0;padding:0 var(--gutter-x)}
+.readline .caret{color:var(--mark-red);font-weight:700;font-size:16px;flex:none;padding-right:9px;line-height:1}
+#feed{
+  flex:1 1 auto;min-width:0;border:0;background:transparent;font-size:15.5px;font-weight:500;
+  padding:13px 0;letter-spacing:-.005em;
+}
+#feed:focus{outline:none}
+#feed::placeholder{color:var(--slate-dim);font-weight:400}
+.readline .hints{flex:none;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-dim);padding-left:12px;white-space:nowrap}
+.blinkline{height:2px;background:var(--mark-red);width:0;transition:width var(--beat-ease)}
+.blinkline.lit{width:100%}
+
+/* disclaimer */
+.plainwarn{
+  border:1.5px solid var(--slate-full);padding:9px 11px;font-size:11.5px;line-height:1.55;
+  color:var(--slate-full);margin-top:10px;max-width:74ch;background:var(--sheet-tint);
+}
+@media print{ .plainwarn{padding:6px 8px;font-size:9px;line-height:1.4;margin-top:7px} }
+.plainwarn b{font-family:var(--set-grot);font-size:10px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:2px}
+
+/* toast */
+.toast{
+  position:fixed;left:50%;bottom:96px;transform:translate(-50%,10px);background:var(--slate-full);
+  color:var(--sheet-white);padding:7px 15px;font-size:11.5px;letter-spacing:.06em;z-index:60;
+  opacity:0;pointer-events:none;transition:opacity var(--beat-ease),transform var(--beat-ease);max-width:calc(100vw - 32px);
+}
+.toast.up{opacity:1;transform:translate(-50%,0)}
+
+/* print sheets */
+#sheetout{display:none}
+.docband{margin-bottom:14px}
+.doctitle{font-family:var(--set-grot);font-weight:800;font-size:19px;letter-spacing:-.02em;text-transform:uppercase}
+.docsub{font-size:11px;color:var(--slate-dim);letter-spacing:.06em;margin-top:2px}
+.bkt{width:100%;font-size:10.5px;margin-top:8px}
+.bkt th{
+  border:1px solid var(--slate-full);background:var(--sheet-tint);padding:4px 5px;text-align:left;
+  font-family:var(--set-grot);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;
+}
+.bkt td{border:1px solid var(--score-firm);padding:4px 5px;vertical-align:top;line-height:1.4}
+.bkt td.sig{width:82px}
+.bkt .num{text-align:right;font-variant-numeric:tabular-nums}
+
+@media (max-width:640px){
+  :root{--stride:1.5}
+  .masthead{padding:7px var(--gutter-x) 6px}
+  .whoband{padding:7px var(--gutter-x) 0}
+  .ribbonwrap{padding:7px var(--gutter-x) 8px}
+  .mast-note{font-size:9.5px;gap:8px;width:100%;margin-left:0;padding-top:2px}
+  .readline .hints{display:none}
+  #feed{font-size:16px;padding:12px 0}
+  .cmdlist{columns:1}
+  .ribbon{height:22px;margin-top:32px;margin-bottom:19px}
+  .ribbonhead{flex-direction:column;align-items:flex-start;gap:0;line-height:1.45}
+  .logline .lday{width:66px;font-size:11px}
+  .alarmline{font-size:12.5px}
+  .weavegrid{grid-template-columns:30px repeat(7,24px)}
+  .weavegrid .wwk{line-height:24px}
+  .pip{height:24px}
+  .weavekey{flex:1 1 100%;min-width:0}
+}
+@media (max-width:400px){ .rib-lab{font-size:8px} }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+
+@media print{
+  @page{size:A4 portrait;margin:13mm}
+  html,body{height:auto;overflow:visible;background:#fff;font-size:10pt}
+  body{display:block}
+  .masthead,.whoband,.ribbonwrap,.scrollback,.composer,.toast{display:none !important}
+  #sheetout{display:block}
+  .docband{break-inside:avoid}
+  .bkt{break-inside:auto}
+  .bkt tr{break-inside:avoid}
+  .bkt thead{display:table-header-group}
+  .plainwarn{border:1.5px solid #000;background:#fff}
+  .flagitem{break-inside:avoid;border-left:3px solid #000}
+  a[href]::after{content:""}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1 class="wordmark">Reading<em>·</em>Record</h1>
+  <div class="mast-note">
+    <span>offline · no account</span>
+    <span class="samplechip" id="samplechip">sample family</span>
+    <button type="button" id="clearsample">clear sample</button>
+  </div>
+</header>
+
+<section class="whoband" aria-label="Current reader">
+  <h2 class="offscreen">Reader status</h2>
+  <div class="wholine">
+    <button type="button" class="whoname" id="whoname" title="Switch reader (Alt+1-9)">&mdash;</button>
+    <span class="whoyear" id="whoyear"></span>
+    <span class="whomode" id="whomode" hidden></span>
+  </div>
+  <p class="statusline" id="statusline">Loading&hellip;</p>
+  <p class="alarmline" id="alarmline" hidden></p>
+</section>
+
+<section class="ribbonwrap" aria-label="Oral reading fluency against published norms">
+  <div class="ribbonhead">
+    <span id="ribtitle">words correct per minute</span>
+    <span id="ribgrade"></span>
+  </div>
+  <div class="ribbon" id="ribbon" role="img" aria-label="Fluency ribbon"></div>
+  <p class="ribbon-empty" id="ribempty" hidden></p>
+</section>
+
+<main class="scrollback" id="scrollback" tabindex="-1" aria-label="Reading log and command output" aria-live="polite" aria-relevant="additions"></main>
+
+<footer class="composer">
+  <div class="parsestrip" id="parsestrip" hidden aria-live="polite" aria-atomic="true"></div>
+  <div class="blinkline" id="blinkline" aria-hidden="true"></div>
+  <div class="readline">
+    <span class="caret" aria-hidden="true">&#9656;</span>
+    <label class="offscreen" for="feed">Type tonight's reading, or a slash command</label>
+    <input id="feed" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+           placeholder="ella 20m charlottes web p45-60 fluent" enterkeyhint="done">
+    <span class="hints" aria-hidden="true">&#9166; log &nbsp;/ cmds &nbsp;&#8593; recall</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="sheetout" aria-hidden="true"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   READING RECORD — one file, offline, no network beyond the webfont.
+   ========================================================================== */
+var STORE_KEY = "reading-record.v3";
+
+/* ---------- tiny helpers ---------- */
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function fx(n,d){ if(!isFinite(n)) return "—"; return Number(n).toFixed(d==null?2:d); }
+function intOr(n,f){ n=parseInt(n,10); return isFinite(n)?n:f; }
+function safeDiv(a,b){ if(!isFinite(a)||!isFinite(b)||b===0) return null; var r=a/b; return isFinite(r)?r:null; }
+function pad2(n){ return (n<10?"0":"")+n; }
+function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }
+function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); }
+
+/* ---------- dates: local, leap-safe, no timezone drift ---------- */
+function ymd(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function parseYMD(s){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||""));
+  if(!m) return null;
+  var y=+m[1], mo=+m[2], da=+m[3];
+  var d=new Date(y,mo-1,da,12,0,0,0);
+  if(d.getFullYear()!==y||d.getMonth()!==mo-1||d.getDate()!==da) return null;
+  return d;
+}
+function today(){ var n=new Date(); return new Date(n.getFullYear(),n.getMonth(),n.getDate(),12,0,0,0); }
+function addDays(d,n){ var c=new Date(d.getTime()); c.setDate(c.getDate()+n); return c; }
+function dayDiff(a,b){ return Math.round((a.getTime()-b.getTime())/86400000); }
+function offYMD(n){ return ymd(addDays(today(),n)); }
+var DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtShort(s){ var d=parseYMD(s); if(!d) return "—"; return DOW[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]; }
+function fmtNum(s){ var d=parseYMD(s); if(!d) return "—"; return pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+String(d.getFullYear()).slice(2); }
+function mondayOf(d){ var c=new Date(d.getTime()); var w=(c.getDay()+6)%7; return addDays(c,-w); }
+/* school year rolls on 1 September */
+function schoolYear(d){ return d.getMonth()>=8 ? d.getFullYear() : d.getFullYear()-1; }
+/* fall Sep-Dec, winter Jan-Mar, spring Apr-Aug */
+function seasonOf(d){ var m=d.getMonth(); if(m>=8) return "fall"; if(m<=2) return "winter"; return "spring"; }
+var SEASON_LABEL={fall:"autumn",winter:"winter",spring:"spring"};
+
+/* ============================================================================
+   HASBROUCK & TINDAL (2017) COMPILED ORAL READING FLUENCY NORMS
+   Words correct per minute. Percentiles 90/75/50/25/10, by grade and season.
+   Published table, reproduced for offline scoring. Grade 1 autumn has no
+   published value.
+   ========================================================================== */
+var ORF = {
+  1:{ fall:null,
+      winter:{p90:97,p75:59,p50:29,p25:16,p10:9},
+      spring:{p90:116,p75:91,p50:60,p25:34,p10:18} },
+  2:{ fall:{p90:111,p75:84,p50:50,p25:36,p10:23},
+      winter:{p90:131,p75:109,p50:84,p25:59,p10:35},
+      spring:{p90:148,p75:124,p50:100,p25:72,p10:43} },
+  3:{ fall:{p90:134,p75:104,p50:83,p25:59,p10:40},
+      winter:{p90:161,p75:137,p50:97,p25:79,p10:62},
+      spring:{p90:166,p75:139,p50:112,p25:91,p10:63} },
+  4:{ fall:{p90:153,p75:125,p50:94,p25:75,p10:60},
+      winter:{p90:168,p75:143,p50:120,p25:95,p10:71},
+      spring:{p90:184,p75:160,p50:133,p25:105,p10:83} },
+  5:{ fall:{p90:179,p75:153,p50:121,p25:87,p10:64},
+      winter:{p90:183,p75:160,p50:133,p25:109,p10:84},
+      spring:{p90:195,p75:169,p50:146,p25:119,p10:102} },
+  6:{ fall:{p90:185,p75:159,p50:132,p25:112,p10:89},
+      winter:{p90:195,p75:166,p50:145,p25:116,p10:91},
+      spring:{p90:204,p75:173,p50:146,p25:122,p10:91} }
+};
+var ORF_CITE = "Hasbrouck, J. &amp; Tindal, G. (2017). An update to compiled ORF norms. Technical Report 1702, Behavioral Research and Teaching, University of Oregon.";
+
+function normFor(grade,season){
+  var g=ORF[clamp(intOr(grade,3),1,6)];
+  if(!g) return null;
+  return g[season]||null;
+}
+/* piecewise-linear percentile from the five published anchors */
+function percentileOf(wcpm,norm){
+  if(!norm||!isFinite(wcpm)) return null;
+  var pts=[[norm.p10,10],[norm.p25,25],[norm.p50,50],[norm.p75,75],[norm.p90,90]];
+  if(wcpm<=pts[0][0]){
+    var span=pts[1][0]-pts[0][0];
+    if(span<=0) return 10;
+    return clamp(10-((pts[0][0]-wcpm)/span)*15, 1, 10);
+  }
+  if(wcpm>=pts[4][0]){
+    var span2=pts[4][0]-pts[3][0];
+    if(span2<=0) return 90;
+    return clamp(90+((wcpm-pts[4][0])/span2)*15, 90, 99);
+  }
+  for(var i=0;i<4;i++){
+    var a=pts[i],b=pts[i+1];
+    if(wcpm>=a[0]&&wcpm<=b[0]){
+      var d=b[0]-a[0];
+      if(d<=0) return a[1];
+      return a[1]+((wcpm-a[0])/d)*(b[1]-a[1]);
+    }
+  }
+  return null;
+}
+function ordinal(n){
+  n=Math.round(n);
+  var s=["th","st","nd","rd"], v=n%100;
+  return n+(s[(v-20)%10]||s[v]||s[0]);
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   STATE + STORAGE
+   ========================================================================== */
+var S = null;          /* live state */
+var active = null;     /* active child id */
+var lineHist = [];     /* typed-line recall */
+var histPos = -1;
+
+function blankState(){
+  return { v:3, sample:false, children:[], entries:[], books:[], checks:[],
+           settings:{ schoolApp:false, signature:"", termStart:null, termEnd:null } };
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+  catch(e){ /* private mode / quota — the session still works, it just won't persist */ }
+}
+function load(){
+  var raw=null;
+  try{ raw = localStorage.getItem(STORE_KEY); }catch(e){ raw=null; }
+  if(!raw) return null;
+  try{
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=="object"||!Array.isArray(o.children)) return null;
+    o.entries = Array.isArray(o.entries)?o.entries:[];
+    o.books   = Array.isArray(o.books)?o.books:[];
+    o.checks  = Array.isArray(o.checks)?o.checks:[];
+    o.settings= (o.settings&&typeof o.settings==="object")?o.settings:{schoolApp:false,signature:"",termStart:null,termEnd:null};
+    return o;
+  }catch(e){ return null; }
+}
+
+/* ---------- title normalisation ---------- */
+var SMALL={"a":1,"an":1,"the":1,"of":1,"and":1,"or":1,"in":1,"on":1,"to":1,"at":1,"for":1,"with":1,"from":1};
+function normTitle(t){
+  return String(t||"").toLowerCase()
+    .replace(/[‘’'`]/g,"")
+    .replace(/[^a-z0-9]+/g," ")
+    .replace(/\b(the|a|an)\b/g," ")
+    .replace(/\s+/g," ").trim();
+}
+function titleCase(t){
+  var w=String(t||"").trim().split(/\s+/);
+  return w.map(function(x,i){
+    var low=x.toLowerCase();
+    if(i>0&&SMALL[low]) return low;
+    return low.charAt(0).toUpperCase()+low.slice(1);
+  }).join(" ");
+}
+
+/* ---------- lookups ---------- */
+function childById(id){ for(var i=0;i<S.children.length;i++) if(S.children[i].id===id) return S.children[i]; return null; }
+function activeChild(){ return childById(active) || S.children[0] || null; }
+function gradeAt(kid,dateStr){
+  var d=parseYMD(dateStr)||today();
+  var g = intOr(kid.grade,3) + (schoolYear(d) - intOr(kid.gradeYear, schoolYear(today())));
+  return clamp(g,1,6);
+}
+function bookById(id){ for(var i=0;i<S.books.length;i++) if(S.books[i].id===id) return S.books[i]; return null; }
+function findBook(childId,title){
+  var k=normTitle(title); if(!k) return null;
+  for(var i=0;i<S.books.length;i++) if(S.books[i].childId===childId && S.books[i].key===k) return S.books[i];
+  return null;
+}
+function childEntries(childId){
+  return S.entries.filter(function(e){ return e.childId===childId; })
+    .sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:(a.seq||0)-(b.seq||0)); });
+}
+function bookEntries(bookId){
+  return S.entries.filter(function(e){ return e.bookId===bookId; })
+    .sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:(a.seq||0)-(b.seq||0)); });
+}
+/* derived book state — never stored, so undo is exact */
+function bookState(book){
+  var es=bookEntries(book.id), last=0, mins=0, pages=0, fin=null, first=null;
+  for(var i=0;i<es.length;i++){
+    var e=es[i];
+    if(!first) first=e.date;
+    if(isFinite(e.to)&&e.to!==null&&e.to>last) last=e.to;
+    mins+=intOr(e.minutes,0);
+    if(e.from!==null&&e.to!==null&&isFinite(e.from)&&isFinite(e.to)) pages+=Math.max(0,e.to-e.from+1);
+    if(e.fin) fin=e.date;
+  }
+  var days=null;
+  if(first&&fin){ var a=parseYMD(first),b=parseYMD(fin); if(a&&b) days=dayDiff(b,a)+1; }
+  return { last:last, minutes:mins, pages:pages, finished:fin, started:first, nights:es.length, days:days };
+}
+function lastTouched(childId){
+  var es=childEntries(childId);
+  for(var i=es.length-1;i>=0;i--){
+    if(es[i].bookId){
+      var b=bookById(es[i].bookId);
+      if(b && !bookState(b).finished) return b;
+    }
+  }
+  return null;
+}
+
+/* ============================================================================
+   SAMPLE FAMILY  — deterministic, generated relative to today
+   ========================================================================== */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+function mkBook(childId,title,level,genre,series){
+  return { id:uid(), childId:childId, title:title, key:normTitle(title),
+           level:level==null?null:level, genre:genre||"fiction", series:series||null };
+}
+function pushEntry(o){
+  o.id=o.id||uid();
+  o.seq=o.seq==null?S.entries.length:o.seq;
+  S.entries.push(o);
+  return o;
+}
+/* lay a book's nights across a window, landing exactly on endPage */
+function layRun(rng,child,book,startOff,endOff,startPage,endPage,skip,finish){
+  var nights=[],o;
+  for(o=startOff;o<=endOff;o++){
+    if(o===startOff||o===endOff||rng()>skip) nights.push(o);
+  }
+  if(nights.length<2) nights=[startOff,endOff];
+  var total=endPage-startPage, n=nights.length;
+  var cuts=[], i;
+  for(i=0;i<n;i++) cuts.push(0.65+rng()*0.7);
+  var sum=cuts.reduce(function(a,b){return a+b;},0);
+  var page=startPage, made=[];
+  for(i=0;i<n;i++){
+    var take = (i===n-1) ? (endPage-page) : Math.max(3, Math.round(total*cuts[i]/sum));
+    if(page+take>endPage) take=endPage-page;
+    if(take<=0&&i<n-1) continue;
+    var from=page+1, to=page+take;
+    page=to;
+    made.push({off:nights[i],from:from,to:to});
+  }
+  for(i=0;i<made.length;i++){
+    var m=made[i];
+    var mins = 12+Math.round(rng()*13);
+    pushEntry({ childId:child.id, bookId:book.id, date:offYMD(m.off), from:m.from, to:m.to,
+                minutes:mins, tags:[], note:"", fin:(finish&&i===made.length-1)?true:false, seq:S.entries.length });
+  }
+}
+
+function buildSample(){
+  var st=blankState();
+  st.sample=true;
+  var sy=schoolYear(today());
+  var ella={ id:"kid-ella", name:"Ella", initial:"e", year:"Year 3", grade:3, gradeYear:sy, target:100, free:false };
+  var max ={ id:"kid-max",  name:"Max",  initial:"m", year:"Year 5", grade:5, gradeYear:sy, target:120, free:true  };
+  st.children=[ella,max];
+  st.settings.signature="A. Whitfield";
+  st.settings.termStart=offYMD(-104);
+  st.settings.termEnd=offYMD(30);
+  S=st;
+
+  var rng=mulberry32(20260904);
+
+  /* --- Ella: school reading scheme, levels 10 -> 12 --- */
+  var eb=[
+    mkBook(ella.id,"Flat Stanley",10,"fiction",null),
+    mkBook(ella.id,"Fantastic Mr Fox",11,"fiction",null),
+    mkBook(ella.id,"The Owl Who Was Afraid of the Dark",11,"fiction",null),
+    mkBook(ella.id,"Amazing Animal Journeys",11,"nonfiction",null),
+    mkBook(ella.id,"The Worst Witch",12,"fiction","The Worst Witch"),
+    mkBook(ella.id,"Mr Stink",12,"fiction",null),
+    mkBook(ella.id,"The Boy Who Grew Dragons",12,"fiction","Grew Dragons"),
+    mkBook(ella.id,"Horrible Histories: Rotten Romans",12,"nonfiction","Horrible Histories"),
+    mkBook(ella.id,"Charlotte's Web",12,"fiction",null)
+  ];
+  eb.forEach(function(b){ S.books.push(b); });
+  layRun(rng,ella,eb[0],-176,-158,0,96,0.30,true);
+  layRun(rng,ella,eb[1],-156,-136,0,81,0.30,true);
+  layRun(rng,ella,eb[2],-134,-118,0,122,0.28,true);
+  layRun(rng,ella,eb[3],-116,-106,0,64,0.28,true);
+  layRun(rng,ella,eb[4],-104,-80,0,106,0.35,true);
+  layRun(rng,ella,eb[5],-78,-66,0,108,0.25,true);
+  layRun(rng,ella,eb[6],-62,-20,0,208,0.42,true);
+  layRun(rng,ella,eb[7],-58,-14,0,51,0.55,false);
+
+  /* the last fortnight, written out so the demo chains exactly */
+  var rr=eb[7], cw=eb[8];
+  var hand=[
+    {off:-12,b:rr,f:52,t:60,m:18,tg:[],n:""},
+    {off:-11,b:rr,f:61,t:69,m:20,tg:["discussed"],n:""},
+    {off:-10,b:rr,f:70,t:76,m:15,tg:[],n:"read the captions first, then went back"},
+    {off:-9, b:rr,f:77,t:84,m:22,tg:[],n:""},
+    {off:-8, b:rr,f:85,t:96,m:20,tg:["enjoyed"],n:"",fin:true},
+    {off:-7, b:cw,f:1, t:8, m:15,tg:["new book"],n:""},
+    {off:-6, b:cw,f:9, t:16,m:18,tg:["fluent"],n:""},
+    {off:-5, b:cw,f:17,t:23,m:14,tg:["needed help","names"],n:"needed help with Fern and Zuckerman"},
+    {off:-4, b:cw,f:24,t:31,m:20,tg:["expression"],n:""},
+    {off:-3, b:cw,f:32,t:37,m:16,tg:["tired"],n:"short one, very tired"},
+    {off:-2, b:cw,f:38,t:44,m:22,tg:["fluent","self-corrected"],n:""},
+    {off:-1, b:cw,f:null,t:null,m:15,tg:[],n:"re-read chapter one to Grandma on the phone"}
+  ];
+  hand.forEach(function(h){
+    pushEntry({ childId:ella.id, bookId:h.b.id, date:offYMD(h.off), from:h.f, to:h.t,
+                minutes:h.m, tags:h.tg, note:h.n, fin:!!h.fin, seq:S.entries.length });
+  });
+
+  /* --- Max: free reader, school booklet finished last year --- */
+  var mb=[
+    mkBook(max.id,"Percy Jackson: The Lightning Thief",null,"fiction","Percy Jackson"),
+    mkBook(max.id,"The Boy at the Back of the Class",null,"fiction",null),
+    mkBook(max.id,"Everything You Need to Know About Sharks",null,"nonfiction",null),
+    mkBook(max.id,"Skulduggery Pleasant",null,"fiction","Skulduggery Pleasant"),
+    mkBook(max.id,"The Hobbit",null,"fiction",null),
+    mkBook(max.id,"Kensuke's Kingdom",null,"fiction",null)
+  ];
+  mb.forEach(function(b){ S.books.push(b); });
+  layRun(rng,max,mb[0],-170,-124,0,377,0.30,true);
+  layRun(rng,max,mb[1],-118,-96,0,301,0.28,true);
+  layRun(rng,max,mb[2],-92,-70,0,128,0.34,true);
+  layRun(rng,max,mb[3],-68,-22,0,392,0.30,true);
+  layRun(rng,max,mb[4],-18,-11,0,179,0.20,false);
+  var mhand=[
+    {off:-9,b:mb[4],f:180,t:188,m:20,tg:[],n:""},
+    {off:-8,b:mb[4],f:189,t:197,m:18,tg:[],n:""},
+    {off:-6,b:mb[4],f:198,t:203,m:15,tg:[],n:"getting lost in the songs"},
+    {off:-4,b:mb[4],f:204,t:209,m:22,tg:["fluent"],n:""},
+    {off:-3,b:mb[5],f:1, t:12, m:15,tg:["new book"],n:""},
+    {off:-2,b:mb[5],f:13,t:24, m:18,tg:[],n:""},
+    {off:-1,b:mb[5],f:25,t:36, m:20,tg:["gripped"],n:"would not put it down"}
+  ];
+  mhand.forEach(function(h){
+    pushEntry({ childId:max.id, bookId:h.b.id, date:offYMD(h.off), from:h.f, to:h.t,
+                minutes:h.m, tags:h.tg, note:h.n, fin:false, seq:S.entries.length });
+  });
+
+  /* --- weekly one-minute fluency checks --- */
+  function chk(kid,off,words,errs,title){
+    var b=findBook(kid.id,title);
+    S.checks.push({ id:uid(), childId:kid.id, date:offYMD(off), words:words, errors:errs,
+                    bookId:b?b.id:null, bookTitle:title });
+  }
+  chk(ella,-170, 78, 7,"Flat Stanley");
+  chk(ella,-150, 84, 6,"Fantastic Mr Fox");
+  chk(ella,-124, 92, 4,"The Owl Who Was Afraid of the Dark");
+  chk(ella,-110, 88, 8,"Amazing Animal Journeys");
+  chk(ella,-96,  95, 5,"The Worst Witch");
+  chk(ella,-82,  97, 5,"The Worst Witch");
+  chk(ella,-68,  91, 8,"Mr Stink");
+  chk(ella,-54,  84, 9,"Horrible Histories: Rotten Romans");
+  chk(ella,-40,  99, 6,"The Boy Who Grew Dragons");
+  chk(ella,-30,  90,10,"Horrible Histories: Rotten Romans");
+  chk(ella,-24, 100, 5,"The Boy Who Grew Dragons");
+  chk(ella,-17,  98, 6,"The Boy Who Grew Dragons");
+  chk(ella,-10,  95, 5,"The Boy Who Grew Dragons");
+  chk(ella,-3,  102, 7,"Charlotte's Web");
+
+  chk(max,-260,118, 5,"Percy Jackson: The Lightning Thief");
+  chk(max,-215,124, 6,"Percy Jackson: The Lightning Thief");
+  chk(max,-180,133, 5,"The Boy at the Back of the Class");
+  chk(max,-140,138, 6,"The Boy at the Back of the Class");
+  chk(max,-85, 135, 7,"Everything You Need to Know About Sharks");
+  chk(max,-45, 132, 6,"Skulduggery Pleasant");
+  chk(max,-2,  130, 6,"The Hobbit");
+
+  S.entries.sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:a.seq-b.seq); });
+  S.entries.forEach(function(e,i){ e.seq=i; });
+  return S;
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   THE PARSER — one typed line becomes a night
+   ========================================================================== */
+var TAGDEFS=[
+ {k:"fluent",        ph:["fluently","fluent","confidently","confident","smoothly","smooth","flowing"]},
+ {k:"needed help",   ph:["needed help","needs help","needed support","need help","struggled","stuck","hard going","found it hard"]},
+ {k:"names",         ph:["proper nouns","with names","names"]},
+ {k:"self-corrected",ph:["self-corrected","self corrected","selfcorrected","corrected himself","corrected herself","went back"]},
+ {k:"expression",    ph:["with expression","expression","voices","acted it out"]},
+ {k:"sounded out",   ph:["sounded out","sounding out","decoding","blending","phonics"]},
+ {k:"hesitant",      ph:["hesitant","laboured","labored","plodding","word by word"]},
+ {k:"discussed",     ph:["talked about","discussed","retold","summarised","summarized","predicted","asked questions"]},
+ {k:"tired",         ph:["very tired","tired","sleepy","yawning"]},
+ {k:"reluctant",     ph:["reluctant","refused","would not","wouldnt","moaned","fought it"]},
+ {k:"enjoyed",       ph:["enjoyed","loved it","loved","laughed","giggled","funny"]},
+ {k:"gripped",       ph:["would not put it down","couldnt put it down","gripped","hooked"]},
+ {k:"independent",   ph:["independently","independent","on his own","on her own","by himself","by herself","on my own","alone"]},
+ {k:"shared",        ph:["took turns","turn about","together","shared","echo read","paired"]},
+ {k:"new book",      ph:["new book"]},
+ {k:"re-read",       ph:["re-read","reread","re read","read again"]},
+ {k:"skimmed",       ph:["captions","skimmed","skipped ahead","looked at the pictures"]}
+];
+var FINISH_W={finished:1,finish:1,done:1,completed:1,complete:1,fin:1,ended:1};
+var START_W={started:1,starting:1,"new":1,begun:1,began:1};
+var MIN_W={m:1,min:1,mins:1,minute:1,minutes:1,mn:1};
+var DOW_W={sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,
+           thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
+
+function hashStr(s){ var h=2166136261; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return (h>>>0); }
+
+function findTagsIn(text){
+  var low=" "+String(text||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim()+" ";
+  var found=[], covered=[];
+  for(var i=0;i<TAGDEFS.length;i++){
+    var d=TAGDEFS[i];
+    for(var j=0;j<d.ph.length;j++){
+      var p=" "+d.ph[j].toLowerCase().replace(/[^a-z0-9]+/g," ").trim()+" ";
+      var at=low.indexOf(p);
+      if(at>=0){ if(found.indexOf(d.k)<0) found.push(d.k); covered.push([at,at+p.length-1]); break; }
+    }
+  }
+  /* is the whole string nothing but tag words? */
+  var bare=low.trim(), rest=bare;
+  for(i=0;i<TAGDEFS.length;i++){
+    for(var j2=0;j2<TAGDEFS[i].ph.length;j2++){
+      var pp=TAGDEFS[i].ph[j2].toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      rest=rest.split(pp).join(" ");
+    }
+  }
+  rest=rest.replace(/\b(and|but|a|the|it|was|were|is|very|quite|bit|of|to|with|then|again|tonight|today)\b/g," ").replace(/\s+/g," ").trim();
+  return { tags:found, tagsOnly: bare.length>0 && rest.length===0 };
+}
+
+function resolveDateToken(t){
+  var low=t.toLowerCase().replace(/[.,]$/,"");
+  if(low==="today"||low==="tonight") return 0;
+  if(low==="yesterday"||low==="yest"||low==="yday") return -1;
+  if(DOW_W.hasOwnProperty(low)){
+    var want=DOW_W[low], now=today(), cur=now.getDay();
+    var back=(cur-want+7)%7;
+    return -back;
+  }
+  var m=/^-(\d{1,2})d?$/.exec(low);
+  if(m) return -intOr(m[1],0);
+  m=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(low);
+  if(m){
+    var d=intOr(m[1],0), mo=intOr(m[2],0), y=m[3]?intOr(m[3],0):null;
+    if(y!==null&&y<100) y+=2000;
+    var now2=today();
+    if(y===null){ y=now2.getFullYear(); }
+    var dd=parseYMD(y+"-"+pad2(mo)+"-"+pad2(d));
+    if(!dd) return null;
+    if(m[3]==null && dayDiff(dd,now2)>0) dd=parseYMD((y-1)+"-"+pad2(mo)+"-"+pad2(d));
+    if(!dd) return null;
+    return dayDiff(dd,now2);
+  }
+  return null;
+}
+
+function parseLine(raw){
+  var out={ ok:false, childId:null, date:ymd(today()), dateOff:0, title:null, bookId:null,
+            from:null, to:null, minutes:null, tags:[], note:"", fin:false, start:false,
+            level:null, genre:null, newBook:false, chained:false, problems:[], notes:[] };
+  var text=String(raw||"").trim();
+  if(!text){ out.problems.push("Nothing typed yet."); return out; }
+
+  /* explicit note separator: comma, semicolon or ' -- ' */
+  var explicitNote="";
+  var cut=text.search(/(,|;| -- | – )/);
+  if(cut>=0){
+    explicitNote=text.slice(cut).replace(/^\s*(,|;|--|–)\s*/,"").trim();
+    text=text.slice(0,cut).trim();
+  }
+
+  var toks=text.split(/\s+/);
+  var claim=new Array(toks.length).fill(null);
+  var i,t,low,m;
+
+  /* 1. who */
+  var kids=S.children;
+  if(toks.length){
+    low=toks[0].toLowerCase().replace(/[:,]$/,"");
+    for(i=0;i<kids.length;i++){
+      var k=kids[i];
+      if(low===k.name.toLowerCase() || (low.length<=2 && low===String(k.initial||k.name[0]).toLowerCase())){
+        out.childId=k.id; claim[0]="who"; break;
+      }
+    }
+  }
+  if(!out.childId){
+    if(kids.length===1){ out.childId=kids[0].id; }
+    else if(kids.length>1){ out.childId=active; out.notes.push("No name given — filed under "+(activeChild()?activeChild().name:"?")+"."); }
+  }
+  if(!out.childId){ out.problems.push("No reader set up yet. Type /who add Name."); return out; }
+
+  /* 2. finished / started */
+  for(i=0;i<toks.length;i++){
+    if(claim[i]) continue;
+    low=toks[i].toLowerCase().replace(/[.!]$/,"");
+    if(FINISH_W[low]){ out.fin=true; claim[i]="fin"; }
+    else if(START_W[low] && !(low==="new"&&toks[i+1]&&toks[i+1].toLowerCase()==="book")){ out.start=true; claim[i]="start"; }
+  }
+
+  /* 3. level / band / genre */
+  for(i=0;i<toks.length;i++){
+    if(claim[i]) continue;
+    low=toks[i].toLowerCase();
+    m=/^(?:lvl|level|band|bk)\.?(\d{1,3})$/.exec(low);
+    if(m){ out.level=intOr(m[1],null); claim[i]="lvl"; continue; }
+    if((low==="lvl"||low==="level"||low==="band") && toks[i+1] && /^\d{1,3}$/.test(toks[i+1])){
+      out.level=intOr(toks[i+1],null); claim[i]="lvl"; claim[i+1]="lvl"; continue;
+    }
+    if(low==="nf"||low==="nonfiction"||low==="non-fiction"){ out.genre="nonfiction"; claim[i]="genre"; continue; }
+    if(low==="fic"||low==="fiction"){ out.genre="fiction"; claim[i]="genre"; continue; }
+  }
+
+  /* 4. minutes */
+  for(i=0;i<toks.length;i++){
+    if(claim[i]) continue;
+    low=toks[i].toLowerCase();
+    m=/^(\d{1,3})(m|min|mins|minute|minutes)$/.exec(low);
+    if(m){ out.minutes=intOr(m[1],null); claim[i]="min"; continue; }
+    if(/^\d{1,3}$/.test(low) && toks[i+1] && MIN_W[toks[i+1].toLowerCase().replace(/[.]$/,"")]){
+      out.minutes=intOr(low,null); claim[i]="min"; claim[i+1]="min"; continue;
+    }
+  }
+
+  /* 5. pages */
+  var pgFrom=null,pgTo=null,pgEndOnly=null,pgPlus=null;
+  for(i=0;i<toks.length;i++){
+    if(claim[i]) continue;
+    low=toks[i].toLowerCase().replace(/[.,]$/,"");
+    if((low==="p"||low==="pp"||low==="pg"||low==="page"||low==="pages") && toks[i+1]){
+      var nx=toks[i+1].toLowerCase();
+      var mm=/^(\d{1,4})\s*(?:-|–|—|to)\s*(\d{1,4})$/.exec(nx);
+      if(mm){ pgFrom=intOr(mm[1],null); pgTo=intOr(mm[2],null); claim[i]="pg"; claim[i+1]="pg"; continue; }
+      if(/^\d{1,4}$/.test(nx)){ pgEndOnly=intOr(nx,null); claim[i]="pg"; claim[i+1]="pg"; continue; }
+    }
+    m=/^(?:p{1,2}\.?|pg\.?|pages?)?(\d{1,4})(?:-|–|—|to)(\d{1,4})$/.exec(low);
+    if(m){ pgFrom=intOr(m[1],null); pgTo=intOr(m[2],null); claim[i]="pg"; continue; }
+    m=/^(?:p{1,2}\.?|pg\.?)(\d{1,4})$/.exec(low);
+    if(m){ pgEndOnly=intOr(m[1],null); claim[i]="pg"; continue; }
+    m=/^(?:p{1,2}\.?)?\+(\d{1,3})$/.exec(low);
+    if(m){ pgPlus=intOr(m[1],null); claim[i]="pg"; continue; }
+  }
+
+  /* 6. date */
+  for(i=0;i<toks.length;i++){
+    if(claim[i]) continue;
+    if(i>1 && i<toks.length-1) continue;   /* only the head or the tail of the line */
+    var off=resolveDateToken(toks[i]);
+    if(off!==null && off<=0 && off>-400){
+      /* a lone small number is minutes-ish, not a date; require a word or a slash form */
+      if(/^\d{1,3}$/.test(toks[i])) continue;
+      out.dateOff=off; out.date=offYMD(off); claim[i]="date";
+    }
+  }
+
+  /* 7. runs -> title + trailing text */
+  var runs=[],cur=null;
+  for(i=0;i<toks.length;i++){
+    if(claim[i]){ if(cur){ runs.push(cur); cur=null; } }
+    else { if(!cur) cur=[]; cur.push(toks[i]); }
+  }
+  if(cur) runs.push(cur);
+
+  var titleRun = runs.length?runs[0]:null;
+  var trailing = runs.slice(1).map(function(r){ return r.join(" "); }).join(" ").trim();
+  var extraNote="";
+  var book=null;
+
+  if(titleRun){
+    var found=null,flen=0;
+    for(var L=titleRun.length; L>=1; L--){
+      var cand=titleRun.slice(0,L).join(" ");
+      var b=findBook(out.childId,cand);
+      if(b){ found=b; flen=L; break; }
+      var kk=normTitle(cand);
+      if(kk.length>=4){
+        var hits=S.books.filter(function(x){ return x.childId===out.childId && x.key.indexOf(kk)===0; });
+        if(hits.length===1){ found=hits[0]; flen=L; break; }
+      }
+    }
+    if(found){
+      book=found; out.bookId=found.id; out.title=found.title;
+      if(flen<titleRun.length) extraNote=titleRun.slice(flen).join(" ");
+    } else {
+      out.title=titleCase(titleRun.join(" ")); out.newBook=true;
+    }
+  } else {
+    book = lastTouched(out.childId);
+    if(book){ out.bookId=book.id; out.title=book.title; out.notes.push("Carried on from the open book."); }
+  }
+
+  /* 8. tags + comment */
+  var trailScan=findTagsIn(trailing);
+  var trailWords=trailing?trailing.split(/\s+/).length:0;
+  var trailIsBareTag = trailScan.tagsOnly && trailWords<=2;
+  var noteBits=[];
+  if(extraNote) noteBits.push(extraNote);
+  if(trailing && !trailIsBareTag) noteBits.push(trailing);
+  if(explicitNote) noteBits.push(explicitNote);
+  out.note=noteBits.join(" ").replace(/\s+/g," ").trim();
+  var allScan=findTagsIn([trailing,extraNote,explicitNote].join(" "));
+  out.tags=allScan.tags.slice(0);
+  if(out.start && out.tags.indexOf("new book")<0) out.tags.push("new book");
+
+  /* 9. pages against book state */
+  var last = book ? bookState(book).last : 0;
+  if(pgFrom!==null && pgTo!==null){
+    out.from=pgFrom; out.to=pgTo;
+    if(pgTo<pgFrom){ out.problems.push("Page range runs backwards (p."+pgFrom+" to p."+pgTo+")."); }
+    else if(last>0 && pgFrom===last+1) out.chained=true;
+    else if(last>0 && pgFrom>last+1) out.notes.push("Jumps past p."+last+" — "+(pgFrom-last-1)+" page"+((pgFrom-last-1)===1?"":"s")+" skipped.");
+    else if(last>0 && pgFrom<=last) out.notes.push("Re-reads pages already recorded (last was p."+last+").");
+  } else if(pgEndOnly!==null){
+    if(pgEndOnly>last){ out.from=last+1; out.to=pgEndOnly; out.chained=last>0; }
+    else { out.from=pgEndOnly; out.to=pgEndOnly; out.notes.push("p."+pgEndOnly+" is behind the last page recorded (p."+last+")."); }
+  } else if(pgPlus!==null){
+    out.from=last+1; out.to=last+pgPlus; out.chained=last>0;
+  }
+
+  /* 10. verdicts */
+  if(!out.title){ out.problems.push("No book. Type a title, or open one you have read before."); }
+  if(out.minutes===null && out.from===null && !out.fin){
+    out.problems.push("Nothing to record. Add minutes (20m) or pages (p45-60), or say finished.");
+  }
+  if(out.minutes!==null && (out.minutes<1||out.minutes>300)) out.problems.push("Minutes look wrong: "+out.minutes+".");
+  if(out.to!==null && out.to>4000) out.problems.push("Page "+out.to+" looks wrong.");
+  out.ok = out.problems.length===0;
+  return out;
+}
+
+/* ============================================================================
+   THE COMMENT — the sentence the parent cannot face writing
+   ========================================================================== */
+var READ_FORMS=[
+  function(t,a,b,m){ return "Read pp."+a+"–"+b+" of "+t+", "+m+" min."; },
+  function(t,a,b,m){ return m+" minutes on "+t+" (pp."+a+"–"+b+")."; },
+  function(t,a,b,m){ return t+", pp."+a+"–"+b+" — "+m+" minutes."; },
+  function(t,a,b,m){ return "Read "+t+" pp."+a+"–"+b+" for "+m+" min."; },
+  function(t,a,b,m){ return "pp."+a+"–"+b+" of "+t+" tonight, "+m+" min."; },
+  function(t,a,b,m){ return t+": pp."+a+"–"+b+", "+m+" min."; }
+];
+var READ_NOPAGE=[
+  function(t,m){ return "Read "+t+" for "+m+" minutes."; },
+  function(t,m){ return m+" minutes of "+t+"."; },
+  function(t,m){ return t+" — "+m+" min."; },
+  function(t,m){ return "Read from "+t+", "+m+" min."; }
+];
+var READ_NOMIN=[
+  function(t,a,b){ return "Read pp."+a+"–"+b+" of "+t+"."; },
+  function(t,a,b){ return t+", pp."+a+"–"+b+"."; },
+  function(t,a,b){ return "pp."+a+"–"+b+" of "+t+"."; }
+];
+var FIN_FORMS=[
+  function(t){ return "Finished "+t+" tonight."; },
+  function(t){ return "Finished "+t+"."; },
+  function(t){ return "Got to the end of "+t+"."; },
+  function(t){ return "Last pages of "+t+" — finished."; }
+];
+var START_FORMS=[
+  function(t){ return "Started "+t+"."; },
+  function(t){ return "New book: "+t+"."; },
+  function(t){ return "Opened "+t+" for the first time."; }
+];
+var TAG_FORMS={
+ "fluent":["Fluent and confident throughout.","Read fluently, good pace.","Smooth and confident reading.","Read it fluently with very few stumbles."],
+ "needed help":["Needed support with the harder words.","Wanted help on a few tricky words.","Needed prompting on unfamiliar vocabulary.","Some support needed with new words."],
+ "names":["Needed support with proper nouns.","Character names are still catching them out.","Tripped on the names, fine on everything else.","Proper nouns are the sticking point."],
+ "self-corrected":["Self-corrected twice.","Noticed and fixed own errors.","Self-corrected without prompting.","Went back and corrected the mistake."],
+ "expression":["Good expression in the dialogue.","Read with real expression.","Used different voices for the characters.","Expression is coming on well."],
+ "sounded out":["Sounded out the longer words independently.","Blending is getting quicker.","Used phonics to work out new words.","Decoded the unfamiliar words unaided."],
+ "hesitant":["Hesitant in places, pace picked up later.","A little word-by-word tonight.","Slower going than usual.","Reading was laboured in the harder passages."],
+ "discussed":["Retold what happened afterwards.","We talked about what might happen next.","Answered questions on the chapter well.","Summarised the chapter accurately."],
+ "tired":["Tired tonight, short session.","Very sleepy — kept it brief.","Late finish, stamina was low.","Ran out of steam early."],
+ "reluctant":["Reluctant to start, settled once going.","Took some persuading tonight.","Not keen at first, better by the end.","Needed encouragement to pick it up."],
+ "enjoyed":["Really enjoyed this one.","Laughed out loud in places.","Clearly enjoying the book.","Great fun — lots of laughing."],
+ "gripped":["Completely gripped — did not want to stop.","Would not put it down.","Read on past the agreed page.","Hooked on this one."],
+ "independent":["Read this independently.","All read unaided.","No help needed tonight.","Entirely independent reading."],
+ "shared":["We took turns, a page each.","Shared read tonight.","Echo read the harder page.","Read together, alternating pages."],
+ "new book":["Settling into the new book.","First few pages of a new one.","Getting to know the characters."],
+ "re-read":["A re-read of an old favourite.","Read it again by choice.","Went back over an earlier chapter."],
+ "skimmed":["Read the captions and pictures first.","Dipped in and out of the sections.","Skimmed before reading properly."]
+};
+
+function entryOrdinal(e){
+  var es=childEntries(e.childId);
+  for(var i=0;i<es.length;i++) if(es[i].id===e.id) return i;
+  return es.length;
+}
+function formIndex(e,ord,n){ return (ord + hashStr(e.childId+"|"+e.date)) % n; }
+function pickForm(e,ord,n,prev,prevOrd){
+  var i=formIndex(e,ord,n);
+  if(prev && formIndex(prev,prevOrd,n)===i) i=(i+1)%n;
+  return i;
+}
+function makeComment(e,ord,prev,prevOrd){
+  var b=e.bookId?bookById(e.bookId):null;
+  var t=b?b.title:(e.title||"reading");
+  var parts=[];
+  var hasP = e.from!==null&&e.to!==null&&isFinite(e.from)&&isFinite(e.to);
+  var hasM = isFinite(e.minutes)&&e.minutes>0;
+  if(e.fin) parts.push(FIN_FORMS[pickForm(e,ord,FIN_FORMS.length,prev,prevOrd)](t));
+  else if(e.tags&&e.tags.indexOf("new book")>=0 && hasP && e.from<=2)
+    parts.push(START_FORMS[pickForm(e,ord,START_FORMS.length,prev,prevOrd)](t));
+  if(hasP&&hasM) parts.push(READ_FORMS[pickForm(e,ord,READ_FORMS.length,prev,prevOrd)](t,e.from,e.to,e.minutes));
+  else if(hasM) parts.push(READ_NOPAGE[pickForm(e,ord,READ_NOPAGE.length,prev,prevOrd)](t,e.minutes));
+  else if(hasP) parts.push(READ_NOMIN[pickForm(e,ord,READ_NOMIN.length,prev,prevOrd)](t,e.from,e.to));
+  var noteTags = e.note ? findTagsIn(e.note).tags : [];
+  var tags=(e.tags||[]).filter(function(x){
+    if(!TAG_FORMS[x]) return false;
+    if(noteTags.indexOf(x)>=0) return false;                       /* the parent said it better */
+    if(x==="new book"&&parts.length&&/^(Started|New book|Opened)/.test(parts[0])) return false;
+    return true;
+  });
+  var used=0;
+  for(var i=0;i<tags.length&&used<2;i++){
+    var pool=TAG_FORMS[tags[i]];
+    var ix=(ord + hashStr(e.childId+"|"+e.date+"|"+tags[i])) % pool.length;
+    parts.push(pool[ix]); used++;
+  }
+  if(e.note){
+    var n=String(e.note).trim();
+    var already=parts.join(" ").toLowerCase();
+    if(already.indexOf(n.toLowerCase())<0){
+      n=n.charAt(0).toUpperCase()+n.slice(1);
+      if(!/[.!?]$/.test(n)) n+=".";
+      parts.push(n);
+    }
+  }
+  return parts.join(" ").replace(/\s+/g," ").trim();
+}
+function commentFor(e){
+  var es=childEntries(e.childId), ord=0, prev=null, prevOrd=0;
+  for(var i=0;i<es.length;i++){ if(es[i].id===e.id){ ord=i; prev=i>0?es[i-1]:null; prevOrd=i-1; break; } }
+  return makeComment(e,ord,prev,prevOrd);
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   MEASUREMENT — streaks, weeks, books, fluency, stalls
+   ========================================================================== */
+function nightSet(childId){
+  var s={}; S.entries.forEach(function(e){ if(e.childId===childId) s[e.date]=true; });
+  return s;
+}
+function streaks(childId){
+  var set=nightSet(childId), t=today(), cur=0, i;
+  var startAt = set[ymd(t)] ? 0 : (set[ymd(addDays(t,-1))] ? -1 : null);
+  if(startAt!==null){
+    for(i=startAt;i>-4000;i--){ if(set[ymd(addDays(t,i))]) cur++; else break; }
+  }
+  var dates=Object.keys(set).sort(), best=0, run=0, prev=null;
+  for(i=0;i<dates.length;i++){
+    var d=parseYMD(dates[i]); if(!d) continue;
+    if(prev && dayDiff(d,prev)===1) run++; else run=1;
+    if(run>best) best=run;
+    prev=d;
+  }
+  return { current:cur, longest:best, loggedToday:!!set[ymd(t)] };
+}
+function weekWindow(){
+  var mon=mondayOf(today());
+  return { from:ymd(mon), to:ymd(addDays(mon,6)), monday:mon };
+}
+function minutesBetween(childId,from,to){
+  var sum=0,nights={};
+  S.entries.forEach(function(e){
+    if(e.childId!==childId) return;
+    if(e.date<from||e.date>to) return;
+    sum+=intOr(e.minutes,0); nights[e.date]=true;
+  });
+  return { minutes:sum, nights:Object.keys(nights).length };
+}
+function booksFinished(childId,from,to){
+  var out=[];
+  S.books.forEach(function(b){
+    if(b.childId!==childId) return;
+    var st=bookState(b);
+    if(st.finished && (!from||st.finished>=from) && (!to||st.finished<=to)) out.push({book:b,st:st});
+  });
+  out.sort(function(a,b){ return a.st.finished<b.st.finished?1:-1; });
+  return out;
+}
+function termRange(){
+  var ts=S.settings.termStart||offYMD(-90);
+  var te=S.settings.termEnd||ymd(today());
+  return { from:ts, to:te };
+}
+
+/* ---------- fluency ---------- */
+function checkRow(c){
+  var kid=childById(c.childId); if(!kid) return null;
+  var words=intOr(c.words,0), errs=intOr(c.errors,0);
+  var wcpm=Math.max(0,words-errs);
+  var acc=safeDiv(words-errs,words);
+  var d=parseYMD(c.date)||today();
+  var g=gradeAt(kid,c.date), se=seasonOf(d);
+  var norm=normFor(g,se);
+  var pct=norm?percentileOf(wcpm,norm):null;
+  var bk=c.bookId?bookById(c.bookId):null;
+  return { id:c.id, date:c.date, words:words, errors:errs, wcpm:wcpm,
+           accuracy: acc===null?null:acc*100, grade:g, season:se, norm:norm, pct:pct,
+           book: bk?bk.title:(c.bookTitle||""), genre: bk?bk.genre:null };
+}
+function fluencySeries(childId){
+  return S.checks.filter(function(c){ return c.childId===childId; })
+    .sort(function(a,b){ return a.date<b.date?-1:1; })
+    .map(checkRow).filter(Boolean);
+}
+function median(a){
+  if(!a.length) return null;
+  var b=a.slice(0).sort(function(x,y){ return x-y; });
+  var m=Math.floor(b.length/2);
+  return b.length%2 ? b[m] : (b[m-1]+b[m])/2;
+}
+function mean(a){ if(!a.length) return null; var s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s/a.length; }
+
+/* ---------- level / band history, derived ---------- */
+function bandInfo(childId){
+  var lv=-1, first=null;
+  var es=childEntries(childId);
+  es.forEach(function(e){
+    var b=e.bookId?bookById(e.bookId):null;
+    if(!b||b.level==null) return;
+    if(b.level>lv){ lv=b.level; first=e.date; }
+  });
+  if(lv<0) return null;
+  var d=parseYMD(first)||today();
+  return { level:lv, since:first, weeks: Math.floor(dayDiff(today(),d)/7) };
+}
+
+/* ============================================================================
+   THE STALL DETECTOR
+   ========================================================================== */
+function stallFlags(childId){
+  var kid=childById(childId); if(!kid) return [];
+  var f=[], ser=fluencySeries(childId), t=today();
+  var name=kid.name;
+
+  /* 1 — accuracy floor */
+  if(ser.length>=4){
+    var last4=ser.slice(-4);
+    var accs=last4.map(function(r){ return r.accuracy; }).filter(function(x){ return x!==null; });
+    var ma=mean(accs);
+    if(ma!==null&&ma<95){
+      var band=bandInfo(childId);
+      f.push({ key:"accuracy", sev:90,
+        head:"Accuracy is averaging "+fx(ma,1)+"% — below the 95% independent line.",
+        why:"Across the last four one-minute checks "+name+" read "+fx(ma,1)+"% of words correctly. Below about 95% a book is generally treated as instructional rather than independent"+(band?", and "+name+" is currently on band "+band.level:"")+".",
+        ask:(band? "At what accuracy do you move a child up from band "+band.level+"? "+name+" is averaging "+fx(ma,1)+"% on it at home."
+                 : name+" is averaging "+fx(ma,1)+"% accuracy at home, below the 95% independent line. What are you seeing in class?"),
+        rows:last4.map(function(r){ return [fmtNum(r.date)+" · "+(r.book||"—"), fx(r.accuracy,1)+"% · "+r.wcpm+" wcpm"]; })
+      });
+    }
+  }
+
+  /* 2 — book band stall */
+  var bi=bandInfo(childId);
+  if(bi && !kid.free && bi.weeks>=10){
+    f.push({ key:"band", sev:85,
+      head:bi.weeks+" weeks on the same book band (level "+bi.level+").",
+      why:"The first book at level "+bi.level+" was logged on "+fmtShort(bi.since)+". Nothing above that level has been recorded since.",
+      ask:"What are you looking for before "+name+" moves up from level "+bi.level+", and what should we practise at home to get there?",
+      rows:[["First level "+bi.level+" night",fmtNum(bi.since)],["Weeks since",String(bi.weeks)],
+            ["Books finished on this band",String(booksFinished(childId,bi.since,ymd(t)).length)]]
+    });
+  }
+
+  /* 3 — non-fiction speed gap */
+  var win=ymd(addDays(t,-120));
+  var recent=ser.filter(function(r){ return r.date>=win; });
+  var nf=recent.filter(function(r){ return r.genre==="nonfiction"; });
+  var fic=recent.filter(function(r){ return r.genre==="fiction"; });
+  if(nf.length>=3&&fic.length>=3){
+    var mn=mean(nf.map(function(r){return r.wcpm;})), mf=mean(fic.map(function(r){return r.wcpm;}));
+    var gap=safeDiv(mf-mn,mf);
+    if(gap!==null&&gap>=0.12){
+      f.push({ key:"nfgap", sev:82,
+        head:"Reads "+Math.round(gap*100)+"% slower on non-fiction than fiction.",
+        why:"Over the last 120 days: "+fx(mf,0)+" wcpm across "+fic.length+" fiction checks against "+fx(mn,0)+" wcpm across "+nf.length+" non-fiction checks. Most of the reading in the rest of the school day is non-fiction.",
+        ask:"Is the non-fiction gap showing in "+name+"'s work in other subjects, and should we be reading more of it at home?",
+        rows:[["Fiction mean",fx(mf,0)+" wcpm ("+fic.length+" checks)"],
+              ["Non-fiction mean",fx(mn,0)+" wcpm ("+nf.length+" checks)"],
+              ["Difference",Math.round(gap*100)+"%"]]
+      });
+    }
+  }
+
+  /* 4 — percentile slide against the published norms */
+  var nine=ymd(addDays(t,-274));
+  var pser=ser.filter(function(r){ return r.date>=nine && r.pct!==null; });
+  if(pser.length>=6){
+    var a=median(pser.slice(0,3).map(function(r){return r.pct;}));
+    var b=median(pser.slice(-3).map(function(r){return r.pct;}));
+    if(a!==null&&b!==null&&(a-b)>=8){
+      var f0=pser[0], l0=pser[pser.length-1];
+      f.push({ key:"slide", sev:80,
+        head:"Slipped from about the "+ordinal(a)+" to the "+ordinal(b)+" percentile since "+fmtShort(pser[0].date)+".",
+        why:"Rate is still rising ("+f0.wcpm+" → "+l0.wcpm+" wcpm) but the published median for "+name+"'s year group rose faster over the same span ("+f0.norm.p50+" → "+l0.norm.p50+" wcpm). Percentiles are scored against the Hasbrouck &amp; Tindal (2017) compiled ORF norms.",
+        ask:"Against year-group expectations "+name+"'s reading rate has slipped about "+Math.round(a-b)+" percentile points since "+fmtShort(pser[0].date)+". Does that match what you see in class?",
+        rows:pser.slice(-4).map(function(r){ return [fmtNum(r.date)+" · G"+r.grade+" "+SEASON_LABEL[r.season], r.wcpm+" wcpm · "+ordinal(r.pct)+" pct"]; })
+      });
+    }
+  }
+
+  /* 5 — the gaps the school asks about */
+  var from28=ymd(addDays(t,-27));
+  var w28=minutesBetween(childId,from28,ymd(t));
+  if(w28.nights<12 && childEntries(childId).length>10){
+    f.push({ key:"gaps", sev:66,
+      head:"Read on "+w28.nights+" of the last 28 nights.",
+      why:"That is "+w28.minutes+" minutes over four weeks. Most schools ask for five nights a week; the gaps are the thing they can see and you cannot.",
+      ask:"We managed "+w28.nights+" nights in the last four weeks. Does it matter which nights, or is the weekly total what you look at?",
+      rows:[["Nights read (28 days)",String(w28.nights)],["Minutes",String(w28.minutes)],
+            ["Average per reading night", w28.nights? fx(w28.minutes/w28.nights,1)+" min":"—"]]
+    });
+  }
+
+  /* 6 — stamina */
+  var recentM=[], earlyM=[];
+  childEntries(childId).forEach(function(e){
+    var d=parseYMD(e.date); if(!d) return;
+    var ago=dayDiff(t,d);
+    if(!isFinite(e.minutes)||e.minutes<=0) return;
+    if(ago<=27) recentM.push(e.minutes); else if(ago<=83) earlyM.push(e.minutes);
+  });
+  if(recentM.length>=6&&earlyM.length>=6){
+    var r1=mean(recentM), r0=mean(earlyM), drop=safeDiv(r0-r1,r0);
+    if(drop!==null&&drop>=0.25){
+      f.push({ key:"stamina", sev:55,
+        head:"Sessions have shortened from "+fx(r0,0)+" to "+fx(r1,0)+" minutes.",
+        why:"Mean session length over the last four weeks against the eight weeks before it.",
+        ask:"Sessions at home have dropped from about "+fx(r0,0)+" to "+fx(r1,0)+" minutes. Is stamina something you are seeing too?",
+        rows:[["Last 4 weeks",fx(r1,1)+" min over "+recentM.length+" nights"],
+              ["Previous 8 weeks",fx(r0,1)+" min over "+earlyM.length+" nights"]]
+      });
+    }
+  }
+
+  /* 7 — a book that has stopped moving */
+  S.books.forEach(function(b){
+    if(b.childId!==childId) return;
+    var st=bookState(b);
+    if(st.finished||st.nights===0) return;
+    var es=bookEntries(b.id), lastD=parseYMD(es[es.length-1].date), startD=parseYMD(st.started);
+    if(!lastD||!startD) return;
+    var idle=dayDiff(t,lastD);
+    if(idle>=14 && dayDiff(t,startD)>=21){
+      f.push({ key:"abandoned:"+b.id, sev:45,
+        head:"“"+b.title+"” has not moved in "+idle+" days.",
+        why:"Opened "+fmtShort(st.started)+", last read "+fmtShort(es[es.length-1].date)+", stopped at p."+st.last+" after "+st.nights+" night"+(st.nights===1?"":"s")+".",
+        ask:"“"+b.title+"” stalled at p."+st.last+". Is it too hard, or just the wrong book?",
+        rows:[["Opened",fmtNum(st.started)],["Last read",fmtNum(es[es.length-1].date)],["Stopped at","p."+st.last]]
+      });
+    }
+  });
+
+  f.sort(function(a,b){ return b.sev-a.sev; });
+  return f;
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   CHROME — status line + the norm ribbon (the permanent hero)
+   ========================================================================== */
+var RIB_X=[8,28,50,72,92];
+function ribX(w,norm){
+  var pts=[norm.p10,norm.p25,norm.p50,norm.p75,norm.p90];
+  if(w<=pts[0]){ var s=pts[1]-pts[0]; return clamp(RIB_X[0]-(s>0?((pts[0]-w)/s)*20:0),2,RIB_X[0]); }
+  if(w>=pts[4]){ var s2=pts[4]-pts[3]; return clamp(RIB_X[4]+(s2>0?((w-pts[4])/s2)*20:0),RIB_X[4],98); }
+  for(var i=0;i<4;i++){
+    if(w>=pts[i]&&w<=pts[i+1]){
+      var d=pts[i+1]-pts[i];
+      return RIB_X[i]+(d>0?((w-pts[i])/d)*(RIB_X[i+1]-RIB_X[i]):0);
+    }
+  }
+  return 50;
+}
+function renderRibbon(){
+  var kid=activeChild(), box=el("ribbon"), empty=el("ribempty");
+  var head=el("ribtitle"), gr=el("ribgrade");
+  if(!kid){ box.innerHTML=""; empty.hidden=false; empty.textContent="No reader yet."; return; }
+  var ser=fluencySeries(kid.id);
+  var latest=ser.length?ser[ser.length-1]:null;
+  if(!latest||!latest.norm){
+    box.innerHTML=""; box.setAttribute("aria-label","No fluency check recorded yet");
+    empty.hidden=false;
+    empty.innerHTML = latest
+      ? "No published norm for Grade "+latest.grade+" "+SEASON_LABEL[latest.season]+" — the table starts at Grade 1 winter."
+      : "<b>No fluency check yet.</b> Type <b>/check</b> and hand "+esc(kid.name)+" whatever book is nearest. Sixty seconds.";
+    head.textContent="words correct per minute"; gr.textContent="";
+    return;
+  }
+  empty.hidden=true;
+  var n=latest.norm;
+  head.innerHTML="words correct per minute &nbsp;·&nbsp; <b>"+latest.wcpm+"</b> on "+esc(fmtShort(latest.date));
+  gr.innerHTML="grade "+latest.grade+" "+SEASON_LABEL[latest.season]+" norms &nbsp;·&nbsp; <b>"+ordinal(latest.pct)+"</b> percentile";
+  var labs=[["p10",n.p10,RIB_X[0]],["p25",n.p25,RIB_X[1]],["p50",n.p50,RIB_X[2]],["p75",n.p75,RIB_X[3]],["p90",n.p90,RIB_X[4]]];
+  var _u=0;
+  var h='<div class="rib-track"></div>';
+  h+='<div class="rib-zone" style="left:'+RIB_X[1]+'%;width:'+(RIB_X[3]-RIB_X[1])+'%"></div>';
+  labs.forEach(function(L,i){
+    h+='<div class="rib-tick'+(i===2?" mid":"")+'" style="left:'+L[2]+'%"></div>';
+    h+='<div class="rib-lab" style="left:'+L[2]+'%">'+(i===2?"<b>"+L[1]+"</b>":L[1])+'<u>'+L[0].slice(1)+'th</u></div>';
+  });
+  ser.slice(-6,-1).forEach(function(r){
+    if(!r.norm) return;
+    h+='<div class="rib-trail" style="left:'+fx(ribX(r.wcpm,n),2)+'%"></div>';
+  });
+  var x=ribX(latest.wcpm,n);
+  h+='<div class="rib-you" style="left:'+fx(x,2)+'%"><span class="val">'+latest.wcpm+'</span><span class="stem"></span><span class="caretdown"></span></div>';
+  box.innerHTML=h;
+  box.setAttribute("aria-label",
+    kid.name+" read "+latest.wcpm+" words correct per minute on "+fmtShort(latest.date)+
+    ", about the "+ordinal(latest.pct)+" percentile for grade "+latest.grade+" "+SEASON_LABEL[latest.season]+
+    ". Published band: 10th percentile "+n.p10+", median "+n.p50+", 90th percentile "+n.p90+" words correct per minute.");
+}
+
+function renderChrome(){
+  el("samplechip").hidden = !S.sample;
+  el("clearsample").textContent = S.sample ? "clear sample" : "start over";
+  var kid=activeChild();
+  if(!kid){
+    el("whoname").textContent="No reader"; el("whoyear").textContent="";
+    el("statusline").innerHTML="Type <b>/who add Ella y3</b> to begin.";
+    renderRibbon(); return;
+  }
+  var wnEl=el("whoname");
+  wnEl.textContent=kid.name;
+  wnEl.setAttribute("data-many",S.children.length>1?"1":"0");
+  wnEl.setAttribute("data-hint",S.children.length>1?"switch":"");
+  wnEl.setAttribute("aria-label",S.children.length>1?("Reader "+kid.name+". Activate to switch reader."):("Reader "+kid.name));
+  el("whoyear").textContent=(kid.year||("Grade "+kid.grade))+(S.children.length>1?" · alt+1–"+S.children.length+" switches":"");
+  var mode=el("whomode");
+  var modes=[];
+  if(kid.free) modes.push("independent track");
+  if(S.settings.schoolApp) modes.push("school uses an app");
+  if(modes.length){ mode.hidden=false; mode.textContent=modes.join(" · "); } else { mode.hidden=true; }
+
+  var st=streaks(kid.id), w=weekWindow(), wk=minutesBetween(kid.id,w.from,w.to);
+  var term=termRange(), fin=booksFinished(kid.id,term.from,term.to);
+  var ser=fluencySeries(kid.id), last=ser.length?ser[ser.length-1]:null;
+  var flags=stallFlags(kid.id);
+  var open=lastTouched(kid.id);
+  var bits=[];
+  var SEP='<span class="sep">|</span>';
+
+  if(S.settings.schoolApp){
+    bits.push("logging <b>stubbed</b> &mdash; the school app keeps the booklet");
+  } else if(kid.free){
+    bits.push("<b>"+fin.length+"</b> book"+(fin.length===1?"":"s")+" this term");
+    var gset={}, sset={};
+    booksFinished(kid.id,term.from,term.to).forEach(function(x){ gset[x.book.genre||"fiction"]=1; if(x.book.series) sset[x.book.series]=1; });
+    bits.push("<b>"+Object.keys(gset).length+"</b> genre"+(Object.keys(gset).length===1?"":"s"));
+    if(Object.keys(sset).length) bits.push("<b>"+Object.keys(sset).length+"</b> series running");
+  } else {
+    bits.push("streak <b>"+st.current+"</b> night"+(st.current===1?"":"s")+(st.longest>st.current?" (best "+st.longest+")":""));
+    bits.push("wk <b>"+wk.minutes+"</b>/"+(kid.target||0)+" min");
+    bits.push("<b>"+fin.length+"</b> book"+(fin.length===1?"":"s")+" this term");
+  }
+  if(open) bits.push("<b>"+esc(open.title)+"</b> p."+bookState(open).last);
+  if(!last) bits.push('<span class="alarm">no fluency check yet</span>');
+  if(!st.loggedToday && !S.settings.schoolApp) bits.push("tonight <b>not logged</b>");
+
+  var al=el("alarmline");
+  if(flags.length){
+    al.hidden=false;
+    al.innerHTML="<b>"+flags.length+" thing"+(flags.length===1?"":"s")+" to ask the teacher</b> &mdash; "+
+      flags[0].head+' <span class="go">/flags</span>';
+  } else if(ser.length>=4){
+    al.hidden=false;
+    al.innerHTML='<span style="color:var(--mark-good)"><b>Nothing stalling.</b> Accuracy, band, pace and gaps all ordinary. <span class="go" style="border-color:var(--mark-good)">/flags</span></span>';
+  } else {
+    al.hidden=true; al.innerHTML="";
+  }
+  el("statusline").innerHTML=bits.join(SEP);
+  renderRibbon();
+}
+
+/* ============================================================================
+   SCROLLBACK
+   ========================================================================== */
+function emit(echoText, html, opts){
+  var back=el("scrollback");
+  var d=document.createElement("section");
+  d.className="cell"+((opts&&opts.fresh)?" fresh":"");
+  var inner="";
+  if(echoText) inner+='<p class="echo"><span class="caret" aria-hidden="true">&#9656;</span>'+esc(echoText)+'</p>';
+  inner+=html;
+  d.innerHTML=inner;
+  back.appendChild(d);
+  var kids=back.children;
+  while(kids.length>60) back.removeChild(kids[0]);
+  if(d.offsetHeight > back.clientHeight - 12) back.scrollTop = Math.max(0, d.offsetTop - back.offsetTop);
+  else back.scrollTop = back.scrollHeight;
+  return d;
+}
+function clearBack(){ el("scrollback").innerHTML=""; }
+function toast(msg){
+  var t=el("toast"); t.textContent=msg; t.classList.add("up");
+  clearTimeout(toast._t); toast._t=setTimeout(function(){ t.classList.remove("up"); },2600);
+}
+function nightHTML(e,opts){
+  var b=e.bookId?bookById(e.bookId):null;
+  var meta=[];
+  if(e.from!==null&&e.to!==null) meta.push("pp."+e.from+"–"+e.to);
+  if(isFinite(e.minutes)&&e.minutes>0) meta.push(e.minutes+" min");
+  if(!meta.length) meta.push("no pages or minutes recorded");
+  if(e.fin) meta.push("finished");
+  return '<div class="logline"><span class="lday">'+esc(fmtShort(e.date))+'</span>'+
+    '<span class="lbody"><span class="lbook">'+esc(b?b.title:"—")+'</span> '+
+    '<span class="lmeta">'+meta.join(" · ")+'</span>'+
+    ((opts&&opts.comment===false)?"":'<span class="lcomment">'+esc(commentFor(e))+'</span>')+
+    '</span></div>';
+}
+var DISCLAIM='<div class="plainwarn"><b>Read this bit</b>'+
+  'Check the format your school expects — this is a record you keep, not a replacement for their booklet. '+
+  'Fluency percentiles are an indicator scored against published norms; they are not a formal assessment, '+
+  'and reading age indicators are not a formal assessment.</div>';
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   VIEWS
+   ========================================================================== */
+function kidOr(){ var k=activeChild(); if(!k){ emit(null,'<p class="prose">No reader set up. Type <b>/who add Ella y3</b>.</p>'); return null; } return k; }
+
+function viewWeek(echo){
+  var kid=kidOr(); if(!kid) return;
+  var w=weekWindow(), rows="", tot=0, nights=0;
+  for(var i=0;i<7;i++){
+    var d=addDays(w.monday,i), ds=ymd(d);
+    var es=S.entries.filter(function(e){ return e.childId===kid.id&&e.date===ds; });
+    var mins=es.reduce(function(a,e){ return a+intOr(e.minutes,0); },0);
+    tot+=mins; if(es.length) nights++;
+    var future=dayDiff(d,today())>0;
+    var what=es.length? es.map(function(e){
+        var b=e.bookId?bookById(e.bookId):null;
+        return esc(b?b.title:"—")+(e.from!==null?" pp."+e.from+"–"+e.to:"");
+      }).join("<br>") : (future?'<span style="color:var(--slate-dim)">—</span>':'<span style="color:var(--mark-red)">not read</span>');
+    rows+='<tr><td>'+DOW[d.getDay()]+' '+d.getDate()+'</td><td>'+what+'</td>'+
+          '<td class="num">'+(mins?mins:"—")+'</td></tr>';
+  }
+  var target=kid.target||0, left=Math.max(0,target-tot);
+  var h='<h2 class="celltitle">This week <span class="qual">'+esc(fmtNum(w.from))+" – "+esc(fmtNum(w.to))+'</span></h2>';
+  h+='<div class="scrollx"><table class="slip"><caption class="offscreen">Nights read this week</caption><thead><tr><th>Day</th><th>Book and pages</th><th class="num">Min</th></tr></thead><tbody>'+rows+
+     '<tr><td class="strong">Total</td><td class="strong">'+nights+' night'+(nights===1?"":"s")+'</td><td class="num strong">'+tot+'</td></tr>'+
+     '</tbody></table></div>';
+  h+='<p class="prose" style="margin-top:8px">School target <b>'+target+' min</b> a week. '+
+     (tot>=target? 'Met, with '+(tot-target)+' to spare.' : left+' minutes short — about '+Math.ceil(left/20)+' more session'+(Math.ceil(left/20)===1?"":"s")+'.')+'</p>';
+  h+='<div class="acts"><button class="act hot" data-do="crib">Print the catch-up crib</button><button class="act" data-do="term">Term view</button></div>';
+  emit(echo,h,{fresh:true});
+}
+
+function viewTerm(echo){
+  var kid=kidOr(); if(!kid) return;
+  var WEEKS=16, t=today(), endMon=mondayOf(t), startMon=addDays(endMon,-7*(WEEKS-1));
+  var set=nightSet(kid.id), chk={};
+  S.checks.forEach(function(c){ if(c.childId===kid.id) chk[c.date]=true; });
+  var g='<div class="weavegrid" role="img" aria-label="Calendar of nights read over the last '+WEEKS+' weeks"><span class="wlab"></span>';
+  ["M","T","W","T","F","S","S"].forEach(function(d,i){ g+='<span class="wlab">'+d+'</span>'; });
+  var readCount=0, possible=0;
+  for(var wI=0;wI<WEEKS;wI++){
+    var mon=addDays(startMon,wI*7);
+    g+='<span class="wwk">'+mon.getDate()+"/"+(mon.getMonth()+1)+'</span>';
+    for(var dI=0;dI<7;dI++){
+      var d=addDays(mon,dI), ds=ymd(d), fut=dayDiff(d,t)>0;
+      var cls="pip";
+      if(set[ds]) cls+=" on"; else if(fut) cls+=" future";
+      if(chk[ds]) cls+=" chk";
+      if(ds===ymd(t)) cls+=" today";
+      if(!fut){ possible++; if(set[ds]) readCount++; }
+      g+='<span class="'+cls+'" title="'+esc(fmtShort(ds))+(set[ds]?" — read":"")+'"></span>';
+    }
+  }
+  g+='</div>';
+  var rate=safeDiv(readCount,possible);
+  var key='<div class="weavekey"><div><i class="on"></i> night logged</div><div><i></i> nothing recorded</div>'+
+    '<div><i class="chk"></i> one-minute fluency check</div>'+
+    '<p class="prose" style="margin-top:9px"><b>'+readCount+'</b> of '+possible+' nights'+
+    (rate!==null?" — <b>"+Math.round(rate*100)+"%</b>":"")+' since '+esc(fmtShort(ymd(startMon)))+
+    '. The gaps are what the school asks about.</p></div>';
+  var h='<h2 class="celltitle">Term view <span class="qual">last '+WEEKS+' weeks · Mon to Sun</span></h2>'+
+        '<div class="heatweave">'+g+key+'</div>'+
+        '<div class="acts"><button class="act" data-do="record">Print the term record</button></div>';
+  emit(echo,h,{fresh:true});
+}
+
+function viewBooks(echo){
+  var kid=kidOr(); if(!kid) return;
+  var mine=S.books.filter(function(b){ return b.childId===kid.id; })
+    .map(function(b){ return {b:b,st:bookState(b)}; })
+    .filter(function(x){ return x.st.nights>0; });
+  var open=mine.filter(function(x){ return !x.st.finished; })
+    .sort(function(a,b){ return a.st.started<b.st.started?1:-1; });
+  var done=mine.filter(function(x){ return x.st.finished; })
+    .sort(function(a,b){ return a.st.finished<b.st.finished?1:-1; });
+  var h='<h2 class="celltitle">The shelf <span class="qual">'+esc(kid.name)+'</span></h2>';
+  if(open.length){
+    h+='<p class="prose" style="margin-bottom:4px"><b>On the go</b> — type the title and the pages carry on from here.</p>';
+    h+='<div class="scrollx"><table class="slip"><thead><tr><th>Book</th><th class="num">At</th><th class="num">Nights</th><th class="num">Min</th></tr></thead><tbody>';
+    open.forEach(function(x){
+      h+='<tr><td class="strong">'+esc(x.b.title)+(x.b.level!=null?' <span style="color:var(--slate-dim)">L'+x.b.level+'</span>':'')+
+         (x.b.genre==="nonfiction"?' <span style="color:var(--slate-dim)">non-fic</span>':'')+
+         '</td><td class="num">p.'+x.st.last+'</td><td class="num">'+x.st.nights+'</td><td class="num">'+x.st.minutes+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  if(done.length){
+    var genres={}, series={};
+    done.forEach(function(x){ genres[x.b.genre||"fiction"]=1; if(x.b.series) series[x.b.series]=(series[x.b.series]||0)+1; });
+    h+='<p class="prose" style="margin:11px 0 4px"><b>Finished</b> — '+done.length+' book'+(done.length===1?"":"s")+
+       ', '+Object.keys(genres).length+' genre'+(Object.keys(genres).length===1?"":"s")+
+       (Object.keys(series).length?', '+Object.keys(series).length+' series on the go':'')+'.</p>';
+    h+='<div class="scrollx"><table class="slip"><thead><tr><th>Book</th><th class="num">Finished</th><th class="num">Days</th><th class="num">Pages</th><th class="num">Min</th></tr></thead><tbody>';
+    done.slice(0,14).forEach(function(x){
+      h+='<tr><td>'+esc(x.b.title)+'</td><td class="num">'+esc(fmtNum(x.st.finished))+'</td>'+
+         '<td class="num">'+(x.st.days==null?"—":x.st.days)+'</td><td class="num">'+x.st.pages+'</td><td class="num">'+x.st.minutes+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    if(done.length>14) h+='<p class="prose" style="margin-top:6px">'+(done.length-14)+' older titles not shown.</p>';
+  }
+  if(!open.length&&!done.length) h+='<p class="prose">Nothing logged yet.</p>';
+  emit(echo,h,{fresh:true});
+}
+
+function sparkSVG(ser){
+  if(ser.length<2) return "";
+  var W=600,H=150,PL=6,PR=6,PT=10,PB=10;
+  var vals=[];
+  ser.forEach(function(r){ vals.push(r.wcpm); if(r.norm) vals.push(r.norm.p50); });
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+  if(hi-lo<10){ hi=lo+10; }
+  var pad=(hi-lo)*0.12; lo-=pad; hi+=pad;
+  function X(i){ return PL+(ser.length<2?0:(i/(ser.length-1))*(W-PL-PR)); }
+  function Y(v){ var d=hi-lo; return PT+(d<=0?0:(1-(v-lo)/d)*(H-PT-PB)); }
+  var p1="",p2="",dots="";
+  ser.forEach(function(r,i){
+    p1+=(i?" L":"M")+fx(X(i),1)+" "+fx(Y(r.wcpm),1);
+    if(r.norm) p2+=(p2?" L":"M")+fx(X(i),1)+" "+fx(Y(r.norm.p50),1);
+    dots+='<circle cx="'+fx(X(i),1)+'" cy="'+fx(Y(r.wcpm),1)+'" r="3" fill="#0a0a0a"/>';
+  });
+  var lastR=ser[ser.length-1];
+  return '<div class="sparkbox"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Words correct per minute over '+ser.length+
+    ' checks, from '+ser[0].wcpm+' to '+lastR.wcpm+', plotted against the published median for the year group">'+
+    '<path d="'+p2+'" fill="none" stroke="#8a8a8a" stroke-width="2" stroke-dasharray="7 5"/>'+
+    '<path d="'+p1+'" fill="none" stroke="#0a0a0a" stroke-width="2.5"/>'+dots+
+    '</svg><div class="sparkkey"><span><b></b> '+esc(activeChild()?activeChild().name:"child")+'</span>'+
+    '<span><b class="dash"></b> published median</span><span>'+fx(lo,0)+'–'+fx(hi,0)+' wcpm</span></div></div>';
+}
+
+function viewFluency(echo){
+  var kid=kidOr(); if(!kid) return;
+  var ser=fluencySeries(kid.id);
+  var h='<h2 class="celltitle">Fluency <span class="qual">one minute, out loud, whatever book is in hand</span></h2>';
+  if(!ser.length){
+    h+='<p class="prose">No checks yet. Type <b>/check</b>, press start, and let '+esc(kid.name)+
+       ' read aloud for sixty seconds from any book. Then count the words and the errors. It takes a minute a week and it is the only number here that is comparable to anything outside your house.</p>'+
+       '<div class="acts"><button class="act hot" data-do="check">Run a check now</button></div>';
+    emit(echo,h,{fresh:true}); return;
+  }
+  var last=ser[ser.length-1];
+  h+='<p class="prose"><span class="bignum">'+last.wcpm+'</span> words correct per minute on '+esc(fmtShort(last.date))+
+     (last.pct!==null?', about the <b>'+ordinal(last.pct)+' percentile</b> for grade '+last.grade+' '+SEASON_LABEL[last.season]:'')+
+     (last.accuracy!==null?'. Accuracy <b>'+fx(last.accuracy,1)+'%</b>':'')+'.</p>';
+  h+=sparkSVG(ser.slice(-14));
+  h+='<div class="scrollx"><table class="slip" style="margin-top:9px"><thead><tr><th>Date</th><th>Book</th><th class="num">Words</th><th class="num">Err</th><th class="num">WCPM</th><th class="num">Acc</th><th class="num">Pct</th></tr></thead><tbody>';
+  ser.slice(-10).reverse().forEach(function(r){
+    h+='<tr><td>'+esc(fmtNum(r.date))+'</td><td>'+esc(r.book||"—")+'</td><td class="num">'+r.words+'</td><td class="num">'+r.errors+
+       '</td><td class="num strong">'+r.wcpm+'</td><td class="num">'+(r.accuracy===null?"—":fx(r.accuracy,1)+"%")+
+       '</td><td class="num">'+(r.pct===null?"—":ordinal(r.pct))+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<p class="prose" style="margin-top:9px">Percentiles are read off the Hasbrouck &amp; Tindal (2017) compiled oral reading fluency norms — grades 1 to 6, autumn / winter / spring, 10th to 90th percentile — interpolated between the published anchors. '+ORF_CITE+'</p>';
+  h+=DISCLAIM;
+  h+='<div class="acts"><button class="act hot" data-do="check">New check</button><button class="act" data-do="flags">What it adds up to</button></div>';
+  emit(echo,h,{fresh:true});
+}
+
+function viewFlags(echo,forPrint){
+  var kid=kidOr(); if(!kid) return;
+  var f=stallFlags(kid.id);
+  var h='<h2 class="celltitle">Stall check <span class="qual">'+esc(kid.name)+' · '+f.length+' finding'+(f.length===1?"":"s")+'</span></h2>';
+  if(!f.length){
+    h+='<div class="flagitem allclear"><p class="flaghead">Nothing is stalling.</p>'+
+       '<p class="flagwhy">Accuracy, band movement, fiction against non-fiction, percentile trend, gaps and stamina all look ordinary. This report is only as good as the checks behind it — one a week is enough.</p></div>';
+  } else {
+    f.forEach(function(x,i){
+      h+='<div class="flagitem'+(x.sev<70?" soft":"")+'"><p class="flaghead">'+x.head+'</p><p class="flagwhy">'+x.why+'</p>'+
+         (i<3?'<p class="flagask">'+esc(x.ask)+'</p>':'')+'</div>';
+    });
+    h+='<p class="prose" style="margin-top:4px">The top three become the questions on the parents\' evening sheet.</p>';
+  }
+  h+='<div class="acts"><button class="act hot" data-do="evening">Print the parents\' evening sheet</button><button class="act" data-do="fluency">Fluency detail</button></div>';
+  emit(echo,h,{fresh:true});
+}
+
+function cribRows(kid,fromD,toD){
+  var es=S.entries.filter(function(e){ return e.childId===kid.id&&e.date>=fromD&&e.date<=toD; })
+    .sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:(a.seq||0)-(b.seq||0)); });
+  return es;
+}
+function viewCrib(echo){
+  var kid=kidOr(); if(!kid) return;
+  var w=weekWindow();
+  var es=cribRows(kid,w.from,w.to);
+  var h='<h2 class="celltitle">Catch-up crib <span class="qual">'+esc(fmtNum(w.from))+' – '+esc(fmtNum(w.to))+' · transcription order</span></h2>';
+  h+='<p class="prose" style="margin-bottom:7px">Copy these into the school booklet top to bottom. Every line is what actually happened, in the order the nights happened, with the sentence already written.</p>';
+  if(!es.length){ h+='<p class="prose">Nothing logged this week yet.</p>'; }
+  else{
+    es.forEach(function(e){ h+=nightHTML(e); });
+    var tot=es.reduce(function(a,e){ return a+intOr(e.minutes,0); },0);
+    h+='<p class="prose" style="margin-top:8px"><b>'+es.length+'</b> night'+(es.length===1?"":"s")+', <b>'+tot+'</b> minutes.</p>';
+  }
+  h+='<div class="acts"><button class="act hot" data-do="crib">Print it</button><button class="act" data-do="record">Whole term instead</button></div>';
+  emit(echo,h,{fresh:true});
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   THE ONE-MINUTE CHECK
+   ========================================================================== */
+function viewCheck(echo){
+  var kid=kidOr(); if(!kid) return;
+  var open=lastTouched(kid.id);
+  var h='<h2 class="celltitle">One-minute check <span class="qual">'+esc(kid.name)+'</span></h2>'+
+    '<p class="prose" style="margin-bottom:9px">Hand '+esc(kid.name)+' whatever book is nearest'+(open?' — '+esc(open.title)+' is open':'')+
+    '. Press start, let '+(kid.name)+' read aloud for sixty seconds, then type how many words were read and how many were wrong. '+
+    'A word is wrong if it is misread, skipped or given to them. Self-corrections do not count.</p>'+
+    '<div class="checkbox2">'+
+      '<span class="bigclock" data-role="clock">60</span>'+
+      '<div class="clockbar" aria-hidden="true"><i data-role="bar"></i></div>'+
+      '<div class="acts" style="margin-top:0">'+
+        '<button class="act hot" data-role="start">Start the minute</button>'+
+        '<button class="act" data-role="skip">Skip the timer</button>'+
+      '</div>'+
+      '<div data-role="tally" hidden>'+
+        '<div class="tally">'+
+          '<div><label for="w-'+esc(kid.id)+'">Words read</label><input id="w-'+esc(kid.id)+'" data-role="words" type="number" min="1" max="400" inputmode="numeric"></div>'+
+          '<div><label for="e-'+esc(kid.id)+'">Errors</label><input id="e-'+esc(kid.id)+'" data-role="errs" type="number" min="0" max="200" inputmode="numeric" value="0"></div>'+
+        '</div>'+
+        '<div class="acts"><button class="act hot" data-role="score">Score it</button></div>'+
+      '</div>'+
+      '<p class="checkout" data-role="out"></p>'+
+    '</div>'+DISCLAIM;
+  var cell=emit(echo,h,{fresh:true});
+  var clock=cell.querySelector('[data-role=clock]'), bar=cell.querySelector('[data-role=bar]');
+  var tally=cell.querySelector('[data-role=tally]'), out=cell.querySelector('[data-role=out]');
+  var wIn=cell.querySelector('[data-role=words]'), eIn=cell.querySelector('[data-role=errs]');
+  var timer=null, left=60;
+  function reveal(){
+    tally.hidden=false; clock.classList.remove("running");
+    out.innerHTML='<b>Time.</b> Mark the last word read, then count back.';
+    try{ wIn.focus(); }catch(e){}
+  }
+  cell.querySelector('[data-role=start]').addEventListener("click",function(){
+    if(timer) return;
+    left=60; clock.textContent="60"; clock.classList.add("running"); bar.style.width="0%";
+    var t0=Date.now();
+    timer=setInterval(function(){
+      var el2=(Date.now()-t0)/1000;
+      left=Math.max(0,60-el2);
+      clock.textContent=Math.ceil(left);
+      bar.style.width=fx(clamp(el2/60,0,1)*100,1)+"%";
+      if(left<=0){ clearInterval(timer); timer=null; clock.textContent="0"; reveal(); }
+    },100);
+  });
+  cell.querySelector('[data-role=skip]').addEventListener("click",function(){
+    if(timer){ clearInterval(timer); timer=null; }
+    bar.style.width="100%"; clock.textContent="0"; reveal();
+  });
+  cell.querySelector('[data-role=score]').addEventListener("click",function(){
+    var words=intOr(wIn.value,NaN), errs=intOr(eIn.value,0);
+    if(!isFinite(words)||words<1){ out.innerHTML='<b style="color:var(--mark-red)">Type how many words were read.</b>'; try{wIn.focus();}catch(e){} return; }
+    if(!isFinite(errs)||errs<0) errs=0;
+    if(errs>words) errs=words;
+    var rec={ id:uid(), childId:kid.id, date:ymd(today()), words:words, errors:errs,
+              bookId:open?open.id:null, bookTitle:open?open.title:"" };
+    S.checks.push(rec); save();
+    var r=checkRow(rec);
+    var lines='<span class="bignum">'+r.wcpm+'</span> words correct per minute · accuracy <b>'+fx(r.accuracy,1)+'%</b>';
+    if(r.norm&&r.pct!==null){
+      lines+='<br>Grade '+r.grade+' '+SEASON_LABEL[r.season]+' median is <b>'+r.norm.p50+'</b>. That puts '+esc(kid.name)+
+             ' at about the <b>'+ordinal(r.pct)+' percentile</b>.';
+    } else {
+      lines+='<br>No published norm for grade '+r.grade+' '+SEASON_LABEL[r.season]+', so no percentile this time.';
+    }
+    if(r.accuracy!==null&&r.accuracy<95) lines+='<br>Below 95% accuracy — this book is at instructional level, not independent.';
+    out.innerHTML=lines;
+    tally.hidden=true;
+    renderChrome();
+    toast("Check saved · "+r.wcpm+" wcpm");
+  });
+  [wIn,eIn].forEach(function(inp){
+    inp.addEventListener("keydown",function(ev){
+      if(ev.key==="Enter"){ ev.preventDefault(); cell.querySelector('[data-role=score]').click(); }
+    });
+  });
+}
+
+/* ============================================================================
+   HELP / READERS / SETTINGS
+   ========================================================================== */
+function viewHelp(echo){
+  var rows=[
+    ["ella 20m charlottes web p45-60 fluent","a whole night, in any order"],
+    ["m 15 mins the hobbit 210-218 needed help with names","initial routes it; the sentence writes itself"],
+    ["ella charlottes web finished","closes the book, records days, pages and minutes"],
+    ["ella 20m","carries on the open book, minutes only"],
+    ["ella p60","reads on to p.60 from wherever you were"],
+    ["ella +12","twelve more pages from the last one"],
+    ["ella sat 20m mr stink p1-14","backfill: sat, yesterday, -3d, 29/8"],
+    ["ella 18m new title here, lovely bedtime read","comma splits title from comment"],
+    ["/week","this week against the school target"],
+    ["/term","sixteen weeks of nights, and the gaps"],
+    ["/books","the shelf: open books, finished books, days each took"],
+    ["/check","the one-minute fluency check"],
+    ["/fluency","every check, plotted against published norms"],
+    ["/flags","the stall detector"],
+    ["/crib","this week, ready to transcribe — printable"],
+    ["/record 1/9 30/11","the booklet record for any dates — printable"],
+    ["/evening","the parents' evening sheet — printable"],
+    ["/who","readers; /who ella switches; /who add Sam y2"],
+    ["/target 100","weekly minutes the school asks for"],
+    ["/grade 3","US grade equivalent, for the norm table"],
+    ["/level charlottes web 12","record the book band"],
+    ["/nf rotten romans","mark a book non-fiction"],
+    ["/free on","independent-reading track, past the booklet"],
+    ["/schoolapp on","school switched to an app — logging goes to a stub"],
+    ["/sig A. Whitfield","the name in the signature column"],
+    ["/undo","take back the last night"],
+    ["/export csv","also: /export json, /export checks, /import"],
+    ["/clear","clear the screen; /reset wipes everything"]
+  ];
+  var h='<h2 class="celltitle">Keys and commands</h2>'+
+    '<p class="prose" style="margin-bottom:8px">'+
+    '<span class="keycap">&#8593;</span> recalls what you typed · '+
+    '<span class="keycap">Esc</span> clears the line · '+
+    '<span class="keycap">Ctrl</span>+<span class="keycap">Z</span> undoes the last night · '+
+    '<span class="keycap">Alt</span>+<span class="keycap">1</span>–<span class="keycap">9</span> switch reader · '+
+    '<span class="keycap">/</span> starts a command. Just start typing — the line is always live.</p>'+
+    '<div class="cmdlist">';
+  rows.forEach(function(r){ h+='<div><code>'+esc(r[0])+'</code> — '+esc(r[1])+'</div>'; });
+  h+='</div>'+DISCLAIM;
+  emit(echo,h,{fresh:true});
+}
+function viewWho(echo){
+  var h='<h2 class="celltitle">Readers</h2><div class="scrollx"><table class="slip"><thead><tr><th>#</th><th>Name</th><th>Year</th><th class="num">Grade</th><th class="num">Target</th><th>Track</th></tr></thead><tbody>';
+  S.children.forEach(function(k,i){
+    h+='<tr><td>'+(i+1)+'</td><td class="strong">'+esc(k.name)+(k.id===active?' &#9664;':'')+'</td><td>'+esc(k.year||"—")+
+       '</td><td class="num">'+k.grade+'</td><td class="num">'+k.target+' min</td><td>'+(k.free?"independent":"school booklet")+'</td></tr>';
+  });
+  h+='</tbody></table></div><p class="prose" style="margin-top:8px">Press <span class="keycap">Alt</span>+<span class="keycap">1</span>–<span class="keycap">'+
+     Math.max(1,S.children.length)+'</span> to switch, or start the line with a name or initial and it routes itself.</p>';
+  emit(echo,h,{fresh:true});
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   PRINTED OUTPUTS
+   ========================================================================== */
+var PRINT_WARN='<div class="plainwarn"><b>Please read</b>'+
+  'Check the format your school expects — this sheet makes their booklet fast and true, it does not replace it. '+
+  'Fluency percentiles are an indicator scored against published norms, not a formal assessment, and reading age '+
+  'indicators are not a formal assessment.</div>';
+
+function docHead(title,sub){
+  return '<div class="docband"><p class="doctitle">'+esc(title)+'</p><p class="docsub">'+sub+'</p></div>';
+}
+function bookletTable(kid,es,opts){
+  var sig=S.settings.signature||"";
+  var h='<table class="bkt"><thead><tr><th style="width:62px">Date</th><th>Book</th><th style="width:58px">Pages</th>'+
+        '<th style="width:34px" class="num">Min</th><th>Comment</th><th class="sig">Parent signature</th></tr></thead><tbody>';
+  if(!es.length){
+    h+='<tr><td colspan="6">No nights recorded in this range.</td></tr>';
+  }
+  es.forEach(function(e){
+    var b=e.bookId?bookById(e.bookId):null;
+    h+='<tr><td>'+esc(fmtNum(e.date))+'</td><td>'+esc(b?b.title:"—")+'</td>'+
+       '<td>'+((e.from!==null&&e.to!==null)?(e.from+"–"+e.to):"—")+'</td>'+
+       '<td class="num">'+(isFinite(e.minutes)&&e.minutes>0?e.minutes:"—")+'</td>'+
+       '<td>'+esc(commentFor(e))+'</td>'+
+       '<td class="sig">'+((opts&&opts.presign)?esc(sig):"")+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  return h;
+}
+function doPrint(html){
+  var out=el("sheetout");
+  out.innerHTML=html;
+  var t=setTimeout(function(){ try{ window.print(); }catch(e){} },60);
+  return t;
+}
+function printCrib(){
+  var kid=activeChild(); if(!kid) return;
+  var w=weekWindow(), es=cribRows(kid,w.from,w.to);
+  var tot=es.reduce(function(a,e){ return a+intOr(e.minutes,0); },0);
+  var h=docHead("Catch-up crib — "+kid.name,
+    esc(fmtShort(w.from))+" to "+esc(fmtShort(w.to))+" &nbsp;·&nbsp; "+es.length+" night"+(es.length===1?"":"s")+
+    " &nbsp;·&nbsp; "+tot+" minutes &nbsp;·&nbsp; target "+(kid.target||0)+" min");
+  h+='<p style="font-size:10.5px;line-height:1.5;margin-bottom:6px">Transcribe top to bottom into the school booklet. '+
+     'Comments are generated from what was actually logged on the night.</p>';
+  h+=bookletTable(kid,es,{presign:false});
+  h+=PRINT_WARN;
+  doPrint(h);
+}
+function printRecord(fromD,toD){
+  var kid=activeChild(); if(!kid) return;
+  var es=cribRows(kid,fromD,toD);
+  var tot=es.reduce(function(a,e){ return a+intOr(e.minutes,0); },0);
+  var nights={}; es.forEach(function(e){ nights[e.date]=true; });
+  var fin=booksFinished(kid.id,fromD,toD);
+  var ser=fluencySeries(kid.id).filter(function(r){ return r.date>=fromD&&r.date<=toD; });
+  var weeks=Math.max(1,Math.round((dayDiff(parseYMD(toD)||today(),parseYMD(fromD)||today())+1)/7));
+  var h=docHead("Reading record — "+kid.name,
+    (kid.year?esc(kid.year)+" &nbsp;·&nbsp; ":"")+esc(fmtShort(fromD))+" to "+esc(fmtShort(toD)));
+  h+='<table class="bkt" style="margin-bottom:9px"><tbody>'+
+     '<tr><th style="width:26%">Nights read</th><td>'+Object.keys(nights).length+' of '+(dayDiff(parseYMD(toD)||today(),parseYMD(fromD)||today())+1)+' days</td>'+
+     '<th style="width:26%">Minutes</th><td>'+tot+' ('+fx(tot/weeks,1)+' a week against a '+(kid.target||0)+' min target)</td></tr>'+
+     '<tr><th>Books finished</th><td>'+fin.length+(fin.length?': '+esc(fin.map(function(x){return x.book.title;}).join("; ")):"")+'</td>'+
+     '<th>Fluency checks</th><td>'+(ser.length? ser.length+' · latest '+ser[ser.length-1].wcpm+' wcpm, '+
+        (ser[ser.length-1].pct!==null?ordinal(ser[ser.length-1].pct)+' percentile':'no norm')+
+        ', '+fx(ser[ser.length-1].accuracy,1)+'% accuracy' : 'none in this range')+'</td></tr>'+
+     '</tbody></table>';
+  h+=bookletTable(kid,es,{presign:false});
+  h+=PRINT_WARN;
+  doPrint(h);
+}
+function printEvening(){
+  var kid=activeChild(); if(!kid) return;
+  var f=stallFlags(kid.id).slice(0,3);
+  var ser=fluencySeries(kid.id), last=ser.length?ser[ser.length-1]:null;
+  var st=streaks(kid.id), term=termRange();
+  var w4=minutesBetween(kid.id,offYMD(-27),ymd(today()));
+  var h=docHead("Parents' evening — "+kid.name,
+    "Prepared "+esc(fmtShort(ymd(today())))+(kid.year?" &nbsp;·&nbsp; "+esc(kid.year):"")+
+    " &nbsp;·&nbsp; from "+childEntries(kid.id).length+" logged nights");
+  h+='<table class="bkt" style="margin-bottom:8px"><tbody><tr>'+
+     '<th style="width:24%">Where '+esc(kid.name)+' is</th><td>'+
+       (last? last.wcpm+' words correct per minute, '+fx(last.accuracy,1)+'% accuracy, '+
+              (last.pct!==null? 'about the '+ordinal(last.pct)+' percentile for grade '+last.grade+' '+SEASON_LABEL[last.season]
+                              : 'no published norm for this grade and season')
+            : 'no fluency check recorded')+'</td></tr>'+
+     '<tr><th>Habit</th><td>'+w4.nights+' of the last 28 nights, '+w4.minutes+' minutes; longest run '+st.longest+' nights; '+
+        booksFinished(kid.id,term.from,term.to).length+' books finished this term</td></tr>'+
+     '</tbody></table>';
+  if(!f.length){
+    h+='<p style="font-size:11px">Nothing is flagging. Worth asking anyway: what would you like us to do differently at home?</p>';
+  } else {
+    h+='<p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:4px">Three questions, with the numbers underneath</p>';
+    f.forEach(function(x,i){
+      h+='<div class="flagitem" style="margin-bottom:11px"><p class="flaghead" style="font-size:12.5px">'+(i+1)+'. '+esc(x.ask)+'</p>'+
+         '<p class="flagwhy" style="font-size:10.5px">'+x.why+'</p>'+
+         '<table class="bkt" style="margin-top:5px"><tbody>';
+      x.rows.forEach(function(r){ h+='<tr><th style="width:38%">'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>'; });
+      h+='</tbody></table></div>';
+    });
+  }
+  if(ser.length>=2){
+    h+='<p style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin:8px 0 3px">Fluency checks</p>';
+    h+='<table class="bkt"><thead><tr><th>Date</th><th>Book</th><th class="num">Words</th><th class="num">Err</th><th class="num">WCPM</th><th class="num">Accuracy</th><th class="num">Grade median</th><th class="num">Percentile</th></tr></thead><tbody>';
+    ser.slice(-8).reverse().forEach(function(r){
+      h+='<tr><td>'+esc(fmtNum(r.date))+'</td><td>'+esc(r.book||"—")+'</td><td class="num">'+r.words+'</td><td class="num">'+r.errors+
+         '</td><td class="num">'+r.wcpm+'</td><td class="num">'+(r.accuracy===null?"—":fx(r.accuracy,1)+"%")+
+         '</td><td class="num">'+(r.norm?r.norm.p50:"—")+'</td><td class="num">'+(r.pct===null?"—":ordinal(r.pct))+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    h+='<p style="font-size:9.5px;color:#4a4a4a;margin-top:5px">Norms: '+ORF_CITE+'</p>';
+  }
+  h+=PRINT_WARN;
+  doPrint(h);
+}
+
+/* ============================================================================
+   EXPORT / IMPORT
+   ========================================================================== */
+function csvCell(v){
+  var s=(v==null?"":String(v));
+  if(/[",\r\n]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function csvDoc(rows){
+  return "﻿"+rows.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n")+"\r\n";
+}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download=name; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },800);
+    return true;
+  }catch(e){ return false; }
+}
+function exportEntriesCSV(){
+  var rows=[["child","date","book","level","genre","page_from","page_to","minutes","finished","tags","note","comment"]];
+  S.entries.slice(0).sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:a.seq-b.seq); }).forEach(function(e){
+    var k=childById(e.childId), b=e.bookId?bookById(e.bookId):null;
+    rows.push([ k?k.name:"", e.date, b?b.title:"", b&&b.level!=null?b.level:"", b?b.genre:"",
+                e.from==null?"":e.from, e.to==null?"":e.to, isFinite(e.minutes)?e.minutes:"",
+                e.fin?"yes":"", (e.tags||[]).join("; "), e.note||"", commentFor(e) ]);
+  });
+  download("reading-record-entries.csv","text/csv;charset=utf-8",csvDoc(rows));
+}
+function exportChecksCSV(){
+  var rows=[["child","date","book","genre","words","errors","wcpm","accuracy_pct","grade","season","norm_p50","percentile"]];
+  S.checks.slice(0).sort(function(a,b){ return a.date<b.date?-1:1; }).forEach(function(c){
+    var r=checkRow(c); if(!r) return;
+    var k=childById(c.childId);
+    rows.push([ k?k.name:"", r.date, r.book, r.genre||"", r.words, r.errors, r.wcpm,
+                r.accuracy===null?"":fx(r.accuracy,2), r.grade, r.season,
+                r.norm?r.norm.p50:"", r.pct===null?"":fx(r.pct,1) ]);
+  });
+  download("reading-record-fluency.csv","text/csv;charset=utf-8",csvDoc(rows));
+}
+function exportJSON(){
+  download("reading-record.json","application/json",JSON.stringify(S,null,2));
+}
+function importJSON(){
+  var inp=document.createElement("input");
+  inp.type="file"; inp.accept="application/json,.json"; inp.style.display="none";
+  document.body.appendChild(inp);
+  inp.addEventListener("change",function(){
+    var f=inp.files&&inp.files[0];
+    if(!f){ inp.remove(); return; }
+    var rd=new FileReader();
+    rd.onload=function(){
+      var ok=false;
+      try{
+        var o=JSON.parse(String(rd.result));
+        if(o&&typeof o==="object"&&Array.isArray(o.children)&&Array.isArray(o.entries)){
+          o.books=Array.isArray(o.books)?o.books:[];
+          o.checks=Array.isArray(o.checks)?o.checks:[];
+          o.settings=(o.settings&&typeof o.settings==="object")?o.settings:{schoolApp:false,signature:"",termStart:null,termEnd:null};
+          o.sample=false;
+          S=o; active=(S.children[0]||{}).id||null; save(); ok=true;
+        }
+      }catch(e){ ok=false; }
+      inp.remove();
+      if(ok){ clearBack(); renderChrome(); boot(true); toast("Imported."); }
+      else emit("/import",'<p class="prose"><b style="color:var(--mark-red)">That file did not read as a Reading Record export.</b> Nothing was changed.</p>');
+    };
+    rd.onerror=function(){ inp.remove(); emit("/import",'<p class="prose"><b style="color:var(--mark-red)">Could not read that file.</b></p>'); };
+    rd.readAsText(f);
+  });
+  inp.click();
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   COMMIT / UNDO
+   ========================================================================== */
+var undoStack=[];
+function reseq(){
+  S.entries.sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:(a.seq||0)-(b.seq||0)); });
+  S.entries.forEach(function(e,i){ e.seq=i; });
+}
+function commitParse(p){
+  var book=p.bookId?bookById(p.bookId):null, madeBook=false;
+  if(!book&&p.title){
+    book=mkBook(p.childId,p.title,p.level,p.genre||"fiction",null);
+    S.books.push(book); madeBook=true;
+  }
+  if(book){
+    if(p.level!=null) book.level=p.level;
+    if(p.genre) book.genre=p.genre;
+  }
+  var e={ id:uid(), childId:p.childId, bookId:book?book.id:null, date:p.date,
+          from:p.from, to:p.to, minutes:p.minutes, tags:p.tags.slice(0),
+          note:p.note, fin:!!p.fin, seq:S.entries.length };
+  S.entries.push(e); reseq();
+  undoStack.push({ kind:"entry", id:e.id, bookId:madeBook&&book?book.id:null });
+  if(S.sample===true && !S._touched){ S._touched=true; }
+  save();
+  return e;
+}
+function undoLast(){
+  var u=undoStack.pop();
+  if(!u){ emit("/undo",'<p class="prose">Nothing to undo in this session.</p>'); return; }
+  if(u.kind==="entry"){
+    var idx=-1,i;
+    for(i=0;i<S.entries.length;i++) if(S.entries[i].id===u.id) idx=i;
+    if(idx<0){ emit("/undo",'<p class="prose">That night is already gone.</p>'); return; }
+    var e=S.entries[idx];
+    var b=e.bookId?bookById(e.bookId):null;
+    S.entries.splice(idx,1);
+    if(u.bookId){
+      var stillUsed=S.entries.some(function(x){ return x.bookId===u.bookId; });
+      if(!stillUsed){ for(i=0;i<S.books.length;i++) if(S.books[i].id===u.bookId){ S.books.splice(i,1); break; } }
+    }
+    reseq(); save(); renderChrome();
+    emit("/undo",'<p class="prose">Removed <b>'+esc(fmtShort(e.date))+'</b> — '+esc(b?b.title:"—")+
+      ((e.from!==null)?', pp.'+e.from+'–'+e.to:'')+'. The page count went back with it.</p>',{fresh:true});
+  } else if(u.kind==="check"){
+    for(var j=0;j<S.checks.length;j++) if(S.checks[j].id===u.id){ S.checks.splice(j,1); break; }
+    save(); renderChrome();
+    emit("/undo",'<p class="prose">Removed that fluency check.</p>',{fresh:true});
+  }
+}
+
+/* ============================================================================
+   COMMANDS
+   ========================================================================== */
+function argDate(tok,fallback){
+  if(!tok) return fallback;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(tok)&&parseYMD(tok)) return tok;
+  var off=resolveDateToken(tok);
+  return off===null?fallback:offYMD(off);
+}
+function runCommand(line){
+  var raw=line.trim();
+  var parts=raw.slice(1).split(/\s+/);
+  var cmd=(parts[0]||"").toLowerCase();
+  var rest=raw.slice(1+cmd.length).trim();
+  var kid=activeChild();
+
+  switch(cmd){
+    case "": case "help": case "?": case "h": viewHelp(raw); return;
+    case "week": case "w": viewWeek(raw); return;
+    case "term": case "t": case "heat": viewTerm(raw); return;
+    case "books": case "shelf": case "b": viewBooks(raw); return;
+    case "check": case "c": viewCheck(raw); return;
+    case "fluency": case "f": case "wcpm": viewFluency(raw); return;
+    case "flags": case "stall": case "x": viewFlags(raw); return;
+    case "crib": viewCrib(raw); return;
+    case "who": case "kids":
+      if(!rest){ viewWho(raw); return; }
+      var w=rest.split(/\s+/);
+      if(w[0].toLowerCase()==="add"){
+        var nm=w[1]?titleCase(w[1]):"";
+        if(!nm){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">Give a name:</b> /who add Sam y2</p>'); return; }
+        var yr=w[2]||"", gm=/y(?:ear)?\s*(\d)/i.exec(yr), grade=gm?clamp(intOr(gm[1],3)-1,1,6):3;
+        var nk={ id:"kid-"+uid(), name:nm, initial:nm[0].toLowerCase(), year:gm?("Year "+gm[1]):"",
+                 grade:grade, gradeYear:schoolYear(today()), target:100, free:false };
+        S.children.push(nk); active=nk.id; save(); renderChrome();
+        emit(raw,'<p class="prose">Added <b>'+esc(nm)+'</b>'+(gm?', Year '+gm[1]+' (grade '+grade+' for the norm table)':'')+
+          '. Start a line with <b>'+esc(nm.toLowerCase())+'</b> or <b>'+esc(nm[0].toLowerCase())+'</b> to route to '+esc(nm)+'.</p>',{fresh:true});
+        return;
+      }
+      var target=null;
+      S.children.forEach(function(k){
+        if(k.name.toLowerCase()===w[0].toLowerCase()||String(k.initial).toLowerCase()===w[0].toLowerCase()) target=k;
+      });
+      if(target){ active=target.id; save(); renderChrome(); emit(raw,'<p class="prose">Now logging for <b>'+esc(target.name)+'</b>.</p>',{fresh:true}); }
+      else emit(raw,'<p class="prose"><b style="color:var(--mark-red)">No reader called '+esc(w[0])+'.</b> /who lists them.</p>');
+      return;
+    case "target":
+      if(!kid) return;
+      var tv=intOr(rest,NaN);
+      if(!isFinite(tv)||tv<1||tv>2000){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">Give minutes a week:</b> /target 100</p>'); return; }
+      kid.target=tv; save(); renderChrome();
+      emit(raw,'<p class="prose">'+esc(kid.name)+'’s weekly target is now <b>'+tv+' minutes</b>.</p>',{fresh:true});
+      return;
+    case "grade":
+      if(!kid) return;
+      var gv=intOr(rest,NaN);
+      if(!isFinite(gv)||gv<1||gv>6){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">Grade 1 to 6</b> — the norm table only covers those. UK Year 3 is grade 2, Year 4 is grade 3, and so on.</p>'); return; }
+      kid.grade=gv; kid.gradeYear=schoolYear(today()); save(); renderChrome();
+      emit(raw,'<p class="prose">'+esc(kid.name)+' is now scored against <b>grade '+gv+'</b> norms.</p>',{fresh:true});
+      return;
+    case "level": case "band":
+      if(!kid) return;
+      var lm=/^(.*)\s+(\d{1,3})$/.exec(rest);
+      if(!lm){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">Try:</b> /level charlottes web 12</p>'); return; }
+      var lb=findBook(kid.id,lm[1]);
+      if(!lb){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">No book called '+esc(lm[1])+'</b> for '+esc(kid.name)+'.</p>'); return; }
+      lb.level=intOr(lm[2],null); save(); renderChrome();
+      emit(raw,'<p class="prose">'+esc(lb.title)+' is level <b>'+lb.level+'</b>.</p>',{fresh:true});
+      return;
+    case "nf": case "nonfiction": case "fic": case "fiction":
+      if(!kid) return;
+      var gb=findBook(kid.id,rest);
+      if(!gb){ emit(raw,'<p class="prose"><b style="color:var(--mark-red)">No book called '+esc(rest)+'</b> for '+esc(kid.name)+'.</p>'); return; }
+      gb.genre=(cmd==="nf"||cmd==="nonfiction")?"nonfiction":"fiction"; save();
+      emit(raw,'<p class="prose">'+esc(gb.title)+' marked <b>'+gb.genre+'</b>.</p>',{fresh:true});
+      return;
+    case "free":
+      if(!kid) return;
+      kid.free = rest.toLowerCase()!=="off"; save(); renderChrome();
+      emit(raw,'<p class="prose">'+esc(kid.name)+' is on the <b>'+(kid.free?"independent-reading track":"school booklet track")+'</b>. '+
+        (kid.free? 'Streak pressure and the weekly minutes target drop away. Books finished, genre breadth, series progression and the weekly fluency check carry on — they are what keeps working after the booklet stops.'
+                 : 'Weekly minutes and the night streak are back.')+'</p>',{fresh:true});
+      return;
+    case "schoolapp":
+      S.settings.schoolApp = rest.toLowerCase()!=="off"; save(); renderChrome();
+      emit(raw,'<p class="prose">School-uses-an-app mode is <b>'+(S.settings.schoolApp?"on":"off")+'</b>. '+
+        (S.settings.schoolApp? 'Logging drops to a stub — type <b>ella done</b> or <b>ella 20m</b> and nothing more is asked of you. The measurement track is untouched: the weekly one-minute check, the percentile against published norms, and the stall detector all carry on, because the school’s app will not give you any of them.'
+                             : 'Full logging is back.')+'</p>',{fresh:true});
+      return;
+    case "sig": case "signature":
+      S.settings.signature=rest; save();
+      emit(raw,'<p class="prose">Signature column will read <b>'+esc(rest||"(blank)")+'</b> where it is pre-filled.</p>',{fresh:true});
+      return;
+    case "record": case "booklet": case "print":
+      var a=rest.split(/\s+/).filter(Boolean), tr=termRange();
+      if(cmd==="print"&&a[0]&&/^(crib|evening|record)$/i.test(a[0])){
+        var which=a[0].toLowerCase();
+        if(which==="crib"){ printCrib(); toast("Crib sent to print"); return; }
+        if(which==="evening"){ printEvening(); toast("Evening sheet sent to print"); return; }
+        a=a.slice(1);
+      }
+      var f1=argDate(a[0],tr.from), f2=argDate(a[1],ymd(today()));
+      if(f1>f2){ var sw=f1; f1=f2; f2=sw; }
+      emit(raw,'<p class="prose">Printing the booklet record for <b>'+esc(kid?kid.name:"—")+'</b>, '+
+        esc(fmtShort(f1))+' to '+esc(fmtShort(f2))+'. Every night, with a signature column.</p>',{fresh:true});
+      printRecord(f1,f2);
+      return;
+    case "evening": case "parents":
+      emit(raw,'<p class="prose">Printing the parents’ evening sheet — three questions with the data underneath.</p>',{fresh:true});
+      printEvening(); return;
+    case "export":
+      var kind=(rest||"csv").toLowerCase();
+      if(kind==="json"){ exportJSON(); emit(raw,'<p class="prose">Full JSON exported — <b>/import</b> reads it back.</p>',{fresh:true}); }
+      else if(kind==="checks"||kind==="fluency"){ exportChecksCSV(); emit(raw,'<p class="prose">Fluency checks exported as CSV.</p>',{fresh:true}); }
+      else { exportEntriesCSV(); emit(raw,'<p class="prose">Every night exported as CSV, comment column included.</p>',{fresh:true}); }
+      return;
+    case "import": importJSON(); return;
+    case "undo": case "u": undoLast(); return;
+    case "clear": case "cls": clearBack(); emit(null,'<p class="prose">Screen cleared. Nothing was deleted — <b>/term</b> brings it all back.</p>'); return;
+    case "sample":
+      if(rest.toLowerCase()==="clear"){ wipe(); return; }
+      emit(raw,'<p class="prose">This is the sample family. <b>/sample clear</b> empties it and leaves you with your own readers.</p>');
+      return;
+    case "reset": wipe(); return;
+    default:
+      emit(raw,'<p class="prose"><b style="color:var(--mark-red)">No command called /'+esc(cmd)+'.</b> '+
+        'Type <b>/help</b> for the list — or drop the slash and it will be read as a night of reading.</p>');
+  }
+}
+function wipe(){
+  var names=S.children.map(function(k){ return {name:k.name,year:k.year,grade:k.grade,target:k.target,free:k.free}; });
+  S=blankState();
+  S.sample=false;
+  names.forEach(function(n){
+    S.children.push({ id:"kid-"+uid(), name:n.name, initial:n.name[0].toLowerCase(), year:n.year,
+                      grade:n.grade, gradeYear:schoolYear(today()), target:n.target, free:n.free });
+  });
+  active=(S.children[0]||{}).id||null;
+  undoStack=[];
+  save(); clearBack(); renderChrome();
+  emit(null,'<h2 class="celltitle">Empty and yours</h2><p class="prose">The sample nights, books and checks are gone. '+
+    (S.children.length? 'Your readers are still set up — '+esc(S.children.map(function(k){return k.name;}).join(", "))+'.'
+                      : 'Add a reader with <b>/who add Ella y3</b>.')+
+    ' Log tonight and the record starts from here.</p>'+
+    '<div class="acts"><button class="act" data-do="help">Commands</button><button class="act hot" data-do="check">First fluency check</button></div>');
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+   THE LIVE LINE — interpretation before commitment
+   ========================================================================== */
+var CMDS=["help","week","term","books","check","fluency","flags","crib","record","evening","who","target",
+          "grade","level","nf","fic","free","schoolapp","sig","export","import","undo","clear","sample","reset"];
+function chit(text,cls){ return '<span class="chit'+(cls?" "+cls:"")+'">'+text+'</span>'; }
+
+function renderPreview(){
+  var strip=el("parsestrip"), v=el("feed").value;
+  if(!v.trim()){ strip.hidden=true; strip.innerHTML=""; el("blinkline").classList.remove("lit"); return; }
+  strip.hidden=false;
+  el("blinkline").classList.remove("lit");
+  if(v.trim().charAt(0)==="/"){
+    var w=v.trim().slice(1).split(/\s+/)[0].toLowerCase();
+    var hits=CMDS.filter(function(c){ return c.indexOf(w)===0; });
+    var h=chit("command","lead");
+    if(!w){ h+='<span class="parsenote">'+CMDS.map(function(c){ return "/"+c; }).join("  ")+'</span>'; }
+    else if(hits.length){
+      hits.slice(0,8).forEach(function(c){ h+=chit("/"+esc(c),c===w?"":"dim"); });
+      h+='<span class="parsenote">'+(hits[0]===w?"Enter to run.":"Tab completes.")+'</span>';
+    } else {
+      h+=chit("/"+esc(w),"bad")+'<span class="parsenote bad">No such command. /help lists them.</span>';
+    }
+    strip.innerHTML=h;
+    return;
+  }
+  var p=parseLine(v);
+  var kid=childById(p.childId);
+  var h2="";
+  if(S.children.length>1) h2+=chit(esc(kid?kid.name:"?"),"lead");
+  if(p.dateOff!==0) h2+=chit(esc(fmtShort(p.date)),"");
+  if(p.minutes!==null) h2+=chit("<b>"+p.minutes+"</b> min","");
+  if(p.title) h2+=chit(esc(p.title)+(p.newBook?" &middot; NEW":""),p.newBook?"dim":"");
+  if(p.from!==null&&p.to!==null) h2+=chit("pp.<b>"+p.from+"–"+p.to+"</b>"+(p.chained?" &middot; carried on":""),"");
+  if(p.fin) h2+=chit("FINISHED","lead");
+  if(p.level!=null) h2+=chit("level "+p.level,"dim");
+  if(p.genre) h2+=chit(esc(p.genre),"dim");
+  p.tags.forEach(function(t){ h2+=chit(esc(t),"dim"); });
+  if(p.problems.length){
+    p.problems.forEach(function(x){ h2+=chit(esc(x),"bad"); });
+    h2+='<span class="parsenote bad">Not logged yet — fix the line, or press Enter to see why.</span>';
+  } else {
+    var ghost={ id:"ghost", childId:p.childId, bookId:p.bookId, date:p.date, from:p.from, to:p.to,
+                minutes:p.minutes, tags:p.tags, note:p.note, fin:p.fin, title:p.title };
+    var es=childEntries(p.childId);
+    var sentence=makeComment(ghost,es.length,es.length?es[es.length-1]:null,es.length-1);
+    var extra=p.notes.length? " &nbsp;·&nbsp; "+p.notes.map(esc).join(" ") : "";
+    h2+='<span class="parsenote">&ldquo;'+esc(sentence)+'&rdquo;'+extra+'</span>';
+  }
+  strip.innerHTML=h2;
+}
+
+/* ============================================================================
+   RUN A LINE
+   ========================================================================== */
+function runLine(){
+  var feed=el("feed"), v=feed.value.trim();
+  if(!v) return;
+  lineHist.push(v); if(lineHist.length>200) lineHist.shift();
+  histPos=-1;
+  if(v.charAt(0)==="/"){
+    feed.value=""; renderPreview();
+    runCommand(v);
+    return;
+  }
+  var p=parseLine(v);
+  if(!p.ok){
+    emit(v,'<p class="prose"><b style="color:var(--mark-red)">Not logged.</b> '+
+      p.problems.map(esc).join(" ")+'</p>'+
+      '<p class="prose" style="margin-top:5px">A whole night looks like <b>ella 20m charlottes web p45-60 fluent</b> — '+
+      'name, minutes, title, pages, how it went, in any order. <b>/help</b> has the rest.</p>');
+    el("blinkline").classList.add("lit");
+    setTimeout(function(){ el("blinkline").classList.remove("lit"); },400);
+    return;
+  }
+  var e=commitParse(p);
+  feed.value=""; renderPreview();
+  var kid=childById(e.childId);
+  var extra=p.notes.length?'<p class="prose" style="margin-top:5px">'+p.notes.map(esc).join(" ")+'</p>':"";
+  var bs=e.bookId?bookState(bookById(e.bookId)):null;
+  if(e.fin&&bs){
+    extra+='<p class="prose" style="margin-top:5px"><b>Closed.</b> '+esc(bookById(e.bookId).title)+' took <b>'+
+      (bs.days==null?"—":bs.days)+' days</b>, <b>'+bs.nights+' nights</b>, <b>'+bs.pages+' pages</b> and <b>'+bs.minutes+' minutes</b>.</p>';
+  }
+  emit(v,(S.children.length>1?'<p class="prose" style="margin-bottom:4px">'+esc(kid?kid.name:"")+'</p>':'')+
+        nightHTML(e)+extra+
+        '<p class="prose" style="margin-top:6px;font-size:11.5px">Comment written for you — copy it straight into the booklet. '+
+        '<span class="keycap">Ctrl</span>+<span class="keycap">Z</span> or <b>/undo</b> takes it back.</p>',{fresh:true});
+  renderChrome();
+}
+
+/* ============================================================================
+   KEYBOARD
+   ========================================================================== */
+function cycleChild(dir){
+  if(S.children.length<2) return;
+  var i=0;
+  for(var j=0;j<S.children.length;j++) if(S.children[j].id===active) i=j;
+  i=(i+(dir||1)+S.children.length)%S.children.length;
+  active=S.children[i].id; save(); renderChrome(); renderPreview();
+  toast("Logging for "+S.children[i].name);
+}
+function wireKeys(){
+  var feed=el("feed");
+  feed.addEventListener("input",renderPreview);
+  feed.addEventListener("keydown",function(ev){
+    if(ev.key==="Enter"){ ev.preventDefault(); runLine(); return; }
+    if(ev.key==="ArrowUp"){
+      if(!lineHist.length) return;
+      ev.preventDefault();
+      histPos = histPos<0 ? lineHist.length-1 : Math.max(0,histPos-1);
+      feed.value=lineHist[histPos]; renderPreview();
+      try{ feed.setSelectionRange(feed.value.length,feed.value.length); }catch(e){}
+      return;
+    }
+    if(ev.key==="ArrowDown"){
+      if(histPos<0) return;
+      ev.preventDefault();
+      histPos++;
+      if(histPos>=lineHist.length){ histPos=-1; feed.value=""; }
+      else feed.value=lineHist[histPos];
+      renderPreview();
+      return;
+    }
+    if(ev.key==="Escape"){ ev.preventDefault(); feed.value=""; histPos=-1; renderPreview(); return; }
+    if(ev.key==="Tab" && feed.value.trim().charAt(0)==="/" && feed.value.indexOf(" ")<0){
+      var w=feed.value.trim().slice(1).toLowerCase();
+      var hits=CMDS.filter(function(c){ return c.indexOf(w)===0; });
+      if(hits.length){ ev.preventDefault(); feed.value="/"+hits[0]+" "; renderPreview(); }
+      return;
+    }
+    if((ev.ctrlKey||ev.metaKey)&&(ev.key==="z"||ev.key==="Z")&&!feed.value){ ev.preventDefault(); undoLast(); return; }
+  });
+  document.addEventListener("keydown",function(ev){
+    var t=ev.target;
+    var inField = t && (t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"||t.isContentEditable);
+    if((ev.altKey)&&/^[1-9]$/.test(ev.key)){
+      var n=intOr(ev.key,1);
+      if(S.children[n-1]){ ev.preventDefault(); active=S.children[n-1].id; save(); renderChrome(); renderPreview(); toast("Logging for "+S.children[n-1].name); }
+      return;
+    }
+    if((ev.ctrlKey||ev.metaKey)&&(ev.key==="z"||ev.key==="Z")&&!inField){ ev.preventDefault(); undoLast(); return; }
+    if(inField||ev.ctrlKey||ev.metaKey||ev.altKey) return;
+    if(ev.key==="Escape"){ feed.focus(); return; }
+    if(ev.key.length===1){ feed.focus(); }
+    else if(ev.key==="Backspace"){ ev.preventDefault(); feed.focus(); }
+  });
+  el("scrollback").addEventListener("click",function(ev){
+    var b=ev.target.closest?ev.target.closest("[data-do]"):null;
+    if(!b) return;
+    var d=b.getAttribute("data-do");
+    if(d==="crib"){ printCrib(); toast("Sent to print"); }
+    else if(d==="record"){ var tr=termRange(); printRecord(tr.from,ymd(today())); toast("Sent to print"); }
+    else if(d==="evening"){ printEvening(); toast("Sent to print"); }
+    else if(d==="check") viewCheck("/check");
+    else if(d==="fluency") viewFluency("/fluency");
+    else if(d==="flags") viewFlags("/flags");
+    else if(d==="term") viewTerm("/term");
+    else if(d==="week") viewWeek("/week");
+    else if(d==="books") viewBooks("/books");
+    else if(d==="help") viewHelp("/help");
+  });
+  var wn=el("whoname");
+  wn.addEventListener("click",function(){ cycleChild(1); });
+  el("clearsample").addEventListener("click",function(){ wipe(); });
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+function boot(quiet){
+  var kid=activeChild();
+  if(!kid){
+    emit(null,'<h2 class="celltitle">Nobody set up yet</h2><p class="prose">Type <b>/who add Ella y3</b> and then log tonight.</p>');
+    return;
+  }
+  var es=childEntries(kid.id).slice(-5);
+  var open=lastTouched(kid.id);
+  var flags=stallFlags(kid.id);
+  var h='<h2 class="celltitle">The last five nights <span class="qual">'+esc(kid.name)+
+        (S.sample?' · sample family, cleared in one click':'')+'</span></h2>';
+  if(es.length){ es.forEach(function(e){ h+=nightHTML(e); }); }
+  else h+='<p class="prose">Nothing logged yet for '+esc(kid.name)+'.</p>';
+  h+='<p class="prose" style="margin-top:9px">Type one line for tonight — <b>name, minutes, title, pages, how it went</b>, in any order. '+
+     (open? 'The pages carry on by themselves: '+esc(open.title)+' is at <b>p.'+bookState(open).last+'</b>, so '+
+            '<b>'+esc(String(kid.initial||kid.name[0]).toLowerCase())+' 20m '+esc(open.title.toLowerCase())+' p'+(bookState(open).last+16)+'</b> is a whole night. '
+          : '')+
+     'You will see it parsed before you commit, and the diary sentence written for you.</p>';
+  h+='<div class="acts">'+
+     '<button class="act hot" data-do="flags">What to ask the teacher</button>'+
+     '<button class="act" data-do="crib">This week&rsquo;s crib</button>'+
+     '<button class="act" data-do="check">One-minute check</button>'+
+     '<button class="act" data-do="term">Term view</button>'+
+     '<button class="act" data-do="help">All commands</button>'+
+     '</div>';
+  h+=DISCLAIM;
+  emit(null,h);
+}
+
+/* ---------- init ---------- */
+(function init(){
+  var loaded=load();
+  if(loaded && loaded.children && loaded.children.length){ S=loaded; }
+  else { buildSample(); save(); }
+  active=(S.children[0]||{}).id||null;
+  try{
+    renderChrome();
+    wireKeys();
+    boot();
+  }catch(err){
+    S=blankState(); buildSample(); active=S.children[0].id;
+    renderChrome(); wireKeys(); boot();
+  }
+  var f=el("feed");
+  if(window.matchMedia && window.matchMedia("(min-width:700px)").matches){ try{ f.focus(); }catch(e){} }
+  var rzT=null;
+  window.addEventListener("resize",function(){ clearTimeout(rzT); rzT=setTimeout(renderRibbon,120); });
+  window.addEventListener("beforeprint",function(){
+    var out=el("sheetout");
+    if(out.innerHTML.trim()) return;
+    var kid=activeChild(); if(!kid) return;
+    var tr=termRange(), es=cribRows(kid,tr.from,ymd(today()));
+    out.innerHTML=docHead("Reading record — "+kid.name,
+      (kid.year?esc(kid.year)+" &middot; ":"")+esc(fmtShort(tr.from))+" to "+esc(fmtShort(ymd(today()))))+
+      bookletTable(kid,es,{presign:false})+PRINT_WARN;
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumber Cut Optimiser — Solvix Toolkit</title>
+<meta name="description" content="Turn a cut list and priced stock lengths into the cheapest complete buying and cutting plan. First-fit-decreasing bin packing with saw kerf per cut, scale cut diagrams, waste percentage, offcut recovery and material cost.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23B45309'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'%3E%3Crect x='5.5' y='9' width='21' height='6.5' rx='1'/%3E%3Cpath d='M12.5 9v6.5M19.5 9v6.5M6 22h20M9 19.5v5M15 19.5v5M21 19.5v5'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#B45309;--accent-ink:#8F4207;--accent-wash:#FBF0DC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E8944A;--accent-ink:#F3B076;--accent-wash:#2E2011;--on-accent:#180D03}}
+:root[data-theme="dark"]{--accent:#E8944A;--accent-ink:#F3B076;--accent-wash:#2E2011;--on-accent:#180D03}
+
+.appbar{margin-bottom:14px}
+@media print{.app{padding-top:0}}
+[hidden]{display:none!important}
+.stackgap{display:flex;flex-direction:column;gap:14px;min-width:0}
+.split>*{min-width:0}
+.stackgap>*{min-width:0;max-width:100%}
+.tw{max-width:100%}
+.fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(196px,1fr))}
+.statgrid{display:grid;gap:8px;grid-template-columns:1fr 1fr;margin-top:8px}
+.statgrid .stat .v{font-size:18px}
+.stat.hero .v{font-size:30px}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.sampleflag{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.del{color:var(--bad)}
+td.act{width:1%;white-space:nowrap}
+td.lab input,td.lab{text-align:left;font-family:var(--sans)}
+#tStock input[type=number],#tCuts input[type=number]{min-width:64px}
+#tStock td,#tCuts td,#tStock th,#tCuts th{padding:6px 7px}
+#tStock th,#tCuts th{white-space:normal}
+.smallcap{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.kv{display:flex;gap:8px;align-items:baseline;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .kn{color:var(--ink-2)}
+.kv .kvv{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dim{color:var(--muted)}
+
+/* cut plan */
+.plan{display:flex;flex-direction:column;gap:12px}
+.grp{border:1px solid var(--line);border-radius:4px;background:var(--raise);padding:9px 10px;break-inside:avoid}
+.grp .gh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;margin-bottom:6px}
+.grp .gh .gn{font:650 13.5px/1.2 var(--sans)}
+.grp .gh .gm{font:400 11.5px/1.2 var(--mono);color:var(--muted)}
+.grp .gh .gc{margin-left:auto}
+svg.dwg{width:100%;height:auto;display:block;overflow:visible}
+.dwg .pc{fill:var(--accent-wash);stroke:var(--accent);stroke-width:1.2}
+.dwg .oc{fill:var(--sunk);stroke:var(--line-hard);stroke-width:1.2}
+.dwg .hatch{stroke:var(--line-hard);stroke-width:1}
+.dwg .kf{fill:var(--line-hard)}
+.dwg text{font-family:var(--mono);fill:var(--ink)}
+.dwg .plabel{font-size:15px}
+.dwg .olabel{font-size:14px;fill:var(--muted)}
+.grp .gl{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.45}
+.grp .gl b{font-weight:650}
+@media(max-width:640px){.dwg .plabel,.dwg .olabel{display:none}svg.dwg{height:46px}}
+
+.minibar{display:none}
+@media(max-width:900px){
+  .col-r{order:-1}
+  .sticky{position:static}
+  .minibar{display:flex;position:sticky;top:48px;z-index:35;gap:10px;align-items:center;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:7px 11px;margin:0 0 12px;flex-wrap:wrap}
+  .minibar .mk{font:600 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .minibar .mv{font:700 17px/1 var(--mono);color:var(--accent-ink)}
+  .minibar .mm{font:400 11.5px/1.3 var(--mono);color:var(--ink-2);order:3;flex:1 1 100%}
+}
+#disclaimer{margin-bottom:14px}
+@media(max-width:560px){#disclaimer{font-size:12.8px}}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:90;max-width:min(520px,92vw);
+  box-shadow:var(--sh);background:var(--surface);border:1px solid var(--line);border-left-width:3px}
+footer.foot{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 40px;color:var(--muted);font-size:12.5px;line-height:1.55}
+footer.foot b{color:var(--ink-2)}
+
+/* print document */
+.phead{border-bottom:2px solid #000;padding-bottom:9px;margin-bottom:12px}
+.phead .pt{font-size:17pt;font-weight:700;letter-spacing:-.01em}
+.phead .ps{font-size:9.5pt;color:#333;margin-top:2px}
+.pmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px 18px;margin-top:10px;font-size:9.5pt}
+.pmeta div span{display:block;font-weight:700;text-transform:uppercase;font-size:7.5pt;letter-spacing:.06em;color:#444}
+@media print{
+  .tw{overflow:visible!important}
+  .minibar{display:none!important}
+  .phead{display:block}
+  h1,h2{color:#000}
+  .statgrid{display:grid!important;grid-template-columns:repeat(4,1fr)}
+  .stat.hero .v{font-size:20pt}
+  .statgrid .stat .v{font-size:13pt}
+  .grp{border:1px solid #bbb;background:#fff;page-break-inside:avoid}
+  .dwg .pc{fill:#fff;stroke:#000}
+  .dwg .oc{fill:#fff;stroke:#666}
+  .dwg .kf{fill:#000}
+  .dwg .hatch{stroke:#999}
+  .dwg text{fill:#000}
+  .dwg .plabel,.dwg .olabel{display:inline!important}
+  #tStock,#tCuts{font-size:9pt}
+  .card{margin-bottom:6mm}
+  #planCard{page-break-before:auto}
+  .note{border-left:3px solid #000;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  footer.foot{color:#333;font-size:8.5pt;padding:6px 0 0}
+}
+</style>
+</head>
+<body>
+
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+
+<main class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">CO</div>
+    <div style="min-width:0">
+      <h1>Lumber Cut Optimiser</h1>
+      <div class="sub">CUT PLAN · YIELD · MATERIAL COST</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm" id="bSample">Load sample</button>
+    <button type="button" class="btn sm" id="bJson">JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import</button>
+    <button type="button" class="btn sm" id="bCsv">CSV</button>
+    <button type="button" class="btn sm pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn sm dgr" id="bClear">Clear all data</button>
+  </div>
+</div>
+
+<!-- print letterhead -->
+<div class="printonly">
+  <div class="phead">
+    <div class="pt">Cutting &amp; Material Plan</div>
+    <div class="ps">Optimised cut list, board buying schedule and offcut yield</div>
+    <div class="pmeta">
+      <div><span>Job reference</span><b id="pRef">—</b></div>
+      <div><span>Client</span><b id="pClient">—</b></div>
+      <div><span>Site / location</span><b id="pSite">—</b></div>
+      <div><span>Material / section</span><b id="pMat">—</b></div>
+      <div><span>Prepared by</span><b id="pBy">—</b></div>
+      <div><span>Date</span><b id="pDate">—</b></div>
+      <div><span>Units</span><b id="pUnits">—</b></div>
+      <div><span>Saw kerf per cut</span><b id="pKerf">—</b></div>
+      <div><span>Plan chosen</span><b id="pPlan">—</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="minibar noprint" id="minibar">
+  <span class="mk">Material cost</span><span class="mv" id="mbCost">—</span>
+  <span class="chip" id="mbChip" style="margin-left:auto">—</span>
+  <span class="mm" id="mbMeta">—</span>
+</div>
+
+<div class="note warn" id="disclaimer">
+  <strong>Check the plan against the actual timber before you cut.</strong>
+  It packs the lengths you enter by first-fit-decreasing bin packing with one saw kerf per cut, assuming straight, defect-free
+  stock at exactly the nominal lengths given. It makes no allowance for bow, crook, split or waney ends, grain and face
+  selection, or offcuts already in your rack — add an end-trim allowance and spare quantity for those yourself. Measure and mark
+  out every board before cutting, and confirm lengths and prices with your timber merchant. Prices exclude tax and delivery.
+</div>
+
+<div class="split">
+  <!-- ── left: inputs ─────────────────────────────────────────── -->
+  <div class="stackgap">
+
+    <div class="card noprint" id="jobCard">
+      <div class="hd">
+        <h2>Job details</h2>
+        <span class="chip warn" id="sampleChip">Sample data</span>
+      </div>
+      <div class="bd">
+        <div class="fgrid wide">
+          <div class="f"><label for="jRef">Job reference</label><input id="jRef" data-scope="job" data-f="ref" autocomplete="off"></div>
+          <div class="f"><label for="jClient">Client</label><input id="jClient" data-scope="job" data-f="client" autocomplete="off"></div>
+          <div class="f"><label for="jSite">Site / location</label><input id="jSite" data-scope="job" data-f="site" autocomplete="off"></div>
+          <div class="f"><label for="jMat">Material / section</label><input id="jMat" data-scope="job" data-f="mat" autocomplete="off"></div>
+          <div class="f"><label for="jBy">Prepared by</label><input id="jBy" data-scope="job" data-f="by" autocomplete="off"></div>
+          <div class="f"><label for="jDate">Date</label><input id="jDate" type="date" data-scope="job" data-f="date"></div>
+        </div>
+        <p class="hint" style="margin-top:9px">One plan covers one material and section. Run a separate plan for each different profile.</p>
+      </div>
+    </div>
+
+    <div class="card" id="stockCard">
+      <div class="hd">
+        <h2>Stock lengths available</h2>
+        <button type="button" class="btn sm noprint" id="bAddStock">+ Add length</button>
+      </div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table id="tStock">
+            <thead><tr>
+              <th scope="col" style="min-width:130px">Stock item</th>
+              <th scope="col" class="n">Length&nbsp;(<span class="uL">mm</span>)</th>
+              <th scope="col" class="n">Price each</th>
+              <th scope="col" class="n">In&nbsp;stock</th>
+              <th scope="col" class="noprint act"><span class="dim">·</span></th>
+            </tr></thead>
+            <tbody id="stockBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ft">
+        <span class="hint">Leave <b>In stock</b> blank for an unlimited merchant supply. Price is per whole board.</span>
+      </div>
+    </div>
+
+    <div class="card" id="cutCard">
+      <div class="hd">
+        <h2>Cut list required</h2>
+        <button type="button" class="btn sm noprint" id="bAddCut">+ Add cut</button>
+      </div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table id="tCuts">
+            <thead><tr>
+              <th scope="col" style="min-width:130px">Part</th>
+              <th scope="col" class="n">Length&nbsp;(<span class="uL">mm</span>)</th>
+              <th scope="col" class="n">Qty</th>
+              <th scope="col" class="n">Total&nbsp;(<span class="uL">mm</span>)</th>
+              <th scope="col" class="noprint act"><span class="dim">·</span></th>
+            </tr></thead>
+            <tbody id="cutBody"></tbody>
+            <tfoot><tr>
+              <td class="lab">Cut list total</td>
+              <td class="n dim">—</td>
+              <td class="n" id="fQty">—</td>
+              <td class="n" id="fLen">—</td>
+              <td class="noprint act"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card noprint" id="optCard">
+      <div class="hd"><h2>Saw &amp; units</h2></div>
+      <div class="bd">
+        <div class="fgrid">
+          <div class="f">
+            <span class="lbl" id="unitLbl">Units</span>
+            <div class="seg" role="group" aria-labelledby="unitLbl">
+              <button type="button" id="uMm" aria-pressed="true">Metric (mm)</button>
+              <button type="button" id="uIn" aria-pressed="false">Imperial (in)</button>
+            </div>
+          </div>
+          <div class="f"><label for="oKerf">Saw kerf per cut (<span class="uL">mm</span>)</label>
+            <input id="oKerf" type="number" min="0" step="0.1" data-scope="opt" data-f="kerf" inputmode="decimal">
+            <span class="hint" id="kerfHint">Default 3&nbsp;mm (0.125&nbsp;in)</span>
+            <span class="err" data-err="kerf" hidden></span></div>
+          <div class="f"><label for="oTrim">Board end trim (<span class="uL">mm</span>)</label>
+            <input id="oTrim" type="number" min="0" step="1" data-scope="opt" data-f="trim" inputmode="decimal">
+            <span class="hint">Taken off each board before packing</span>
+            <span class="err" data-err="trim" hidden></span></div>
+          <div class="f"><label for="oMinUse">Keep offcuts over (<span class="uL">mm</span>)</label>
+            <input id="oMinUse" type="number" min="0" step="1" data-scope="opt" data-f="minUse" inputmode="decimal">
+            <span class="hint">Longer offcuts count as recoverable</span></div>
+          <div class="f"><label for="oCur">Currency</label>
+            <select id="oCur" data-scope="opt" data-f="cur">
+              <option value="£">£ Pound</option><option value="$">$ Dollar</option>
+              <option value="€">€ Euro</option><option value="custom">Custom symbol…</option>
+            </select></div>
+          <div class="f" id="curCustomWrap" hidden><label for="oCurCustom">Custom symbol</label>
+            <input id="oCurCustom" maxlength="4" data-scope="opt" data-f="curCustom" autocomplete="off"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── right: results ───────────────────────────────────────── -->
+  <div class="stackgap col-r">
+    <div class="card sticky" id="resCard">
+      <div class="hd">
+        <h2>Cheapest complete plan</h2>
+        <span class="chip" id="planChip">—</span>
+      </div>
+      <div class="bd">
+        <div class="stat hero">
+          <div class="k">Total material cost</div>
+          <div class="v" id="hCost">—</div>
+          <div class="u" id="hSub">—</div>
+        </div>
+        <div class="statgrid">
+          <div class="stat"><div class="k">Boards to buy</div><div class="v" id="sBoards">—</div></div>
+          <div class="stat"><div class="k">Waste</div><div class="v" id="sWaste">—</div></div>
+          <div class="stat"><div class="k">Saw cuts</div><div class="v" id="sCuts">—</div></div>
+          <div class="stat"><div class="k">Offcut to keep</div><div class="v" id="sOff">—</div></div>
+        </div>
+
+        <div class="note bad" id="unfitNote" hidden style="margin-top:12px"></div>
+
+        <h3 style="margin:14px 0 6px">Buy list</h3>
+        <div class="tw">
+          <table id="tBuy">
+            <thead><tr><th scope="col">Stock item</th><th scope="col" class="n">Qty</th><th scope="col" class="n">Each</th><th scope="col" class="n">Cost</th></tr></thead>
+            <tbody id="buyBody"></tbody>
+            <tfoot><tr><td>Total</td><td class="n" id="buyQty">—</td><td class="n dim">—</td><td class="n" id="buyCost">—</td></tr></tfoot>
+          </table>
+        </div>
+
+        <h3 style="margin:14px 0 6px">Strategies compared</h3>
+        <div class="tw">
+          <table id="tStrat">
+            <thead><tr><th scope="col">Plan</th><th scope="col" class="n">Boards</th><th scope="col" class="n">Waste</th><th scope="col" class="n">Cost</th></tr></thead>
+            <tbody id="stratBody"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin:14px 0 4px">Where the timber goes</h3>
+        <div id="yield"></div>
+      </div>
+      <div class="ft">
+        <span class="smallcap">Rounded up to whole boards</span>
+        <span class="chip ok" id="ftChip" style="margin-left:auto">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="planCard" style="margin-top:14px">
+  <div class="hd">
+    <h2>Cut plan — every board, drawn to scale</h2>
+    <span class="chip" id="planCount">—</span>
+  </div>
+  <div class="bd">
+    <div class="plan" id="planBody"></div>
+    <p class="hint" style="margin-top:10px">Bars are drawn to scale against the longest stock length. Solid blocks are finished parts, the hatched block is the offcut left on that board, and the thin dark lines are the saw kerf lost at each cut. Identical boards are grouped.</p>
+  </div>
+</div>
+
+<div class="printonly" style="margin-top:6mm;font-size:8.5pt;color:#333">
+  <b>Notice.</b> Plan generated by first-fit-decreasing bin packing with one saw kerf per cut. It assumes straight,
+  defect-free stock at the nominal lengths entered and makes no allowance for bow, crook, split ends, face or grain selection,
+  or existing offcuts. Measure and mark out every board before cutting. Prices as entered, excluding tax and delivery.
+</div>
+
+</main>
+
+<footer class="foot">
+  <b>Method.</b> Pieces are sorted longest-first and packed by first-fit-decreasing bin packing, charging the saw kerf against
+  every cut made. The pack is run once for each stock length on its own, and mixed across all lengths by several rules — opening
+  each new board in the length with the lowest cost per unit of finished timber, then downgrading every board to the cheapest
+  length that still holds what was packed on it. The cheapest plan that cuts every piece is the one shown, so a plan with more
+  boards can win when it costs less. Mixed-length packing against a price list has no exact shortcut, so treat the mixed plan as
+  a strong candidate rather than a proven optimum — the strategies table shows what it was measured against. A board holding <i>k</i> pieces of total length <i>S</i> needs
+  <i>S</i>&nbsp;+&nbsp;kerf&nbsp;×&nbsp;(<i>k</i>−1) ≤ length − end trim. Waste&nbsp;% = (total stock length bought − total cut
+  length) ÷ total stock length bought, counting kerf loss, end trim and offcut. Quantities always round up to whole boards;
+  money is shown to 2&nbsp;dp. Not a substitute for checking the timber itself.
+</footer>
+
+<div id="toast" class="note" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function(){
+"use strict";
+/* ═══ helpers ═══════════════════════════════════════════════════ */
+var LS='solvix.lumber-cut-optimizer.v1';
+var MAXP=2000, MAXB=3000;
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(v){
+  if(v===''||v===null||v===undefined) return NaN;
+  if(typeof v==='number') return isFinite(v)?v:NaN;
+  var n=Number(String(v).replace(/[^0-9.\-]/g,''));
+  return isFinite(n)?n:NaN;
+}
+function thou(s){
+  var neg=s.charAt(0)==='-'; if(neg) s=s.slice(1);
+  var p=s.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return (neg?'-':'')+p[0]+(p.length>1?'.'+p[1]:'');
+}
+function nfmt(x,d){
+  if(x===null||x===undefined||typeof x!=='number'||!isFinite(x)) return '—';
+  var v=x; if(Object.is(v,-0)) v=0;
+  var s=v.toFixed(d);
+  if(d>0 && s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  if(s==='-0') s='0';
+  return thou(s);
+}
+/* plain machine-readable number for CSV — no thousands separators */
+function rawn(x,d){
+  if(typeof x!=='number'||!isFinite(x)) return '';
+  var v=x; if(Object.is(v,-0)) v=0;
+  var s=v.toFixed(d);
+  if(d>0 && s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
+function ND(){return S.unit==='in'?3:1;}          /* length decimals */
+function uL(){return S.unit==='in'?'in':'mm';}
+function fLen(v,withUnit){
+  if(typeof v!=='number'||!isFinite(v)) return '—';
+  var s=nfmt(v,ND());
+  return withUnit===false?s:s+' '+uL();
+}
+function curSym(){return S.cur==='custom'?(S.curCustom||'¤'):S.cur;}
+function money(v){
+  if(typeof v!=='number'||!isFinite(v)) return '—';
+  var x=v; if(Object.is(x,-0)) x=0;
+  var neg=x<0; if(neg) x=-x;
+  return (neg?'-':'')+curSym()+thou(x.toFixed(2));
+}
+function pct(v){ return (typeof v==='number'&&isFinite(v))?nfmt(v,1)+'%':'—'; }
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fDate(iso){
+  if(!iso) return '—';
+  var p=String(iso).split('-'); if(p.length!==3) return iso;
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mi=parseInt(p[1],10)-1; if(!(mi>=0&&mi<12)) return iso;
+  return parseInt(p[2],10)+' '+m[mi]+' '+p[0];
+}
+var toastT=null;
+function toast(msg,kind){
+  var t=$('toast'); t.className='note'+(kind?' '+kind:''); t.textContent=msg; t.hidden=false;
+  if(toastT) clearTimeout(toastT);
+  toastT=setTimeout(function(){t.hidden=true;},4200);
+}
+
+/* ═══ state ═════════════════════════════════════════════════════ */
+var uid=1;
+function sample(){
+  return {
+    v:1, unit:'mm', cur:'£', curCustom:'', kerf:3, trim:0, minUse:300, sample:true,
+    job:{ref:'JOB-2418', client:'Marsden Joinery Ltd', site:'14 Bracken Rise — rear deck frame',
+         mat:'47 × 150 C24 treated softwood', by:'D. Whitcombe', date:todayISO()},
+    stock:[
+      {id:uid++, label:'2.4 m length', auto:true, len:2400, price:8.4,  qty:''},
+      {id:uid++, label:'3.6 m length', auto:true, len:3600, price:11.9, qty:''},
+      {id:uid++, label:'4.8 m length', auto:true, len:4800, price:16.5, qty:''}
+    ],
+    cuts:[
+      {id:uid++, part:'Deck joist',      len:1850, qty:10},
+      {id:uid++, part:'Trimmer / header',len:2350, qty:4},
+      {id:uid++, part:'Noggin blocking', len:380,  qty:20},
+      {id:uid++, part:'Ledger cleat',    len:900,  qty:6}
+    ]
+  };
+}
+var S=sample();
+
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  var raw=null;
+  try{ raw=localStorage.getItem(LS); }catch(e){ return false; }
+  if(!raw) return false;
+  try{
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object') return false;
+    S=normalise(o); return true;
+  }catch(e){ return false; }
+}
+function normalise(o){
+  var d=sample();
+  var s={
+    v:1,
+    unit:(o.unit==='in')?'in':'mm',
+    cur:['£','$','€','custom'].indexOf(o.cur)>=0?o.cur:'£',
+    curCustom:typeof o.curCustom==='string'?o.curCustom.slice(0,4):'',
+    kerf:isFinite(num(o.kerf))?num(o.kerf):d.kerf,
+    trim:isFinite(num(o.trim))?num(o.trim):0,
+    minUse:isFinite(num(o.minUse))?num(o.minUse):d.minUse,
+    sample:!!o.sample,
+    job:{}, stock:[], cuts:[]
+  };
+  var jk=['ref','client','site','mat','by','date'];
+  for(var i=0;i<jk.length;i++){ var k=jk[i]; s.job[k]=(o.job&&typeof o.job[k]==='string')?o.job[k]:''; }
+  if(Array.isArray(o.stock)) o.stock.forEach(function(r){
+    if(!r||typeof r!=='object') return;
+    s.stock.push({id:uid++, label:typeof r.label==='string'?r.label:'', auto:r.auto!==false,
+      len:isFinite(num(r.len))?num(r.len):NaN,
+      price:isFinite(num(r.price))?num(r.price):NaN,
+      qty:(r.qty===''||r.qty===null||r.qty===undefined)?'':(isFinite(num(r.qty))?num(r.qty):'')});
+  });
+  if(Array.isArray(o.cuts)) o.cuts.forEach(function(r){
+    if(!r||typeof r!=='object') return;
+    s.cuts.push({id:uid++, part:typeof r.part==='string'?r.part:'',
+      len:isFinite(num(r.len))?num(r.len):NaN,
+      qty:isFinite(num(r.qty))?num(r.qty):NaN});
+  });
+  if(!s.stock.length) s.stock.push({id:uid++,label:'',auto:true,len:NaN,price:NaN,qty:''});
+  if(!s.cuts.length)  s.cuts.push({id:uid++,part:'',len:NaN,qty:NaN});
+  return s;
+}
+
+/* auto stock naming — regenerated until the user types their own */
+function autoName(len){
+  if(!isFinite(len)||len<=0) return '';
+  if(S.unit==='in'){
+    var ft=len/12;
+    if(Math.abs(ft-Math.round(ft))<0.005 && ft>=1) return Math.round(ft)+' ft length';
+    return nfmt(len,2)+' in length';
+  }
+  if(len>=1000) return nfmt(len/1000,2)+' m length';
+  return nfmt(len,0)+' mm length';
+}
+function refreshAutoNames(){
+  S.stock.forEach(function(r){ if(r.auto) r.label=autoName(r.len); });
+}
+
+/* ═══ the optimiser ═════════════════════════════════════════════
+   First-fit-decreasing bin packing with a saw kerf charged to every
+   cut. A board holding k pieces of total length Sp fits when
+   Sp + kerf*(k-1) <= usable length. When a new board must be opened
+   the stock length giving the lowest cost per unit of finished
+   timber is chosen, so mixed-length plans can beat single lengths. */
+var EPS=1e-6;
+
+/* every board: total length cut, number of saw cuts, kerf lost, offcut left */
+function finalise(res, kerf, trim){
+  var cost=0, stockLen=0, product=0, kerfLoss=0, trimLoss=0, offcut=0, cuts=0;
+  res.boards.forEach(function(b){
+    var k=b.items.length, i, s=0;
+    for(i=0;i<k;i++) s+=b.items[i].len;
+    b.S=s;
+    var raw=(b.stock.len-trim)-s-kerf*(k-1);
+    if(raw<0) raw=0;
+    b.cuts = (kerf>0 ? (raw>=kerf-EPS?k:k-1) : (raw>EPS?k:k-1));
+    if(b.cuts<0) b.cuts=0;
+    b.offcut = raw - (b.cuts===k?kerf:0);
+    if(b.offcut<0) b.offcut=0;
+    b.kerfLoss=b.cuts*kerf;
+    cost+=b.stock.price; stockLen+=b.stock.len; product+=s;
+    kerfLoss+=b.kerfLoss; trimLoss+=trim; offcut+=b.offcut; cuts+=b.cuts;
+  });
+  res.cost=cost; res.stockLen=stockLen; res.product=product; res.kerfLoss=kerfLoss;
+  res.trimLoss=trimLoss; res.offcut=offcut; res.cuts=cuts;
+  res.waste = stockLen>0 ? (stockLen-product)/stockLen*100 : NaN;
+  return res;
+}
+/* value of a candidate board: cost per unit of finished timber it would yield */
+function lookahead(list, from, st, kerf, trim, take){
+  var cap=st.len-trim, s=0, k=0, i, idx=take?[]:null;
+  for(i=from;i<list.length;i++){
+    if(list[i]===null) continue;
+    var c=list[i];
+    if(s+c.len+kerf*k <= cap+EPS){ s+=c.len; k++; if(idx) idx.push(i); }
+  }
+  return {S:s, k:k, idx:idx};
+}
+/* mode 'firstfit' — literal FFD: each piece goes in the first open board that
+   takes it, and a new board is opened in the stock length with the best value.
+   mode 'value'   — each new board is opened already filled with the best-value
+   run of pieces, which suits mixed price lists better.                      */
+function pack(pieces, stocks, kerf, trim, mode){
+  var avail={}, anyPrice=false;
+  stocks.forEach(function(st){ avail[st.id]=st.qty; if(st.price>0) anyPrice=true; });
+  var boards=[], unfit=[], i, j;
+
+  function pickStock(list, from){
+    var best=null, p=list[from];
+    for(j=0;j<stocks.length;j++){
+      var st=stocks[j];
+      if(avail[st.id]<=0) continue;
+      if(p.len > st.len-trim+EPS) continue;
+      var la=lookahead(list, from, st, kerf, trim, mode==='value');
+      var eff = anyPrice ? (st.price/la.S) : (st.len/la.S);
+      if(best===null || eff<best.eff-1e-12 ||
+         (Math.abs(eff-best.eff)<=1e-12 && (la.S>best.la.S+EPS ||
+          (Math.abs(la.S-best.la.S)<=EPS && st.price<best.st.price-1e-9)))){
+        best={st:st, eff:eff, la:la};
+      }
+    }
+    return best;
+  }
+
+  if(mode==='value'){
+    var list=pieces.slice(), left=list.length, from=0;
+    while(left>0){
+      while(from<list.length && list[from]===null) from++;
+      if(from>=list.length) break;
+      if(boards.length>=MAXB){ for(i=from;i<list.length;i++) if(list[i]){ unfit.push(list[i]); list[i]=null; left--; } break; }
+      var pick=pickStock(list, from);
+      if(!pick){ unfit.push(list[from]); list[from]=null; left--; continue; }
+      avail[pick.st.id]--;
+      var items=pick.la.idx.map(function(ix){ var v=list[ix]; list[ix]=null; return v; });
+      left-=items.length;
+      boards.push({stock:pick.st, items:items});
+    }
+  } else {
+    for(i=0;i<pieces.length;i++){
+      var p=pieces[i], placed=false;
+      for(j=0;j<boards.length;j++){
+        var b=boards[j], k=b.items.length+1, s=0, q;
+        for(q=0;q<b.items.length;q++) s+=b.items[q].len;
+        if(s+p.len+kerf*(k-1) <= b.stock.len-trim+EPS){ b.items.push(p); placed=true; break; }
+      }
+      if(placed) continue;
+      if(boards.length>=MAXB){ unfit.push(p); continue; }
+      var pk=pickStock(pieces, i);
+      if(!pk){ unfit.push(p); continue; }
+      avail[pk.st.id]--;
+      boards.push({stock:pk.st, items:[p]});
+    }
+  }
+  return finalise({boards:boards, unfit:unfit}, kerf, trim);
+}
+/* buy the cheapest board that still holds what was packed on it */
+function downgrade(res, stocks, kerf, trim){
+  if(stocks.length<2) return res;
+  var used={}, i;
+  stocks.forEach(function(s){ used[s.id]=0; });
+  res.boards.forEach(function(b){ used[b.stock.id]++; });
+  var order=stocks.slice().sort(function(a,b){ return (a.price-b.price)||(a.len-b.len); });
+  res.boards.forEach(function(b){
+    var s=0, k=b.items.length;
+    for(i=0;i<k;i++) s+=b.items[i].len;
+    var need=s+kerf*(k-1);
+    for(i=0;i<order.length;i++){
+      var st=order[i];
+      if(st.price>=b.stock.price-1e-9) break;
+      if(need > st.len-trim+EPS) continue;
+      if(used[st.id]>=st.qty) continue;
+      used[b.stock.id]--; used[st.id]++; b.stock=st; break;
+    }
+  });
+  return finalise(res, kerf, trim);
+}
+function cloneRes(r){
+  return {boards:r.boards.map(function(b){ return {stock:b.stock, items:b.items.slice()}; }),
+          unfit:r.unfit.slice()};
+}
+
+/* ═══ compute ═══════════════════════════════════════════════════ */
+var R=null;
+function compute(){
+  var kerf=num(S.kerf); if(!isFinite(kerf)||kerf<0) kerf=0;
+  var trim=num(S.trim); if(!isFinite(trim)||trim<0) trim=0;
+  var minUse=num(S.minUse); if(!isFinite(minUse)||minUse<0) minUse=0;
+
+  var stocks=[];
+  S.stock.forEach(function(r,i){
+    var L=num(r.len);
+    if(!isFinite(L)||L<=0) return;
+    var pr=num(r.price); if(!isFinite(pr)||pr<0) pr=0;
+    var q=(r.qty===''||r.qty===null)?Infinity:Math.floor(num(r.qty));
+    if(!isFinite(q)) q=(r.qty===''||r.qty===null)?Infinity:0;
+    if(q<0) q=0;
+    if(L-trim<=0) return;
+    stocks.push({id:r.id, idx:i, label:r.label||autoName(L)||('Stock '+(i+1)), len:L, price:pr, qty:q});
+  });
+
+  var pieces=[], overflow=false, totalQty=0, totalCutLen=0;
+  S.cuts.forEach(function(c,i){
+    var L=num(c.len), q=Math.floor(num(c.qty));
+    if(!isFinite(L)||L<=0||!isFinite(q)||q<=0) return;
+    totalQty+=q; totalCutLen+=L*q;
+    var name=(c.part||'').trim()||('Part '+(i+1));
+    for(var j=0;j<q;j++){
+      if(pieces.length>=MAXP){ overflow=true; return; }
+      pieces.push({len:L, part:name, ci:i});
+    }
+  });
+  pieces.sort(function(a,b){ return (b.len-a.len) || (a.part<b.part?-1:a.part>b.part?1:0); });
+
+  var runs=[], singles=[];
+  stocks.forEach(function(st){
+    var r=pack(pieces, [st], kerf, trim, 'firstfit');
+    r.name='All '+st.label; r.single=true;
+    singles.push(r); runs.push(r);
+  });
+  if(stocks.length>1 && pieces.length){
+    /* several honest heuristics; the cheapest complete one is offered as the
+       mixed plan, because mixed-length packing with prices has no exact
+       shortcut short of trying every combination */
+    var mixes=[
+      downgrade(pack(pieces, stocks, kerf, trim, 'value'), stocks, kerf, trim),
+      downgrade(pack(pieces, stocks, kerf, trim, 'firstfit'), stocks, kerf, trim)
+    ];
+    singles.forEach(function(r){ mixes.push(downgrade(cloneRes(r), stocks, kerf, trim)); });
+    mixes.sort(function(a,b){
+      if(a.unfit.length!==b.unfit.length) return a.unfit.length-b.unfit.length;
+      if(Math.abs(a.cost-b.cost)>0.004) return a.cost-b.cost;
+      if(a.boards.length!==b.boards.length) return a.boards.length-b.boards.length;
+      return (a.stockLen-a.product)-(b.stockLen-b.product);
+    });
+    var mx=mixes[0];
+    mx.name='Mixed lengths'; mx.single=false;
+    runs.push(mx);
+  }
+  runs=runs.filter(function(r){ return r.boards.length>0 || r.unfit.length>0 || pieces.length===0; });
+
+  var ranked=runs.slice().sort(function(a,b){
+    if(a.unfit.length!==b.unfit.length) return a.unfit.length-b.unfit.length;
+    if(Math.abs(a.cost-b.cost)>0.004) return a.cost-b.cost;
+    if(a.boards.length!==b.boards.length) return a.boards.length-b.boards.length;
+    return (a.stockLen-a.product)-(b.stockLen-b.product);
+  });
+  var best=ranked.length?ranked[0]:null;
+
+  var usable=0, scrap=0;
+  if(best) best.boards.forEach(function(b){ if(b.offcut>=minUse&&b.offcut>0) usable+=b.offcut; else scrap+=b.offcut; });
+
+  R={kerf:kerf, trim:trim, minUse:minUse, stocks:stocks, pieces:pieces, overflow:overflow,
+     totalQty:totalQty, totalCutLen:totalCutLen, runs:runs, best:best,
+     usable:usable, scrap:scrap, hasStock:stocks.length>0};
+  return R;
+}
+
+/* ═══ rendering — inputs ════════════════════════════════════════ */
+function rowStock(r,i){
+  return '<tr data-i="'+i+'">'+
+    '<td class="lab"><input value="'+esc(r.label)+'" data-scope="stock" data-i="'+i+'" data-f="label" aria-label="Stock item '+(i+1)+' description" autocomplete="off"></td>'+
+    '<td class="n"><input type="number" min="0" step="any" inputmode="decimal" value="'+(isFinite(r.len)?r.len:'')+'" data-scope="stock" data-i="'+i+'" data-f="len" aria-label="Stock item '+(i+1)+' length"><span class="err" data-err="stock-len-'+i+'" hidden></span></td>'+
+    '<td class="n"><input type="number" min="0" step="0.01" inputmode="decimal" value="'+(isFinite(r.price)?r.price.toFixed(2):'')+'" data-scope="stock" data-i="'+i+'" data-f="price" aria-label="Stock item '+(i+1)+' price each"></td>'+
+    '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" placeholder="∞" value="'+(r.qty===''?'':r.qty)+'" data-scope="stock" data-i="'+i+'" data-f="qty" aria-label="Stock item '+(i+1)+' quantity in stock"></td>'+
+    '<td class="act noprint"><button type="button" class="btn sm ico del" data-del="stock" data-i="'+i+'" aria-label="Remove stock item '+(i+1)+'" title="Remove">✕</button></td></tr>';
+}
+function rowCut(r,i){
+  var L=num(r.len), q=Math.floor(num(r.qty));
+  var tot=(isFinite(L)&&isFinite(q)&&L>0&&q>0)?fLen(L*q,false):'—';
+  return '<tr data-i="'+i+'">'+
+    '<td class="lab"><input value="'+esc(r.part)+'" data-scope="cut" data-i="'+i+'" data-f="part" aria-label="Cut '+(i+1)+' part name" autocomplete="off"></td>'+
+    '<td class="n"><input type="number" min="0" step="any" inputmode="decimal" value="'+(isFinite(L)?r.len:'')+'" data-scope="cut" data-i="'+i+'" data-f="len" aria-label="Cut '+(i+1)+' length"><span class="err" data-err="cut-len-'+i+'" hidden></span></td>'+
+    '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" value="'+(isFinite(q)?q:'')+'" data-scope="cut" data-i="'+i+'" data-f="qty" aria-label="Cut '+(i+1)+' quantity"></td>'+
+    '<td class="n" data-tot="'+i+'">'+tot+'</td>'+
+    '<td class="act noprint"><button type="button" class="btn sm ico del" data-del="cut" data-i="'+i+'" aria-label="Remove cut '+(i+1)+'" title="Remove">✕</button></td></tr>';
+}
+function renderTables(){
+  $('stockBody').innerHTML=S.stock.map(rowStock).join('');
+  $('cutBody').innerHTML=S.cuts.map(rowCut).join('');
+}
+function renderForm(){
+  $('jRef').value=S.job.ref; $('jClient').value=S.job.client; $('jSite').value=S.job.site;
+  $('jMat').value=S.job.mat; $('jBy').value=S.job.by; $('jDate').value=S.job.date;
+  $('oKerf').value=isFinite(num(S.kerf))?S.kerf:'';
+  $('oTrim').value=isFinite(num(S.trim))?S.trim:'';
+  $('oMinUse').value=isFinite(num(S.minUse))?S.minUse:'';
+  $('oCur').value=S.cur; $('oCurCustom').value=S.curCustom||'';
+  $('curCustomWrap').hidden=(S.cur!=='custom');
+  $('uMm').setAttribute('aria-pressed', S.unit==='mm'?'true':'false');
+  $('uIn').setAttribute('aria-pressed', S.unit==='in'?'true':'false');
+  var u=uL(), els=document.querySelectorAll('.uL');
+  for(var i=0;i<els.length;i++) els[i].textContent=u;
+  $('kerfHint').textContent = S.unit==='in' ? 'Default 0.125 in (3 mm)' : 'Default 3 mm (0.125 in)';
+  $('sampleChip').hidden=!S.sample;
+}
+
+/* ═══ rendering — results ═══════════════════════════════════════ */
+function boardSig(b){
+  return b.stock.id+'|'+b.items.map(function(p){return p.len+'@'+p.part;}).sort().join(',');
+}
+function numRange(ns){
+  ns=ns.slice().sort(function(a,b){return a-b;});
+  var out=[], s=ns[0], p=ns[0], i;
+  for(i=1;i<=ns.length;i++){
+    if(i<ns.length && ns[i]===p+1){ p=ns[i]; continue; }
+    out.push(s===p?String(s):(p===s+1?s+', '+p:s+'–'+p));
+    s=ns[i]; p=ns[i];
+  }
+  return out.join(', ');
+}
+function drawBoard(b, maxLen, kerf, trim){
+  var W=1000, H=58, BY=5, BH=34;
+  var sc=function(v){ return v/maxLen*W; };
+  var parts=[], x=trim>0?sc(trim):0, i;
+  if(trim>0) parts.push('<rect class="kf" x="0" y="'+BY+'" width="'+sc(trim).toFixed(2)+'" height="'+BH+'" opacity="0.5"></rect>');
+  for(i=0;i<b.items.length;i++){
+    var p=b.items[i], w=sc(p.len);
+    parts.push('<rect class="pc" x="'+x.toFixed(2)+'" y="'+BY+'" width="'+w.toFixed(2)+'" height="'+BH+'" rx="1"><title>'+esc(p.part)+' — '+esc(fLen(p.len))+'</title></rect>');
+    if(w>52) parts.push('<text class="plabel" x="'+(x+w/2).toFixed(2)+'" y="'+(BY+BH/2+5)+'" text-anchor="middle">'+esc(nfmt(p.len,ND()))+'</text>');
+    x+=w;
+    if(i<b.items.length-1 || b.cuts===b.items.length){
+      var kw=Math.max(sc(kerf),0.9);
+      parts.push('<rect class="kf" x="'+x.toFixed(2)+'" y="'+BY+'" width="'+kw.toFixed(2)+'" height="'+BH+'"></rect>');
+      x+=sc(kerf);
+    }
+  }
+  if(b.offcut>0.0005){
+    var ow=sc(b.offcut);
+    parts.push('<rect class="oc" x="'+x.toFixed(2)+'" y="'+BY+'" width="'+ow.toFixed(2)+'" height="'+BH+'" rx="1"><title>Offcut '+esc(fLen(b.offcut))+'</title></rect>');
+    var step=9, hx;
+    for(hx=x-BH; hx<x+ow; hx+=step){
+      var x1=Math.max(x,hx), y1=BY+BH-(x1-hx), x2=Math.min(x+ow,hx+BH), y2=BY+BH-(x2-hx);
+      if(x2>x1 && y1>=BY && y2<=BY+BH) parts.push('<line class="hatch" x1="'+x1.toFixed(2)+'" y1="'+y1.toFixed(2)+'" x2="'+x2.toFixed(2)+'" y2="'+y2.toFixed(2)+'"></line>');
+    }
+    if(ow>62) parts.push('<text class="olabel" x="'+(x+ow/2).toFixed(2)+'" y="'+(BY+BH/2+5)+'" text-anchor="middle">'+esc(nfmt(b.offcut,ND()))+'</text>');
+  }
+  parts.push('<text class="olabel" x="0" y="'+(H-2)+'">0</text>');
+  parts.push('<text class="olabel" x="'+sc(b.stock.len).toFixed(2)+'" y="'+(H-2)+'" text-anchor="end">'+esc(fLen(b.stock.len))+'</text>');
+  return '<svg class="dwg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="Cut layout for a '+esc(fLen(b.stock.len))+' board">'+parts.join('')+'</svg>';
+}
+function paint(){
+  compute();
+  var best=R.best, i;
+
+  /* cut list footer */
+  $('fQty').textContent = R.totalQty>0 ? nfmt(R.totalQty,0) : '—';
+  $('fLen').textContent = R.totalCutLen>0 ? fLen(R.totalCutLen,false) : '—';
+  S.cuts.forEach(function(c,ix){
+    var el=document.querySelector('[data-tot="'+ix+'"]');
+    if(!el) return;
+    var L=num(c.len), q=Math.floor(num(c.qty));
+    el.textContent=(isFinite(L)&&isFinite(q)&&L>0&&q>0)?fLen(L*q,false):'—';
+  });
+
+  var ok = !!(best && best.boards.length);
+  /* hero */
+  $('hCost').textContent = ok ? money(best.cost) : '—';
+  $('hSub').textContent  = ok ? (nfmt(best.boards.length,0)+' board'+(best.boards.length===1?'':'s')+' · '+best.name.toLowerCase()) : 'Add stock lengths and a cut list';
+  $('sBoards').textContent = ok ? nfmt(best.boards.length,0) : '—';
+  $('sWaste').textContent  = ok ? pct(best.waste) : '—';
+  $('sCuts').textContent   = ok ? nfmt(best.cuts,0) : '—';
+  $('sOff').textContent    = ok ? fLen(R.usable) : '—';
+  $('planChip').textContent= ok ? best.name : 'No plan yet';
+  $('mbCost').textContent  = ok ? money(best.cost) : '—';
+  $('mbMeta').textContent  = ok ? (nfmt(best.boards.length,0)+' boards · '+pct(best.waste)+' waste · '+nfmt(best.cuts,0)+' cuts') : '—';
+
+  var chip=$('ftChip'), mchip=$('mbChip'), cls='chip ok', txt='Every piece placed';
+  if(!ok){ cls='chip'; txt='Waiting for input'; }
+  else if(best.unfit.length){ cls='chip bad'; txt=best.unfit.length+' piece'+(best.unfit.length===1?'':'s')+' will not fit'; }
+  else if(isFinite(best.waste)&&best.waste>25){ cls='chip warn'; txt='High waste — try another length'; }
+  chip.className=cls; chip.textContent=txt; mchip.className=cls; mchip.textContent=txt;
+
+  /* unfit / overflow notice */
+  var msgs=[];
+  if(R.overflow) msgs.push('<strong>Cut list truncated.</strong> This tool plans up to '+MAXP+' pieces at a time; split the job into batches.');
+  if(ok && best.unfit.length){
+    var byName={};
+    best.unfit.forEach(function(p){ var k=p.part+'|'+p.len; byName[k]=(byName[k]||0)+1; });
+    var list=Object.keys(byName).map(function(k){
+      var pr=k.split('|'); return byName[k]+' × '+esc(pr[0])+' at '+esc(fLen(num(pr[1])));
+    }).join('; ');
+    msgs.push('<strong>Not cut by this plan:</strong> '+list+'. No stock length in the list is long enough (after end trim), or you have run out of that stock.');
+  }
+  if(!R.hasStock && R.pieces.length) msgs.push('<strong>No usable stock lengths.</strong> Enter at least one stock length longer than your longest cut.');
+  var un=$('unfitNote');
+  if(msgs.length){ un.innerHTML=msgs.join('<br>'); un.hidden=false; } else { un.hidden=true; un.innerHTML=''; }
+
+  /* buy list */
+  var buy={}, order=[];
+  if(ok) best.boards.forEach(function(b){
+    if(!buy[b.stock.id]){ buy[b.stock.id]={st:b.stock,n:0}; order.push(b.stock.id); }
+    buy[b.stock.id].n++;
+  });
+  order.sort(function(a,b){ return buy[b].st.len-buy[a].st.len; });
+  $('buyBody').innerHTML = order.length ? order.map(function(k){
+    var e=buy[k];
+    return '<tr><th scope="row" style="font:inherit;text-transform:none;letter-spacing:0;background:none;color:inherit;border-bottom:1px solid var(--line);padding:8px 10px;white-space:normal">'+esc(e.st.label)+'</th>'+
+      '<td class="n">'+nfmt(e.n,0)+'</td><td class="n">'+money(e.st.price)+'</td><td class="n">'+money(e.st.price*e.n)+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">Nothing to buy yet</td></tr>';
+  $('buyQty').textContent = ok ? nfmt(best.boards.length,0) : '—';
+  $('buyCost').textContent= ok ? money(best.cost) : '—';
+
+  /* strategy comparison */
+  $('stratBody').innerHTML = R.runs.length ? R.runs.slice().sort(function(a,b){
+      if(a.unfit.length!==b.unfit.length) return a.unfit.length-b.unfit.length;
+      return a.cost-b.cost;
+    }).map(function(r){
+      var chosen=(r===best);
+      return '<tr'+(chosen?' style="background:var(--accent-wash);font-weight:650"':'')+'>'+
+        '<th scope="row" style="font:inherit;text-transform:none;letter-spacing:0;background:none;color:inherit;border-bottom:1px solid var(--line);padding:8px 10px;white-space:normal">'+
+          esc(r.name)+(chosen?' ✓':'')+(r.unfit.length?' <span class="chip bad">'+r.unfit.length+' unfit</span>':'')+'</th>'+
+        '<td class="n">'+(r.boards.length?nfmt(r.boards.length,0):'—')+'</td>'+
+        '<td class="n">'+pct(r.waste)+'</td><td class="n">'+money(r.cost)+'</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="empty">Enter stock lengths to compare</td></tr>';
+
+  /* yield breakdown */
+  var y=$('yield');
+  if(ok){
+    var rows=[
+      ['Stock bought', fLen(best.stockLen), ''],
+      ['Finished parts', fLen(best.product), pct(best.stockLen>0?best.product/best.stockLen*100:NaN)],
+      ['Saw kerf lost ('+nfmt(best.cuts,0)+' cuts × '+fLen(R.kerf)+')', fLen(best.kerfLoss), pct(best.stockLen>0?best.kerfLoss/best.stockLen*100:NaN)],
+      ['End trim ('+nfmt(best.boards.length,0)+' × '+fLen(R.trim)+')', fLen(best.trimLoss), pct(best.stockLen>0?best.trimLoss/best.stockLen*100:NaN)],
+      ['Offcut worth keeping (≥ '+fLen(R.minUse)+')', fLen(R.usable), pct(best.stockLen>0?R.usable/best.stockLen*100:NaN)],
+      ['Offcut scrapped', fLen(R.scrap), pct(best.stockLen>0?R.scrap/best.stockLen*100:NaN)]
+    ];
+    y.innerHTML=rows.map(function(r){
+      return '<div class="kv"><span class="kn">'+r[0]+'</span><span class="kvv">'+r[1]+(r[2]?' <span class="dim">'+r[2]+'</span>':'')+'</span></div>';
+    }).join('')+
+    '<div class="kv"><span class="kn"><b>Cost per '+(S.unit==='in'?'foot':'metre')+' of finished part</b></span><span class="kvv">'+
+      (best.product>0?money(best.cost/(S.unit==='in'?best.product/12:best.product/1000)):'—')+'</span></div>';
+  } else {
+    y.innerHTML='<div class="empty">No plan yet</div>';
+  }
+
+  /* cut plan */
+  var pb=$('planBody');
+  if(ok){
+    var maxLen=0;
+    best.boards.forEach(function(b){ if(b.stock.len>maxLen) maxLen=b.stock.len; });
+    var groups=[], map={};
+    best.boards.forEach(function(b,ix){
+      var sg=boardSig(b);
+      if(!map[sg]){ map[sg]={b:b, nums:[], sig:sg}; groups.push(map[sg]); }
+      map[sg].nums.push(ix+1);
+    });
+    pb.innerHTML=groups.map(function(g){
+      var b=g.b, n=g.nums.length;
+      var counts={}, ordr=[];
+      b.items.forEach(function(p){
+        var k=p.part+'|'+p.len;
+        if(!counts[k]){ counts[k]={p:p,n:0}; ordr.push(k); }
+        counts[k].n++;
+      });
+      var list=ordr.map(function(k){
+        return '<b>'+counts[k].n+' ×</b> '+esc(counts[k].p.part)+' '+esc(fLen(counts[k].p.len,false));
+      }).join(' &nbsp;·&nbsp; ');
+      return '<div class="grp">'+
+        '<div class="gh"><span class="gn">Board '+numRange(g.nums)+(n>1?' <span class="dim">('+n+' identical)</span>':'')+'</span>'+
+        '<span class="gm">'+esc(b.stock.label)+' · '+esc(fLen(b.stock.len))+' · '+money(b.stock.price)+' each</span>'+
+        '<span class="chip gc'+(b.offcut>=R.minUse&&b.offcut>0?' ok':'')+'">Offcut '+esc(fLen(b.offcut))+'</span></div>'+
+        drawBoard(b,maxLen,R.kerf,R.trim)+
+        '<div class="gl">'+list+' &nbsp;·&nbsp; <span class="dim">'+b.cuts+' cut'+(b.cuts===1?'':'s')+
+        ', '+esc(fLen(b.kerfLoss))+' kerf</span></div></div>';
+    }).join('');
+    $('planCount').textContent=groups.length+' pattern'+(groups.length===1?'':'s')+' · '+best.boards.length+' board'+(best.boards.length===1?'':'s');
+  } else {
+    pb.innerHTML='<div class="empty">Enter a cut list and at least one stock length to see the plan.</div>';
+    $('planCount').textContent='—';
+  }
+
+  /* print header */
+  $('pRef').textContent=S.job.ref||'—'; $('pClient').textContent=S.job.client||'—';
+  $('pSite').textContent=S.job.site||'—'; $('pMat').textContent=S.job.mat||'—';
+  $('pBy').textContent=S.job.by||'—'; $('pDate').textContent=fDate(S.job.date);
+  $('pUnits').textContent=S.unit==='in'?'Inches (imperial)':'Millimetres (metric)';
+  $('pKerf').textContent=fLen(R.kerf);
+  $('pPlan').textContent=ok?(best.name+' — '+best.boards.length+' boards, '+money(best.cost)):'—';
+}
+
+/* ═══ validation ════════════════════════════════════════════════ */
+function showErr(key,msg,el){
+  var e=document.querySelector('[data-err="'+key+'"]');
+  if(e){ if(msg){ e.textContent=msg; e.hidden=false; } else { e.textContent=''; e.hidden=true; } }
+  if(el){ if(msg) el.classList.add('inv'); else el.classList.remove('inv'); }
+}
+function validateField(el){
+  var sc=el.getAttribute('data-scope'), f=el.getAttribute('data-f'), i=el.getAttribute('data-i');
+  var v=el.value.trim();
+  if(sc==='stock'&&f==='len'){
+    var L=num(v);
+    showErr('stock-len-'+i, (v!==''&&(!isFinite(L)||L<=0))?'Length must be more than 0':'', el);
+  } else if(sc==='cut'&&f==='len'){
+    var C=num(v);
+    var msg='';
+    if(v!==''&&(!isFinite(C)||C<=0)) msg='Length must be more than 0';
+    else if(isFinite(C)&&C>0&&R&&R.stocks.length){
+      var maxCap=0;
+      R.stocks.forEach(function(s){ if(s.len-R.trim>maxCap) maxCap=s.len-R.trim; });
+      if(C>maxCap+1e-6) msg='Longer than any stock length ('+fLen(maxCap)+' usable)';
+    }
+    showErr('cut-len-'+i, msg, el);
+  } else if(sc==='opt'&&(f==='kerf'||f==='trim')){
+    var K=num(v);
+    showErr(f, (v!==''&&(!isFinite(K)||K<0))?'Cannot be negative':'', el);
+  }
+}
+function validateAll(){
+  var els=document.querySelectorAll('[data-scope]');
+  for(var i=0;i<els.length;i++) validateField(els[i]);
+}
+
+/* ═══ events ════════════════════════════════════════════════════ */
+function touched(){ if(S.sample){ S.sample=false; $('sampleChip').hidden=true; } }
+
+document.addEventListener('input', function(ev){
+  var el=ev.target;
+  if(!el||!el.getAttribute) return;
+  var sc=el.getAttribute('data-scope'); if(!sc) return;
+  var f=el.getAttribute('data-f'), i=parseInt(el.getAttribute('data-i'),10);
+  var v=el.value;
+  touched();
+  if(sc==='job'){ S.job[f]=v; }
+  else if(sc==='opt'){
+    if(f==='cur'){ S.cur=v; $('curCustomWrap').hidden=(v!=='custom'); }
+    else if(f==='curCustom'){ S.curCustom=v.slice(0,4); }
+    else { S.kerf=(f==='kerf')?(v===''?0:num(v)):S.kerf;
+           S.trim=(f==='trim')?(v===''?0:num(v)):S.trim;
+           S.minUse=(f==='minUse')?(v===''?0:num(v)):S.minUse; }
+  }
+  else if(sc==='stock'&&S.stock[i]){
+    var r=S.stock[i];
+    if(f==='label'){ r.label=v; r.auto=(v.trim()===''); if(r.auto) r.label=autoName(r.len); }
+    else if(f==='len'){ r.len=(v===''?NaN:num(v)); if(r.auto){ r.label=autoName(r.len); var lb=document.querySelector('input[data-scope="stock"][data-i="'+i+'"][data-f="label"]'); if(lb) lb.value=r.label; } }
+    else if(f==='price'){ r.price=(v===''?NaN:num(v)); }
+    else if(f==='qty'){ r.qty=(v===''?'':num(v)); }
+  }
+  else if(sc==='cut'&&S.cuts[i]){
+    var c=S.cuts[i];
+    if(f==='part') c.part=v;
+    else if(f==='len') c.len=(v===''?NaN:num(v));
+    else if(f==='qty') c.qty=(v===''?NaN:num(v));
+  }
+  save(); paint(); validateField(el);
+});
+document.addEventListener('change', function(ev){
+  var el=ev.target;
+  if(el&&el.getAttribute&&el.getAttribute('data-scope')==='opt'&&el.getAttribute('data-f')==='cur'){ save(); paint(); }
+});
+document.addEventListener('focusout', function(ev){
+  var el=ev.target;
+  if(!el||!el.getAttribute||!el.getAttribute('data-scope')) return;
+  /* tidy prices to 2 dp once the field is left */
+  if(el.getAttribute('data-scope')==='stock' && el.getAttribute('data-f')==='price'){
+    var i=parseInt(el.getAttribute('data-i'),10), n=num(el.value);
+    if(el.value.trim()!=='' && isFinite(n) && n>=0 && S.stock[i]){
+      el.value=n.toFixed(2); S.stock[i].price=Number(n.toFixed(2)); save(); paint();
+    }
+  }
+  validateField(el);
+});
+document.addEventListener('click', function(ev){
+  var el=ev.target.closest?ev.target.closest('[data-del]'):null;
+  if(!el) return;
+  var kind=el.getAttribute('data-del'), i=parseInt(el.getAttribute('data-i'),10);
+  var arr=(kind==='stock')?S.stock:S.cuts;
+  if(!(i>=0&&i<arr.length)) return;
+  touched();
+  arr.splice(i,1);
+  if(!arr.length) arr.push(kind==='stock'?{id:uid++,label:'',auto:true,len:NaN,price:NaN,qty:''}:{id:uid++,part:'',len:NaN,qty:NaN});
+  save(); renderTables(); paint(); validateAll();
+});
+$('bAddStock').addEventListener('click', function(){
+  touched(); S.stock.push({id:uid++,label:'',auto:true,len:NaN,price:NaN,qty:''});
+  save(); renderTables(); paint();
+  var rows=$('stockBody').querySelectorAll('input[data-f="len"]');
+  if(rows.length) rows[rows.length-1].focus();
+});
+$('bAddCut').addEventListener('click', function(){
+  touched(); S.cuts.push({id:uid++,part:'',len:NaN,qty:NaN});
+  save(); renderTables(); paint();
+  var rows=$('cutBody').querySelectorAll('input[data-f="part"]');
+  if(rows.length) rows[rows.length-1].focus();
+});
+function setUnit(u){
+  if(u===S.unit) return;
+  var k=(u==='in')?(1/25.4):25.4;
+  var rd=(u==='in')?3:1;
+  var cv=function(v){ var n=num(v); return isFinite(n)?Number((n*k).toFixed(rd)):v; };
+  S.stock.forEach(function(r){ if(isFinite(num(r.len))) r.len=cv(r.len); });
+  S.cuts.forEach(function(c){ if(isFinite(num(c.len))) c.len=cv(c.len); });
+  S.kerf=cv(S.kerf); S.trim=cv(S.trim); S.minUse=cv(S.minUse);
+  S.unit=u;
+  refreshAutoNames();
+  save(); renderForm(); renderTables(); paint(); validateAll();
+}
+$('uMm').addEventListener('click', function(){ setUnit('mm'); });
+$('uIn').addEventListener('click', function(){ setUnit('in'); });
+$('bSample').addEventListener('click', function(){
+  S=sample(); refreshAutoNames(); save(); renderForm(); renderTables(); paint(); validateAll();
+  toast('Sample deck-framing job loaded.','');
+});
+$('bClear').addEventListener('click', function(){
+  if(!window.confirm('Clear the job details, stock lengths and cut list, and delete the saved copy in this browser?')) return;
+  try{ localStorage.removeItem(LS); }catch(e){}
+  S={v:1, unit:S.unit, cur:S.cur, curCustom:S.curCustom, kerf:S.unit==='in'?0.125:3, trim:0,
+     minUse:S.unit==='in'?12:300, sample:false,
+     job:{ref:'',client:'',site:'',mat:'',by:'',date:todayISO()},
+     stock:[{id:uid++,label:'',auto:true,len:NaN,price:NaN,qty:''}],
+     cuts:[{id:uid++,part:'',len:NaN,qty:NaN}]};
+  save(); renderForm(); renderTables(); paint(); validateAll();
+  toast('All data cleared.','warn');
+});
+$('bPrint').addEventListener('click', function(){ window.print(); });
+
+/* ═══ exports ═══════════════════════════════════════════════════ */
+function download(text, name, mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },800);
+    return true;
+  }catch(e){ toast('Your browser blocked the download.','bad'); return false; }
+}
+function slug(){
+  var s=(S.job.ref||'cut-plan').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  return s||'cut-plan';
+}
+function cell(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvText(){
+  compute();
+  var best=R.best, u=uL(), sym=curSym(), rows=[];
+  rows.push(['Solvix Lumber Cut Optimiser — cutting and material plan']);
+  rows.push(['Job reference',S.job.ref]);
+  rows.push(['Client',S.job.client]);
+  rows.push(['Site / location',S.job.site]);
+  rows.push(['Material / section',S.job.mat]);
+  rows.push(['Prepared by',S.job.by]);
+  rows.push(['Date',S.job.date]);
+  rows.push(['Units',S.unit==='in'?'inches':'millimetres']);
+  rows.push(['Saw kerf per cut ('+u+')', R?rawn(R.kerf,ND()):'']);
+  rows.push(['Board end trim ('+u+')', R?rawn(R.trim,ND()):'']);
+  rows.push(['Currency',sym]);
+  rows.push([]);
+  rows.push(['SUMMARY']);
+  if(best&&best.boards.length){
+    rows.push(['Plan chosen',best.name]);
+    rows.push(['Boards to buy',best.boards.length]);
+    rows.push(['Total material cost',best.cost.toFixed(2)]);
+    rows.push(['Total cut length ('+u+')',rawn(best.product,ND())]);
+    rows.push(['Total stock length ('+u+')',rawn(best.stockLen,ND())]);
+    rows.push(['Saw cuts',best.cuts]);
+    rows.push(['Kerf lost ('+u+')',rawn(best.kerfLoss,ND())]);
+    rows.push(['End trim ('+u+')',rawn(best.trimLoss,ND())]);
+    rows.push(['Offcut worth keeping ('+u+')',rawn(R.usable,ND())]);
+    rows.push(['Offcut scrapped ('+u+')',rawn(R.scrap,ND())]);
+    rows.push(['Waste %',rawn(best.waste,1)]);
+    rows.push(['Pieces not cut',best.unfit.length]);
+  } else {
+    rows.push(['No plan — enter stock lengths and a cut list']);
+  }
+  rows.push([]);
+  rows.push(['CUT LIST REQUESTED']);
+  rows.push(['Part','Length ('+u+')','Qty','Total length ('+u+')']);
+  S.cuts.forEach(function(c,i){
+    var L=num(c.len), q=Math.floor(num(c.qty));
+    if(!isFinite(L)||!isFinite(q)) return;
+    rows.push([c.part||('Part '+(i+1)), rawn(L,ND()), q, rawn(L*q,ND())]);
+  });
+  rows.push([]);
+  rows.push(['BUY LIST']);
+  rows.push(['Stock item','Length ('+u+')','Qty','Price each ('+sym+')','Line cost ('+sym+')']);
+  if(best){
+    var buy={},order=[];
+    best.boards.forEach(function(b){ if(!buy[b.stock.id]){buy[b.stock.id]={st:b.stock,n:0};order.push(b.stock.id);} buy[b.stock.id].n++; });
+    order.sort(function(a,b){return buy[b].st.len-buy[a].st.len;});
+    order.forEach(function(k){
+      var e=buy[k];
+      rows.push([e.st.label, rawn(e.st.len,ND()), e.n, e.st.price.toFixed(2), (e.st.price*e.n).toFixed(2)]);
+    });
+    rows.push(['Total','',best.boards.length,'',best.cost.toFixed(2)]);
+  }
+  rows.push([]);
+  rows.push(['CUT PLAN — ONE ROW PER BOARD']);
+  rows.push(['Board','Stock item','Stock length ('+u+')','Pieces','Cut length used ('+u+')','Saw cuts','Kerf lost ('+u+')','Offcut ('+u+')','Offcut usable']);
+  if(best) best.boards.forEach(function(b,ix){
+    rows.push([ix+1, b.stock.label, rawn(b.stock.len,ND()), b.items.length, rawn(b.S,ND()),
+      b.cuts, rawn(b.kerfLoss,ND()), rawn(b.offcut,ND()), (b.offcut>=R.minUse&&b.offcut>0)?'yes':'no']);
+  });
+  rows.push([]);
+  rows.push(['CUT PLAN — ONE ROW PER PIECE']);
+  rows.push(['Board','Stock item','Stock length ('+u+')','Part','Cut length ('+u+')']);
+  if(best) best.boards.forEach(function(b,ix){
+    b.items.forEach(function(p){
+      rows.push([ix+1, b.stock.label, rawn(b.stock.len,ND()), p.part, rawn(p.len,ND())]);
+    });
+  });
+  if(best&&best.unfit.length){
+    rows.push([]);
+    rows.push(['PIECES NOT CUT — no stock length long enough or stock exhausted']);
+    rows.push(['Part','Length ('+u+')']);
+    best.unfit.forEach(function(p){ rows.push([p.part, rawn(p.len,ND())]); });
+  }
+  rows.push([]);
+  rows.push(['Method: first-fit-decreasing bin packing, one saw kerf charged per cut; cheapest complete plan of all stock-length strategies.']);
+  rows.push(['Assumes straight defect-free stock at the nominal lengths entered. Check every board before cutting. Prices exclude tax and delivery.']);
+  return rows.map(function(r){ return r.map(cell).join(','); }).join('\r\n');
+}
+$('bCsv').addEventListener('click', function(){
+  if(download('﻿'+csvText(), slug()+'-cut-plan.csv', 'text/csv;charset=utf-8;'))
+    toast('CSV cut plan downloaded.','');
+});
+$('bJson').addEventListener('click', function(){
+  if(download(JSON.stringify(S,null,2), slug()+'-cut-plan.json', 'application/json'))
+    toast('JSON saved — reload it with Import.','');
+});
+$('bImport').addEventListener('click', function(){ $('fileIn').click(); });
+$('fileIn').addEventListener('change', function(ev){
+  var f=ev.target.files&&ev.target.files[0];
+  if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      if(!o||typeof o!=='object'||(!Array.isArray(o.cuts)&&!Array.isArray(o.stock))) throw new Error('shape');
+      S=normalise(o); refreshAutoNames();
+      save(); renderForm(); renderTables(); paint(); validateAll();
+      toast('Cut list imported.','');
+    }catch(e){ toast('That file is not a Solvix cut plan.','bad'); }
+    $('fileIn').value='';
+  };
+  rd.onerror=function(){ toast('Could not read that file.','bad'); $('fileIn').value=''; };
+  rd.readAsText(f);
+});
+
+/* ═══ boot ══════════════════════════════════════════════════════ */
+if(!load()){ S=sample(); save(); }
+refreshAutoNames();
+renderForm(); renderTables(); paint(); validateAll();
+})();
+</script>
+</body>
+</html>

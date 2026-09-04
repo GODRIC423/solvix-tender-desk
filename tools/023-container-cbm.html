@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Container CBM &amp; Stuffing Calculator — cbm, chargeable weight, cartons per container</title>
+<meta name="description" content="Offline sea freight calculator: cubic metres per carton and per shipment, LCL chargeable weight on the 1 cbm = 1 tonne rule, volume and payload utilisation for 20GP, 40GP, 40HC and 45HC, cartons per container by best-of-six-orientation fit, printable stuffing plan, CSV and JSON export.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ECB%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#5A9BE8;--accent-ink:#93C1F3;--accent-wash:#152A40;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#5A9BE8;--accent-ink:#93C1F3;--accent-wash:#152A40;--on-accent:#0B1017}
+
+[hidden]{display:none!important}
+.app>*+*{margin-top:14px}
+.split{margin-top:14px}
+body>.appbar{margin:0;padding-left:0;padding-right:0}
+.appbar-in{width:100%;max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+@media(min-width:901px){
+  .col-res{grid-column:2;grid-row:1}
+  .col-in{grid-column:1;grid-row:1}
+}
+.col-res .stat.hero .v{font-size:33px;line-height:1.08}
+.col-res .stat.hero .u{display:block;margin-top:4px}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:340px){.statgrid{grid-template-columns:1fr}}
+.statgrid .stat{padding:9px 11px}
+.statgrid .stat .v{font-size:17px}
+.statgrid .stat .u{display:block;font-size:11.5px;margin-top:1px}
+.ftbig{font:700 20px/1.1 var(--mono);margin-left:auto;font-variant-numeric:tabular-nums}
+.mini{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.cellerr{display:block;font:11px/1.35 var(--sans);color:var(--bad);margin-top:3px;max-width:160px;white-space:normal}
+#lineTable{min-width:930px;font-size:13.5px}
+#lineTable td{padding:5px 5px}
+#lineTable th{padding:9px 5px}
+#lineTable input[type=number]{min-width:58px}
+#lineTable input[type=text]{min-width:112px;text-align:left}
+#lineTable select{min-width:62px;padding-right:2px}
+#lineTable td.n{white-space:nowrap}
+.pv{display:none}
+#contTable{min-width:900px;font-size:13.5px}
+#contTable td,#contTable th{padding:8px 5px}
+#contTable td.n{white-space:nowrap}
+#contTable th[scope=row]{background:transparent;text-transform:none;letter-spacing:0;
+  font:600 13.5px/1.3 var(--sans);color:var(--ink);white-space:nowrap;border-bottom:1px solid var(--line)}
+#contTable tr.sel{background:var(--accent-wash)}
+#contTable tr.sel th[scope=row]{color:var(--accent-ink)}
+#fitTable{min-width:880px;font-size:13.5px}
+#fitTable td,#fitTable th{padding:8px 6px}
+#fitTable td.n{white-space:nowrap}
+#fitTable th[scope=row]{background:transparent;text-transform:none;letter-spacing:0;
+  font:600 13.5px/1.3 var(--sans);color:var(--ink);border-bottom:1px solid var(--line);min-width:150px;white-space:normal}
+.bar{height:7px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.over{background:var(--bad)}
+.utilwrap{display:grid;grid-template-columns:1fr;gap:9px}
+.util{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:9px 11px}
+.util .u1{display:flex;gap:8px;align-items:baseline}
+.util .u1 .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:auto}
+.util .u1 .v{font:700 15px/1 var(--mono);font-variant-numeric:tabular-nums}
+.util .u2{font:11.5px/1.4 var(--sans);color:var(--muted);margin-top:3px}
+.dim{color:var(--muted)}
+.del{color:var(--muted);border:1px solid transparent;background:transparent;cursor:pointer;
+  font:700 14px/1 var(--mono);padding:5px 7px;border-radius:3px}
+.del:hover{color:var(--bad);background:var(--bad-wash);border-color:var(--bad)}
+.banner{margin-top:14px}
+.tag{font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+/* printed document head */
+.doc-head{border-bottom:2.5px solid #000;padding-bottom:6mm;margin-bottom:6mm}
+.dh-title{font:700 19pt/1.1 var(--sans);letter-spacing:-.02em}
+.dh-sub{font:12pt/1.3 var(--sans);margin-top:2mm}
+.dh-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm 6mm;margin-top:5mm}
+.dh-grid div span{display:block;font:600 7.5pt/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#555}
+.dh-grid div b{font:600 10.5pt/1.3 var(--sans)}
+.notes-print{border:1px solid #bbb;padding:4mm;font-size:9.5pt;margin-bottom:6mm;white-space:pre-wrap}
+.sign{margin-top:2mm;font-size:9.5pt}
+.sign .lines{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:10mm}
+.sign .lines div{border-top:1px solid #000;padding-top:1.5mm;font:8.5pt/1.2 var(--sans);color:#333}
+
+@media print{
+  .app{display:flex;flex-direction:column;gap:0}
+  .app>*+*{margin-top:0}
+  .doc-head{order:1}
+  .split{order:2;margin-top:0}
+  #linesCard{order:3}
+  #contCard{order:4}
+  #fitCard{order:5}
+  .notes-print{order:6}
+  .sign{order:7}
+  #footNote{order:8}
+  #detailCard,.banner{display:none!important}
+  .col-res .card{margin-bottom:6mm}
+  .statgrid{display:grid!important;grid-template-columns:repeat(4,1fr)}
+  .statgrid .stat .v{font-size:11pt}
+  .col-res .stat.hero .v{font-size:22pt}
+  .utilwrap{display:grid!important;grid-template-columns:1fr 1fr;gap:4mm}
+  .bar{display:none}
+  .tw{overflow:visible}
+  #lineTable,#contTable,#fitTable{min-width:0;font-size:8.4pt;table-layout:auto}
+  #lineTable th,#lineTable td,#contTable th,#contTable td,#fitTable th,#fitTable td{padding:2px 3px;white-space:nowrap}
+  #lineTable th,#contTable th,#fitTable th{white-space:normal}
+  #lineTable input[type=text]{display:none!important}
+  #lineTable .pv{display:block;white-space:normal;min-width:110px}
+  #lineTable input,#lineTable select{min-width:0;font-size:8.4pt}
+  #fitTable th[scope=row],#contTable th[scope=row]{font-size:8.6pt;min-width:0}
+  .cellerr{display:none}
+  .ftbig{font-size:15pt}
+  .del,.selbtn{display:none!important}
+  #contTable tr.sel{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">CB</div>
+    <div style="min-width:0">
+      <h1>Container CBM &amp; Stuffing</h1>
+      <div class="sub">cbm · chargeable weight · cartons per container</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export JSON</button>
+    <button type="button" class="btn" id="btnImport">Import JSON</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <!-- printed document header -->
+  <div class="printonly doc-head">
+    <div class="dh-title">Container Stuffing Plan &amp; CBM Worksheet</div>
+    <div class="dh-sub" id="pRefLine">—</div>
+    <div class="dh-grid">
+      <div><span>Shipper</span><b id="pShipper">—</b></div>
+      <div><span>Consignee</span><b id="pConsignee">—</b></div>
+      <div><span>Reference</span><b id="pRef">—</b></div>
+      <div><span>Container studied</span><b id="pCont">—</b></div>
+      <div><span>Port of loading</span><b id="pPol">—</b></div>
+      <div><span>Port of discharge</span><b id="pPod">—</b></div>
+      <div><span>Prepared by</span><b id="pPrep">—</b></div>
+      <div><span>Date</span><b id="pDate">—</b></div>
+    </div>
+  </div>
+
+  <div class="note banner noprint" id="banner">
+    <strong>Sample data is loaded</strong> — a three-line export shipment for a 40' high cube, so you can see how the
+    numbers behave. Type over any figure, or clear it and start your own.
+    <div class="row" style="margin-top:9px">
+      <button type="button" class="btn sm" id="btnBlank">Start a blank shipment</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+  <div class="note banner noprint" id="toast" role="status" hidden></div>
+
+  <div class="split">
+
+    <!-- ══ results ══ -->
+    <section class="col-res">
+      <div class="card sticky" id="sumCard">
+        <div class="hd"><h2>Shipment summary</h2><span class="chip" id="chipLimit">—</span></div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k">Total volume — all cargo</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">—</div>
+          </div>
+
+          <div class="note warn" id="disclaimer">
+            <strong>Planning estimate — not a certified load plan and not a carrier quotation.</strong>
+            Internal dimensions and payload vary from box to box, and road, rail or terminal weight limits may cut the
+            payload further. The carton fit is plain geometry: no allowance for pallets, dunnage, lashing, door
+            clearance, stack strength, weight distribution or cargo that cannot be turned. Under SOLAS Chapter VI the
+            verified gross mass (VGM) must be established by weighing, never calculated from this sheet. Check the
+            container's CSC plate and confirm chargeable weight with your carrier or forwarder before booking.
+          </div>
+
+          <div class="statgrid">
+            <div class="stat"><div class="k">LCL chargeable weight</div><div class="v" id="vChg">—</div><div class="u" id="uChg">—</div></div>
+            <div class="stat"><div class="k">Gross weight</div><div class="v" id="vWt">—</div><div class="u" id="uWt">—</div></div>
+            <div class="stat"><div class="k">Total cartons</div><div class="v" id="vCtn">—</div><div class="u" id="uCtn">—</div></div>
+            <div class="stat"><div class="k">Containers needed</div><div class="v" id="vNeed">—</div><div class="u" id="uNeed">—</div></div>
+          </div>
+
+          <div>
+            <div class="mini" id="utilTitle">Utilisation of one container</div>
+            <div class="utilwrap">
+              <div class="util">
+                <div class="u1"><span class="k">By volume</span><span class="v" id="vVolU">—</span></div>
+                <div class="bar" aria-hidden="true"><i id="barVol" style="width:0"></i></div>
+                <div class="u2" id="uVolU">—</div>
+              </div>
+              <div class="util">
+                <div class="u1"><span class="k">By weight</span><span class="v" id="vWtU">—</span></div>
+                <div class="bar" aria-hidden="true"><i id="barWt" style="width:0"></i></div>
+                <div class="u2" id="uWtU">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat" id="freightStat"><div class="k">Estimated LCL freight</div><div class="v" id="vFreight">—</div><div class="u" id="uFreight">—</div></div>
+
+        </div>
+        <div class="ft"><strong>Chargeable weight (W/M)</strong><span class="ftbig" id="ftChg">—</span></div>
+      </div>
+    </section>
+
+    <!-- ══ inputs ══ -->
+    <section class="col-in stack">
+      <div class="card" id="detailCard">
+        <div class="hd"><h2>Shipment details</h2><span class="hint">Saved in this browser only</span></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="fShipper">Shipper</label><input type="text" id="fShipper" autocomplete="off"></div>
+            <div class="f"><label for="fConsignee">Consignee</label><input type="text" id="fConsignee" autocomplete="off"></div>
+            <div class="f"><label for="fRef">Reference / booking</label><input type="text" id="fRef" autocomplete="off"></div>
+            <div class="f"><label for="fDate">Date</label><input type="date" id="fDate"></div>
+            <div class="f"><label for="fPol">Port of loading</label><input type="text" id="fPol" autocomplete="off"></div>
+            <div class="f"><label for="fPod">Port of discharge</label><input type="text" id="fPod" autocomplete="off"></div>
+            <div class="f"><label for="fPrep">Prepared by</label><input type="text" id="fPrep" autocomplete="off"></div>
+            <div class="f"><label for="fUnits">Measurement units</label>
+              <select id="fUnits">
+                <option value="metric">Metric — cm / kg</option>
+                <option value="imperial">Imperial — inches / lb</option>
+              </select></div>
+            <div class="f"><label for="fCont">Container studied</label><select id="fCont"></select></div>
+            <div class="f"><label for="fStow">Practical stow factor %</label>
+              <input type="number" id="fStow" min="10" max="100" step="1" inputmode="numeric"></div>
+          </div>
+          <p class="hint">The stow factor is a planning allowance for the space you never get to use — pallet
+            overhang, dunnage, uneven layers, cargo that cannot be turned. It affects only the "at stow factor"
+            column of the container comparison; every other figure on this sheet is a true 100% calculation.</p>
+          <fieldset>
+            <legend>LCL rate (optional)</legend>
+            <div class="grid cols-3">
+              <div class="f"><label for="fCur">Currency</label>
+                <select id="fCur">
+                  <option value="$">$ — US dollar</option>
+                  <option value="£">£ — pound</option>
+                  <option value="€">€ — euro</option>
+                  <option value="custom">Custom symbol…</option>
+                </select></div>
+              <div class="f" id="curCustomWrap" hidden><label for="fCurCustom">Custom symbol</label>
+                <input type="text" id="fCurCustom" maxlength="4"></div>
+              <div class="f"><label for="fRate">Rate per revenue ton</label>
+                <input type="number" id="fRate" min="0" step="0.01" inputmode="decimal"></div>
+              <div class="f"><label for="fMin">Minimum charge</label>
+                <input type="number" id="fMin" min="0" step="0.01" inputmode="decimal"></div>
+            </div>
+            <p class="hint" style="margin-top:8px">Ocean LCL is normally rated per revenue ton (W/M): the greater of
+              cubic metres and metric tonnes, one revenue ton per whole or part unit as your carrier's tariff states.
+              This estimate covers the freight line only — not THC, documentation, customs, CFS or destination charges.</p>
+          </fieldset>
+          <div class="f"><label for="fNotes">Notes for the stuffing plan (printed)</label>
+            <textarea id="fNotes" placeholder="e.g. Load heavy cartons on the floor, two high maximum. Do not stack line 3."></textarea></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══ cargo lines ══ -->
+  <section class="card" id="linesCard">
+    <div class="hd">
+      <h2>Cargo lines</h2>
+      <span class="hint" id="lineHint">—</span>
+      <button type="button" class="btn sm noprint" id="btnAdd">+ Add line</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table id="lineTable">
+          <thead><tr>
+            <th scope="col" style="width:34px">#</th>
+            <th scope="col">Description / mark</th>
+            <th scope="col" class="n">Cartons</th>
+            <th scope="col" class="n" id="hL">Length</th>
+            <th scope="col" class="n" id="hW">Width</th>
+            <th scope="col" class="n" id="hH">Height</th>
+            <th scope="col" class="n" id="hWt">Weight each</th>
+            <th scope="col">Stack</th>
+            <th scope="col" class="n">CBM each</th>
+            <th scope="col" class="n">Line CBM</th>
+            <th scope="col" class="n" id="hLineWt">Line weight</th>
+            <th scope="col" class="n" id="hPerCtr">Per container</th>
+            <th scope="col" class="noprint" style="width:34px"><span class="lbl">Del</span></th>
+          </tr></thead>
+          <tbody id="lineBody"></tbody>
+          <tfoot><tr>
+            <td colspan="2">Shipment total</td>
+            <td class="n" id="tCtn">—</td>
+            <td colspan="5"></td>
+            <td class="n" id="tCbmEach"></td>
+            <td class="n" id="tCbm">—</td>
+            <td class="n" id="tWt">—</td>
+            <td class="n"></td>
+            <td class="noprint"></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <div class="ft">
+      <span class="hint">CBM per carton = length × width × height in metres. Line CBM = CBM per carton × cartons.
+        Volumes are shown to 4 decimal places per carton and 3 for totals; carton counts are whole cartons, rounded down
+        to what physically fits.</span>
+    </div>
+  </section>
+
+  <!-- ══ container comparison ══ -->
+  <section class="card" id="contCard">
+    <div class="hd">
+      <h2>Container comparison</h2>
+      <span class="hint">Standard dry containers — nominal internal capacity</span>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table id="contTable">
+          <thead><tr>
+            <th scope="col">Container</th>
+            <th scope="col" class="n" id="hIntDims">Internal L × W × H</th>
+            <th scope="col" class="n">Cap.</th>
+            <th scope="col" class="n" id="hPay">Max payload</th>
+            <th scope="col" class="n">Volume used</th>
+            <th scope="col" class="n">Payload used</th>
+            <th scope="col">Limits</th>
+            <th scope="col" class="n">Boxes</th>
+            <th scope="col" class="n" id="hAtStow">At stow factor</th>
+            <th scope="col" class="noprint" style="width:64px"></th>
+          </tr></thead>
+          <tbody id="contBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ft">
+      <span class="hint">Capacity and payload figures are the industry nominal values for standard dry boxes
+        (20GP 33.2 m³ / 28,200 kg · 40GP 67.7 m³ / 26,700 kg · 40HC 76.4 m³ / 26,460 kg · 45HC 86.1 m³ / 27,700 kg).
+        Boxes needed is the greater of the volume requirement and the payload requirement, rounded up to a whole
+        container.</span>
+    </div>
+  </section>
+
+  <!-- ══ stuffing fit ══ -->
+  <section class="card" id="fitCard">
+    <div class="hd">
+      <h2>Cartons per container — <span id="fitContName">—</span></h2>
+      <span class="hint">Best of six orientations, single-line stow</span>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table id="fitTable">
+          <thead><tr>
+            <th scope="col">Line</th>
+            <th scope="col" class="n" id="hFitCarton">Carton L × W × H</th>
+            <th scope="col" class="n" id="hFitOrient">Best orientation (L × W × H)</th>
+            <th scope="col" class="n">Along</th>
+            <th scope="col" class="n">Across</th>
+            <th scope="col" class="n">High</th>
+            <th scope="col" class="n">Fit by size</th>
+            <th scope="col" class="n">Cap by payload</th>
+            <th scope="col" class="n">Cartons per container</th>
+            <th scope="col" class="n">Cube filled</th>
+          </tr></thead>
+          <tbody id="fitBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ft">
+      <span class="hint">Each row assumes the container is stuffed with that one carton size only, in a single
+        orientation, in neat rows. A real mixed load will differ — use these figures to choose a carton size or an
+        order quantity, and confirm the final plan with the loading gang.</span>
+    </div>
+  </section>
+
+  <div class="printonly notes-print" id="notesPrint"></div>
+
+  <div class="printonly sign">
+    <div class="lines">
+      <div>Prepared by / date</div>
+      <div>Checked by / date</div>
+      <div>Container &amp; seal number</div>
+    </div>
+  </div>
+
+  <footer class="hint" id="footNote" style="margin-top:18px;padding-top:12px;border-top:1px solid var(--line)">
+    CBM = L × W × H in metres per carton × quantity. LCL chargeable weight follows the ocean freight W/M rule —
+    the greater of total cubic metres and total weight in metric tonnes (1 m³ = 1,000 kg). Carton fit is a plain
+    three-axis calculation, floor(container L ÷ carton L) × floor(container W ÷ carton W) × floor(container H ÷ carton H),
+    taking the best of the six axis permutations. Container capacities are nominal industry values for standard dry
+    boxes and vary between builds; verify against the CSC plate on the actual container. Works offline; all data stays
+    in this browser.
+  </footer>
+
+</main>
+
+<script>
+"use strict";
+(function(){
+const KEY='solvix.container-cbm.v1';
+const $=function(id){return document.getElementById(id);};
+const DASH='—';
+
+/* ── container reference data ──────────────────────────────────────
+   vol / pay are the nominal industry capacity figures. L/W/H are the
+   nominal internal dimensions in metres used for the 3-axis fit.     */
+const CONT=[
+ {id:'20GP',name:"20' General Purpose (20GP)",vol:33.2,pay:28200,L:5.898,W:2.352,H:2.393},
+ {id:'40GP',name:"40' General Purpose (40GP)",vol:67.7,pay:26700,L:12.032,W:2.352,H:2.393},
+ {id:'40HC',name:"40' High Cube (40HC)",vol:76.4,pay:26460,L:12.032,W:2.352,H:2.700},
+ {id:'45HC',name:"45' High Cube (45HC)",vol:86.1,pay:27700,L:13.556,W:2.352,H:2.700}
+];
+const byId=function(id){for(var i=0;i<CONT.length;i++){if(CONT[i].id===id)return CONT[i];}return CONT[2];};
+
+const IN_M=0.0254, LB_KG=0.45359237, FT_M=0.3048, CFT=35.3146667;
+
+/* ── state ─────────────────────────────────────────────────────── */
+var uid=1;
+function blankState(){
+  return {v:1,sample:false,dismissed:false,units:'metric',cont:'40HC',stow:85,
+    cur:'$',curCustom:'',rate:'',min:'',
+    shipper:'',consignee:'',ref:'',date:todayISO(),pol:'',pod:'',prep:'',notes:'',
+    lines:[newLine()]};
+}
+function newLine(d){
+  d=d||{};
+  return {id:uid++,desc:d.desc||'',qty:d.qty===undefined?'':d.qty,
+    l:d.l===undefined?'':d.l,w:d.w===undefined?'':d.w,h:d.h===undefined?'':d.h,
+    wt:d.wt===undefined?'':d.wt,stack:d.stack===undefined?1:d.stack};
+}
+function todayISO(){
+  var d=new Date(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+day;
+}
+function sampleState(){
+  var s=blankState();
+  s.sample=true;
+  s.shipper='Northgate Trading Ltd, Leeds LS11';
+  s.consignee='Almeida Importações Lda, São Paulo';
+  s.ref='SO-24817 / booking NGT-4471';
+  s.pol='Felixstowe (GBFXT)';
+  s.pod='Santos (BRSSZ)';
+  s.prep='A. Whitfield';
+  s.cont='40HC';
+  s.rate='78.00';
+  s.min='120.00';
+  s.notes='Line 3 to be loaded last, in the door end. Heavy cartons on the floor only.';
+  s.lines=[
+    newLine({desc:'Carton A — 27" monitor',qty:320,l:60,w:45,h:35,wt:9.5,stack:1}),
+    newLine({desc:'Carton B — stand & arm kit',qty:180,l:80,w:40,h:30,wt:14.2,stack:1}),
+    newLine({desc:'Carton C — cable accessories',qty:90,l:50,w:40,h:40,wt:6.8,stack:0})
+  ];
+  return s;
+}
+var state=blankState();
+
+/* ── number helpers ────────────────────────────────────────────── */
+function num(v){
+  if(v===''||v===null||v===undefined)return NaN;
+  var n=typeof v==='number'?v:parseFloat(String(v).replace(/,/g,''));
+  return isFinite(n)?n:NaN;
+}
+function fmt(n,dp){
+  if(!isFinite(n))return DASH;
+  if(Object.is(n,-0))n=0;
+  if(n===0)n=0;
+  return n.toLocaleString('en-GB',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+}
+function fmtInt(n){return isFinite(n)?fmt(Math.round(n),0):DASH;}
+function curSym(){return state.cur==='custom'?(state.curCustom||'¤'):state.cur;}
+function money(n){return isFinite(n)?curSym()+fmt(n,2):DASH;}
+function pct(n){return isFinite(n)?fmt(n,1)+'%':DASH;}
+
+/* unit conversion — entry units to SI */
+function toM(v){var n=num(v);return isFinite(n)?(state.units==='imperial'?n*IN_M:n/100):NaN;}
+function toKg(v){var n=num(v);return isFinite(n)?(state.units==='imperial'?n*LB_KG:n):NaN;}
+function dW(kg){return state.units==='imperial'?kg/LB_KG:kg;}
+function wU(){return state.units==='imperial'?'lb':'kg';}
+function dU(){return state.units==='imperial'?'in':'cm';}
+function mToDisp(m){return state.units==='imperial'?m/FT_M:m;}
+function lenU(){return state.units==='imperial'?'ft':'m';}
+
+/* ── the 3-axis fit, best of six orientations ─────────────────── */
+function fitCount(c,l,w,h,stackable){
+  var perms=[[l,w,h],[l,h,w],[w,l,h],[w,h,l],[h,l,w],[h,w,l]];
+  var best={n:0,o:null,nx:0,ny:0,nz:0};
+  for(var i=0;i<perms.length;i++){
+    var p=perms[i];
+    if(!(p[0]>0)||!(p[1]>0)||!(p[2]>0))continue;
+    var nx=Math.floor(c.L/p[0]+1e-9), ny=Math.floor(c.W/p[1]+1e-9), nz=Math.floor(c.H/p[2]+1e-9);
+    if(!stackable&&nz>1)nz=1;
+    var n=nx*ny*nz;
+    if(n>best.n)best={n:n,o:p,nx:nx,ny:ny,nz:nz};
+  }
+  return best;
+}
+
+/* ── line rendering ───────────────────────────────────────────── */
+var refs=[];
+function makeCell(tag,cls){var el=document.createElement(tag);if(cls)el.className=cls;return el;}
+function mkInput(type,val,step,min,label){
+  var el=document.createElement('input');
+  el.type=type; el.value=(val===undefined||val===null)?'':val;
+  if(step)el.step=step; if(min!==undefined&&min!==null)el.min=min;
+  if(type==='number')el.inputMode='decimal';
+  el.setAttribute('aria-label',label);
+  return el;
+}
+function renderLines(){
+  var tb=$('lineBody'); tb.innerHTML=''; refs=[];
+  if(!state.lines.length){
+    var tr=document.createElement('tr'), td=makeCell('td');
+    td.colSpan=13; td.className='empty';
+    td.textContent='No cargo lines yet — press “+ Add line” to enter your first carton size.';
+    tr.appendChild(td); tb.appendChild(tr); return;
+  }
+  state.lines.forEach(function(ln,i){
+    var tr=document.createElement('tr');
+    var r={tr:tr};
+
+    var tdN=makeCell('th'); tdN.setAttribute('scope','row');
+    tdN.style.cssText='background:transparent;text-transform:none;letter-spacing:0;font:600 13px/1.3 var(--sans);color:var(--muted);border-bottom:1px solid var(--line)';
+    tdN.textContent=String(i+1); tr.appendChild(tdN); r.num=tdN;
+
+    var tdD=makeCell('td');
+    var di=mkInput('text',ln.desc,null,null,'Description for line '+(i+1));
+    di.placeholder='Carton description';
+    var dpv=makeCell('span','pv');
+    di.addEventListener('input',function(){ln.desc=di.value;dpv.textContent=di.value;touch();});
+    dpv.textContent=ln.desc;
+    tdD.appendChild(di); tdD.appendChild(dpv); tr.appendChild(tdD);
+    r.dpv=dpv;
+
+    ['qty','l','w','h','wt'].forEach(function(k){
+      var td=makeCell('td','n');
+      var labels={qty:'Cartons',l:'Length',w:'Width',h:'Height',wt:'Weight each'};
+      var inp=mkInput('number',ln[k],k==='qty'?'1':'0.1','0',labels[k]+' for line '+(i+1));
+      inp.addEventListener('input',function(){ln[k]=inp.value;touch();});
+      inp.addEventListener('blur',function(){validateLine(ln,r);});
+      td.appendChild(inp);
+      var er=makeCell('span','cellerr'); er.hidden=true; td.appendChild(er);
+      r[k]=inp; r['e_'+k]=er;
+      tr.appendChild(td);
+    });
+
+    var tdS=makeCell('td');
+    var sel=document.createElement('select');
+    sel.setAttribute('aria-label','Stackable for line '+(i+1));
+    [['1','Yes'],['0','No']].forEach(function(o){
+      var op=document.createElement('option'); op.value=o[0]; op.textContent=o[1]; sel.appendChild(op);
+    });
+    sel.value=String(ln.stack?1:0);
+    sel.addEventListener('change',function(){ln.stack=sel.value==='1'?1:0;touch();});
+    tdS.appendChild(sel); tr.appendChild(tdS);
+
+    ['cbmEach','cbmTot','wtTot','perCtr'].forEach(function(k){
+      var td=makeCell('td','n'); td.textContent=DASH; r[k]=td; tr.appendChild(td);
+    });
+
+    var tdX=makeCell('td','noprint');
+    var b=document.createElement('button');
+    b.type='button'; b.className='del'; b.textContent='×';
+    b.setAttribute('aria-label','Delete line '+(i+1));
+    b.title='Delete this line';
+    b.addEventListener('click',function(){
+      var idx=state.lines.indexOf(ln);
+      if(idx>-1)state.lines.splice(idx,1);
+      state.sample=false; renderLines(); touch();
+    });
+    tdX.appendChild(b); tr.appendChild(tdX);
+
+    refs.push(r); tb.appendChild(tr);
+  });
+}
+function validateLine(ln,r){
+  var checks=[
+    ['qty','Cartons must be a whole number of 1 or more.',function(n){return n>0&&Math.abs(n-Math.round(n))<1e-9;}],
+    ['l','Length must be greater than 0.',function(n){return n>0;}],
+    ['w','Width must be greater than 0.',function(n){return n>0;}],
+    ['h','Height must be greater than 0.',function(n){return n>0;}],
+    ['wt','Weight cannot be negative.',function(n){return n>=0;}]
+  ];
+  checks.forEach(function(c){
+    var raw=ln[c[0]], n=num(raw), blank=(raw===''||raw===null||raw===undefined);
+    var bad=!blank&&(!isFinite(n)||!c[2](n));
+    r[c[0]].classList.toggle('inv',bad);
+    r['e_'+c[0]].hidden=!bad;
+    r['e_'+c[0]].textContent=bad?c[1]:'';
+  });
+}
+
+/* ── the calculation ──────────────────────────────────────────── */
+var calc={};
+function recalc(){
+  var c=byId(state.cont);
+  var totCbm=0, totKg=0, totCtn=0, valid=0, anyWeight=false;
+  var rows=[];
+
+  state.lines.forEach(function(ln,i){
+    var qty=num(ln.qty);
+    var L=toM(ln.l), W=toM(ln.w), H=toM(ln.h), kg=toKg(ln.wt);
+    var okDims=(L>0&&W>0&&H>0);
+    var okQty=(qty>0&&isFinite(qty));
+    var cbmEach=okDims?L*W*H:NaN;
+    var cbmTot=(okDims&&okQty)?cbmEach*qty:NaN;
+    var wtTot=(isFinite(kg)&&kg>=0&&okQty)?kg*qty:NaN;
+    var fit=okDims?fitCount(c,L,W,H,!!ln.stack):{n:0,o:null,nx:0,ny:0,nz:0};
+    var capWt=(isFinite(kg)&&kg>0)?Math.floor(c.pay/kg):Infinity;
+    var eff=okDims?Math.min(fit.n,isFinite(capWt)?capWt:fit.n):NaN;
+
+    if(isFinite(cbmTot)){totCbm+=cbmTot;valid++;}
+    if(isFinite(wtTot)){totKg+=wtTot;if(wtTot>0)anyWeight=true;}
+    if(okQty)totCtn+=qty;
+
+    rows.push({i:i,ln:ln,qty:qty,L:L,W:W,H:H,kg:kg,cbmEach:cbmEach,cbmTot:cbmTot,wtTot:wtTot,
+      fit:fit,capWt:capWt,eff:eff,okDims:okDims});
+  });
+
+  var hasCargo=valid>0;
+  var cbm=hasCargo?totCbm:NaN;
+  var kgT=hasCargo?totKg:NaN;
+  var chargeable=(isFinite(cbm)&&isFinite(kgT))?Math.max(cbm,kgT/1000):NaN;
+  var volU=(isFinite(cbm)&&c.vol>0)?cbm/c.vol*100:NaN;
+  var wtU=(isFinite(kgT)&&c.pay>0)?kgT/c.pay*100:NaN;
+  var limit=(!isFinite(volU)||!isFinite(wtU))?null:(volU>=wtU?'volume':'weight');
+
+  var rate=num(state.rate), minC=num(state.min);
+  var freight=NaN, minApplied=false;
+  if(isFinite(chargeable)&&isFinite(rate)&&rate>=0){
+    freight=chargeable*rate;
+    if(isFinite(minC)&&minC>freight){freight=minC;minApplied=true;}
+  }
+
+  calc={c:c,rows:rows,cbm:cbm,kg:kgT,ctn:totCtn,chargeable:chargeable,volU:volU,wtU:wtU,
+    limit:limit,freight:freight,minApplied:minApplied,hasCargo:hasCargo,anyWeight:anyWeight};
+  return calc;
+}
+function needed(cx,cbm,kg){
+  var byVol=(isFinite(cbm)&&cx.vol>0)?Math.ceil(cbm/cx.vol-1e-9):NaN;
+  var byWt=(isFinite(kg)&&cx.pay>0)?Math.ceil(kg/cx.pay-1e-9):NaN;
+  var v=Math.max(isFinite(byVol)?byVol:0,isFinite(byWt)?byWt:0);
+  if(!isFinite(cbm)&&!isFinite(kg))return NaN;
+  return v;
+}
+
+/* ── painting the UI ──────────────────────────────────────────── */
+function paint(){
+  var k=recalc(), c=k.c;
+
+  $('hL').textContent='Length ('+dU()+')';
+  $('hW').textContent='Width ('+dU()+')';
+  $('hH').textContent='Height ('+dU()+')';
+  $('hWt').textContent='Weight each ('+wU()+')';
+  $('hLineWt').textContent='Line weight ('+wU()+')';
+  $('hPerCtr').textContent='Per '+c.id;
+  $('hIntDims').textContent='Internal L × W × H ('+lenU()+')';
+  $('hPay').textContent='Max payload ('+wU()+')';
+  $('hAtStow').textContent='At '+fmtInt(num(state.stow))+'% stow';
+  $('hFitCarton').textContent='Carton L × W × H ('+dU()+')';
+  $('hFitOrient').textContent='Best orientation ('+dU()+')';
+  $('fitContName').textContent=c.name;
+
+  /* per line cells */
+  k.rows.forEach(function(r,i){
+    var ref=refs[i]; if(!ref)return;
+    ref.cbmEach.textContent=isFinite(r.cbmEach)?fmt(r.cbmEach,4):DASH;
+    ref.cbmTot.textContent=isFinite(r.cbmTot)?fmt(r.cbmTot,3):DASH;
+    ref.wtTot.textContent=isFinite(r.wtTot)?fmt(dW(r.wtTot),1):DASH;
+    if(!r.okDims){ref.perCtr.textContent=DASH;}
+    else if(r.fit.n===0){ref.perCtr.innerHTML='<span class="chip bad">Too big</span>';}
+    else{ref.perCtr.textContent=fmtInt(r.eff);}
+  });
+
+  $('tCtn').textContent=k.ctn>0?fmtInt(k.ctn):DASH;
+  $('tCbm').textContent=isFinite(k.cbm)?fmt(k.cbm,3):DASH;
+  $('tWt').textContent=isFinite(k.kg)?fmt(dW(k.kg),1):DASH;
+  $('lineHint').textContent=state.lines.length+(state.lines.length===1?' line':' lines')+
+    (k.ctn>0?' · '+fmtInt(k.ctn)+' cartons':'');
+
+  /* hero + summary */
+  $('heroV').textContent=isFinite(k.cbm)?fmt(k.cbm,3)+' m³':DASH;
+  $('heroU').textContent=isFinite(k.cbm)
+    ? fmt(k.cbm*CFT,1)+' ft³ · '+fmtInt(k.ctn)+' cartons · '+(isFinite(k.kg)?fmt(dW(k.kg),1)+' '+wU():'no weight entered')
+    : 'Enter carton sizes and quantities below.';
+
+  $('vChg').textContent=isFinite(k.chargeable)?fmt(k.chargeable,3):DASH;
+  $('uChg').textContent=isFinite(k.chargeable)
+    ? 'revenue tons — '+(k.cbm>=k.kg/1000?'volume rules':'weight rules')
+    : 'revenue tons (W/M)';
+  $('vWt').textContent=isFinite(k.kg)?fmt(dW(k.kg),1):DASH;
+  $('uWt').textContent=wU()+' gross'+(isFinite(k.kg)?' · '+fmt(k.kg/1000,3)+' t':'');
+  $('vCtn').textContent=k.ctn>0?fmtInt(k.ctn):DASH;
+  $('uCtn').textContent=state.lines.length+' cargo line'+(state.lines.length===1?'':'s');
+
+  var nd=needed(c,k.cbm,k.kg);
+  $('vNeed').textContent=isFinite(nd)?fmtInt(nd)+' × '+c.id:DASH;
+  $('uNeed').textContent=isFinite(nd)&&nd>0
+    ? fmt(Math.max(0,c.vol*nd-k.cbm),2)+' m³ spare at 100% stow'
+    : 'at 100% stow';
+
+  $('utilTitle').textContent='Utilisation of one '+c.id;
+  $('vVolU').textContent=pct(k.volU);
+  $('uVolU').textContent=isFinite(k.volU)
+    ? fmt(k.cbm,3)+' of '+fmt(c.vol,1)+' m³'
+    : 'capacity '+fmt(c.vol,1)+' m³';
+  $('vWtU').textContent=pct(k.wtU);
+  $('uWtU').textContent=isFinite(k.wtU)
+    ? fmt(dW(k.kg),1)+' of '+fmt(dW(c.pay),0)+' '+wU()
+    : 'payload '+fmt(dW(c.pay),0)+' '+wU();
+  setBar('barVol',k.volU); setBar('barWt',k.wtU);
+
+  var chip=$('chipLimit');
+  if(!k.limit){chip.className='chip';chip.textContent=DASH;}
+  else if(k.limit==='volume'){
+    chip.className=(k.volU>100?'chip bad':'chip warn');
+    chip.textContent=k.volU>100?'Volume over one '+c.id:'Volume limits (cubes out)';
+  }else{
+    chip.className=(k.wtU>100?'chip bad':'chip warn');
+    chip.textContent=k.wtU>100?'Payload over one '+c.id:'Weight limits (weighs out)';
+  }
+
+  var fs=$('freightStat'), rate=num(state.rate);
+  if(isFinite(rate)&&rate>0){
+    fs.hidden=false;
+    $('vFreight').textContent=money(k.freight);
+    $('uFreight').textContent=isFinite(k.freight)
+      ? (k.minApplied?'minimum charge applied ('+money(num(state.min))+')'
+        :fmt(k.chargeable,3)+' R/T × '+money(rate)+' per R/T')+' — freight only'
+      : 'freight only';
+  }else{fs.hidden=true;}
+
+  $('ftChg').textContent=isFinite(k.chargeable)?fmt(k.chargeable,3)+' R/T':DASH;
+
+  paintContainers(k);
+  paintFit(k);
+  paintDoc(k);
+}
+function setBar(id,p){
+  var el=$(id);
+  if(!isFinite(p)){el.style.width='0';el.className='';return;}
+  el.style.width=Math.max(0,Math.min(100,p))+'%';
+  el.className=p>100?'over':'';
+}
+function paintContainers(k){
+  var tb=$('contBody'); tb.innerHTML='';
+  var stow=num(state.stow); if(!(stow>0&&stow<=100))stow=100;
+  CONT.forEach(function(cx){
+    var tr=document.createElement('tr');
+    if(cx.id===state.cont)tr.className='sel';
+    var th=document.createElement('th'); th.setAttribute('scope','row'); th.textContent=cx.name; tr.appendChild(th);
+
+    function cell(txt,cls){var td=document.createElement('td');td.className=cls||'n';td.textContent=txt;tr.appendChild(td);return td;}
+    cell(fmt(mToDisp(cx.L),2)+' × '+fmt(mToDisp(cx.W),2)+' × '+fmt(mToDisp(cx.H),2));
+    cell(fmt(cx.vol,1)+' m³');
+    cell(fmt(dW(cx.pay),0));
+
+    var vu=(isFinite(k.cbm)&&cx.vol>0)?k.cbm/cx.vol*100:NaN;
+    var wu=(isFinite(k.kg)&&cx.pay>0)?k.kg/cx.pay*100:NaN;
+    cell(pct(vu)); cell(pct(wu));
+
+    var lim=document.createElement('td');
+    if(!isFinite(vu)||!isFinite(wu))lim.textContent=DASH;
+    else{
+      var isVol=vu>=wu;
+      var sp=document.createElement('span');
+      sp.className='chip '+((isVol?vu:wu)>100?'bad':'warn');
+      sp.textContent=isVol?'Volume':'Weight';
+      lim.appendChild(sp);
+    }
+    tr.appendChild(lim);
+
+    var nd=needed(cx,k.cbm,k.kg);
+    cell(isFinite(nd)?fmtInt(nd):DASH);
+    var ndS=(isFinite(k.cbm)||isFinite(k.kg))
+      ? Math.max(isFinite(k.cbm)?Math.ceil(k.cbm/(cx.vol*stow/100)-1e-9):0,
+                 isFinite(k.kg)?Math.ceil(k.kg/cx.pay-1e-9):0)
+      : NaN;
+    cell(isFinite(ndS)?fmtInt(ndS):DASH);
+
+    var td=document.createElement('td'); td.className='noprint';
+    if(cx.id!==state.cont){
+      var b=document.createElement('button');
+      b.type='button'; b.className='btn sm selbtn'; b.textContent='Study';
+      b.setAttribute('aria-label','Study the '+cx.name);
+      b.addEventListener('click',function(){state.cont=cx.id;$('fCont').value=cx.id;touch();});
+      td.appendChild(b);
+    }else{
+      var sp2=document.createElement('span'); sp2.className='tag'; sp2.textContent='Studied'; td.appendChild(sp2);
+    }
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+}
+function paintFit(k){
+  var tb=$('fitBody'); tb.innerHTML='';
+  var c=k.c;
+  var live=k.rows.filter(function(r){return r.okDims;});
+  if(!live.length){
+    var tr=document.createElement('tr'), td=document.createElement('td');
+    td.colSpan=10; td.className='empty';
+    td.textContent='Enter a carton length, width and height to see how many fit a container.';
+    tr.appendChild(td); tb.appendChild(tr); return;
+  }
+  k.rows.forEach(function(r,i){
+    if(!r.okDims)return;
+    var tr=document.createElement('tr');
+    var th=document.createElement('th'); th.setAttribute('scope','row');
+    th.textContent=(i+1)+'. '+(r.ln.desc||'Line '+(i+1))+(r.ln.stack?'':' (no stack)');
+    tr.appendChild(th);
+    function cell(txt){var td=document.createElement('td');td.className='n';td.textContent=txt;tr.appendChild(td);}
+    var dv=function(m){return fmt(state.units==='imperial'?m/IN_M:m*100,1);};
+    cell(dv(r.L)+' × '+dv(r.W)+' × '+dv(r.H));
+    if(r.fit.n===0){
+      var td=document.createElement('td'); td.className='n'; td.colSpan=8;
+      td.innerHTML='<span class="chip bad">Does not fit a '+c.id+' in any orientation</span>';
+      tr.appendChild(td); tb.appendChild(tr); return;
+    }
+    cell(dv(r.fit.o[0])+' × '+dv(r.fit.o[1])+' × '+dv(r.fit.o[2]));
+    cell(fmtInt(r.fit.nx)); cell(fmtInt(r.fit.ny)); cell(fmtInt(r.fit.nz));
+    cell(fmtInt(r.fit.n));
+    cell(isFinite(r.capWt)?fmtInt(r.capWt):DASH);
+    cell(fmtInt(r.eff));
+    cell(c.vol>0?pct(r.eff*r.cbmEach/c.vol*100):DASH);
+    tb.appendChild(tr);
+  });
+}
+function paintDoc(k){
+  var c=k.c;
+  var set=function(id,v){$(id).textContent=(v&&String(v).trim())?v:DASH;};
+  set('pShipper',state.shipper); set('pConsignee',state.consignee); set('pRef',state.ref);
+  set('pPol',state.pol); set('pPod',state.pod); set('pPrep',state.prep);
+  set('pCont',c.name);
+  set('pDate',state.date?fmtDate(state.date):DASH);
+  var bits=[];
+  if(state.ref)bits.push(state.ref);
+  bits.push(isFinite(k.cbm)?fmt(k.cbm,3)+' m³':'no cargo entered');
+  if(isFinite(k.kg))bits.push(fmt(dW(k.kg),1)+' '+wU()+' gross');
+  if(isFinite(k.chargeable))bits.push(fmt(k.chargeable,3)+' revenue tons chargeable');
+  $('pRefLine').textContent=bits.join('  ·  ');
+  var np=$('notesPrint');
+  np.textContent=state.notes?('Notes: '+state.notes):'';
+  np.style.display=state.notes?'':'none';
+}
+function fmtDate(iso){
+  var p=String(iso).split('-');
+  if(p.length!==3)return iso;
+  var d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  if(isNaN(d.getTime()))return iso;
+  var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return p[2].replace(/^0/,'')+' '+mo[d.getMonth()]+' '+p[0];
+}
+
+/* ── persistence ──────────────────────────────────────────────── */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){/* storage blocked — tool still works */}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object'||!Array.isArray(o.lines))return false;
+    applyState(o);
+    return true;
+  }catch(e){return false;}
+}
+function applyState(o){
+  var s=blankState();
+  ['units','cont','cur','curCustom','rate','min','shipper','consignee','ref','date','pol','pod','prep','notes'].forEach(function(k){
+    if(o[k]!==undefined&&o[k]!==null)s[k]=String(o[k]);
+  });
+  if(o.units!=='imperial'&&o.units!=='metric')s.units='metric';
+  if(!byId(s.cont)||['20GP','40GP','40HC','45HC'].indexOf(s.cont)<0)s.cont='40HC';
+  s.stow=isFinite(num(o.stow))?num(o.stow):85;
+  s.sample=!!o.sample; s.dismissed=!!o.dismissed;
+  s.lines=(Array.isArray(o.lines)?o.lines:[]).map(function(l){
+    return newLine({desc:l.desc,qty:l.qty,l:l.l,w:l.w,h:l.h,wt:l.wt,stack:l.stack?1:0});
+  });
+  if(!s.lines.length)s.lines=[newLine()];
+  state=s;
+}
+function touch(){paint();save();}
+
+/* ── form binding ─────────────────────────────────────────────── */
+function fillForm(){
+  $('fShipper').value=state.shipper; $('fConsignee').value=state.consignee;
+  $('fRef').value=state.ref; $('fDate').value=state.date;
+  $('fPol').value=state.pol; $('fPod').value=state.pod; $('fPrep').value=state.prep;
+  $('fUnits').value=state.units; $('fCont').value=state.cont;
+  $('fStow').value=state.stow; $('fCur').value=state.cur;
+  $('fCurCustom').value=state.curCustom; $('curCustomWrap').hidden=state.cur!=='custom';
+  $('fRate').value=state.rate; $('fMin').value=state.min; $('fNotes').value=state.notes;
+  $('banner').hidden=!(state.sample&&!state.dismissed);
+}
+function bind(){
+  [['fShipper','shipper'],['fConsignee','consignee'],['fRef','ref'],['fDate','date'],
+   ['fPol','pol'],['fPod','pod'],['fPrep','prep'],['fNotes','notes'],
+   ['fRate','rate'],['fMin','min'],['fCurCustom','curCustom']].forEach(function(p){
+    $(p[0]).addEventListener('input',function(){state[p[1]]=$(p[0]).value;touch();});
+  });
+  $('fStow').addEventListener('input',function(){
+    state.stow=$('fStow').value; touch();
+  });
+  $('fStow').addEventListener('blur',function(){
+    var n=num($('fStow').value);
+    if(!(n>0&&n<=100)){state.stow=85;$('fStow').value=85;touch();}
+  });
+  $('fCont').addEventListener('change',function(){state.cont=$('fCont').value;touch();});
+  $('fCur').addEventListener('change',function(){
+    state.cur=$('fCur').value; $('curCustomWrap').hidden=state.cur!=='custom'; touch();
+  });
+  $('fUnits').addEventListener('change',function(){
+    var to=$('fUnits').value;
+    if(to!==state.units)convertUnits(state.units,to);
+    state.units=to; renderLines(); touch();
+  });
+  $('btnAdd').addEventListener('click',function(){
+    state.lines.push(newLine()); state.sample=false; renderLines(); touch();
+    var last=refs[refs.length-1]; if(last&&last.tr)last.tr.querySelector('input').focus();
+  });
+  $('btnBlank').addEventListener('click',function(){
+    state=blankState(); fillForm(); renderLines(); touch();
+    $('fShipper').focus();
+  });
+  $('btnDismiss').addEventListener('click',function(){state.dismissed=true;$('banner').hidden=true;save();});
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all data? This deletes the saved shipment from this browser and cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    state=blankState(); fillForm(); renderLines(); touch();
+  });
+  $('btnPrint').addEventListener('click',function(){window.print();});
+  $('btnCsv').addEventListener('click',exportCsv);
+  $('btnJson').addEventListener('click',exportJson);
+  $('btnImport').addEventListener('click',function(){$('fileIn').click();});
+  $('fileIn').addEventListener('change',importJson);
+}
+function convertUnits(from,to){
+  var toImp = (from==='metric'&&to==='imperial');
+  var dimF = toImp ? (1/(100*IN_M)) : (100*IN_M);
+  var wtF  = toImp ? (1/LB_KG) : LB_KG;
+  /* 3dp going to inches/lb, 2dp coming back to cm/kg: a metric → imperial →
+     metric round trip then lands back on the figure the user first typed. */
+  var q = toImp ? 1000 : 100;
+  state.lines.forEach(function(ln){
+    ['l','w','h'].forEach(function(k){
+      var n=num(ln[k]);
+      if(isFinite(n))ln[k]=String(Math.round(n*dimF*q)/q);
+    });
+    var w=num(ln.wt);
+    if(isFinite(w))ln.wt=String(Math.round(w*wtF*q)/q);
+  });
+}
+
+/* ── export ───────────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvRow(a){return a.map(csvCell).join(',');}
+function download(name,mime,text){
+  var blob=new Blob([text],{type:mime});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=name; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+}
+function slug(){
+  var s=(state.ref||'shipment').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  return s||'shipment';
+}
+function exportCsv(){
+  var k=recalc(), c=k.c, out=[];
+  out.push(['Container CBM & Stuffing Plan']);
+  out.push(['Shipper',state.shipper]);
+  out.push(['Consignee',state.consignee]);
+  out.push(['Reference',state.ref]);
+  out.push(['Port of loading',state.pol]);
+  out.push(['Port of discharge',state.pod]);
+  out.push(['Prepared by',state.prep]);
+  out.push(['Date',state.date]);
+  out.push(['Units entered',state.units==='imperial'?'inches / lb':'cm / kg']);
+  out.push(['Container studied',c.name]);
+  out.push([]);
+  out.push(['Line','Description','Cartons','Length ('+dU()+')','Width ('+dU()+')','Height ('+dU()+')',
+    'Weight each ('+wU()+')','Stackable','CBM each (m3)','Line CBM (m3)','Line weight ('+wU()+')',
+    'Cartons per '+c.id,'Best orientation ('+dU()+')']);
+  k.rows.forEach(function(r,i){
+    var dv=function(m){return isFinite(m)?(state.units==='imperial'?m/IN_M:m*100).toFixed(1):'';};
+    out.push([i+1,r.ln.desc,isFinite(r.qty)?r.qty:'',r.ln.l,r.ln.w,r.ln.h,r.ln.wt,
+      r.ln.stack?'Yes':'No',
+      isFinite(r.cbmEach)?r.cbmEach.toFixed(4):'',
+      isFinite(r.cbmTot)?r.cbmTot.toFixed(3):'',
+      isFinite(r.wtTot)?dW(r.wtTot).toFixed(2):'',
+      isFinite(r.eff)?r.eff:'',
+      r.fit.o?(dv(r.fit.o[0])+' x '+dv(r.fit.o[1])+' x '+dv(r.fit.o[2])):'']);
+  });
+  out.push([]);
+  out.push(['Total cartons',k.ctn>0?k.ctn:'']);
+  out.push(['Total volume (m3)',isFinite(k.cbm)?k.cbm.toFixed(3):'']);
+  out.push(['Total volume (ft3)',isFinite(k.cbm)?(k.cbm*CFT).toFixed(1):'']);
+  out.push(['Total gross weight ('+wU()+')',isFinite(k.kg)?dW(k.kg).toFixed(2):'']);
+  out.push(['Total gross weight (tonnes)',isFinite(k.kg)?(k.kg/1000).toFixed(3):'']);
+  out.push(['LCL chargeable weight (revenue tons, W/M)',isFinite(k.chargeable)?k.chargeable.toFixed(3):'']);
+  out.push(['Chargeable basis',isFinite(k.chargeable)?(k.cbm>=k.kg/1000?'Volume (1 m3 = 1 t)':'Weight (1 m3 = 1 t)'):'']);
+  if(isFinite(k.freight)){
+    out.push(['Rate per revenue ton',curSym()+num(state.rate).toFixed(2)]);
+    out.push(['Estimated LCL freight',curSym()+k.freight.toFixed(2)+(k.minApplied?' (minimum charge)':'')]);
+  }
+  out.push([]);
+  out.push(['Container','Internal L (m)','Internal W (m)','Internal H (m)','Capacity (m3)','Max payload (kg)',
+    'Volume used %','Payload used %','Limiting factor','Containers needed','At '+num(state.stow)+'% stow']);
+  var stow=num(state.stow); if(!(stow>0&&stow<=100))stow=100;
+  CONT.forEach(function(cx){
+    var vu=(isFinite(k.cbm)&&cx.vol>0)?k.cbm/cx.vol*100:NaN;
+    var wu=(isFinite(k.kg)&&cx.pay>0)?k.kg/cx.pay*100:NaN;
+    var nd=needed(cx,k.cbm,k.kg);
+    var ndS=(isFinite(k.cbm)||isFinite(k.kg))
+      ? Math.max(isFinite(k.cbm)?Math.ceil(k.cbm/(cx.vol*stow/100)-1e-9):0,
+                 isFinite(k.kg)?Math.ceil(k.kg/cx.pay-1e-9):0):NaN;
+    out.push([cx.id,cx.L,cx.W,cx.H,cx.vol,cx.pay,
+      isFinite(vu)?vu.toFixed(1):'',isFinite(wu)?wu.toFixed(1):'',
+      (isFinite(vu)&&isFinite(wu))?(vu>=wu?'Volume':'Weight'):'',
+      isFinite(nd)?nd:'',isFinite(ndS)?ndS:'']);
+  });
+  out.push([]);
+  out.push(['Notes',state.notes]);
+  out.push(['Disclaimer','Planning estimate only. Container dimensions and payloads vary; no allowance for pallets, dunnage, lashing, stack strength or weight distribution. VGM under SOLAS Chapter VI must be established by weighing. Confirm with your carrier or forwarder before booking.']);
+  download('container-cbm-'+slug()+'.csv','text/csv;charset=utf-8',
+    '﻿'+out.map(csvRow).join('\r\n')+'\r\n');
+}
+function exportJson(){
+  download('container-cbm-'+slug()+'.json','application/json',JSON.stringify(state,null,2));
+}
+function importJson(ev){
+  var f=ev.target.files&&ev.target.files[0];
+  if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.lines))throw new Error('shape');
+      applyState(o); fillForm(); renderLines(); touch();
+      flash('Imported '+state.lines.length+' cargo line'+(state.lines.length===1?'':'s')+'.');
+    }catch(e){
+      flash('That file could not be read as a saved shipment.',true);
+    }
+    ev.target.value='';
+  };
+  rd.onerror=function(){flash('That file could not be read.',true);ev.target.value='';};
+  rd.readAsText(f);
+}
+var flashTimer=null;
+function flash(msg,bad){
+  var t=$('toast');
+  t.className='note banner noprint'+(bad?' bad':'');
+  t.textContent='';
+  var strong=document.createElement('strong'); strong.textContent=msg;
+  t.appendChild(strong);
+  t.hidden=false;
+  if(flashTimer)clearTimeout(flashTimer);
+  flashTimer=setTimeout(function(){t.hidden=true;},5000);
+}
+
+/* ── boot ─────────────────────────────────────────────────────── */
+function init(){
+  var sel=$('fCont');
+  CONT.forEach(function(c){
+    var o=document.createElement('option'); o.value=c.id; o.textContent=c.name; sel.appendChild(o);
+  });
+  if(!load())state=sampleState();
+  fillForm(); renderLines(); bind(); paint(); save();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+})();
+</script>
+</body>
+</html>

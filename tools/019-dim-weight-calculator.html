@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dimensional Weight Calculator — billable weight compared across UPS, FedEx, USPS, DHL and LTL freight</title>
+<meta name="description" content="Offline dimensional weight tool: dim weight = (L x W x H) / divisor, billable weight is the greater of actual and dim rounded up to the next whole pound or kilo, totalled across a multi-package shipment and compared side by side across UPS, FedEx, USPS, DHL and LTL freight divisors. Imperial and metric, editable divisors, optional rate per lb/kg, printable comparison, CSV and JSON export.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M16 6l9 4.5v11L16 26l-9-4.5v-11z'/%3E%3Cpath d='M7 10.5l9 4.5 9-4.5M16 15v11'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══ Freight & Logistics ═════════════════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#68A6EE;--accent-ink:#93C0F4;--accent-wash:#152538;--on-accent:#080E15}}
+:root[data-theme="dark"]{--accent:#68A6EE;--accent-ink:#93C0F4;--accent-wash:#152538;--on-accent:#080E15}
+
+[hidden]{display:none!important}
+.app{padding-top:14px}
+.appbar{margin:0;padding-left:0;padding-right:0;display:block}
+.appbar-in{max-width:1180px;margin:0 auto;padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar-in .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.stack-lg{display:flex;flex-direction:column;gap:14px;min-width:0}
+.split>*{min-width:0}
+.card{min-width:0}
+.card>.bd.cols-2{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;background:var(--raise)}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 12px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.stat.hero .v{font-size:38px;line-height:1.05}
+.stat.hero .who{margin-top:6px;font:600 13px/1.35 var(--sans);color:var(--accent-ink)}
+.stat.hero .who small{display:block;font:400 11.5px/1.4 var(--mono);color:var(--ink-2);letter-spacing:.02em;margin-top:2px}
+.stat .v.sm{font-size:19px}
+.split{grid-template-columns:minmax(0,1fr) minmax(300px,.60fr)}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.pkgtbl td,.pkgtbl th{padding:7px 6px}
+.pkgtbl th{white-space:normal;line-height:1.25}
+.pkgtbl th:nth-child(1){min-width:124px}
+.pkgtbl th:nth-child(2){min-width:40px}
+.pkgtbl th:nth-child(3),.pkgtbl th:nth-child(4),.pkgtbl th:nth-child(5){min-width:50px}
+.pkgtbl th:nth-child(6){min-width:64px}
+.pkgtbl th:nth-child(7){min-width:68px}
+.pkgtbl th:nth-child(8){min-width:62px}
+.pkgtbl th:nth-child(9){min-width:68px}
+.pkgtbl th:nth-child(10){min-width:64px}
+.pkgtbl td:first-child input{text-align:left;font-family:var(--sans)}
+.pkgtbl input[type=number]::-webkit-inner-spin-button,.pkgtbl input[type=number]::-webkit-outer-spin-button,
+.ctbl input[type=number]::-webkit-inner-spin-button,.ctbl input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pkgtbl input[type=number],.ctbl input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.drv{font:600 10px/1 var(--sans);letter-spacing:.06em;color:var(--muted);margin-left:4px}
+.drv.d{color:var(--accent-ink)}
+.ctbl td,.ctbl th{padding:8px 8px}
+.ctbl td.n{white-space:nowrap}
+.ctbl th:nth-child(2){min-width:180px}
+.ctbl th:nth-child(3),.ctbl th:nth-child(4){min-width:86px}
+@media(min-width:901px){.res .cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ctbl .cname{font-weight:600;font-size:13.5px}
+.ctbl .cnote{font:11px/1.35 var(--sans);color:var(--muted);margin-top:1px}
+tr.best td{background:var(--accent-wash)}
+tr.best:hover td{background:var(--accent-wash)}
+tr.off td{color:var(--muted)}
+tr.off .cname{font-weight:500}
+.pv{display:none;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pkgtbl .pv.desc,.ctbl .pv.desc{font-family:var(--sans)}
+.msg{margin:10px 0 0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:11.5px/1.4 var(--sans);color:var(--muted)}
+.sampbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:14px}
+.sampbar .note{flex:1 1 260px}
+footer{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 40px;color:var(--muted);font-size:12px;line-height:1.6}
+.dh{border-bottom:2px solid #000;padding-bottom:6mm;margin-bottom:6mm}
+.dh h2{font-size:16pt;letter-spacing:-.01em}
+.dh .dhs{font-size:9pt;color:#333;margin-top:2px}
+.dhgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3mm 6mm;margin-top:5mm;font-size:9.5pt}
+.dhgrid .k{font-weight:700;text-transform:uppercase;font-size:7.5pt;letter-spacing:.06em;color:#444}
+.dhbig{margin-top:5mm;border:1.5px solid #000;padding:3mm 4mm;font-size:10pt}
+.dhbig strong{font-size:15pt;font-family:var(--mono)}
+@media print{
+  .pv{display:inline}
+  .pkgtbl input,.ctbl input,.ctbl select,.seg,.tw .btn{display:none!important}
+  .note{background:#fff!important;border:1px solid #888;border-left:3px solid #000}
+  .stat.hero{border:1.5px solid #000}
+  .tw{overflow:visible}
+  .card{margin-bottom:6mm}
+  .cx{display:none!important}
+  tbody tr:hover,tr.best td{background:#fff!important}
+  tr.best td{outline:1.5px solid #000;outline-offset:-1.5px}
+  :root{--accent:#17497F;--accent-ink:#17497F}
+  th{white-space:normal}
+  .pkgtbl th,.pkgtbl td,.ctbl th,.ctbl td{min-width:0!important;padding:3px 4px}
+  .pkgtbl th:nth-child(1){width:26%}
+  .ctbl th:nth-child(2){width:27%}
+  .ctbl .cname{white-space:normal}
+  table{font-size:8.5pt;table-layout:auto}
+  .pv{white-space:nowrap}
+  .legend{font-size:8pt}
+  .stat{padding:6px 9px}
+  .stat .v{font-size:13pt}
+  .stat.hero .v{font-size:20pt}
+  .grid.cols-3{display:grid!important;grid-template-columns:1fr 1fr 1fr;gap:3mm}
+}
+@media(max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .split>.res{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:520px){
+  .appbar .sub{display:none}
+  .stat.hero .v{font-size:32px}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">DW</div>
+    <div style="min-width:0">
+      <h1>Dimensional Weight Calculator</h1>
+      <div class="sub">BILLABLE WEIGHT · MULTI-CARRIER COMPARISON</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export JSON</button>
+    <button type="button" class="btn" id="btnImport">Import JSON</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileJson" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <!-- printed document header -->
+  <div class="printonly dh">
+    <h2>Dimensional &amp; Billable Weight Comparison</h2>
+    <div class="dhs">Prepared with the Solvix Dimensional Weight Calculator — dim weight = (L × W × H) ÷ divisor; billable = greater of actual and dim, rounded up.</div>
+    <div class="dhgrid">
+      <div><div class="k">Shipper</div><div id="pFrom">—</div></div>
+      <div><div class="k">Consignee</div><div id="pTo">—</div></div>
+      <div><div class="k">Reference</div><div id="pRef">—</div></div>
+      <div><div class="k">Ship date</div><div id="pDate">—</div></div>
+      <div><div class="k">Carrier account</div><div id="pAcct">—</div></div>
+      <div><div class="k">Prepared by</div><div id="pBy">—</div></div>
+      <div><div class="k">Units</div><div id="pUnits">—</div></div>
+      <div><div class="k">Pieces</div><div id="pPieces">—</div></div>
+      <div><div class="k">Measuring rule</div><div id="pRule">—</div></div>
+    </div>
+    <div class="dhbig">Lowest billable weight: <strong id="pBest">—</strong> <span id="pBestWho"></span></div>
+    <div class="dhs" id="pNotes" style="margin-top:4mm"></div>
+  </div>
+
+  <div class="sampbar noprint" id="sampBar" hidden>
+    <div class="note"><strong>Sample shipment loaded</strong> — three cartons, so you can see the answer straight away. Overwrite any field, or start from an empty sheet.</div>
+    <button type="button" class="btn" id="btnBlank">Start blank sheet</button>
+  </div>
+
+  <div id="msgWrap" class="msg noprint" hidden><div class="note ok" id="msg" role="status"></div></div>
+
+  <div class="split">
+
+    <!-- ── inputs ────────────────────────────────────────────── -->
+    <div class="stack-lg">
+
+      <section class="card noprint" aria-labelledby="h-ship">
+        <div class="hd"><h2 id="h-ship">Shipment details</h2><span class="hint">Printed on the comparison document</span></div>
+        <div class="bd grid cols-2">
+          <div class="f"><label for="ref">Reference / order no.</label><input id="ref" data-s="ref" type="text" autocomplete="off"></div>
+          <div class="f"><label for="date">Ship date</label><input id="date" data-s="date" type="date"></div>
+          <div class="f"><label for="from">Ship from</label><input id="from" data-s="from" type="text" autocomplete="off"></div>
+          <div class="f"><label for="to">Ship to</label><input id="to" data-s="to" type="text" autocomplete="off"></div>
+          <div class="f"><label for="acct">Carrier account</label><input id="acct" data-s="acct" type="text" autocomplete="off"></div>
+          <div class="f"><label for="by">Prepared by</label><input id="by" data-s="by" type="text" autocomplete="off"></div>
+          <div class="f" style="grid-column:1/-1"><label for="notes">Notes for the document</label><textarea id="notes" data-s="notes"></textarea></div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-pkg">
+        <div class="hd">
+          <h2 id="h-pkg">Packages</h2>
+          <div class="seg noprint" role="group" aria-label="Unit system">
+            <button type="button" id="uImp" aria-pressed="true">Imperial (in / lb)</button>
+            <button type="button" id="uMet" aria-pressed="false">Metric (cm / kg)</button>
+          </div>
+        </div>
+        <div class="printonly" style="padding:3mm 4mm 0;font:600 9.5pt/1.35 var(--sans)">Package detail — dim weight and billable weight shown for <span id="capCarrier">the lowest-billable carrier</span></div>
+        <div class="tw">
+          <table class="pkgtbl">
+            <thead>
+              <tr>
+                <th scope="col">Description</th>
+                <th scope="col" class="n">Qty</th>
+                <th scope="col" class="n">L <span class="ulen">in</span></th>
+                <th scope="col" class="n">W <span class="ulen">in</span></th>
+                <th scope="col" class="n">H <span class="ulen">in</span></th>
+                <th scope="col" class="n">Actual ea <span class="uwt">lb</span></th>
+                <th scope="col" class="n">Cube ea <span class="ucube">in³</span></th>
+                <th scope="col" class="n">Dim wt ea</th>
+                <th scope="col" class="n">Billable ea</th>
+                <th scope="col" class="n">Billable line</th>
+                <th scope="col" class="cx noprint"><span class="lbl">Del</span></th>
+              </tr>
+            </thead>
+            <tbody id="pkgBody"></tbody>
+            <tfoot>
+              <tr>
+                <td>Shipment total</td>
+                <td class="n" id="tQty">—</td>
+                <td colspan="2"></td>
+                <td class="n"><span class="lbl">Totals</span></td>
+                <td class="n" id="tActual">—</td>
+                <td class="n" id="tCube">—</td>
+                <td class="n" id="tDim">—</td>
+                <td class="n"></td>
+                <td class="n" id="tBill">—</td>
+                <td class="cx noprint"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn noprint" id="btnAddPkg">+ Add package</button>
+          <div class="f noprint" style="margin-left:auto;flex-direction:row;align-items:center;gap:8px">
+            <label for="detail" style="white-space:nowrap">Detail columns</label>
+            <select id="detail" style="width:auto"></select>
+          </div>
+        </div>
+        <div class="bd" style="border-top:1px solid var(--line);padding-top:12px">
+          <label class="check noprint" for="roundDims"><input type="checkbox" id="roundDims"><span>Round each dimension to the nearest whole <span class="ulen">in</span> before cubing — the measuring rule UPS and FedEx apply at the depot. Off = use the dimensions exactly as entered.</span></label>
+          <p class="legend" style="margin-top:10px"><span><strong>DIM</strong> = dimensional weight drove the charge on that package</span><span><strong>ACT</strong> = actual weight drove it</span><span>Billable weight is rounded <strong>up</strong> to the next whole unit on every package before the line is multiplied out.</span></p>
+          <div id="pkgWarn" class="note bad" style="margin-top:10px" hidden></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── results ───────────────────────────────────────────── -->
+    <div class="res">
+      <div class="sticky stack-lg">
+        <section class="card" aria-labelledby="h-res">
+          <div class="hd"><h2 id="h-res">Billable weight</h2><span class="chip" id="pieceChip">—</span></div>
+          <div class="bd stack">
+            <div class="stat hero">
+              <div class="k">Lowest billable weight — whole shipment</div>
+              <div class="v" id="heroVal">—</div>
+              <div class="who" id="heroWho">Enter package dimensions to compare carriers<small id="heroSub"></small></div>
+            </div>
+            <div class="grid cols-3">
+              <div class="stat"><div class="k">Total actual weight</div><div class="v sm" id="sActual">—</div></div>
+              <div class="stat"><div class="k">Dim weight <span class="u" id="sDimWho"></span></div><div class="v sm" id="sDim">—</div></div>
+              <div class="stat"><div class="k">Charged over actual</div><div class="v sm" id="sUplift">—</div></div>
+              <div class="stat"><div class="k">Total cube</div><div class="v sm" id="sCube">—</div></div>
+            </div>
+            <p class="hint" id="spread">&nbsp;</p>
+            <div class="note warn">
+              <strong>Estimate for planning and quoting — not a rate quote.</strong>
+              Dimensional divisors are set by each carrier, differ by service and country, and are frequently changed; a negotiated contract often carries a divisor other than the published one. This tool computes billable weight only — it does not price freight, fuel, residential, oversize, additional-handling or any other accessorial charge. Confirm the divisor, the measuring rule and the rounding rule in your current carrier agreement or published rate guide before you invoice a customer or accept a charge.
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── carrier comparison ──────────────────────────────────── -->
+  <section class="card" style="margin-top:14px" aria-labelledby="h-car">
+    <div class="hd">
+      <h2 id="h-car">Carrier comparison</h2>
+      <div class="row noprint">
+        <label class="lbl" for="cur" style="white-space:nowrap">Currency</label>
+        <select id="cur" style="width:auto"><option value="$">$ USD</option><option value="£">£ GBP</option><option value="€">€ EUR</option><option value="custom">Custom…</option></select>
+        <input type="text" id="curCustom" maxlength="4" style="width:64px" aria-label="Custom currency symbol" hidden>
+        <button type="button" class="btn sm" id="btnResetDiv">Reset divisors</button>
+      </div>
+    </div>
+    <div class="tw">
+      <table class="ctbl">
+        <thead>
+          <tr>
+            <th scope="col" class="cx noprint">Use</th>
+            <th scope="col">Carrier / service</th>
+            <th scope="col" class="n">Divisor <span class="udiv">in³/lb</span></th>
+            <th scope="col" class="n">Rate per <span class="uwt">lb</span></th>
+            <th scope="col" class="n">Dim weight</th>
+            <th scope="col" class="n">Billable weight</th>
+            <th scope="col" class="n">vs actual</th>
+            <th scope="col" class="n">Est. cost</th>
+            <th scope="col" class="cx noprint"><span class="lbl">Del</span></th>
+          </tr>
+        </thead>
+        <tbody id="carBody"></tbody>
+      </table>
+    </div>
+    <div class="ft">
+      <button type="button" class="btn noprint" id="btnAddCar">+ Add carrier</button>
+      <div class="legend" style="margin-left:auto">
+        <span>Published defaults: 139 in³/lb (5,000 cm³/kg) UPS · FedEx · DHL</span>
+        <span>166 in³/lb (6,000 cm³/kg) USPS</span>
+        <span>250 in³/lb LTL / air-freight cube</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="printonly" style="margin-top:6mm;font-size:8.5pt;line-height:1.5;border-top:1px solid #888;padding-top:3mm">
+    <strong>Basis of calculation.</strong> Dimensional weight = (Length × Width × Height) ÷ divisor, computed for each package separately. Billable weight per package = the greater of actual weight and dimensional weight, rounded <em>up</em> to the next whole pound or kilogram, then multiplied by the quantity of identical packages and summed across the shipment.
+    <br><strong>Estimate only — not a rate quote.</strong> Dimensional divisors are set by each carrier, differ by service and country, and are frequently changed; negotiated contracts often carry a divisor other than the published one. This document states billable weight only. It does not price freight, fuel, residential, oversize, additional-handling or any other accessorial charge. Confirm the divisor, the measuring rule and the rounding rule in your current carrier agreement or published rate guide before invoicing or accepting a charge. Estimated cost figures, where shown, are the operator's own rate per unit weight multiplied by billable weight.
+  </div>
+
+</main>
+
+<footer class="noprint">
+  Dim weight = (L × W × H) ÷ divisor. Billable weight = greater of actual and dim weight, rounded up to the next whole lb/kg per package, then totalled across the shipment. Divisor defaults follow the published parcel standards — 139 in³/lb (5,000 cm³/kg) for UPS, FedEx and DHL, 166 in³/lb (6,000 cm³/kg) for USPS, and the 250 in³/lb cube rule used for LTL and domestic air freight; the metric LTL figure of 9,000 cm³/kg is the converted equivalent of 250 in³/lb (≈9,032) and is shown rounded — edit it to match your tariff. Every divisor on this page is editable. Conversions: 1 in = 2.54 cm exactly, 1 lb = 0.45359237 kg exactly. All data stays in this browser; nothing is uploaded.
+</footer>
+
+<script>
+(function(){
+'use strict';
+var K='solvix.dim-weight-calculator.v1';
+var IN_CM=2.54, LB_KG=0.45359237;
+var U={imp:{len:'in',wt:'lb',cube:'in³',div:'in³/lb'},met:{len:'cm',wt:'kg',cube:'cm³',div:'cm³/kg'}};
+var $=function(s,r){return (r||document).querySelector(s);};
+var S=null, saveTimer=null;
+
+/* ── helpers ─────────────────────────────────────────────── */
+function fin(x){return typeof x==='number' && isFinite(x);}
+function num(v){ if(v===''||v===null||v===undefined) return NaN; var n=parseFloat(v); return isFinite(n)?n:NaN; }
+function nf(x,d){ if(!fin(x)) return '—'; if(Math.abs(x)<5e-10) x=0; return x.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function ni(x){ if(!fin(x)) return '—'; return Math.round(x).toLocaleString('en-US'); }
+function sm(x){ if(!fin(x)) return '—'; return Math.abs(x-Math.round(x))<1e-9 ? ni(x) : nf(x,1); }
+function ceilW(x){ return fin(x)? Math.ceil(x-1e-9) : NaN; }
+function esc(s){ return String(s==null?'':s); }
+function uid(){ return 'r'+Math.random().toString(36).slice(2,9); }
+function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function sym(){ return S.cur==='custom' ? (S.curCustom||'¤') : S.cur; }
+function money(x){ return fin(x)? sym()+nf(x,2) : '—'; }
+function uL(){ return U[S.units].len; } function uW(){ return U[S.units].wt; }
+function uC(){ return U[S.units].cube; } function uD(){ return U[S.units].div; }
+
+/* ── defaults ────────────────────────────────────────────── */
+function defCarriers(){
+  return [
+    {id:'ups-dom',  name:'UPS — US Domestic',        note:'Ground · Air · 3 Day Select',      divImp:139, divMet:5000},
+    {id:'ups-intl', name:'UPS — International',      note:'Worldwide Express / Expedited',     divImp:139, divMet:5000},
+    {id:'fx-dom',   name:'FedEx — US Domestic',      note:'Express and Ground',                divImp:139, divMet:5000},
+    {id:'fx-intl',  name:'FedEx — International',    note:'International Priority / Economy',  divImp:139, divMet:5000},
+    {id:'usps',     name:'USPS — Priority Mail',     note:'Balloon / cubic-priced parcels',    divImp:166, divMet:6000},
+    {id:'dhl',      name:'DHL Express',              note:'Worldwide, 5,000 cm³/kg basis',     divImp:139, divMet:5000},
+    {id:'ltl',      name:'Freight — LTL / air cube', note:'250 in³/lb cube rule',              divImp:250, divMet:9000}
+  ].map(function(c){ c.on=true; c.rate=0; c.custom=false; return c; });
+}
+var PUBLISHED={}; defCarriers().forEach(function(c){ PUBLISHED[c.id]={divImp:c.divImp,divMet:c.divMet}; });
+
+function blankState(){
+  return { v:1, sample:false, units:'imp', cur:'$', curCustom:'', roundDims:false, detail:'best',
+    ship:{ref:'',date:today(),from:'',to:'',acct:'',by:'',notes:''},
+    pkgs:[], carriers:defCarriers() };
+}
+function sampleState(){
+  var s=blankState();
+  s.sample=true;
+  s.ship={ref:'SO-40218', date:today(), from:'Meridian Supply Co. — Columbus, OH 43219',
+          to:'Harbor Line Outfitters — Tacoma, WA 98421', acct:'Acct 4X72V9', by:'D. Alvarez',
+          notes:'Consolidated release 2 of 3. Cartons palletised on collection.'};
+  s.pkgs=[
+    {id:uid(), desc:'Carton A — counter display units', qty:1, l:24, w:18, h:12, wt:14.5},
+    {id:uid(), desc:'Carton B — rack kits, boxed',      qty:2, l:30, w:20, h:16, wt:22},
+    {id:uid(), desc:'Carton C — spares and fixings',    qty:1, l:12, w:10, h:8,  wt:9}
+  ];
+  return s;
+}
+
+/* ── persistence ─────────────────────────────────────────── */
+function save(){
+  try{ localStorage.setItem(K, JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(K);
+    if(!raw) return null;
+    var o=JSON.parse(raw);
+    if(!o || typeof o!=='object' || !Array.isArray(o.pkgs)) return null;
+    return normalise(o);
+  }catch(e){ return null; }
+}
+function normalise(o){
+  var s=blankState();
+  s.sample=!!o.sample;
+  s.units=(o.units==='met')?'met':'imp';
+  s.cur=typeof o.cur==='string'?o.cur:'$';
+  s.curCustom=typeof o.curCustom==='string'?o.curCustom:'';
+  s.roundDims=!!o.roundDims;
+  s.detail=typeof o.detail==='string'?o.detail:'best';
+  if(o.ship&&typeof o.ship==='object'){
+    ['ref','date','from','to','acct','by','notes'].forEach(function(k){
+      if(typeof o.ship[k]==='string') s.ship[k]=o.ship[k];
+    });
+  }
+  s.pkgs=(o.pkgs||[]).map(function(p){
+    return {id:(p&&p.id)||uid(), desc:esc(p&&p.desc), qty:p&&p.qty!==undefined?p.qty:1,
+            l:p?p.l:'', w:p?p.w:'', h:p?p.h:'', wt:p?p.wt:''};
+  });
+  if(Array.isArray(o.carriers)&&o.carriers.length){
+    s.carriers=o.carriers.map(function(c){
+      return {id:(c&&c.id)||uid(), name:esc(c&&c.name)||'Carrier', note:esc(c&&c.note),
+              divImp:c?c.divImp:139, divMet:c?c.divMet:5000,
+              on:c?c.on!==false:true, rate:c&&fin(num(c.rate))?num(c.rate):0, custom:!!(c&&c.custom)};
+    });
+  }
+  return s;
+}
+
+/* ── maths ───────────────────────────────────────────────── */
+function pkgQty(p){ var q=num(p.qty); return (fin(q)&&q>=1)? Math.floor(q) : NaN; }
+function dimOK(x){ return fin(x)&&x>0; }
+function pkgCube(p){
+  var l=num(p.l), w=num(p.w), h=num(p.h);
+  if(!dimOK(l)||!dimOK(w)||!dimOK(h)) return NaN;
+  if(S.roundDims){ l=Math.round(l); w=Math.round(w); h=Math.round(h);
+    if(!dimOK(l)||!dimOK(w)||!dimOK(h)) return NaN; }
+  return l*w*h;
+}
+function pkgComplete(p){
+  var wt=num(p.wt);
+  return fin(pkgCube(p)) && fin(pkgQty(p)) && fin(wt) && wt>0;
+}
+function divOf(c){ var d=num(S.units==='imp'?c.divImp:c.divMet); return (fin(d)&&d>0)?d:NaN; }
+
+/* per-carrier totals over the complete packages */
+function calc(c){
+  var div=divOf(c);
+  var r={div:div, valid:fin(div), dim:0, bill:0, lines:[], any:false};
+  for(var i=0;i<S.pkgs.length;i++){
+    var p=S.pkgs[i], line={cube:NaN,dimEa:NaN,billEa:NaN,billLine:NaN,driver:''};
+    if(pkgComplete(p) && r.valid){
+      var q=pkgQty(p), wt=num(p.wt), cube=pkgCube(p);
+      line.cube=cube;
+      line.dimEa=cube/div;
+      var base=Math.max(wt, line.dimEa);
+      line.driver = (line.dimEa>wt+1e-9)?'dim':'actual';
+      line.billEa=ceilW(base);
+      line.billLine=line.billEa*q;
+      r.dim+=line.dimEa*q; r.bill+=line.billLine; r.any=true;
+    }
+    r.lines.push(line);
+  }
+  if(!r.any){ r.dim=NaN; r.bill=NaN; }
+  return r;
+}
+function totals(){
+  var t={qty:0, actual:0, cube:0, any:false, incomplete:0};
+  for(var i=0;i<S.pkgs.length;i++){
+    var p=S.pkgs[i];
+    if(pkgComplete(p)){
+      var q=pkgQty(p);
+      t.qty+=q; t.actual+=num(p.wt)*q; t.cube+=pkgCube(p)*q; t.any=true;
+    } else t.incomplete++;
+  }
+  if(!t.any){ t.qty=NaN; t.actual=NaN; t.cube=NaN; }
+  return t;
+}
+
+/* ── package rows ────────────────────────────────────────── */
+function cell(kind,key,val,extra){
+  var attrs='data-k="'+key+'"';
+  var cls='';
+  if(kind==='num'){ attrs+=' type="number" inputmode="decimal"'+(extra||''); }
+  else { attrs+=' type="text" autocomplete="off"'; cls=' desc'; }
+  return '<td class="'+(kind==='num'?'n':'')+'"><input '+attrs+' value="'+escAttr(val)+'" aria-label="'+escAttr(key)+'">'+
+         '<span class="pv'+cls+'"></span><span class="err" hidden></span></td>';
+}
+function escAttr(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function renderPkgs(){
+  var b=$('#pkgBody'); b.innerHTML='';
+  if(!S.pkgs.length){
+    b.innerHTML='<tr><td colspan="11" class="empty">No packages yet — add one to compare carriers.</td></tr>';
+    return;
+  }
+  var html='';
+  for(var i=0;i<S.pkgs.length;i++){
+    var p=S.pkgs[i];
+    html+='<tr data-id="'+p.id+'">'+
+      cell('txt','desc',p.desc)+
+      cell('num','qty',p.qty,' min="1" step="1"')+
+      cell('num','l',p.l,' min="0" step="0.1"')+
+      cell('num','w',p.w,' min="0" step="0.1"')+
+      cell('num','h',p.h,' min="0" step="0.1"')+
+      cell('num','wt',p.wt,' min="0" step="0.01"')+
+      '<td class="n" data-o="cube">—</td><td class="n" data-o="dim">—</td>'+
+      '<td class="n" data-o="bill">—</td><td class="n" data-o="line">—</td>'+
+      '<td class="cx noprint"><button type="button" class="btn ico sm" data-del="1" aria-label="Remove package '+(i+1)+'">✕</button></td>'+
+      '</tr>';
+  }
+  b.innerHTML=html;
+}
+
+/* ── carrier rows ────────────────────────────────────────── */
+function renderCars(){
+  var b=$('#carBody'); b.innerHTML='';
+  if(!S.carriers.length){
+    b.innerHTML='<tr><td colspan="9" class="empty">No carriers — add one, or press Reset divisors.</td></tr>';
+    return;
+  }
+  var html='';
+  for(var i=0;i<S.carriers.length;i++){
+    var c=S.carriers[i];
+    var dv=(S.units==='imp')?c.divImp:c.divMet;
+    html+='<tr data-id="'+c.id+'">'+
+      '<td class="cx noprint"><input type="checkbox" data-k="on" '+(c.on!==false?'checked':'')+' style="width:16px;height:16px;accent-color:var(--accent)" aria-label="Include '+escAttr(c.name)+'"></td>'+
+      '<td>'+(c.custom
+          ? '<input type="text" data-k="name" value="'+escAttr(c.name)+'" aria-label="Carrier name"><span class="pv desc"></span>'
+          : '<div class="cname">'+escAttr(c.name)+'</div><div class="cnote">'+escAttr(c.note)+'</div>')+
+        '<span class="chip" data-o="flag" hidden>edited</span></td>'+
+      '<td class="n"><input type="number" data-k="div" value="'+escAttr(dv)+'" min="1" step="1" inputmode="numeric" aria-label="Divisor for '+escAttr(c.name)+'"><span class="pv"></span><span class="err" hidden></span></td>'+
+      '<td class="n"><input type="number" data-k="rate" value="'+escAttr(fin(num(c.rate))&&num(c.rate)>0?c.rate:'')+'" min="0" step="0.01" inputmode="decimal" placeholder="opt." aria-label="Rate per unit weight for '+escAttr(c.name)+'"><span class="pv"></span><span class="err" hidden></span></td>'+
+      '<td class="n" data-o="dim">—</td><td class="n" data-o="bill">—</td><td class="n" data-o="vs">—</td><td class="n" data-o="cost">—</td>'+
+      '<td class="cx noprint">'+(c.custom?'<button type="button" class="btn ico sm" data-del="1" aria-label="Remove '+escAttr(c.name)+'">✕</button>':'')+'</td>'+
+      '</tr>';
+  }
+  b.innerHTML=html;
+}
+
+function renderDetailOpts(){
+  var sel=$('#detail'), html='<option value="best">Lowest billable carrier</option>';
+  for(var i=0;i<S.carriers.length;i++){
+    var c=S.carriers[i];
+    html+='<option value="'+escAttr(c.id)+'">'+escAttr(c.name)+'</option>';
+  }
+  sel.innerHTML=html;
+  var ok=S.detail==='best'||S.carriers.some(function(c){return c.id===S.detail;});
+  if(!ok) S.detail='best';
+  sel.value=S.detail;
+}
+
+/* ── main recompute ──────────────────────────────────────── */
+function recompute(){
+  var t=totals();
+  var results=S.carriers.map(function(c){ var r=calc(c); r.c=c; return r; });
+  var live=results.filter(function(r){ return r.c.on!==false && r.valid && fin(r.bill); });
+  var best=null, cheapest=null;
+  live.forEach(function(r){
+    if(!best || r.bill<best.bill) best=r;
+    var rate=num(r.c.rate);
+    if(fin(rate)&&rate>0){ var cost=r.bill*rate; if(!cheapest||cost<cheapest.cost) cheapest={r:r,cost:cost}; }
+  });
+  var worst=null; live.forEach(function(r){ if(!worst||r.bill>worst.bill) worst=r; });
+
+  var detailR = (S.detail==='best') ? best : results.filter(function(r){return r.c.id===S.detail;})[0]||best;
+
+  /* package rows */
+  var rows=$('#pkgBody').querySelectorAll('tr[data-id]');
+  for(var i=0;i<rows.length;i++){
+    var tr=rows[i], p=S.pkgs[i]; if(!p) continue;
+    var ln=detailR?detailR.lines[i]:null;
+    setO(tr,'cube', ln&&fin(ln.cube)?sm(ln.cube):'—');
+    setO(tr,'dim',  ln&&fin(ln.dimEa)?nf(ln.dimEa,2):'—');
+    var bc=tr.querySelector('[data-o="bill"]');
+    if(bc){
+      bc.textContent = ln&&fin(ln.billEa)? ni(ln.billEa) : '—';
+      if(ln&&fin(ln.billEa)){
+        var dv=document.createElement('span');
+        dv.className='drv'+(ln.driver==='dim'?' d':'');
+        dv.textContent=ln.driver==='dim'?'DIM':'ACT';
+        dv.title=ln.driver==='dim'?'Dimensional weight drove the charge':'Actual weight drove the charge';
+        bc.appendChild(dv);
+      }
+    }
+    setO(tr,'line', ln&&fin(ln.billLine)?ni(ln.billLine):'—');
+    var ins=tr.querySelectorAll('input[data-k]');
+    for(var j=0;j<ins.length;j++){
+      var pv=ins[j].nextElementSibling;
+      if(pv&&pv.classList.contains('pv')) pv.textContent=ins[j].value===''?'—':ins[j].value;
+      if(ins[j].dataset.k==='desc') ins[j].title=ins[j].value;
+    }
+  }
+  $('#tQty').textContent  = fin(t.qty)?ni(t.qty):'—';
+  $('#tActual').textContent = fin(t.actual)?nf(t.actual,2):'—';
+  $('#tCube').textContent = fin(t.cube)?sm(t.cube):'—';
+  $('#tDim').textContent  = detailR&&fin(detailR.dim)?nf(detailR.dim,2):'—';
+  $('#tBill').textContent = detailR&&fin(detailR.bill)?ni(detailR.bill)+' '+uW():'—';
+
+  /* carrier rows */
+  var crows=$('#carBody').querySelectorAll('tr[data-id]');
+  for(var k=0;k<crows.length;k++){
+    var ctr=crows[k], r=results[k]; if(!r) continue;
+    var c=r.c;
+    ctr.classList.toggle('off', c.on===false);
+    ctr.classList.toggle('best', !!(best && best.c.id===c.id));
+    setO(ctr,'dim', fin(r.dim)?nf(r.dim,2)+' '+uW():'—');
+    var billCell=ctr.querySelector('[data-o="bill"]');
+    if(billCell){
+      var txt = fin(r.bill)? ni(r.bill)+' '+uW() : '—';
+      billCell.innerHTML='';
+      billCell.appendChild(document.createTextNode(txt));
+      if(best && best.c.id===c.id && fin(r.bill)){
+        var chip=document.createElement('span'); chip.className='chip ok'; chip.style.marginLeft='7px';
+        chip.textContent='Lowest'; billCell.appendChild(chip);
+      }
+    }
+    var vs = (fin(r.bill)&&fin(t.actual)&&t.actual>0)? (r.bill-t.actual) : NaN;
+    setO(ctr,'vs', fin(vs)? (vs>0?'+':'')+nf(vs,2)+' '+uW()+'  ('+(vs>0?'+':'')+nf(vs/t.actual*100,1)+'%)' : '—');
+    var rate=num(c.rate);
+    var costCell=ctr.querySelector('[data-o="cost"]');
+    if(costCell){
+      var cost=(fin(rate)&&rate>0&&fin(r.bill))? r.bill*rate : NaN;
+      costCell.innerHTML='';
+      costCell.appendChild(document.createTextNode(money(cost)));
+      if(cheapest && cheapest.r.c.id===c.id && fin(cost)){
+        var ch2=document.createElement('span'); ch2.className='chip ok'; ch2.style.marginLeft='7px';
+        ch2.textContent='Cheapest'; costCell.appendChild(ch2);
+      }
+    }
+    var flag=ctr.querySelector('[data-o="flag"]');
+    if(flag){
+      var pub=PUBLISHED[c.id];
+      var cur=(S.units==='imp')?num(c.divImp):num(c.divMet);
+      var pubv=pub?(S.units==='imp'?pub.divImp:pub.divMet):NaN;
+      flag.hidden = !(pub && fin(cur) && cur!==pubv);
+      if(!flag.hidden) flag.textContent='edited — published '+ni(pubv);
+    }
+    var cins=ctr.querySelectorAll('input[data-k]');
+    for(var m=0;m<cins.length;m++){
+      var pv2=cins[m].nextElementSibling;
+      if(pv2&&pv2.classList.contains('pv')){
+        pv2.textContent = cins[m].type==='checkbox' ? (cins[m].checked?'Yes':'No')
+                        : (cins[m].value===''?'—':cins[m].value);
+      }
+    }
+  }
+
+  /* hero + stats */
+  $('#heroVal').textContent = best&&fin(best.bill) ? ni(best.bill)+' '+uW() : '—';
+  if(best&&fin(best.bill)){
+    $('#heroWho').firstChild.nodeValue = best.c.name;
+    $('#heroSub').textContent = 'divisor '+ni(best.div)+' '+uD()+' · '+(fin(t.qty)?ni(t.qty):'—')+' piece'+(t.qty===1?'':'s')+' · rounded up per package';
+  } else {
+    $('#heroWho').firstChild.nodeValue = S.pkgs.length? 'Complete a package row to compare carriers' : 'Add a package to compare carriers';
+    $('#heroSub').textContent='';
+  }
+  $('#sActual').textContent = fin(t.actual)? nf(t.actual,2)+' '+uW() : '—';
+  $('#sDim').textContent = detailR&&fin(detailR.dim)? nf(detailR.dim,2)+' '+uW() : '—';
+  $('#sDimWho').textContent = detailR? '· '+shortName(detailR.c.name) : '';
+  var up=(best&&fin(best.bill)&&fin(t.actual))? best.bill-t.actual : NaN;
+  var upEl=$('#sUplift'); upEl.textContent = fin(up)? (up>0?'+':'')+nf(up,2)+' '+uW() : '—';
+  if(fin(up)&&fin(t.actual)&&t.actual>0){
+    var us=document.createElement('span'); us.className='u'; us.style.marginLeft='6px';
+    us.textContent=(up>0?'+':'')+nf(up/t.actual*100,1)+'%'; upEl.appendChild(us);
+  }
+  $('#sCube').textContent = fin(t.cube)? sm(t.cube)+' '+uC() : '—';
+  $('#pieceChip').textContent = fin(t.qty)? ni(t.qty)+' piece'+(t.qty===1?'':'s')+' · '+S.pkgs.length+' line'+(S.pkgs.length===1?'':'s') : '—';
+  if(best&&worst&&fin(best.bill)&&fin(worst.bill)&&worst.bill>best.bill){
+    $('#spread').textContent='Spread across included carriers: '+ni(worst.bill-best.bill)+' '+uW()+
+      ' — highest is '+shortName(worst.c.name)+' at '+ni(worst.bill)+' '+uW()+' (divisor '+ni(worst.div)+').';
+  } else if(best&&fin(best.bill)){
+    $('#spread').textContent='All included carriers bill the same weight at these divisors.';
+  } else $('#spread').innerHTML='&nbsp;';
+
+  /* incomplete warning */
+  var w=$('#pkgWarn');
+  if(t.incomplete>0){
+    w.hidden=false;
+    w.innerHTML='<strong>'+t.incomplete+' package row'+(t.incomplete===1?'':'s')+' incomplete.</strong> '+
+      'Every row needs a quantity of 1 or more, all three dimensions above zero and an actual weight above zero. Incomplete rows are excluded from the totals below.';
+  } else w.hidden=true;
+
+  /* caption + print header */
+  $('#capCarrier').textContent = detailR? detailR.c.name+' (divisor '+ni(detailR.div)+' '+uD()+')' : 'the lowest-billable carrier';
+  $('#pFrom').textContent = S.ship.from||'—';
+  $('#pTo').textContent   = S.ship.to||'—';
+  $('#pRef').textContent  = S.ship.ref||'—';
+  $('#pDate').textContent = S.ship.date||'—';
+  $('#pAcct').textContent = S.ship.acct||'—';
+  $('#pBy').textContent   = S.ship.by||'—';
+  $('#pUnits').textContent= S.units==='imp'?'Inches / pounds':'Centimetres / kilograms';
+  $('#pPieces').textContent = (fin(t.qty)?ni(t.qty):'—')+' across '+S.pkgs.length+' line'+(S.pkgs.length===1?'':'s');
+  $('#pRule').textContent = S.roundDims? 'Dimensions rounded to nearest whole '+uL()+' before cubing' : 'Dimensions used exactly as measured';
+  $('#pBest').textContent = best&&fin(best.bill)? ni(best.bill)+' '+uW() : '—';
+  $('#pBestWho').textContent = best&&fin(best.bill)? '— '+best.c.name+', divisor '+ni(best.div)+' '+uD()+
+      (fin(t.actual)?' (actual '+nf(t.actual,2)+' '+uW()+')':'') : '';
+  $('#pNotes').textContent = S.ship.notes||'';
+
+  save();
+  return {t:t, results:results, best:best, detailR:detailR, cheapest:cheapest};
+}
+function shortName(n){ return String(n).split('—')[0].trim(); }
+function setO(tr,key,val){ var el=tr.querySelector('[data-o="'+key+'"]'); if(el) el.textContent=val; }
+
+/* ── validation ──────────────────────────────────────────── */
+function showErr(input,msg){
+  var e=input.parentNode.querySelector('.err');
+  if(msg){ input.classList.add('inv'); if(e){e.textContent=msg; e.hidden=false;} }
+  else { input.classList.remove('inv'); if(e){e.textContent=''; e.hidden=true;} }
+}
+function validatePkg(input){
+  var k=input.dataset.k, v=input.value.trim();
+  if(k==='desc'){ showErr(input,''); return; }
+  if(v===''){ showErr(input, k==='qty'?'Quantity required':(k==='wt'?'Actual weight required':'Dimension required')); return; }
+  var n=num(v);
+  if(!fin(n)){ showErr(input,'Numbers only'); return; }
+  if(k==='qty'){ showErr(input, (n>=1 && Math.abs(n-Math.round(n))<1e-9)?'':'Whole number, 1 or more'); return; }
+  showErr(input, n>0?'':'Must be greater than 0');
+}
+function validateCar(input){
+  var k=input.dataset.k, v=input.value.trim();
+  if(k==='name'){ showErr(input,''); return; }
+  if(k==='div'){
+    var d=num(v);
+    showErr(input, (fin(d)&&d>0)?'':'Divisor must be greater than 0'); return;
+  }
+  if(k==='rate'){
+    if(v===''){ showErr(input,''); return; }
+    var r=num(v);
+    showErr(input, (fin(r)&&r>=0)?'':'Rate cannot be negative'); return;
+  }
+}
+
+/* ── unit switching ──────────────────────────────────────── */
+function setUnits(u){
+  if(u===S.units) return;
+  var toMet = (u==='met');
+  S.pkgs.forEach(function(p){
+    ['l','w','h'].forEach(function(k){
+      var n=num(p[k]);
+      if(fin(n)) p[k]= conv(n, toMet? IN_CM : 1/IN_CM);
+    });
+    var wt=num(p.wt);
+    if(fin(wt)) p.wt= conv(wt, toMet? LB_KG : 1/LB_KG);
+  });
+  S.carriers.forEach(function(c){
+    var r=num(c.rate);
+    if(fin(r)&&r!==0) c.rate = conv(r, toMet? 1/LB_KG : LB_KG);
+  });
+  S.units=u;
+  markDirty();
+  fullRender();
+}
+function round(x,d){ var f=Math.pow(10,d); return Math.round((x+Number.EPSILON)*f)/f; }
+/* multiply by factor, then use the shortest decimal that converts back cleanly,
+   so switching units repeatedly never drifts the operator's figures */
+function conv(x,f){
+  var raw=x*f;
+  for(var d=0;d<=6;d++){ var v=round(raw,d); if(Math.abs(v/f-x)<=5e-4) return v; }
+  return round(raw,6);
+}
+
+/* ── render everything ───────────────────────────────────── */
+function fullRender(){
+  $('#uImp').setAttribute('aria-pressed', S.units==='imp'?'true':'false');
+  $('#uMet').setAttribute('aria-pressed', S.units==='met'?'true':'false');
+  var L=uL(), W=uW(), C=uC(), D=uD();
+  Array.prototype.forEach.call(document.querySelectorAll('.ulen'),function(e){e.textContent=L;});
+  Array.prototype.forEach.call(document.querySelectorAll('.uwt'), function(e){e.textContent=W;});
+  Array.prototype.forEach.call(document.querySelectorAll('.ucube'),function(e){e.textContent=C;});
+  Array.prototype.forEach.call(document.querySelectorAll('.udiv'),function(e){e.textContent=D;});
+  ['ref','date','from','to','acct','by','notes'].forEach(function(k){ $('#'+k).value=S.ship[k]||''; });
+  $('#roundDims').checked=!!S.roundDims;
+  $('#cur').value=(['$','£','€'].indexOf(S.cur)>=0)?S.cur:'custom';
+  $('#curCustom').hidden=$('#cur').value!=='custom';
+  $('#curCustom').value=S.curCustom||'';
+  $('#sampBar').hidden=!S.sample;
+  renderPkgs(); renderCars(); renderDetailOpts();
+  recompute();
+}
+function markDirty(){ if(S.sample){ S.sample=false; $('#sampBar').hidden=true; } }
+
+/* ── messages ────────────────────────────────────────────── */
+var msgTimer=null;
+function msg(text,kind){
+  var w=$('#msgWrap'), m=$('#msg');
+  m.className='note'+(kind==='bad'?' bad':(kind==='warn'?' warn':''));
+  m.textContent=text; w.hidden=false;
+  clearTimeout(msgTimer); msgTimer=setTimeout(function(){ w.hidden=true; }, 6000);
+}
+
+/* ── export ──────────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v==null)?'':String(v);
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvRow(a){ return a.map(csvCell).join(','); }
+function download(name, mime, text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+  }catch(e){ msg('Could not start the download in this browser.','bad'); }
+}
+function fileStem(){
+  var base=(S.ship.ref||'shipment').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'');
+  return 'dim-weight-'+(base||'shipment');
+}
+function exportCSV(){
+  var R=recompute(), t=R.t, L=uL(), W=uW(), C=uC(), D=uD();
+  var rows=[];
+  rows.push(['Dimensional & Billable Weight Comparison']);
+  rows.push(['Reference',S.ship.ref]); rows.push(['Ship date',S.ship.date]);
+  rows.push(['Ship from',S.ship.from]); rows.push(['Ship to',S.ship.to]);
+  rows.push(['Carrier account',S.ship.acct]); rows.push(['Prepared by',S.ship.by]);
+  rows.push(['Units', S.units==='imp'?'inches / pounds':'centimetres / kilograms']);
+  rows.push(['Measuring rule', S.roundDims?('dimensions rounded to nearest whole '+L+' before cubing'):'dimensions used as measured']);
+  rows.push(['Detail carrier', R.detailR?R.detailR.c.name:'—']);
+  rows.push(['Notes',S.ship.notes]);
+  rows.push([]);
+  rows.push(['PACKAGES']);
+  rows.push(['Description','Qty','L ('+L+')','W ('+L+')','H ('+L+')','Actual each ('+W+')','Actual line ('+W+')',
+             'Cube each ('+C+')','Dim wt each ('+W+')','Driver','Billable each ('+W+')','Billable line ('+W+')']);
+  for(var i=0;i<S.pkgs.length;i++){
+    var p=S.pkgs[i], ln=R.detailR?R.detailR.lines[i]:null, q=pkgQty(p), wt=num(p.wt);
+    rows.push([p.desc, p.qty, p.l, p.w, p.h,
+      fin(wt)?wt:'', (fin(wt)&&fin(q))?round(wt*q,4):'',
+      ln&&fin(ln.cube)?round(ln.cube,4):'',
+      ln&&fin(ln.dimEa)?round(ln.dimEa,2):'',
+      ln&&ln.driver?(ln.driver==='dim'?'dim weight':'actual weight'):'',
+      ln&&fin(ln.billEa)?ln.billEa:'',
+      ln&&fin(ln.billLine)?ln.billLine:'']);
+  }
+  rows.push(['TOTAL', fin(t.qty)?t.qty:'', '','','','', fin(t.actual)?round(t.actual,4):'',
+             fin(t.cube)?round(t.cube,4):'', R.detailR&&fin(R.detailR.dim)?round(R.detailR.dim,2):'','',
+             '', R.detailR&&fin(R.detailR.bill)?R.detailR.bill:'']);
+  rows.push([]);
+  rows.push(['CARRIER COMPARISON']);
+  rows.push(['Carrier / service','Included','Divisor ('+D+')','Rate per '+W+' ('+sym()+')',
+             'Dim weight ('+W+')','Billable weight ('+W+')','Over actual ('+W+')','Over actual (%)','Est. cost ('+sym()+')','Lowest billable']);
+  R.results.forEach(function(r){
+    var rate=num(r.c.rate);
+    var over=(fin(r.bill)&&fin(t.actual))?round(r.bill-t.actual,2):'';
+    var pct=(fin(r.bill)&&fin(t.actual)&&t.actual>0)?round((r.bill-t.actual)/t.actual*100,1):'';
+    var cost=(fin(rate)&&rate>0&&fin(r.bill))?round(r.bill*rate,2):'';
+    rows.push([r.c.name, r.c.on!==false?'yes':'no', fin(r.div)?r.div:'', fin(rate)&&rate>0?rate:'',
+      fin(r.dim)?round(r.dim,2):'', fin(r.bill)?r.bill:'', over, pct, cost,
+      (R.best&&R.best.c.id===r.c.id)?'yes':'']);
+  });
+  rows.push([]);
+  rows.push(['Estimate only. Dim weight = (L x W x H) / divisor; billable = greater of actual and dim, rounded up per package. Divisors vary by carrier, service and contract - confirm against your current rate agreement before invoicing.']);
+  download(fileStem()+'.csv','text/csv;charset=utf-8','﻿'+rows.map(csvRow).join('\r\n'));
+  msg('CSV exported.');
+}
+function exportJSON(){
+  download(fileStem()+'.json','application/json', JSON.stringify(S,null,2));
+  msg('JSON exported — import it back to restore this sheet exactly.');
+}
+function importJSON(file){
+  var fr=new FileReader();
+  fr.onerror=function(){ msg('Could not read that file.','bad'); };
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.pkgs)) throw new Error('shape');
+      S=normalise(o); fullRender(); save();
+      msg('Imported '+S.pkgs.length+' package line'+(S.pkgs.length===1?'':'s')+' and '+S.carriers.length+' carriers.');
+    }catch(e){ msg('That file is not a Dimensional Weight Calculator export.','bad'); }
+  };
+  fr.readAsText(file);
+}
+
+/* ── events ──────────────────────────────────────────────── */
+function bind(){
+  /* shipment fields */
+  ['ref','date','from','to','acct','by','notes'].forEach(function(k){
+    $('#'+k).addEventListener('input',function(){ S.ship[k]=this.value; markDirty(); recompute(); });
+  });
+
+  /* units */
+  $('#uImp').addEventListener('click',function(){ setUnits('imp'); });
+  $('#uMet').addEventListener('click',function(){ setUnits('met'); });
+  $('#roundDims').addEventListener('change',function(){ S.roundDims=this.checked; markDirty(); recompute(); });
+  $('#detail').addEventListener('change',function(){ S.detail=this.value; recompute(); });
+
+  /* currency */
+  $('#cur').addEventListener('change',function(){
+    S.cur=this.value; $('#curCustom').hidden=(this.value!=='custom');
+    if(this.value==='custom' && !S.curCustom){ S.curCustom='¤'; $('#curCustom').value='¤'; }
+    recompute();
+  });
+  $('#curCustom').addEventListener('input',function(){ S.curCustom=this.value.trim(); recompute(); });
+
+  /* package table */
+  var pb=$('#pkgBody');
+  pb.addEventListener('input',function(e){
+    var inp=e.target; if(!inp.dataset||!inp.dataset.k) return;
+    var tr=inp.closest('tr'); var p=byId(S.pkgs,tr.dataset.id); if(!p) return;
+    p[inp.dataset.k]= inp.dataset.k==='desc' ? inp.value : inp.value;
+    markDirty(); recompute();
+  });
+  pb.addEventListener('focusout',function(e){
+    if(e.target.dataset&&e.target.dataset.k) validatePkg(e.target);
+  });
+  pb.addEventListener('click',function(e){
+    var b=e.target.closest('[data-del]'); if(!b) return;
+    var tr=b.closest('tr'); var id=tr.dataset.id;
+    S.pkgs=S.pkgs.filter(function(p){return p.id!==id;});
+    markDirty(); renderPkgs(); recompute();
+  });
+  $('#btnAddPkg').addEventListener('click',function(){
+    S.pkgs.push({id:uid(),desc:'',qty:1,l:'',w:'',h:'',wt:''});
+    markDirty(); renderPkgs(); recompute();
+    var last=$('#pkgBody').querySelector('tr:last-child input'); if(last) last.focus();
+  });
+
+  /* carrier table */
+  var cb=$('#carBody');
+  function carEdit(e){
+    var inp=e.target; if(!inp.dataset||!inp.dataset.k) return;
+    var tr=inp.closest('tr'); var c=byId(S.carriers,tr.dataset.id); if(!c) return;
+    var k=inp.dataset.k;
+    if(k==='on') c.on=inp.checked;
+    else if(k==='name') c.name=inp.value;
+    else if(k==='div'){ if(S.units==='imp') c.divImp=inp.value; else c.divMet=inp.value; }
+    else if(k==='rate') c.rate=inp.value;
+    markDirty(); renderDetailOpts(); recompute();
+  }
+  cb.addEventListener('input',carEdit);
+  cb.addEventListener('change',carEdit);
+  cb.addEventListener('focusout',function(e){ if(e.target.dataset&&e.target.dataset.k) validateCar(e.target); });
+  cb.addEventListener('click',function(e){
+    var b=e.target.closest('[data-del]'); if(!b) return;
+    var id=b.closest('tr').dataset.id;
+    S.carriers=S.carriers.filter(function(c){return c.id!==id;});
+    markDirty(); renderCars(); renderDetailOpts(); recompute();
+  });
+  $('#btnAddCar').addEventListener('click',function(){
+    S.carriers.push({id:uid(),name:'Custom carrier',note:'',divImp:139,divMet:5000,on:true,rate:0,custom:true});
+    markDirty(); renderCars(); renderDetailOpts(); recompute();
+  });
+  $('#btnResetDiv').addEventListener('click',function(){
+    S.carriers.forEach(function(c){
+      var p=PUBLISHED[c.id];
+      if(p){ c.divImp=p.divImp; c.divMet=p.divMet; }
+    });
+    renderCars(); recompute(); msg('Divisors reset to the published defaults.');
+  });
+
+  /* toolbar */
+  $('#btnPrint').addEventListener('click',function(){ recompute(); window.print(); });
+  $('#btnCsv').addEventListener('click',exportCSV);
+  $('#btnJson').addEventListener('click',exportJSON);
+  $('#btnImport').addEventListener('click',function(){ $('#fileJson').click(); });
+  $('#fileJson').addEventListener('change',function(){
+    if(this.files&&this.files[0]) importJSON(this.files[0]);
+    this.value='';
+  });
+  $('#btnBlank').addEventListener('click',function(){
+    S=blankState(); S.pkgs=[{id:uid(),desc:'',qty:1,l:'',w:'',h:'',wt:''}];
+    fullRender(); save(); msg('Sample cleared — the sheet is blank.');
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all shipment data, packages and carrier edits from this browser? This cannot be undone.')) return;
+    try{ localStorage.removeItem(K); }catch(e){}
+    S=sampleState(); fullRender(); save();
+    msg('All saved data cleared. The sample shipment has been reloaded.');
+  });
+  window.addEventListener('beforeprint',function(){ recompute(); });
+}
+function byId(arr,id){ for(var i=0;i<arr.length;i++){ if(arr[i].id===id) return arr[i]; } return null; }
+
+/* ── boot ────────────────────────────────────────────────── */
+S=load()||sampleState();
+bind();
+fullRender();
+save();
+})();
+</script>
+</body>
+</html>

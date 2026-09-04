@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KRD-7 · ASCII Weather Station</title>
+<meta name="description" content="A weather station rendered entirely in ASCII: live rain, snow, sun and storm animations, a spinning z-buffer torus radar, and a temperature graph drawn in block characters. Amber on dark, monospace only.">
+<meta name="theme-color" content="#14110F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2314110F'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' text-anchor='middle' fill='%23FFB000'%3E%2F%2F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#14110F;
+  --ink-2:#1B1714;
+  --amber:#FFB000;
+  --amber-2:#D9A24A;   /* body text tint, 7:1 on ink */
+  --amber-3:#B98416;   /* secondary text, 5.3:1 on ink */
+  --dim:#7A5400;
+  --dim-2:#4A3300;
+  --mono:'Fira Code',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  --pre-size:13px;
+  --pre-lh:1.25;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--ink);color-scheme:dark}
+body{
+  font-family:var(--mono);
+  font-size:15px;line-height:1.6;
+  color:var(--amber-2);
+  background:var(--ink);
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* faint scanline texture, drawn with CSS only */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,rgba(255,176,0,.035) 0 1px,transparent 1px 3px);
+  mix-blend-mode:screen;
+}
+a{color:var(--amber);text-decoration:none;border-bottom:1px dashed var(--dim)}
+a:hover{border-bottom-style:solid}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+pre,code,kbd,samp{font-family:var(--mono)}
+pre{font-size:var(--pre-size);line-height:var(--pre-lh);white-space:pre;overflow:hidden}
+.wrap{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:16px clamp(12px,2.5vw,32px) 48px}
+
+/* ---------- ASCII frame utility ---------- */
+.frame{position:relative;border:1px solid var(--dim);padding:22px clamp(14px,2vw,28px) 20px}
+.frame::before,.frame::after{
+  position:absolute;left:12px;top:-0.72em;
+  font-size:12px;letter-spacing:.14em;line-height:1;
+  color:var(--amber);background:var(--ink);padding:0 8px;
+}
+.frame::before{content:attr(data-label)}
+.frame::after{content:attr(data-tag);left:auto;right:12px;color:var(--amber-3)}
+
+/* ---------- Header ---------- */
+.top{
+  display:grid;grid-template-columns:1fr auto;gap:8px 24px;align-items:end;
+  padding:10px 0 14px;border-bottom:1px dashed var(--dim);
+}
+.top .id{font-size:12px;letter-spacing:.18em;color:var(--amber-3);text-transform:uppercase}
+.top h1{
+  font-size:clamp(28px,4.6vw,64px);line-height:1;font-weight:700;letter-spacing:-.02em;
+  color:var(--amber);margin-top:6px;
+}
+.top h1 span{color:var(--dim)}
+.top .clock{text-align:right;font-size:13px;color:var(--amber-3);line-height:1.5}
+.top .clock b{display:block;font-size:clamp(20px,2.4vw,30px);font-weight:600;color:var(--amber);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.top .clock .blink{animation:blink 1s steps(2) infinite}
+@keyframes blink{to{opacity:0}}
+
+/* ---------- Scene ---------- */
+.scene{margin-top:34px}
+.stage{
+  position:relative;background:var(--ink-2);border:1px solid var(--dim-2);
+  color:var(--amber);
+  transition:background .06s,color .06s;
+}
+.stage pre{position:absolute;inset:0;padding:0;margin:0;pointer-events:none}
+.stage pre.bg{color:var(--dim);position:relative}
+.stage pre.mid{color:var(--amber-3)}
+.stage pre.fg{color:var(--amber);text-shadow:0 0 6px rgba(255,176,0,.35)}
+.stage.flash{background:var(--amber)}
+.stage.flash pre{color:var(--ink)!important;text-shadow:none}
+.stage .noscript{padding:12px;color:var(--amber-3)}
+
+.controls{
+  display:flex;flex-wrap:wrap;gap:10px 8px;align-items:center;margin-top:14px;
+}
+.controls .lbl{font-size:12px;letter-spacing:.14em;color:var(--amber-3);margin-right:6px}
+.btn{
+  appearance:none;background:none;border:0;cursor:pointer;
+  font:600 13px/1 var(--mono);letter-spacing:.12em;color:var(--amber);
+  padding:9px 6px;position:relative;
+}
+.btn::before{content:"[ ";color:var(--dim)}
+.btn::after{content:" ]";color:var(--dim)}
+.btn:hover::before,.btn:hover::after{color:var(--amber)}
+.btn[aria-pressed="true"]{background:var(--amber);color:var(--ink)}
+.btn[aria-pressed="true"]::before,.btn[aria-pressed="true"]::after{color:var(--ink)}
+.btn.small{margin-left:auto;font-weight:500;color:var(--amber-3)}
+.btn.small[aria-pressed="true"]{color:var(--ink)}
+.controls .fps{font-size:12px;color:var(--dim);margin-left:8px;font-variant-numeric:tabular-nums}
+
+/* ---------- Readouts ---------- */
+.grid{display:grid;gap:28px 22px;grid-template-columns:repeat(12,1fr);margin-top:40px}
+.readouts{grid-column:span 5}
+.graph{grid-column:span 7}
+.readouts pre{font-size:14px;line-height:1.55;color:var(--amber-2)}
+.readouts pre b{color:var(--amber);font-weight:600}
+.readouts pre i{font-style:normal;color:var(--dim)}
+.readouts pre em{font-style:normal;color:var(--amber)}
+.readouts .cond{margin-top:14px;font-size:14px;color:var(--amber-3);line-height:1.6}
+.readouts .cond strong{color:var(--amber);font-weight:600}
+
+.graph .gwrap{overflow-x:auto;overflow-y:hidden}
+.graph pre{font-size:14px;line-height:1.2;color:var(--amber);cursor:crosshair;min-width:max-content}
+.graph pre .ax{color:var(--dim)}
+.graph pre .hr{color:var(--amber-3)}
+.graph pre .c{color:var(--amber-3);transition:color .08s}
+.graph pre .c.hot{color:var(--amber);text-shadow:0 0 5px rgba(255,176,0,.5)}
+.graph .out{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--amber-3);margin-top:10px;min-height:1.6em}
+.graph .out output{color:var(--amber);font-weight:600}
+
+/* ---------- Forecast ---------- */
+.forecast{margin-top:40px}
+.days{display:grid;grid-template-columns:repeat(7,minmax(128px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px;scrollbar-color:var(--dim) transparent}
+.day{border:1px solid var(--dim-2);padding:10px 10px 12px;color:var(--amber-3);transition:border-color .15s}
+.day:hover{border-color:var(--amber)}
+.day .d{font-size:12px;letter-spacing:.14em;color:var(--amber);display:flex;justify-content:space-between}
+.day .d span{color:var(--dim)}
+.day pre{font-size:12px;line-height:1.2;color:var(--amber-2);margin:10px 0 8px;height:5em}
+.day .t{font-size:14px;color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
+.day .t span{color:var(--amber-3);font-weight:400}
+.day .p{font-size:12px;margin-top:2px}
+
+/* ---------- Log / copy ---------- */
+.log{margin-top:40px;display:grid;grid-template-columns:repeat(12,1fr);gap:28px 22px}
+.log .frame{grid-column:span 7}
+.log aside{grid-column:span 5}
+.log h2,.forecast h2,.graph h2,.readouts h2{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber-3);font-weight:500;margin-bottom:14px}
+.log h2::before,.forecast h2::before,.graph h2::before,.readouts h2::before{content:"// ";color:var(--dim)}
+.log p{max-width:62ch;margin-bottom:1em}
+.log p:last-child{margin-bottom:0}
+.log aside pre{font-size:13px;line-height:1.5;color:var(--amber-3)}
+.log aside pre b{color:var(--amber);font-weight:600}
+.log aside pre i{font-style:normal;color:var(--dim)}
+.log aside dl{margin-top:18px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.log aside dt{color:var(--dim)}
+.log aside dt::after{content:" ·····"}
+.log aside dd{color:var(--amber-2)}
+.log aside kbd{border:1px solid var(--dim);padding:0 5px;font-size:12px;color:var(--amber)}
+
+footer{margin-top:44px;padding-top:14px;border-top:1px dashed var(--dim);display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;font-size:12px;color:var(--amber-3);letter-spacing:.06em}
+footer span b{color:var(--amber);font-weight:500}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1000px){
+  .readouts,.graph{grid-column:span 12}
+  .log .frame,.log aside{grid-column:span 12}
+}
+@media (max-width:640px){
+  :root{--pre-size:11px}
+  .top{grid-template-columns:1fr}
+  .top .clock{text-align:left}
+  .frame{padding:18px 12px 16px}
+  .controls .lbl{width:100%;margin:0}
+  .btn{padding:9px 2px;font-size:12px;letter-spacing:.08em}
+  .btn.small{margin-left:0}
+  .days{grid-template-columns:repeat(7,150px)}
+  .readouts pre{font-size:12px}
+  .graph pre{font-size:12px}
+}
+@media (prefers-reduced-motion:reduce){
+  .top .clock .blink{animation:none}
+  .stage.flash{background:var(--ink-2)}
+  .stage.flash pre{color:inherit!important}
+  .day,.graph pre .c{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <p class="id">Station KRD-7 · Kestrel Ridge · 1 847 m ASL · 46.91° N 9.13° E</p>
+    <h1>ASCII WEATHER<span>_</span>STATION</h1>
+  </div>
+  <div class="clock" aria-live="off">
+    <b id="clock">--:--:--<span class="blink">_</span></b>
+    <span id="date">local time · syncing</span>
+  </div>
+</header>
+
+<main>
+  <section class="scene frame" data-label="SKYCAM · LIVE" data-tag="ASCII/RAF · 2 LAYER" aria-labelledby="scene-h">
+    <h2 id="scene-h" class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Live sky animation</h2>
+    <div class="stage" id="stage" role="img" aria-label="Animated ASCII sky: precipitation falling over a ridge line, with a spinning torus radar inset">
+      <pre class="bg" id="bg" aria-hidden="true">
+┌─ SKYCAM ──────────────────────────────────────────┐
+│                                                   │
+│        loading character grid ...                 │
+│                                                   │
+└───────────────────────────────────────────────────┘</pre>
+      <pre class="mid" id="mid" aria-hidden="true"></pre>
+      <pre class="fg" id="fg" aria-hidden="true"></pre>
+    </div>
+    <div class="controls" role="group" aria-label="Sky mode">
+      <span class="lbl">MODE</span>
+      <button class="btn" data-mode="rain" aria-pressed="true">RAIN</button>
+      <button class="btn" data-mode="snow" aria-pressed="false">SNOW</button>
+      <button class="btn" data-mode="sun" aria-pressed="false">SUN</button>
+      <button class="btn" data-mode="storm" aria-pressed="false">STORM</button>
+      <button class="btn small" id="pause" aria-pressed="false">PAUSE</button>
+      <span class="fps" id="fps" aria-hidden="true">-- fps</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="readouts frame" data-label="READOUTS" data-tag="SENSOR BUS 01" aria-labelledby="ro-h">
+      <h2 id="ro-h">Current conditions</h2>
+      <pre id="gauges" aria-live="polite"></pre>
+      <p class="cond" id="cond"></p>
+    </section>
+
+    <section class="graph frame" data-label="TEMPERATURE · 24 H" data-tag="BLOCK CHARS ▁▂▃▄▅▆▇█" aria-labelledby="g-h">
+      <h2 id="g-h">Hourly temperature, last 24 hours</h2>
+      <div class="gwrap">
+        <pre id="tgraph" tabindex="0" role="img" aria-label="Bar chart of hourly temperature over the last 24 hours, from a low of 6.8 degrees at 05:00 to a high of 17.9 degrees at 15:00, drawn in block characters. Use left and right arrow keys to inspect values."></pre>
+      </div>
+      <div class="out">
+        <span>HOUR <output id="o-hour">--:--</output></span>
+        <span>TEMP <output id="o-temp">--.- °C</output></span>
+        <span>Δ MEAN <output id="o-delta">--.-</output></span>
+      </div>
+    </section>
+  </div>
+
+  <section class="forecast frame" data-label="OUTLOOK · 7 DAYS" data-tag="MODEL RUN 06Z" aria-labelledby="f-h">
+    <h2 id="f-h">Seven-day outlook</h2>
+    <div class="days" id="days"></div>
+  </section>
+
+  <section class="log" aria-labelledby="log-h">
+    <article class="frame" data-label="STATION LOG" data-tag="ENTRY 0417">
+      <h2 id="log-h">Why a weather station in text</h2>
+      <p>Kestrel Ridge sits on a shoulder of rock above the tree line, and for eleven years its instruments have reported over a 1 200 baud packet link that was never meant to carry pictures. So the station learned to draw with what it had: ninety-five printable characters, a fixed-width grid, and one colour of phosphor. Everything on this page keeps to that discipline. There are no images, no icons, no curves that are not made of letters.</p>
+      <p>The sky panel above is a real simulation, not a recording. Rain is a field of particles pulled down by gravity and pushed sideways by a wind value that drifts between frames; each drop is a single glyph chosen by its slope, and a splash is drawn where it meets the ridge. Snow falls slower and wanders on a sine curve, and it accumulates: watch the ground line thicken from ░ to ▒ to ▓ as the drifts build. Sun mode swaps precipitation for a breathing corona and a scatter of heat shimmer. Storm mode raises the wind, doubles the particle count and, every few seconds, traces a lightning path from cloud to ground and inverts the whole panel for a single frame.</p>
+      <p>The inset labelled RADAR is the station's oldest joke. It is a torus rendered by the classic z-buffer method: for every point on the ring we rotate it around two axes, project it with a little perspective, keep only the nearest surface per cell, and pick a character from the ramp <code>.,-~:;=!*#$@</code> according to how squarely that surface faces the light. It spins whether or not there is any weather to find.</p>
+      <p>The temperature strip beneath the readouts uses the eight Unicode block elements to reach one-eighth-row resolution without leaving the character grid. Hover or arrow across it and the readout follows. None of this needed a framework, a font stack, or a single image request. It needs a monospace face and a little patience.</p>
+    </article>
+    <aside aria-label="Station facts">
+      <pre><b>KRD-7</b> <i>· hardware sheet</i>
+<i>┌──────────────────────────────┐</i>
+<i>│</i> uplink     1200 bd AX.25      <i>│</i>
+<i>│</i> refresh    every 6 s          <i>│</i>
+<i>│</i> sensors    T / RH / P / wind  <i>│</i>
+<i>│</i> power      12 V, 40 W solar   <i>│</i>
+<i>│</i> charset    ASCII + box + blk  <i>│</i>
+<i>│</i> display    amber P3 phosphor  <i>│</i>
+<i>└──────────────────────────────┘</i></pre>
+      <pre id="feed" aria-live="off" style="margin-top:18px"><b>UPLINK</b> <i>· last packets</i>
+</pre>
+      <dl>
+        <dt>keys</dt><dd><kbd>1</kbd>–<kbd>4</kbd> switch mode, <kbd>space</kbd> pauses (when the panel is focused)</dd>
+        <dt>motion</dt><dd>honours reduced-motion: the sky freezes on a single frame and the storm never flashes</dd>
+        <dt>glyphs</dt><dd>│ ─ ┌ ┐ └ ┘ ░ ▒ ▓ ▁▂▃▄▅▆▇█ and the printable ASCII set</dd>
+        <dt>fonts</dt><dd>Fira Code, one family, four weights, nothing proportional</dd>
+      </dl>
+    </aside>
+  </section>
+</main>
+
+<footer>
+  <span>KRD-7 · <b>KESTREL RIDGE</b> · automated surface observation</span>
+  <span>rendered in <b>0</b> images · <b id="cells">0</b> cells per frame</span>
+  <span>&copy; 2026 · amber on #14110F</span>
+</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const stage=$('#stage'), bgEl=$('#bg'), midEl=$('#mid'), fgEl=$('#fg');
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ---------------- clock ---------------- */
+const clockEl=$('#clock'), dateEl=$('#date');
+function tickClock(){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  clockEl.innerHTML=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'<span class="blink">_</span>';
+  dateEl.textContent=d.toLocaleDateString(undefined,{weekday:'short',year:'numeric',month:'short',day:'2-digit'})+' · local time';
+}
+tickClock(); setInterval(tickClock,1000);
+
+/* ---------------- grid geometry ---------------- */
+let cols=0, rows=0, charW=8, lineH=16;
+function measure(){
+  const probe=document.createElement('span');
+  probe.textContent='M'.repeat(50);
+  probe.style.cssText='position:absolute;visibility:hidden;white-space:pre';
+  bgEl.appendChild(probe);
+  const r=probe.getBoundingClientRect();
+  charW=r.width/50; lineH=r.height||parseFloat(getComputedStyle(bgEl).lineHeight);
+  probe.remove();
+}
+function layout(){
+  measure();
+  const w=stage.clientWidth-2;
+  cols=Math.max(40,Math.floor(w/charW));
+  rows=innerWidth<640?26:Math.min(32,Math.max(24,Math.round(innerHeight*0.5/lineH)));
+  stage.style.height=(rows*lineH+2)+'px';
+  initScene();
+  $('#cells').textContent=(cols*rows).toLocaleString();
+}
+
+/* ---------------- scene state ---------------- */
+const MODES={
+  rain :{temp:11.4,rh:88,wind:14,dir:'WSW',press:1006,vis:'6 km',uv:1,txt:'Steady rain from the south-west. Ridge in cloud above 2 100 m. Freezing level 2 600 m.',label:'RAIN · MODERATE'},
+  snow :{temp:-2.3,rh:93,wind:9,dir:'NNE',press:1018,vis:'800 m',uv:0,txt:'Light to moderate snow, accumulating 3–5 cm per hour on the ridge. Drifting on the north face.',label:'SNOW · LIGHT'},
+  sun  :{temp:17.9,rh:41,wind:6,dir:'SSE',press:1024,vis:'> 40 km',uv:7,txt:'Clear. Thermal updraughts along the east face from midday. Alpine glow expected 20:14.',label:'CLEAR · SUNNY'},
+  storm:{temp:9.6,rh:96,wind:48,dir:'W',press:989,vis:'1.5 km',uv:0,txt:'Thunderstorm with heavy rain and gusts to 70 km/h. Lightning within 3 km. Stay off exposed ridges.',label:'THUNDERSTORM'}
+};
+let mode='rain', paused=false, t=0, last=0;
+let drops=[], splashes=[], snowDepth=[], clouds=[], bolt=null, boltT=0, nextBolt=2.5;
+let wind=0.3, windTarget=0.3;
+let radar={x:0,y:0,w:20,h:10};
+let ground=0, A=0, B=0;
+let zbuf, obuf;
+
+function initScene(){
+  ground=rows-4;
+  const rw=Math.min(Math.max(22,Math.floor(cols*(cols<70?0.42:0.36))),48);
+  const rh=Math.min(Math.max(10,Math.floor(rw*0.5)+1),ground-4);
+  radar={x:cols-3-rw,y:2,w:rw,h:rh};
+  zbuf=new Float32Array(rw*rh); obuf=new Uint8Array(rw*rh);
+  snowDepth=new Float32Array(cols);
+  drops=[]; splashes=[]; bolt=null;
+  const n=Math.floor(cols*(mode==='storm'?1.6:mode==='snow'?0.9:1.0));
+  for(let i=0;i<n;i++) drops.push(newDrop(true));
+  clouds=[];
+  const nc=Math.max(2,Math.floor(cols/34));
+  for(let i=0;i<nc;i++) clouds.push({x:Math.random()*cols,y:2+Math.floor(Math.random()*4),v:0.4+Math.random()*0.5,w:8+Math.floor(Math.random()*7)});
+}
+function newDrop(anywhere){
+  const snow=mode==='snow';
+  return {x:Math.random()*cols, y:anywhere?Math.random()*ground:-Math.random()*4,
+    v:snow?(3+Math.random()*3):(mode==='storm'?26+Math.random()*10:16+Math.random()*8),
+    ph:Math.random()*6.28, ch:snow?'*.+'[Math.floor(Math.random()*3)]:'|'};
+}
+
+/* ---------------- buffers ---------------- */
+let BG=[],MID=[],FG=[];
+function blank(){
+  BG=[];MID=[];FG=[];
+  for(let y=0;y<rows;y++){BG.push(new Array(cols).fill(' '));MID.push(new Array(cols).fill(' '));FG.push(new Array(cols).fill(' '));}
+}
+function put(buf,x,y,s){
+  if(y<0||y>=rows)return;
+  for(let i=0;i<s.length;i++){const xx=x+i;if(xx>=0&&xx<cols)buf[y][xx]=s[i];}
+}
+function inRadar(x,y){return x>=radar.x-1&&x<=radar.x+radar.w&&y>=radar.y-1&&y<=radar.y+radar.h;}
+
+/* ---------------- torus (z-buffer) ---------------- */
+function torus(){
+  const {w,h,x:rx,y:ry}=radar;
+  zbuf.fill(0); obuf.fill(0);
+  const cA=Math.cos(A),sA=Math.sin(A),cB=Math.cos(B),sB=Math.sin(B);
+  const asp=lineH/charW;
+  const K2=5, kx=Math.min(w*0.47,h*0.47*asp), ky=kx/asp;
+  for(let j=0;j<6.28;j+=0.07){
+    const ct=Math.cos(j),st=Math.sin(j);
+    for(let i=0;i<6.28;i+=0.03){
+      const sp=Math.sin(i),cp=Math.cos(i);
+      const hh=ct+2;
+      const D=1/(sp*hh*sA+st*cA+K2);
+      const tt=sp*hh*cA-st*sA;
+      const x=(w/2+kx*D*(cp*hh*cB-tt*sB))|0;
+      const y=(h/2+ky*D*(cp*hh*sB+tt*cB))|0;
+      if(x<0||x>=w||y<0||y>=h)continue;
+      const o=x+w*y;
+      const N=8*((st*sA-sp*ct*cA)*cB-sp*ct*sA-st*cA-cp*ct*sB);
+      if(D>zbuf[o]){zbuf[o]=D;obuf[o]=N>0?N:0;}
+    }
+  }
+  const ramp='.,-~:;=!*#$@';
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const o=x+w*y;
+    if(zbuf[o]>0){FG[ry+y][rx+x]=ramp[Math.min(11,obuf[o])];}
+  }
+  // frame
+  const top='┌ RADAR '+'─'.repeat(Math.max(0,w-8))+'┐';
+  put(BG,rx-1,ry-1,top);
+  for(let y=0;y<h;y++){put(BG,rx-1,ry+y,'│');put(BG,rx+w,ry+y,'│');}
+  const sweep=('AZ '+String(Math.round(((B*57.3)%360+360)%360)).padStart(3,'0')+'° ');
+  const bot='└'+'─'.repeat(Math.max(0,w-sweep.length-1))+sweep+'┘';
+  put(BG,rx-1,ry+h,bot);
+  // radar background dots (range rings suggested by sparse dots)
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(FG[ry+y][rx+x]===' '&&((x+y*3)%7===0))BG[ry+y][rx+x]='·';
+  }
+}
+
+/* ---------------- weather layers ---------------- */
+function drawFrame(){
+  const title='┌─ SKYCAM ─ '+MODES[mode].label+' ';
+  put(BG,0,0,'┌'+'─'.repeat(Math.max(0,cols-2))+'┐');
+  put(MID,1,0,title.slice(1));
+  for(let y=1;y<rows-1;y++){BG[y][0]='│';BG[y][cols-1]='│';}
+  const wtxt=' WIND '+Math.round(MODES[mode].wind+wind*6)+' KM/H '+MODES[mode].dir+' ─ T '+MODES[mode].temp.toFixed(1)+'°C ';
+  put(BG,0,rows-1,'└'+'─'.repeat(Math.max(0,cols-wtxt.length-2))+wtxt+'┘');
+}
+function drawGround(){
+  // ridge line: a gentle profile drawn with underscores and slashes
+  for(let x=1;x<cols-1;x++){
+    const gy=ground;
+    const depth=snowDepth[x];
+    if(mode==='snow'&&depth>0.2){
+      const d=Math.min(3,depth);
+      for(let k=0;k<Math.ceil(d);k++){
+        const ch=d-k>=1?'▓':d-k>=0.6?'▒':'░';
+        MID[gy-k][x]=ch;
+      }
+    }else{
+      BG[gy][x]=(x%9===0)?'^':(x%9===4?'.':'_');
+    }
+    BG[gy+1][x]=(x*7)%5===0?'.':' ';
+    BG[gy+2][x]=(x*13)%11===0?'`':' ';
+  }
+  // station mast at left
+  const mx=Math.max(4,Math.floor(cols*0.07));
+  put(MID,mx-1,ground-3,'-+-');
+  put(MID,mx,ground-2,'|');
+  put(MID,mx,ground-1,'|');
+  put(MID,mx-2,ground-4,'KRD-7');
+}
+function drawClouds(dt){
+  for(const c of clouds){
+    c.x+=c.v*dt*(1+Math.abs(wind)*(mode==='storm'?3:1));
+    if(c.x>cols+12)c.x=-c.w-4;
+    const x=Math.round(c.x), y=c.y;
+    const inner=c.w-4;
+    const l1=' .'+'-'.repeat(Math.max(1,inner-2))+'.';
+    const l2='('+' '.repeat(Math.max(1,inner))+')';
+    const l3='('+'_'.repeat(Math.max(1,inner))+')';
+    const buf=(mode==='sun')?BG:MID;
+    for(let i=0;i<l1.length;i++){const xx=x+i;if(xx>0&&xx<cols-1&&!inRadar(xx,y)){buf[y][xx]=l1[i];}}
+    for(let i=0;i<l2.length;i++){const xx=x+i;if(xx>0&&xx<cols-1&&!inRadar(xx,y+1)){buf[y+1][xx]=l2[i];}}
+    for(let i=0;i<l3.length;i++){const xx=x+i;if(xx>0&&xx<cols-1&&!inRadar(xx,y+2)){buf[y+2][xx]=l3[i];}}
+  }
+}
+function drawPrecip(dt){
+  const snow=mode==='snow';
+  // wind drift
+  if(Math.random()<0.02)windTarget=(mode==='storm'?(0.9+Math.random()*1.2):(Math.random()-0.5)*0.9);
+  wind+=(windTarget-wind)*dt*0.8;
+  for(const d of drops){
+    if(snow){
+      d.y+=d.v*dt; d.x+=(wind*2+Math.sin(t*1.7+d.ph)*1.4)*dt*3;
+    }else{
+      d.y+=d.v*dt; d.x+=wind*d.v*dt*0.9;
+    }
+    if(d.x<1)d.x+=cols-2; if(d.x>=cols-1)d.x-=cols-2;
+    const gx=Math.floor(d.x);
+    const gTop=snow?ground-Math.min(3,Math.ceil(snowDepth[gx]||0))+1:ground;
+    if(d.y>=gTop){
+      if(snow){snowDepth[gx]=Math.min(3.4,(snowDepth[gx]||0)+0.07);
+        if(gx>1)snowDepth[gx-1]=Math.min(3.4,snowDepth[gx-1]+0.02);
+        if(gx<cols-2)snowDepth[gx+1]=Math.min(3.4,snowDepth[gx+1]+0.02);}
+      else splashes.push({x:gx,t:0});
+      Object.assign(d,newDrop(false));
+      continue;
+    }
+    const y=Math.floor(d.y);
+    if(y<1||inRadar(gx,y))continue;
+    if(snow){
+      FG[y][gx]=d.ch;
+    }else{
+      const ch=wind>0.25?'\\':wind<-0.25?'/':'|';
+      FG[y][gx]=ch;
+      // streak tail
+      for(let k=1;k<=2;k++){const ty=y-k, tx=Math.floor(d.x-wind*0.9*k);
+        if(ty>0&&tx>0&&tx<cols-1&&!inRadar(tx,ty)&&MID[ty][tx]===' ')MID[ty][tx]=k===1?(wind>0.25?'\\':wind<-0.25?'/':'|'):(wind>0.25?'`':wind<-0.25?'\'':'\'');}
+    }
+  }
+  // splashes
+  for(let i=splashes.length-1;i>=0;i--){
+    const s=splashes[i]; s.t+=dt;
+    if(s.t>0.28){splashes.splice(i,1);continue;}
+    const ch=s.t<0.1?'.':s.t<0.2?'o':'\u02da';
+    if(s.x>0&&s.x<cols-1)MID[ground-1][s.x]=ch;
+  }
+}
+function drawSun(){
+  const cx=Math.floor(cols*0.24), cy=Math.floor(ground*0.42);
+  const R=Math.min(5,Math.floor(rows/6));
+  const pulse=0.5+0.5*Math.sin(t*1.3);
+  // disc
+  for(let y=-R;y<=R;y++)for(let x=-2*R;x<=2*R;x++){
+    const d=Math.hypot(x/2,y);
+    if(d<=R){const xx=cx+x,yy=cy+y;if(yy>0&&yy<ground&&xx>0&&xx<cols-1)FG[yy][xx]=d<R*0.55?'@':d<R*0.85?'O':'o';}
+  }
+  // rays
+  const nR=16;
+  for(let k=0;k<nR;k++){
+    const a=k/nR*6.283+t*0.15;
+    const len=R*1.8+pulse*3+Math.sin(t*2+k)*1.5;
+    for(let r=R+1.6;r<R+len;r+=0.7){
+      const xx=Math.round(cx+Math.cos(a)*r*2), yy=Math.round(cy+Math.sin(a)*r);
+      if(yy>0&&yy<ground&&xx>0&&xx<cols-1&&!inRadar(xx,yy)){
+        const ax=Math.abs(Math.cos(a)), ay=Math.abs(Math.sin(a));
+        const ch=ay<0.35?'-':ax<0.35?'|':(Math.cos(a)*Math.sin(a)>0?'\\':'/');
+        if(BG[yy][xx]===' ')MID[yy][xx]=ch;
+      }
+    }
+  }
+  // heat shimmer
+  for(let x=2;x<cols-2;x+=3){
+    const ph=Math.sin(t*3+x*0.7);
+    if(ph>0.6){const yy=ground-1-((x*3)%3);if(!inRadar(x,yy)&&MID[yy][x]===' ')MID[yy][x]='~';}
+  }
+}
+function drawStorm(dt){
+  nextBolt-=dt;
+  if(!bolt&&nextBolt<=0){
+    nextBolt=2+Math.random()*3.5; boltT=0;
+    const path=[]; let x=4+Math.floor(Math.random()*(radar.x-8)); let y=1;
+    while(y<ground){
+      path.push([x,y]);
+      const r=Math.random(); x+=r<0.33?-1:r<0.66?1:0; y++;
+      if(x<2)x=2; if(x>radar.x-3)x=radar.x-3;
+    }
+    bolt={path,x0:path[0][0]};
+    if(!reduced.matches){stage.classList.add('flash');setTimeout(()=>stage.classList.remove('flash'),70);}
+  }
+  if(bolt){
+    boltT+=dt;
+    if(boltT>0.22){bolt=null;return;}
+    const p=bolt.path;
+    for(let i=0;i<p.length;i++){
+      const [x,y]=p[i]; const nx=i+1<p.length?p[i+1][0]:x;
+      const ch=nx>x?'\\':nx<x?'/':'|';
+      FG[y][x]=boltT<0.12?ch:'.';
+      if(boltT<0.12&&i%5===0&&x+1<cols-1)MID[y][x+1]='*';
+    }
+  }
+}
+
+/* ---------------- main loop ---------------- */
+let frames=0, fpsT=0;
+const fpsEl=$('#fps');
+function render(dt){
+  blank();
+  t+=dt;
+  A+=dt*0.9; B+=dt*0.45;
+  drawFrame();
+  drawClouds(dt);
+  if(mode==='sun')drawSun(); else drawPrecip(dt);
+  if(mode==='storm')drawStorm(dt);
+  drawGround();
+  torus();
+  bgEl.textContent=BG.map(r=>r.join('')).join('\n');
+  midEl.textContent=MID.map(r=>r.join('')).join('\n');
+  fgEl.textContent=FG.map(r=>r.join('')).join('\n');
+}
+function loop(ts){
+  if(!running)return;
+  const dt=Math.min(0.05,(ts-(last||ts))/1000); last=ts;
+  if(!paused){render(dt);
+    frames++; fpsT+=dt; if(fpsT>=1){fpsEl.textContent=frames+' fps';frames=0;fpsT=0;}}
+  requestAnimationFrame(loop);
+}
+let running=false;
+function start(){
+  if(reduced.matches){running=false;render(1/30);fpsEl.textContent='static · reduced motion';return;}
+  if(running)return; running=true; last=0; requestAnimationFrame(loop);
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){running=false;} else start();
+});
+reduced.addEventListener?.('change',()=>{running=false;start();});
+
+/* ---------------- controls ---------------- */
+const modeBtns=[...document.querySelectorAll('.btn[data-mode]')];
+function setMode(m){
+  if(!MODES[m])return;
+  mode=m; initScene(); windTarget=m==='storm'?1.4:m==='rain'?0.3:0;
+  modeBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+  renderGauges(); if(reduced.matches||paused)render(1/30);
+}
+modeBtns.forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+const pauseBtn=$('#pause');
+function setPaused(p){paused=p;pauseBtn.setAttribute('aria-pressed',String(p));pauseBtn.textContent=p?'RESUME':'PAUSE';fpsEl.textContent=p?'paused':fpsEl.textContent;}
+pauseBtn.addEventListener('click',()=>setPaused(!paused));
+document.querySelector('.scene').addEventListener('keydown',e=>{
+  const k=e.key;
+  if(k==='1')setMode('rain'); else if(k==='2')setMode('snow'); else if(k==='3')setMode('sun'); else if(k==='4')setMode('storm');
+  else if(k===' '&&e.target.tagName!=='BUTTON'){e.preventDefault();setPaused(!paused);}
+});
+
+/* ---------------- gauges ---------------- */
+function bar(v,max,n){const f=Math.round(Math.max(0,Math.min(1,v/max))*n);return '<b>'+'█'.repeat(f)+'</b><i>'+'░'.repeat(n-f)+'</i>';}
+function renderGauges(){
+  const m=MODES[mode], n=innerWidth<640?12:16;
+  const rows=[
+    ['TEMP   ',bar(m.temp+10,40,n),(m.temp>0?'+':'')+m.temp.toFixed(1)+' °C'],
+    ['HUMID  ',bar(m.rh,100,n),m.rh+' %'],
+    ['WIND   ',bar(m.wind,80,n),m.wind+' km/h '+m.dir],
+    ['PRESS  ',bar(m.press-960,80,n),m.press+' hPa'],
+    ['UV     ',bar(m.uv,11,n),'index '+m.uv],
+    ['VISIB  ',bar(parseFloat(m.vis.replace(/[^\d.]/g,''))*(m.vis.includes('m')&&!m.vis.includes('km')?0.001:1),40,n),m.vis],
+  ];
+  $('#gauges').innerHTML=rows.map(r=>r[0]+r[1]+' <em>'+r[2]+'</em>').join('\n');
+  $('#cond').innerHTML='<strong>'+m.label+'</strong> — '+m.txt;
+}
+
+/* ---------------- temperature graph ---------------- */
+const TEMPS=[9.4,8.9,8.3,7.6,7.1,6.8,7.0,7.9,9.6,11.8,13.7,15.2,16.4,17.1,17.6,17.9,17.4,16.2,14.6,13.1,12.0,11.2,10.6,10.1];
+const mean=TEMPS.reduce((a,b)=>a+b,0)/TEMPS.length;
+const BLK=' ▁▂▃▄▅▆▇█';
+let sel=15;
+function renderGraph(){
+  const H=6, lo=6, hi=18, cw=innerWidth<640?2:3;
+  const lines=[];
+  for(let r=H-1;r>=0;r--){
+    const lab=(r===H-1?hi:r===0?lo:(r===3?Math.round((lo+hi)/2):'')).toString().padStart(3,' ');
+    let line='<span class="ax">'+lab+' ┤</span>';
+    TEMPS.forEach((v,i)=>{
+      const units=(v-lo)/(hi-lo)*H*8;         // eighths
+      const full=Math.floor(units/8), rem=Math.round(units-full*8);
+      let ch=' ';
+      if(r<full)ch='█'; else if(r===full)ch=BLK[rem];
+      line+='<span class="c'+(i===sel?' hot':'')+'" data-i="'+i+'">'+ch.repeat(cw)+'</span>';
+    });
+    lines.push(line);
+  }
+  lines.push('<span class="ax">    └'+'─'.repeat(24*cw)+'</span>');
+  let hr='<span class="hr">     ';
+  for(let i=0;i<24;i++){hr+=(i%3===0?String(i).padStart(2,'0'):'  ').padEnd(cw,' ');}
+  lines.push(hr+'</span>');
+  $('#tgraph').innerHTML=lines.join('\n');
+  $('#o-hour').textContent=String(sel).padStart(2,'0')+':00';
+  $('#o-temp').textContent=TEMPS[sel].toFixed(1)+' °C';
+  const d=TEMPS[sel]-mean;$('#o-delta').textContent=(d>=0?'+':'')+d.toFixed(1)+' °C';
+}
+const tg=$('#tgraph');
+tg.addEventListener('pointermove',e=>{const s=e.target.closest('.c');if(s){const i=+s.dataset.i;if(i!==sel){sel=i;renderGraph();}}});
+tg.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'){sel=(sel+1)%24;renderGraph();e.preventDefault();}
+  else if(e.key==='ArrowLeft'){sel=(sel+23)%24;renderGraph();e.preventDefault();}
+  else if(e.key==='Home'){sel=0;renderGraph();e.preventDefault();}
+  else if(e.key==='End'){sel=23;renderGraph();e.preventDefault();}
+});
+
+/* ---------------- forecast ---------------- */
+const ICON={
+  sun:'   \\ | /\n  -- O --\n   / | \\',
+  cloud:'    .--.\n .-(    ).\n(___.__)__)',
+  rain:'    .--.\n .-(    ).\n(___.__)__)\n  \' \' \' \'',
+  snow:'    .--.\n .-(    ).\n(___.__)__)\n  * . * .',
+  storm:'    .--.\n .-(    ).\n(___.__)__)\n   / /  \'\n  /',
+};
+const DAYS=[
+  ['THU','04',  'rain', 12, 7, 'rain 80 %'],
+  ['FRI','05',  'storm',10, 6, 'storm 65 %'],
+  ['SAT','06',  'cloud',13, 5, 'cloud 30 %'],
+  ['SUN','07',  'sun',  18, 6, 'clear  5 %'],
+  ['MON','08',  'sun',  19, 8, 'clear  5 %'],
+  ['TUE','09',  'cloud',14, 4, 'cloud 20 %'],
+  ['WED','10',  'snow',  2,-4, 'snow 70 %'],
+];
+$('#days').innerHTML=DAYS.map(d=>'<article class="day"><div class="d"><span>'+d[1]+'</span>'+d[0]+'</div><pre aria-label="'+d[2]+'">'+ICON[d[2]]+'</pre><div class="t">'+(d[3]>0?'+':'')+d[3]+'° <span>/ '+(d[4]>0?'+':'')+d[4]+'°</span></div><div class="p">'+d[5]+'</div></article>').join('');
+
+/* ---------------- uplink feed ---------------- */
+const feedEl=$('#feed'); const feed=[]; let seq=4170;
+function packet(){
+  const m=MODES[mode], d=new Date(), p=n=>String(n).padStart(2,'0');
+  const ts=p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+  const w=Math.round(m.wind+wind*6);
+  return '<i>'+ts+'z</i> KRD7>APRS #'+(seq++)+' <b>T</b>'+(m.temp>0?'+':'')+m.temp.toFixed(1)+' <b>H</b>'+m.rh+' <b>W</b>'+p(w)+m.dir.padEnd(3,'\u00a0')+' <b>P</b>'+m.press+' <i>*'+((seq*37)%256).toString(16).padStart(2,'0').toUpperCase()+'</i>';
+}
+function pushPacket(){feed.unshift(packet());if(feed.length>6)feed.pop();feedEl.innerHTML='<b>UPLINK</b> <i>· last packets · 6 s</i>\n'+feed.join('\n');}
+pushPacket(); setInterval(pushPacket,6000);
+
+/* ---------------- boot ---------------- */
+let resizeT;
+addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{layout();renderGauges();renderGraph();if(reduced.matches||paused)render(1/30);},120);});
+document.fonts?.ready.then(()=>{layout();if(reduced.matches||paused)render(1/30);});
+layout(); renderGauges(); renderGraph(); render(1/30); start();
+})();
+</script>
+</body>
+</html>

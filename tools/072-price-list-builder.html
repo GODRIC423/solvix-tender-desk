@@ -1,0 +1,1572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Price List Builder — tiered trade, retail and distributor price lists with quantity breaks</title>
+<meta name="description" content="Offline price list builder: derive trade, retail and distributor prices from cost and tier margins, add quantity-break bands with their own prices, convert to a second currency at an entered rate with a .99 / whole / nearest-5 rounding rule, apply a bulk percentage increase to a whole category, and print a clean customer price list that hides cost and margin. Versioned, effective-dated, CSV and JSON.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EPL%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B;--accent-ink:#145C39;--accent-wash:#E3F2EA;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}}
+:root[data-theme="dark"]{--accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}
+
+[hidden]{display:none!important}
+.app>*+*{margin-top:14px}
+#work>*+*{margin-top:14px}
+#work>.split:first-child{margin-top:0}
+#cfgRow,#botRow{align-items:start}
+@media(min-width:901px){#cfgRow,#botRow{grid-template-columns:1fr 1fr}}
+body>.appbar{margin:0;padding-left:0;padding-right:0}
+.appbar-in{width:100%;max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:9px 14px;align-items:center}
+@media(min-width:901px){
+  .col-res{grid-column:2;grid-row:1}
+  .col-in{grid-column:1;grid-row:1}
+}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.sticky{position:static}}
+@media(max-width:560px){
+  .appbar .btn{font-size:12.5px;padding:7px 9px}
+  .hidesm{display:none}
+}
+.col-res,.col-in{min-width:0}
+.card>.bd,.card>.hd,.card>.ft{min-width:0}
+.stack>*{min-width:0}
+.col-res .stat.hero .v{font-size:31px;line-height:1.08}
+.col-res .stat.hero .u{display:block;margin-top:5px;line-height:1.45}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:340px){.statgrid{grid-template-columns:1fr}}
+.statgrid .stat{padding:9px 11px}
+.statgrid .stat .v{font-size:17px}
+.statgrid .stat .u{display:block;font-size:11.5px;line-height:1.35;margin-top:2px}
+.ftbig{font:700 19px/1.1 var(--mono);margin-left:auto;font-variant-numeric:tabular-nums}
+.mini{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.cellerr{display:block;font:11px/1.35 var(--sans);color:var(--bad);margin-top:3px;white-space:normal}
+.neg{color:var(--bad)} .pos{color:var(--ok)}
+.pv{display:none}
+.banner{border-left-color:var(--warn);background:var(--warn-wash)}
+.tiny{font:11.5px/1.45 var(--sans);color:var(--muted)}
+
+/* warnings list */
+.wlist{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.wrow{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.4;
+  border-left:3px solid var(--bad);background:var(--bad-wash);padding:6px 9px;border-radius:0 3px 3px 0}
+.wrow.wk{border-left-color:var(--warn);background:var(--warn-wash)}
+.wrow b{font-family:var(--mono);font-weight:700;flex:none}
+
+/* small config tables */
+.mtab td{padding:4px 5px}
+.mtab th{padding:7px 5px}
+.mtab td.n input{min-width:64px}
+.mtab input[type=text]{text-align:left;font-family:var(--sans)}
+#tierTab{min-width:430px} #bandTab{min-width:470px} #logTab{min-width:430px}
+.onbox{display:grid;place-items:center}
+.onbox input{width:16px;height:16px;accent-color:var(--accent)}
+
+/* product table */
+#pTab{min-width:1060px}
+#pTab td{padding:4px 5px;vertical-align:middle}
+#pTab th{padding:8px 5px;white-space:normal;vertical-align:bottom}
+#pTab th .bq{display:block;font:400 9.5px/1.2 var(--mono);letter-spacing:.02em;text-transform:none;color:var(--faint);margin-top:2px}
+#pTab input,#pTab select{padding:5px 5px}
+#pTab input[type=text]{text-align:left;font-family:var(--sans)}
+#pTab td.tsku input{min-width:84px;font-family:var(--mono);font-size:12.5px}
+#pTab td.tnam input{min-width:172px}
+#pTab td.tcat input{min-width:100px}
+#pTab td.tuni input{min-width:88px}
+#pTab td.n input{min-width:62px}
+#pTab td.tprice input{min-width:74px}
+#pTab td.tprice{background:var(--accent-wash)}
+#pTab tr:hover td.tprice{background:var(--accent-wash)}
+#pTab td.tprice.ovr input{font-weight:700;color:var(--accent-ink)}
+#pTab td.tprice.ovr{box-shadow:inset 3px 0 0 var(--accent)}
+#pTab td.tprice.bad2{background:var(--bad-wash);box-shadow:inset 0 0 0 1.5px var(--bad)}
+#pTab td.tmar{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#pTab td.cost input{min-width:70px}
+#pTab .rm{border:0;background:transparent;color:var(--muted);cursor:pointer;font:700 14px/1 var(--mono);padding:4px 7px;border-radius:3px}
+#pTab .rm:hover{color:var(--bad);background:var(--bad-wash)}
+#pTab .grp td{background:var(--sunk);font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.colhdr{border-bottom:2px solid var(--accent)!important}
+
+/* bulk change */
+.bulkbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.bulkbar .f{flex:1 1 130px}
+.pillrow{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ══ the customer document (preview on screen, the deliverable in print) ══ */
+#docCard{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh);padding:22px clamp(14px,3vw,30px) 26px}
+body.preview #docCard{display:block}
+.doc-top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start;
+  border-bottom:2.5px solid var(--ink);padding-bottom:12px}
+.doc-biz{min-width:0;flex:1 1 260px}
+.doc-biz .bn{font:700 20px/1.15 var(--sans);letter-spacing:-.015em}
+.doc-biz .ba{font:12.5px/1.5 var(--sans);color:var(--ink-2);margin-top:4px;white-space:pre-line}
+.doc-ttl{text-align:right;flex:0 1 auto}
+.doc-ttl .t1{font:700 22px/1.1 var(--sans);letter-spacing:-.02em;text-transform:uppercase}
+.doc-ttl .t2{font:600 13px/1.35 var(--sans);color:var(--ink-2);margin-top:4px}
+.doc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin:14px 0 16px}
+@media(max-width:640px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
+.doc-grid div span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.doc-grid div b{font:600 13px/1.35 var(--sans);word-break:break-word}
+#docTab{width:100%;font-size:13px}
+#docTab th{background:var(--sunk)}
+#docTab th.n,#docTab td.n{text-align:right}
+#docTab tr.grp td{background:var(--accent-wash);font:700 10.5px/1.3 var(--sans);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent-ink)}
+#docTab td.d{font-weight:600}
+#docTab td.sku{font-family:var(--mono);font-size:12px;white-space:nowrap}
+.doc-terms{margin-top:16px;display:grid;grid-template-columns:1.4fr 1fr;gap:18px}
+@media(max-width:640px){.doc-terms{grid-template-columns:1fr}}
+.doc-terms h4{font:600 10.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.doc-terms .tx{font:12.5px/1.55 var(--sans);white-space:pre-line}
+.doc-note{margin-top:16px}
+.doc-foot{margin-top:16px;border-top:1px solid var(--line);padding-top:8px;
+  font:11.5px/1.5 var(--sans);color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px}
+
+@media print{
+  #work,.appbar,.banner{display:none!important}
+  #docCard{display:block!important;border:0;box-shadow:none;padding:0;border-radius:0}
+  .doc-top{border-bottom:2.5pt solid #000;padding-bottom:4mm}
+  .doc-biz .bn{font-size:17pt}
+  .doc-biz .ba{font-size:9pt}
+  .doc-ttl .t1{font-size:18pt}
+  .doc-ttl .t2{font-size:10.5pt}
+  .doc-grid{display:grid!important;grid-template-columns:repeat(4,1fr);gap:3mm 6mm;margin:5mm 0 5mm}
+  .doc-grid div span{font-size:7.5pt;color:#555}
+  .doc-grid div b{font-size:10pt}
+  #docTab{font-size:9pt}
+  #docTab th{background:#eee!important;font-size:7.5pt;padding:2mm 2mm}
+  #docTab td{padding:1.6mm 2mm;border-bottom:1px solid #ccc}
+  #docTab tr.grp td{background:#e8e8e8!important;color:#000;font-size:8pt}
+  #docTab td.sku{font-size:8.5pt}
+  .doc-terms{display:grid!important;grid-template-columns:1.4fr 1fr;gap:6mm;margin-top:6mm}
+  .doc-terms h4{font-size:7.5pt}
+  .doc-terms .tx{font-size:9pt}
+  .doc-note{margin-top:5mm}
+  .note{border-left:2.5pt solid #000;background:#fff!important;padding:2.5mm 3mm;font-size:8.5pt}
+  .doc-foot{font-size:8pt;margin-top:5mm}
+  thead{display:table-header-group}
+  tr,td,th{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PL</div>
+    <div style="min-width:0">
+      <h1>Price List Builder</h1>
+      <div class="sub" id="barSub">tiers · breaks · currency</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrev">Preview<span class="hidesm"> customer list</span></button>
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn" id="btnImport">Import<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn dgr" id="btnClear">Clear<span class="hidesm"> all data</span></button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <div class="note banner noprint" id="banner">
+    <strong>Sample data is loaded</strong> — a ten-line wholesale catalogue with three tiers, four quantity-break
+    bands and a GBP → EUR conversion. Change anything, or start with an empty catalogue.
+    <div class="row" style="margin-top:9px">
+      <button type="button" class="btn sm" id="btnBlank">Start an empty catalogue</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- ══════ THE CUSTOMER DOCUMENT — the only thing that prints ══════ -->
+  <section id="docCard" aria-label="Customer price list document">
+    <div class="doc-top">
+      <div class="doc-biz">
+        <div class="bn" id="dBiz">—</div>
+        <div class="ba" id="dAddr"></div>
+      </div>
+      <div class="doc-ttl">
+        <div class="t1">Price List</div>
+        <div class="t2" id="dTierName">—</div>
+      </div>
+    </div>
+    <div class="doc-grid">
+      <div><span>List</span><b id="dList">—</b></div>
+      <div><span>Version</span><b id="dVer">—</b></div>
+      <div><span>Effective from</span><b id="dEff">—</b></div>
+      <div><span>Prices in</span><b id="dCur">—</b></div>
+      <div><span>Prepared for</span><b id="dCust">—</b></div>
+      <div><span>Account / reference</span><b id="dRef">—</b></div>
+      <div><span>Prepared by</span><b id="dBy">—</b></div>
+      <div><span>Issued</span><b id="dIss">—</b></div>
+    </div>
+    <div class="tw"><table id="docTab"><thead id="docHead"></thead><tbody id="docBody"></tbody></table></div>
+    <div class="doc-terms">
+      <div><h4>Terms of sale</h4><div class="tx" id="dTerms">—</div></div>
+      <div><h4>Quantity breaks</h4><div class="tx" id="dBands">—</div></div>
+    </div>
+    <div class="doc-note">
+      <div class="note warn">
+        <strong>Prices exclude VAT / sales tax, duty and delivery unless expressly stated.</strong>
+        This list supersedes all earlier versions and applies from the effective date shown until it is
+        withdrawn or superseded. Where a converted currency is shown, it has been calculated at the single
+        exchange rate printed above on the date of issue and is indicative only — the invoice currency, the
+        rate actually applied and any bank charges will be those confirmed on your order acknowledgement.
+        Quantity-break prices apply per line, per delivery, unless a call-off agreement says otherwise.
+        Errors and omissions excepted (E&amp;OE). This document is a price list, not an offer capable of
+        acceptance, and does not vary any signed supply agreement; check your contract terms before ordering.
+      </div>
+    </div>
+    <div class="doc-foot" id="dFoot"></div>
+  </section>
+
+  <div id="work">
+  <div class="split">
+
+    <!-- ══════ RESULTS ══════ -->
+    <section class="col-res">
+      <div class="card sticky">
+        <div class="hd"><h2>List health</h2><span class="chip" id="chipVer">—</span></div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k" id="heroK">Average gross margin at list price</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">—</div>
+          </div>
+
+          <div class="statgrid">
+            <div class="stat"><div class="k">Lines on the list</div><div class="v" id="vLines">—</div><div class="u" id="uLines">—</div></div>
+            <div class="stat"><div class="k">Sum of list prices</div><div class="v" id="vVal">—</div><div class="u" id="uVal">—</div></div>
+            <div class="stat"><div class="k">Thinnest margin</div><div class="v" id="vLow">—</div><div class="u" id="uLow">—</div></div>
+            <div class="stat"><div class="k">Margin at deepest break</div><div class="v" id="vDeep">—</div><div class="u" id="uDeep">—</div></div>
+            <div class="stat"><div class="k">Below cost</div><div class="v" id="vBelow">—</div><div class="u" id="uBelow">—</div></div>
+            <div class="stat"><div class="k">Break-order faults</div><div class="v" id="vMono">—</div><div class="u" id="uMono">—</div></div>
+          </div>
+
+          <div id="wlist" class="wlist"></div>
+
+          <div class="note" id="rateNote">—</div>
+
+          <div class="note warn">
+            <strong>Cost and margin never appear on the printed list.</strong> The customer document shows
+            SKU, description, unit, minimum order and the break prices only. Check the preview before you send it.
+          </div>
+
+        </div>
+        <div class="ft"><strong id="ftLabel">Average margin</strong><span class="ftbig" id="ftV">—</span></div>
+      </div>
+    </section>
+
+    <!-- ══════ INPUTS ══════ -->
+    <section class="col-in stack">
+
+      <div class="card">
+        <div class="hd"><h2>Catalogue &amp; document</h2></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="fBiz">Your business name</label><input type="text" id="fBiz" autocomplete="off"></div>
+            <div class="f"><label for="fList">Price list name</label><input type="text" id="fList" autocomplete="off"></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="fVer">Version number</label><input type="text" id="fVer" autocomplete="off">
+              <span class="err" id="eVer" hidden></span></div>
+            <div class="f"><label for="fEff">Effective from</label><input type="date" id="fEff">
+              <span class="err" id="eEff" hidden></span></div>
+            <div class="f"><label for="fIss">Date of issue</label><input type="date" id="fIss"></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="fCust">Prepared for (customer or segment)</label><input type="text" id="fCust" autocomplete="off"></div>
+            <div class="f"><label for="fRef">Account / reference</label><input type="text" id="fRef" autocomplete="off"></div>
+            <div class="f"><label for="fBy">Prepared by</label><input type="text" id="fBy" autocomplete="off"></div>
+          </div>
+          <div class="f"><label for="fAddr">Address &amp; contact block (printed under your name)</label>
+            <textarea id="fAddr" rows="3"></textarea></div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <div class="grid cols-2" id="cfgRow">
+
+      <div class="card">
+        <div class="hd"><h2>Currency &amp; rounding</h2></div>
+        <div class="bd stack">
+          <div class="grid cols-3">
+            <div class="f"><label for="fBase">Cost currency</label><select id="fBase"></select></div>
+            <div class="f"><label for="fBaseSym">Custom symbol</label><input type="text" id="fBaseSym" maxlength="4" autocomplete="off" disabled></div>
+            <div class="f"><label for="fBaseCode">Custom code</label><input type="text" id="fBaseCode" maxlength="6" autocomplete="off" disabled></div>
+          </div>
+          <label class="check"><input type="checkbox" id="fConv">
+            <span>Publish this list in a second currency</span></label>
+          <div class="grid cols-3" id="convWrap">
+            <div class="f"><label for="fTgt">List currency</label><select id="fTgt"></select></div>
+            <div class="f"><label for="fRate" id="lRate">Rate</label>
+              <input type="number" id="fRate" min="0" step="0.0001" inputmode="decimal">
+              <span class="err" id="eRate" hidden></span></div>
+            <div class="f"><label for="fTgtSym">Custom symbol / code</label>
+              <div class="row" style="flex-wrap:nowrap;gap:5px">
+                <input type="text" id="fTgtSym" maxlength="4" autocomplete="off" disabled>
+                <input type="text" id="fTgtCode" maxlength="6" autocomplete="off" disabled aria-label="Custom target currency code">
+              </div></div>
+          </div>
+          <div class="grid cols-2">
+            <div class="f"><label for="fRule">Rounding rule for published prices</label>
+              <select id="fRule">
+                <option value="none">None — 2 decimal places</option>
+                <option value="r99">Nearest .99</option>
+                <option value="r95">Nearest .95</option>
+                <option value="whole">Nearest whole unit</option>
+                <option value="r5">Nearest 5</option>
+                <option value="r10">Nearest 10</option>
+              </select></div>
+            <div class="f"><label for="fBasis">Margin basis</label>
+              <select id="fBasis">
+                <option value="margin">Margin on selling price — price = cost ÷ (1 − margin)</option>
+                <option value="markup">Markup on cost — price = cost × (1 + markup)</option>
+              </select></div>
+          </div>
+          <p class="hint" id="basisHint">—</p>
+        </div>
+      </div>
+
+
+    <div class="stack">
+
+      <div class="card">
+        <div class="hd"><h2>Tiers</h2><span class="chip" id="chipTiers">—</span>
+          <button type="button" class="btn sm noprint" id="btnAddTier">+ Add tier</button></div>
+        <div class="bd">
+          <div class="tw"><table id="tierTab" class="mtab">
+            <thead><tr>
+              <th scope="col">Tier name</th>
+              <th scope="col" class="n" id="thTierM">Margin %</th>
+              <th scope="col" class="n">List price example</th>
+              <th scope="col" style="text-align:center">On list</th>
+              <th scope="col"><span class="pv">Remove</span></th>
+            </tr></thead>
+            <tbody id="tierBody"></tbody>
+          </table></div>
+          <p class="hint" style="margin-top:9px">The example column prices the first product on the catalogue at
+            that tier, after conversion and rounding.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Quantity break bands</h2><span class="chip" id="chipBands">—</span>
+          <button type="button" class="btn sm noprint" id="btnAddBand">+ Add band</button></div>
+        <div class="bd">
+          <div class="tw"><table id="bandTab" class="mtab">
+            <thead><tr>
+              <th scope="col">Band label</th>
+              <th scope="col" class="n">From qty</th>
+              <th scope="col" class="n">Discount % off list</th>
+              <th scope="col" class="n">Multiplier</th>
+              <th scope="col"><span class="pv">Remove</span></th>
+            </tr></thead>
+            <tbody id="bandBody"></tbody>
+          </table></div>
+          <p class="hint" style="margin-top:9px">Bands are sorted by quantity. The discount sets the default band
+            price; type directly into any price cell in the catalogue below to give a band its own fixed price.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+      <div class="card" id="prodCard">
+        <div class="hd"><h2>Catalogue</h2>
+          <div class="f" style="flex-direction:row;align-items:center;gap:7px;margin-right:auto">
+            <label for="fShowTier" style="white-space:nowrap">Tier shown &amp; printed</label>
+            <select id="fShowTier" style="width:auto;min-width:140px"></select>
+          </div>
+          <button type="button" class="btn sm noprint" id="btnAddProd">+ Add product</button>
+        </div>
+        <div class="bd" style="padding:0">
+          <div class="tw"><table id="pTab">
+            <thead><tr id="pHead"></tr></thead>
+            <tbody id="pBody"></tbody>
+          </table></div>
+          <div id="pEmpty" class="empty" hidden>No products yet — add a line to start the catalogue.</div>
+        </div>
+        <div class="ft" style="gap:10px">
+          <span class="tiny" id="ovCount">—</span>
+          <button type="button" class="btn sm noprint" id="btnFixMono" style="margin-left:auto">Fix break order</button>
+          <button type="button" class="btn sm noprint" id="btnClearOv">Clear typed prices</button>
+          <button type="button" class="btn sm noprint" id="btnCsvInt">CSV with cost &amp; margin</button>
+        </div>
+      </div>
+
+  <div class="grid cols-2" id="botRow">
+
+      <div class="card">
+        <div class="hd"><h2>Bulk change</h2></div>
+        <div class="bd stack">
+          <div class="bulkbar">
+            <div class="f"><label for="fBulkCat">Category</label><select id="fBulkCat"></select></div>
+            <div class="f"><label for="fBulkPct">Change %</label>
+              <input type="number" id="fBulkPct" step="0.1" inputmode="decimal">
+              <span class="err" id="eBulk" hidden></span></div>
+            <div class="f" style="flex:0 0 auto"><span class="lbl">&nbsp;</span>
+              <button type="button" class="btn pri" id="btnBulk">Apply to cost</button></div>
+          </div>
+          <label class="check"><input type="checkbox" id="fBulkOv">
+            <span>Also scale any typed band prices in that category by the same percentage</span></label>
+          <p class="hint">A positive figure raises cost, a negative figure cuts it. Costs are rounded to 2 decimal
+            places. Applying a change bumps the version number and writes a change-log entry.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Terms &amp; change log</h2>
+          <button type="button" class="btn sm noprint" id="btnAddLog">+ Log entry</button></div>
+        <div class="bd stack">
+          <div class="f"><label for="fTerms">Terms of sale (printed on the customer list)</label>
+            <textarea id="fTerms" rows="5"></textarea></div>
+          <div>
+            <div class="mini">Change log</div>
+            <div class="tw"><table id="logTab" class="mtab">
+              <thead><tr>
+                <th scope="col" style="width:130px">Date</th>
+                <th scope="col">Version</th>
+                <th scope="col">What changed</th>
+                <th scope="col"><span class="pv">Remove</span></th>
+              </tr></thead>
+              <tbody id="logBody"></tbody>
+            </table></div>
+            <div id="logEmpty" class="empty" hidden>No entries yet.</div>
+          </div>
+        </div>
+      </div>
+
+  </div>
+  </div><!-- /#work -->
+
+  <footer class="tiny noprint" style="margin-top:16px;line-height:1.6">
+    Tier prices are derived from cost: <strong>margin on selling price</strong> uses price = cost ÷ (1 − margin),
+    <strong>markup on cost</strong> uses price = cost × (1 + markup). Band prices are list price × (1 − band
+    discount), converted at the single rate you enter and then put through the rounding rule; a price typed
+    directly into a cell is published exactly as typed and is not re-rounded. Achieved margin is measured on the
+    published price converted back at the same rate, so it reflects what rounding actually did.
+    No tax, duty, freight, settlement discount, rebate or landed-cost element is modelled. Everything stays in this
+    browser — nothing is uploaded.
+  </footer>
+</main>
+<script>
+(function(){
+'use strict';
+var KEY='solvix.price-list-builder.v1';
+
+var CUR={GBP:'£',USD:'$',EUR:'€',AUD:'A$',CAD:'C$',NZD:'NZ$',CHF:'Fr',SEK:'kr',NOK:'kr',
+  DKK:'kr',PLN:'zł',JPY:'¥',INR:'₹',ZAR:'R',AED:'AED',SGD:'S$',HKD:'HK$',custom:''};
+var CURORDER=['GBP','USD','EUR','AUD','CAD','NZD','CHF','SEK','NOK','DKK','PLN','JPY','INR','ZAR','AED','SGD','HKD','custom'];
+var RULELBL={none:'None — 2 decimal places',r99:'Nearest .99',r95:'Nearest .95',
+  whole:'Nearest whole unit',r5:'Nearest 5',r10:'Nearest 10'};
+var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ── helpers ─────────────────────────────────────────────── */
+function $(id){return document.getElementById(id);}
+function uid(p){return (p||'r')+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function num(v){
+  if(v===null||v===undefined||v==='')return 0;
+  var n=parseFloat(String(v).replace(/[,\s]/g,''));
+  return isFinite(n)?n:0;
+}
+function blank(v){return v===null||v===undefined||String(v).trim()==='';}
+function round(v,dp){
+  if(v===null||v===undefined||!isFinite(v))return NaN;
+  var f=Math.pow(10,dp), s=v<0?-1:1;
+  var r=Math.round(Math.abs(v)*f+1e-9)/f*s;
+  return r===0?0:r;
+}
+function fx(v,dp){
+  if(v===null||v===undefined||!isFinite(v))return '—';
+  var r=round(v,dp);
+  var s=Math.abs(r).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+  return (r<0?'−':'')+s;
+}
+function esc(s){return String(s===null||s===undefined?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function joinSym(sym,s){return /[A-Za-zÀ-ɏ]$/.test(sym)?sym+' '+s:sym+s;}
+function baseSym(){var c=state.cur.base; return c==='custom'?(state.cur.baseSym||'¤'):CUR[c]||'¤';}
+function baseCode(){var c=state.cur.base; return c==='custom'?(state.cur.baseCode||'CUR'):c;}
+function listSym(){if(!state.cur.conv)return baseSym();var c=state.cur.tgt;return c==='custom'?(state.cur.tgtSym||'¤'):CUR[c]||'¤';}
+function listCode(){if(!state.cur.conv)return baseCode();var c=state.cur.tgt;return c==='custom'?(state.cur.tgtCode||'CUR'):c;}
+function moneyB(v){if(!isFinite(v))return '—';return joinSym(baseSym(),fx(v,2));}
+function moneyL(v){if(!isFinite(v))return '—';return joinSym(listSym(),fx(v,2));}
+function pctS(f,dp){if(!isFinite(f))return '—';return fx(f*100,dp===undefined?1:dp)+'%';}
+function today(){var d=new Date();return iso(d);}
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dateLbl(s){
+  if(blank(s))return '—';
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if(!m)return s;
+  return (+m[3])+' '+MN[(+m[2])-1]+' '+m[1];
+}
+function nextMonth(){var d=new Date();d.setDate(1);d.setMonth(d.getMonth()+1);return iso(d);}
+
+/* ── rounding rules ──────────────────────────────────────── */
+function applyRule(v,rule){
+  if(!isFinite(v))return NaN;
+  if(v<0)v=0;
+  if(v===0)return 0;          /* a zero cost is an unpriced line, not a 0.95 minimum */
+  var n;
+  if(rule==='r99'){n=Math.round(v-0.99);if(n<0)n=0;return round(n+0.99,2);}
+  if(rule==='r95'){n=Math.round(v-0.95);if(n<0)n=0;return round(n+0.95,2);}
+  if(rule==='whole'){n=Math.round(v);if(n<1&&v>0)n=1;return n;}
+  if(rule==='r5'){n=Math.round(v/5)*5;if(n<5&&v>0)n=5;return n;}
+  if(rule==='r10'){n=Math.round(v/10)*10;if(n<10&&v>0)n=10;return n;}
+  return round(v,2);
+}
+
+/* ── state ───────────────────────────────────────────────── */
+var state=null;
+
+function defState(){
+  var P=function(sku,name,cat,unit,moq,cost){
+    return {id:uid('p'),sku:sku,name:name,cat:cat,unit:unit,moq:moq,cost:cost,tm:{},ov:{}};
+  };
+  var prods=[
+    P('NCR-100','House Espresso Blend, whole bean','Coffee','1 kg bag',6,8.40),
+    P('NCR-105','Single Origin Colombia Huila','Coffee','1 kg bag',6,10.90),
+    P('NCR-110','Decaf Swiss Water Process','Coffee','1 kg bag',4,12.20),
+    P('NCR-140','Filter Grind Breakfast Blend','Coffee','1 kg bag',6,7.95),
+    P('NCR-201','Vanilla Syrup','Syrups & sauces','1 L bottle',6,3.15),
+    P('NCR-205','Hazelnut Syrup','Syrups & sauces','1 L bottle',6,3.15),
+    P('NCR-310','12 oz Ripple Wall Cup','Packaging','sleeve of 25',20,2.35),
+    P('NCR-315','Compostable Sip Lid 12/16 oz','Packaging','box of 100',10,4.10),
+    P('NCR-402','Precision Tamper 58 mm','Equipment','each',1,22.50),
+    P('NCR-420','Milk Pitcher 600 ml','Equipment','each',2,6.30)
+  ];
+  var tiers=[
+    {id:'t1',name:'Trade',margin:38,on:true},
+    {id:'t2',name:'Retail (RRP)',margin:55,on:true},
+    {id:'t3',name:'Distributor',margin:25,on:true}
+  ];
+  var bands=[
+    {id:'b1',label:'List',min:1,disc:0},
+    {id:'b2',label:'Case',min:6,disc:4},
+    {id:'b3',label:'Bulk',min:24,disc:8},
+    {id:'b4',label:'Pallet',min:96,disc:13}
+  ];
+  prods[0].ov['t1|b1']=14.95;
+  return {
+    sample:true, banner:true,
+    biz:'Northgate Coffee Roasters Ltd',
+    addr:'Unit 7, Wharf Road Trade Park\nSheffield S9 2AL\nsales@northgateroasters.example · 0114 496 0180\nVAT GB 418 2276 91',
+    list:'Wholesale Price List 2026/27',
+    ver:'2.4', eff:nextMonth(), iss:today(),
+    cust:'Independent cafés — European accounts',
+    ref:'PL-EU-2026-04', by:'R. Ahmed, Sales Office',
+    cur:{base:'GBP',baseSym:'',baseCode:'',conv:true,tgt:'EUR',tgtSym:'',tgtCode:'',rate:1.165,rule:'r95'},
+    basis:'margin',
+    tiers:tiers, bands:bands, show:'t1',
+    prods:prods,
+    bulk:{cat:'Coffee',pct:3.5,ov:true},
+    terms:'Payment: 30 days net from invoice date, approved accounts only.\nMinimum order value €150 ex-works; carriage paid on orders over €400.\nQuantity-break prices apply per line, per delivery.\nRoasted coffee is despatched within 3 working days of roasting.\nClaims for shortage or damage must be notified within 48 hours of delivery.',
+    log:[
+      {id:uid('l'),date:iso(new Date(new Date().getFullYear(),new Date().getMonth()-4,12)),ver:'2.3',note:'Packaging costs restated after supplier change; pallet band added.'},
+      {id:uid('l'),date:nextMonth(),ver:'2.4',note:'Green coffee cost pass-through; EUR rate refreshed to 1.1650.'}
+    ]
+  };
+}
+
+function normalise(s){
+  var d=defState();
+  if(!s||typeof s!=='object')return d;
+  var o={};
+  ['biz','addr','list','ver','eff','iss','cust','ref','by','basis','show','terms'].forEach(function(k){
+    o[k]=(s[k]===undefined||s[k]===null)?d[k]:String(s[k]);
+  });
+  o.sample=!!s.sample; o.banner=s.banner!==false;
+  o.cur={};
+  ['base','baseSym','baseCode','tgt','tgtSym','tgtCode','rule'].forEach(function(k){
+    o.cur[k]=(s.cur&&s.cur[k]!==undefined&&s.cur[k]!==null)?String(s.cur[k]):d.cur[k];
+  });
+  o.cur.conv=s.cur?!!s.cur.conv:d.cur.conv;
+  o.cur.rate=s.cur&&isFinite(parseFloat(s.cur.rate))?parseFloat(s.cur.rate):d.cur.rate;
+  if(!RULELBL[o.cur.rule])o.cur.rule='none';
+  if(o.basis!=='markup')o.basis='margin';
+  o.tiers=(Array.isArray(s.tiers)&&s.tiers.length?s.tiers:d.tiers).map(function(t,i){
+    return {id:String(t.id||('t'+(i+1))),name:String(t.name===undefined?'Tier '+(i+1):t.name),
+      margin:isFinite(parseFloat(t.margin))?parseFloat(t.margin):0,on:t.on!==false};
+  });
+  o.bands=(Array.isArray(s.bands)&&s.bands.length?s.bands:d.bands).map(function(b,i){
+    return {id:String(b.id||('b'+(i+1))),label:String(b.label===undefined?'Band '+(i+1):b.label),
+      min:isFinite(parseFloat(b.min))?parseFloat(b.min):1,
+      disc:isFinite(parseFloat(b.disc))?parseFloat(b.disc):0};
+  });
+  o.prods=(Array.isArray(s.prods)?s.prods:d.prods).map(function(p,i){
+    var ov={},tm={};
+    if(p.ov&&typeof p.ov==='object')Object.keys(p.ov).forEach(function(k){
+      if(isFinite(parseFloat(p.ov[k])))ov[k]=parseFloat(p.ov[k]);});
+    if(p.tm&&typeof p.tm==='object')Object.keys(p.tm).forEach(function(k){
+      if(isFinite(parseFloat(p.tm[k])))tm[k]=parseFloat(p.tm[k]);});
+    return {id:String(p.id||uid('p')),sku:String(p.sku===undefined?'':p.sku),
+      name:String(p.name===undefined?'':p.name),cat:String(p.cat===undefined?'':p.cat),
+      unit:String(p.unit===undefined?'':p.unit),
+      moq:isFinite(parseFloat(p.moq))?parseFloat(p.moq):1,
+      cost:isFinite(parseFloat(p.cost))?parseFloat(p.cost):0,tm:tm,ov:ov};
+  });
+  o.log=(Array.isArray(s.log)?s.log:d.log).map(function(l){
+    return {id:String(l.id||uid('l')),date:String(l.date||''),ver:String(l.ver||''),note:String(l.note||'')};
+  });
+  o.bulk={cat:s.bulk&&s.bulk.cat!==undefined?String(s.bulk.cat):d.bulk.cat,
+    pct:s.bulk&&isFinite(parseFloat(s.bulk.pct))?parseFloat(s.bulk.pct):d.bulk.pct,
+    ov:s.bulk?!!s.bulk.ov:d.bulk.ov};
+  if(!o.tiers.some(function(t){return t.id===o.show;}))o.show=o.tiers[0].id;
+  return o;
+}
+
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return null;
+    return normalise(JSON.parse(raw));
+  }catch(e){return null;}
+}
+
+/* ── pricing core ────────────────────────────────────────── */
+function bandsSorted(){
+  return state.bands.slice().sort(function(a,b){return num(a.min)-num(b.min)||0;});
+}
+function tierById(id){
+  for(var i=0;i<state.tiers.length;i++)if(state.tiers[i].id===id)return state.tiers[i];
+  return state.tiers[0];
+}
+function showTier(){return tierById(state.show);}
+function marginOf(p,t){
+  var v=p.tm[t.id];
+  return (v===undefined||v===null||v==='')?num(t.margin):num(v);
+}
+/* list price in the cost currency, before any band discount */
+function listBase(p,t){
+  var c=num(p.cost), m=marginOf(p,t)/100;
+  if(!isFinite(c)||c<0)return NaN;
+  if(state.basis==='markup'){
+    if(m<=-1)return NaN;
+    return c*(1+m);
+  }
+  if(m>=0.9999||m<=-99)return NaN;
+  return c/(1-m);
+}
+function rateVal(){
+  if(!state.cur.conv)return 1;
+  var r=num(state.cur.rate);
+  return (isFinite(r)&&r>0)?r:NaN;
+}
+function ovKey(t,b){return t.id+'|'+b.id;}
+function ovGet(p,t,b){
+  var v=p.ov[ovKey(t,b)];
+  return (v===undefined||v===null||v==='')?null:num(v);
+}
+/* published price, in the list currency */
+function pubPrice(p,t,b){
+  var ov=ovGet(p,t,b);
+  if(ov!==null)return round(ov,2);
+  var lb=listBase(p,t);
+  var r=rateVal();
+  if(!isFinite(lb)||!isFinite(r))return NaN;
+  var d=num(b.disc)/100;
+  if(d>=1||d<0)return NaN;
+  return applyRule(lb*(1-d)*r,state.cur.rule);
+}
+/* margin actually achieved on the published price */
+function achMargin(p,t,b){
+  var pub=pubPrice(p,t,b), r=rateVal();
+  if(!isFinite(pub)||!isFinite(r)||r<=0||pub<=0)return NaN;
+  var eb=pub/r, c=num(p.cost);
+  return (eb-c)/eb;
+}
+
+/* ── computed summary ────────────────────────────────────── */
+function compute(){
+  var t=showTier(), bs=bandsSorted(), r=rateVal();
+  var out={tier:t,bands:bs,rate:r,n:state.prods.length,warn:[],mono:0,below:0,
+    sumList:0,sumCost:0,marg:[],deep:[],low:null,cats:{},ovN:0,valid:0};
+  var seen={};
+  state.prods.forEach(function(p){
+    var k=String(p.sku||'').trim().toUpperCase();
+    if(k){if(seen[k])out.warn.push({t:'bad',k:k,m:'duplicate SKU appears more than once'});seen[k]=1;}
+    if(String(p.cat||'').trim())out.cats[String(p.cat).trim()]=1;
+    bs.forEach(function(b){if(ovGet(p,t,b)!==null)out.ovN++;});
+    var lb=listBase(p,t);
+    if(!isFinite(lb)){
+      out.warn.push({t:'bad',k:p.sku||'(no SKU)',m:state.basis==='margin'?
+        'margin of '+fx(marginOf(p,t),1)+'% cannot be reached — a margin on selling price must be under 100%':
+        'markup is not a usable number'});
+      return;
+    }
+    var prev=null, bad=false;
+    bs.forEach(function(b,i){
+      var pub=pubPrice(p,t,b);
+      if(!isFinite(pub))return;
+      if(prev!==null&&pub>prev+0.004){bad=true;}
+      prev=pub;
+      if(i===0){out.sumList+=pub;}
+    });
+    if(bad){out.mono++;out.warn.push({t:'bad',k:p.sku||'(no SKU)',
+      m:'a larger quantity is priced dearer than a smaller one — check the typed prices on this line'});}
+    var m0=achMargin(p,t,bs[0]);
+    if(isFinite(m0)){
+      out.valid++;
+      out.marg.push(m0);
+      if(out.low===null||m0<out.low.m)out.low={m:m0,sku:p.sku||p.name||'—'};
+      if(m0<0){out.below++;out.warn.push({t:'bad',k:p.sku||'(no SKU)',
+        m:'published list price is below cost ('+pctS(m0)+' margin)'});}
+      else if(m0<0.05){out.warn.push({t:'warn',k:p.sku||'(no SKU)',
+        m:'list margin is only '+pctS(m0)+' after rounding'});}
+    }
+    var md=achMargin(p,t,bs[bs.length-1]);
+    if(isFinite(md))out.deep.push(md);
+    out.sumCost+=num(p.cost);
+  });
+  out.avg=out.marg.length?out.marg.reduce(function(a,b){return a+b;},0)/out.marg.length:NaN;
+  out.avgDeep=out.deep.length?out.deep.reduce(function(a,b){return a+b;},0)/out.deep.length:NaN;
+  /* band sanity */
+  var pm=null,pd=null;
+  bs.forEach(function(b){
+    var mn=num(b.min), dc=num(b.disc);
+    if(pm!==null&&mn<=pm)out.warn.push({t:'warn',k:b.label||'band',m:'two bands start at the same quantity — merge or renumber them'});
+    if(pd!==null&&dc<pd)out.warn.push({t:'warn',k:b.label||'band',m:'discount falls as quantity rises ('+fx(pd,2)+'% → '+fx(dc,2)+'%)'});
+    if(dc<0||dc>=100)out.warn.push({t:'bad',k:b.label||'band',m:'discount must be between 0% and 99.99%'});
+    pm=mn;pd=dc;
+  });
+  if(state.cur.conv&&!isFinite(r))out.warn.push({t:'bad',k:'rate',m:'enter an exchange rate greater than zero before the list can be published'});
+  return out;
+}
+
+/* ── rendering: config tables ────────────────────────────── */
+function renderTiers(){
+  var b=$('tierBody'), bs=bandsSorted(), p0=state.prods[0];
+  b.innerHTML=state.tiers.map(function(t,i){
+    var ex=p0?pubPrice(p0,t,bs[0]):NaN;
+    return '<tr data-i="'+i+'">'+
+      '<td><input type="text" data-k="name" value="'+esc(t.name)+'" aria-label="Tier name"></td>'+
+      '<td class="n"><input type="number" data-k="margin" step="0.1" inputmode="decimal" value="'+
+        (isFinite(t.margin)?t.margin:'')+'" aria-label="Tier margin percent">'+
+        '<span class="cellerr" data-e="1" hidden></span></td>'+
+      '<td class="n tex">'+esc(moneyL(ex))+'</td>'+
+      '<td class="onbox"><input type="checkbox" data-k="on"'+(t.on?' checked':'')+
+        ' aria-label="Include '+esc(t.name)+' on the list"></td>'+
+      '<td style="text-align:right"><button type="button" class="rm" data-act="rmTier" '+
+        'aria-label="Remove tier '+esc(t.name)+'">✕</button></td></tr>';
+  }).join('');
+}
+function renderBands(){
+  var b=$('bandBody');
+  b.innerHTML=state.bands.map(function(bd,i){
+    var mult=1-num(bd.disc)/100;
+    return '<tr data-i="'+i+'">'+
+      '<td><input type="text" data-k="label" value="'+esc(bd.label)+'" aria-label="Band label"></td>'+
+      '<td class="n"><input type="number" data-k="min" min="1" step="1" inputmode="numeric" value="'+
+        (isFinite(bd.min)?bd.min:'')+'" aria-label="Band from quantity">'+
+        '<span class="cellerr" data-e="1" hidden></span></td>'+
+      '<td class="n"><input type="number" data-k="disc" min="0" max="99" step="0.1" inputmode="decimal" value="'+
+        (isFinite(bd.disc)?bd.disc:'')+'" aria-label="Band discount percent"></td>'+
+      '<td class="n bmult">'+(isFinite(mult)?fx(mult,4):'—')+'</td>'+
+      '<td style="text-align:right"><button type="button" class="rm" data-act="rmBand" '+
+        'aria-label="Remove band '+esc(bd.label)+'">✕</button></td></tr>';
+  }).join('');
+}
+function renderLog(){
+  var b=$('logBody');
+  b.innerHTML=state.log.map(function(l,i){
+    return '<tr data-i="'+i+'">'+
+      '<td><input type="date" data-k="date" value="'+esc(l.date)+'" aria-label="Change date"></td>'+
+      '<td><input type="text" data-k="ver" value="'+esc(l.ver)+'" aria-label="Version"></td>'+
+      '<td><input type="text" data-k="note" value="'+esc(l.note)+'" aria-label="What changed"></td>'+
+      '<td style="text-align:right"><button type="button" class="rm" data-act="rmLog" aria-label="Remove log entry">✕</button></td></tr>';
+  }).join('');
+  $('logEmpty').hidden=state.log.length>0;
+}
+
+/* ── rendering: catalogue ────────────────────────────────── */
+function bandRange(bs,i){
+  var from=num(bs[i].min);
+  if(i===bs.length-1)return fx(from,0)+'+';
+  var to=num(bs[i+1].min)-1;
+  return to>=from?fx(from,0)+'–'+fx(to,0):fx(from,0)+'+';
+}
+function renderProdHead(){
+  var bs=bandsSorted(), t=showTier();
+  var h='<th scope="col">SKU</th><th scope="col">Description</th><th scope="col">Category</th>'+
+    '<th scope="col">Unit</th><th scope="col" class="n">Min qty</th>'+
+    '<th scope="col" class="n">Cost '+esc(baseSym())+'</th>'+
+    '<th scope="col" class="n">'+(state.basis==='markup'?'Markup':'Margin')+' %<span class="bq">'+esc(t.name)+'</span></th>';
+  bs.forEach(function(b){
+    h+='<th scope="col" class="n colhdr">'+esc(b.label)+' '+esc(listSym())+
+      '<span class="bq">qty '+bandRange(bs,bs.indexOf(b))+'</span></th>';
+  });
+  h+='<th scope="col" class="n">Margin<span class="bq">at list</span></th><th scope="col"><span class="pv">Remove</span></th>';
+  $('pHead').innerHTML=h;
+}
+function renderProds(){
+  renderProdHead();
+  var bs=bandsSorted(), t=showTier(), body=$('pBody');
+  body.innerHTML=state.prods.map(function(p,i){
+    var r='<tr data-i="'+i+'">'+
+      '<td class="tsku"><input type="text" data-k="sku" value="'+esc(p.sku)+'" aria-label="SKU"></td>'+
+      '<td class="tnam"><input type="text" data-k="name" value="'+esc(p.name)+'" aria-label="Description"></td>'+
+      '<td class="tcat"><input type="text" data-k="cat" value="'+esc(p.cat)+'" aria-label="Category"></td>'+
+      '<td class="tuni"><input type="text" data-k="unit" value="'+esc(p.unit)+'" aria-label="Unit"></td>'+
+      '<td class="n"><input type="number" data-k="moq" min="0" step="1" inputmode="numeric" value="'+
+        (isFinite(p.moq)?p.moq:'')+'" aria-label="Minimum order quantity"></td>'+
+      '<td class="n cost"><input type="number" data-k="cost" min="0" step="0.01" inputmode="decimal" value="'+
+        (isFinite(p.cost)?num(p.cost).toFixed(2):'')+'" aria-label="Unit cost">'+
+        '<span class="cellerr" data-e="1" hidden></span></td>'+
+      '<td class="n"><input type="number" data-k="tm" step="0.1" inputmode="decimal" value="'+
+        (p.tm[t.id]===undefined?'':p.tm[t.id])+'" placeholder="'+esc(fx(num(t.margin),1))+
+        '" aria-label="Margin override for this line"></td>';
+    bs.forEach(function(b){
+      r+='<td class="n tprice" data-b="'+b.id+'"><input type="number" data-k="ov" data-b="'+b.id+
+        '" min="0" step="0.01" inputmode="decimal" value="" aria-label="'+esc(b.label)+' price"></td>';
+    });
+    r+='<td class="tmar">—</td>'+
+      '<td style="text-align:right"><button type="button" class="rm" data-act="rmProd" aria-label="Remove line">✕</button></td></tr>';
+    return r;
+  }).join('');
+  $('pEmpty').hidden=state.prods.length>0;
+  $('prodCard').querySelector('.tw').hidden=state.prods.length===0;
+}
+function setv(el,v){if(el&&el!==document.activeElement)el.value=v;}
+
+/* ── the customer document ───────────────────────────────── */
+function renderDoc(){
+  var bs=bandsSorted(), t=showTier();
+  $('dBiz').textContent=blank(state.biz)?'—':state.biz;
+  $('dAddr').textContent=state.addr||'';
+  $('dTierName').textContent=(blank(t.name)?'Tier':t.name)+' prices';
+  $('dList').textContent=blank(state.list)?'—':state.list;
+  $('dVer').textContent=blank(state.ver)?'—':'v'+String(state.ver).replace(/^v/i,'');
+  $('dEff').textContent=dateLbl(state.eff);
+  $('dCur').textContent=listCode()+' ('+listSym()+')'+
+    (state.cur.conv?' — converted from '+baseCode()+' at '+fx(rateVal(),4):'');
+  $('dCust').textContent=blank(state.cust)?'—':state.cust;
+  $('dRef').textContent=blank(state.ref)?'—':state.ref;
+  $('dBy').textContent=blank(state.by)?'—':state.by;
+  $('dIss').textContent=dateLbl(state.iss);
+
+  var h='<tr><th scope="col">SKU</th><th scope="col">Description</th><th scope="col">Unit</th>'+
+    '<th scope="col" class="n">Min qty</th>';
+  bs.forEach(function(b,i){
+    h+='<th scope="col" class="n">'+esc(b.label)+'<br><span style="font-weight:400">qty '+bandRange(bs,i)+'</span></th>';
+  });
+  h+='</tr>';
+  $('docHead').innerHTML=h;
+
+  var cats=[], byCat={};
+  state.prods.forEach(function(p){
+    var c=String(p.cat||'').trim()||'Other';
+    if(!byCat[c]){byCat[c]=[];cats.push(c);}
+    byCat[c].push(p);
+  });
+  var span=4+bs.length, rows='';
+  if(!state.prods.length){
+    rows='<tr><td colspan="'+span+'" style="text-align:center;color:#666">No products on this list.</td></tr>';
+  }
+  cats.forEach(function(c){
+    if(cats.length>1||c!=='Other')rows+='<tr class="grp"><td colspan="'+span+'">'+esc(c)+'</td></tr>';
+    byCat[c].forEach(function(p){
+      var r='<tr><td class="sku">'+esc(p.sku||'—')+'</td><td class="d">'+esc(p.name||'—')+'</td>'+
+        '<td>'+esc(p.unit||'—')+'</td><td class="n">'+(isFinite(num(p.moq))&&num(p.moq)>0?fx(p.moq,0):'—')+'</td>';
+      bs.forEach(function(b){
+        var v=pubPrice(p,t,b);
+        r+='<td class="n">'+esc(moneyL(v))+'</td>';
+      });
+      rows+=r+'</tr>';
+    });
+  });
+  $('docBody').innerHTML=rows;
+
+  $('dTerms').textContent=blank(state.terms)?'—':state.terms;
+  $('dBands').textContent=bs.map(function(b,i){
+    return (b.label||('Band '+(i+1)))+': qty '+bandRange(bs,i)+
+      (num(b.disc)>0?' — '+fx(b.disc,2)+'% off list':' — list price');
+  }).join('\n')+'\nRounding applied to published prices: '+RULELBL[state.cur.rule].toLowerCase()+'.';
+
+  var f=[];
+  if(!blank(state.biz))f.push(state.biz);
+  if(!blank(state.list))f.push(state.list);
+  f.push('Version '+(blank(state.ver)?'—':state.ver));
+  f.push('Effective '+dateLbl(state.eff));
+  f.push('All prices per unit shown, in '+listCode());
+  $('dFoot').innerHTML=f.map(function(s){return '<span>'+esc(s)+'</span>';}).join('');
+}
+
+/* ── refresh (no input clobbering) ───────────────────────── */
+function refresh(){
+  var c=compute(), t=c.tier, bs=c.bands;
+
+  /* hero */
+  $('heroK').textContent='Average gross margin at list price';
+  $('heroV').textContent=isFinite(c.avg)?pctS(c.avg):'—';
+  var parts=[(blank(t.name)?'Tier':t.name)+' tier',
+    c.n+(c.n===1?' line':' lines'),
+    isFinite(c.avg)?'thinnest '+pctS(c.low?c.low.m:NaN)+(c.low?' on '+c.low.sku:''):'add a cost to price the list'];
+  $('heroU').textContent=parts.join(' · ');
+  $('ftLabel').textContent='Average margin — '+(blank(t.name)?'tier':t.name);
+  $('ftV').textContent=isFinite(c.avg)?pctS(c.avg):'—';
+  $('chipVer').textContent='v'+(blank(state.ver)?'—':String(state.ver).replace(/^v/i,''))+' · from '+dateLbl(state.eff);
+  $('barSub').textContent=(blank(t.name)?'tier':t.name)+' · '+
+    (isFinite(c.avg)?pctS(c.avg)+' avg margin':'no prices yet')+' · '+
+    (c.mono+c.below?(c.mono+c.below)+' to fix':'clean');
+
+  $('vLines').textContent=c.n?fx(c.n,0):'—';
+  $('uLines').textContent=Object.keys(c.cats).length+' categor'+(Object.keys(c.cats).length===1?'y':'ies')+
+    ' · '+state.tiers.filter(function(x){return x.on;}).length+' tiers on the list';
+  $('vVal').textContent=c.valid?moneyL(c.sumList):'—';
+  $('uVal').textContent='one of each at list · cost '+moneyB(c.sumCost);
+  $('vLow').textContent=c.low?pctS(c.low.m):'—';
+  $('uLow').textContent=c.low?String(c.low.sku):'—';
+  $('vDeep').textContent=isFinite(c.avgDeep)?pctS(c.avgDeep):'—';
+  $('uDeep').textContent=bs.length?('average at '+(bs[bs.length-1].label||'top band')+' (qty '+bandRange(bs,bs.length-1)+')'):'—';
+  $('vBelow').textContent=fx(c.below,0);
+  $('uBelow').textContent=c.below?'lines priced under cost':'no line is priced under cost';
+  $('vMono').textContent=fx(c.mono,0);
+  $('uMono').textContent=c.mono?'a bigger quantity costs more':'every break is cheaper than the one below';
+
+  var below=$('vBelow').parentNode, mono=$('vMono').parentNode;
+  below.style.background=c.below?'var(--bad-wash)':'';
+  below.style.borderColor=c.below?'var(--bad)':'';
+  mono.style.background=c.mono?'var(--bad-wash)':'';
+  mono.style.borderColor=c.mono?'var(--bad)':'';
+
+  /* warnings */
+  var seen={}, w=c.warn.filter(function(x){var k=x.t+x.k+x.m;if(seen[k])return false;seen[k]=1;return true;});
+  $('wlist').innerHTML=w.length
+    ? w.slice(0,9).map(function(x){
+        return '<div class="wrow'+(x.t==='warn'?' wk':'')+'"><b>'+esc(x.k)+'</b><span>'+esc(x.m)+'</span></div>';
+      }).join('')+(w.length>9?'<div class="tiny">…and '+(w.length-9)+' more.</div>':'')
+    : '<div class="wrow wk" style="border-left-color:var(--ok);background:var(--ok-wash)"><b>OK</b>'+
+      '<span>Every line prices cleanly, break prices fall as quantity rises, and nothing sits below cost.</span></div>';
+
+  /* rate note */
+  $('rateNote').innerHTML=state.cur.conv
+    ? '<strong>'+esc(baseCode())+' → '+esc(listCode())+' at '+esc(fx(rateVal(),4))+'.</strong> '+
+      'Published prices are rounded to the <em>'+esc(RULELBL[state.cur.rule].toLowerCase())+'</em> rule after conversion. '+
+      'A price typed straight into a cell is published exactly as typed and is not re-rounded.'
+    : '<strong>Single currency: '+esc(baseCode())+'.</strong> Published prices are rounded to the <em>'+
+      esc(RULELBL[state.cur.rule].toLowerCase())+'</em> rule. Tick the box above to publish in a second currency.';
+
+  $('chipTiers').textContent=state.tiers.length+' defined';
+  $('chipBands').textContent=bs.length+' bands';
+  $('ovCount').textContent=c.ovN?(c.ovN+' typed price'+(c.ovN===1?'':'s')+' on the '+(t.name||'shown')+' tier override the calculated ones')
+    :'No typed prices — every cell is calculated from cost, margin and band discount';
+  $('btnFixMono').disabled=c.mono===0;
+  $('btnClearOv').disabled=c.ovN===0;
+
+  $('basisHint').textContent=state.basis==='markup'
+    ? 'Markup on cost: a 38% markup on a '+baseSym()+'10.00 cost gives '+moneyB(13.8)+' and a gross margin of '+pctS(0.2754)+'.'
+    : 'Margin on selling price: a 38% margin on a '+baseSym()+'10.00 cost gives '+moneyB(10/0.62)+', of which '+pctS(0.38)+' is gross profit.';
+
+  /* tier example column + tier errors */
+  var p0=state.prods[0];
+  Array.prototype.forEach.call($('tierBody').rows,function(tr){
+    var i=+tr.getAttribute('data-i'), tt=state.tiers[i];
+    if(!tt)return;
+    var cell=tr.querySelector('.tex');
+    if(cell)cell.textContent=p0?moneyL(pubPrice(p0,tt,bs[0])):'—';
+    var err=tr.querySelector('[data-e]'), mi=tr.querySelector('[data-k="margin"]');
+    var bad=state.basis==='margin'&&num(tt.margin)>=100;
+    if(err){err.hidden=!bad;err.textContent=bad?'Must be under 100%':'';}
+    if(mi)mi.classList.toggle('inv',bad);
+  });
+  Array.prototype.forEach.call($('bandBody').rows,function(tr){
+    var i=+tr.getAttribute('data-i'), bd=state.bands[i];
+    if(!bd)return;
+    var m=tr.querySelector('.bmult');
+    if(m)m.textContent=fx(1-num(bd.disc)/100,4);
+    var err=tr.querySelector('[data-e]'), mi=tr.querySelector('[data-k="min"]');
+    var bad=num(bd.min)<1;
+    if(err){err.hidden=!bad;err.textContent=bad?'From qty must be 1 or more':'';}
+    if(mi)mi.classList.toggle('inv',bad);
+  });
+
+  /* catalogue cells */
+  Array.prototype.forEach.call($('pBody').rows,function(tr){
+    var i=+tr.getAttribute('data-i'), p=state.prods[i];
+    if(!p)return;
+    var prev=null;
+    bs.forEach(function(b){
+      var td=tr.querySelector('td.tprice[data-b="'+b.id+'"]');
+      if(!td)return;
+      var inp=td.querySelector('input');
+      var pub=pubPrice(p,t,b), ov=ovGet(p,t,b);
+      setv(inp,isFinite(pub)?pub.toFixed(2):'');
+      td.classList.toggle('ovr',ov!==null);
+      var bad=(prev!==null&&isFinite(pub)&&pub>prev+0.004);
+      td.classList.toggle('bad2',bad);
+      if(isFinite(pub))prev=pub;
+    });
+    var mc=tr.querySelector('.tmar');
+    var m0=achMargin(p,t,bs[0]);
+    if(mc){
+      mc.textContent=isFinite(m0)?pctS(m0):'—';
+      mc.className='tmar'+(isFinite(m0)?(m0<0?' neg':(m0<0.05?' neg':'')):'');
+    }
+    var ce=tr.querySelector('td.cost [data-e]'), ci=tr.querySelector('td.cost input');
+    var cbad=num(p.cost)<0;
+    if(ce){ce.hidden=!cbad;ce.textContent=cbad?'Cost cannot be negative':'';}
+    if(ci)ci.classList.toggle('inv',cbad);
+  });
+
+  /* bulk category options */
+  var sel=$('fBulkCat'), cur=state.bulk.cat;
+  var cats=Object.keys(c.cats).sort();
+  var want='__ALL__|'+cats.join('|');
+  if(sel.getAttribute('data-sig')!==want){
+    sel.setAttribute('data-sig',want);
+    sel.innerHTML='<option value="">All categories</option>'+cats.map(function(x){
+      return '<option value="'+esc(x)+'">'+esc(x)+'</option>';}).join('');
+  }
+  if(cats.indexOf(cur)<0&&cur!=='')state.bulk.cat='';
+  if(sel!==document.activeElement)sel.value=state.bulk.cat;
+
+  /* tier selector */
+  var ts=$('fShowTier');
+  var sig=state.tiers.map(function(x){return x.id+':'+x.name;}).join('|');
+  if(ts.getAttribute('data-sig')!==sig){
+    ts.setAttribute('data-sig',sig);
+    ts.innerHTML=state.tiers.map(function(x){
+      return '<option value="'+esc(x.id)+'">'+esc(x.name||'Tier')+'</option>';}).join('');
+  }
+  if(ts!==document.activeElement)ts.value=state.show;
+
+  renderDoc();
+  return c;
+}
+
+/* ── field binding ───────────────────────────────────────── */
+var TXT={fBiz:'biz',fAddr:'addr',fList:'list',fVer:'ver',fEff:'eff',fIss:'iss',
+  fCust:'cust',fRef:'ref',fBy:'by',fTerms:'terms'};
+
+function fillForm(){
+  Object.keys(TXT).forEach(function(id){$(id).value=state[TXT[id]]||'';});
+  $('fBase').value=state.cur.base;
+  $('fTgt').value=state.cur.tgt;
+  $('fBaseSym').value=state.cur.baseSym||'';
+  $('fBaseCode').value=state.cur.baseCode||'';
+  $('fTgtSym').value=state.cur.tgtSym||'';
+  $('fTgtCode').value=state.cur.tgtCode||'';
+  $('fConv').checked=!!state.cur.conv;
+  $('fRate').value=isFinite(state.cur.rate)?state.cur.rate:'';
+  $('fRule').value=state.cur.rule;
+  $('fBasis').value=state.basis;
+  $('fBulkPct').value=isFinite(state.bulk.pct)?state.bulk.pct:'';
+  $('fBulkOv').checked=!!state.bulk.ov;
+  $('banner').hidden=!state.banner;
+  syncCurUI();
+}
+function syncCurUI(){
+  var cb=state.cur.base==='custom', ct=state.cur.tgt==='custom';
+  $('fBaseSym').disabled=!cb; $('fBaseCode').disabled=!cb;
+  $('fTgtSym').disabled=!ct; $('fTgtCode').disabled=!ct;
+  var on=!!state.cur.conv;
+  $('convWrap').style.opacity=on?'1':'.45';
+  ['fTgt','fRate'].forEach(function(id){$(id).disabled=!on;});
+  if(!on){$('fTgtSym').disabled=true;$('fTgtCode').disabled=true;}
+  $('lRate').textContent='Rate — 1 '+baseCode()+' = ? '+listCode();
+  var r=num(state.cur.rate);
+  var bad=on&&!(r>0);
+  $('fRate').classList.toggle('inv',bad);
+  $('eRate').hidden=!bad;
+  $('eRate').textContent=bad?'Enter a rate greater than zero':'';
+}
+function fullRender(){
+  fillForm();renderTiers();renderBands();renderProds();renderLog();refresh();
+}
+function touch(){save();refresh();}
+
+/* ── CSV / JSON ──────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvText(rows){return rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';}
+function dl(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){}
+}
+function slug(s){return String(s||'price-list').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50)||'price-list';}
+
+function buildCsv(internal){
+  var bs=bandsSorted(), t=showTier(), rows=[];
+  rows.push(['Price list',state.list]);
+  rows.push(['Business',state.biz]);
+  rows.push(['Tier',t.name]);
+  rows.push(['Version',state.ver]);
+  rows.push(['Effective from',state.eff]);
+  rows.push(['Issued',state.iss]);
+  rows.push(['Prepared for',state.cust]);
+  rows.push(['Prices in',listCode()+' ('+listSym()+')']);
+  rows.push(['Conversion',state.cur.conv?('1 '+baseCode()+' = '+fx(rateVal(),4)+' '+listCode()):'none — single currency']);
+  rows.push(['Rounding rule',RULELBL[state.cur.rule]]);
+  rows.push(['Margin basis',state.basis==='markup'?'Markup on cost':'Margin on selling price']);
+  if(internal)rows.push(['NOTE','INTERNAL COPY — contains cost and margin. Do not send to customers.']);
+  rows.push([]);
+  var head=['SKU','Description','Category','Unit','Min order qty'];
+  bs.forEach(function(b,i){head.push(b.label+' ('+bandRange(bs,i)+') '+listCode());});
+  if(internal){
+    head.push('Unit cost '+baseCode(),(state.basis==='markup'?'Markup %':'Margin %'));
+    bs.forEach(function(b){head.push(b.label+' margin %');});
+  }
+  rows.push(head);
+  state.prods.forEach(function(p){
+    var r=[p.sku,p.name,p.cat,p.unit,isFinite(num(p.moq))?num(p.moq):''];
+    bs.forEach(function(b){var v=pubPrice(p,t,b);r.push(isFinite(v)?v.toFixed(2):'');});
+    if(internal){
+      r.push(isFinite(num(p.cost))?num(p.cost).toFixed(2):'');
+      r.push(fx(marginOf(p,t),2));
+      bs.forEach(function(b){var m=achMargin(p,t,b);r.push(isFinite(m)?(m*100).toFixed(2):'');});
+    }
+    rows.push(r);
+  });
+  rows.push([]);
+  rows.push(['Terms of sale',(state.terms||'').replace(/\n/g,' | ')]);
+  rows.push(['Notice','Prices exclude VAT / sales tax, duty and delivery unless stated. Converted prices are indicative at the rate shown on the date of issue. E&OE.']);
+  return '﻿'+csvText(rows);
+}
+
+/* ── actions ─────────────────────────────────────────────── */
+function addProd(){
+  var last=state.prods[state.prods.length-1];
+  state.prods.push({id:uid('p'),sku:'',name:'',cat:last?last.cat:'',unit:last?last.unit:'each',moq:1,cost:0,tm:{},ov:{}});
+  state.sample=false;save();renderProds();refresh();
+  var rows=$('pBody').rows;
+  if(rows.length){var inp=rows[rows.length-1].querySelector('input');if(inp)inp.focus();}
+}
+function applyBulk(){
+  var pct=num($('fBulkPct').value);
+  var e=$('eBulk');
+  if(!isFinite(pct)||pct<=-100||pct>1000){
+    e.hidden=false;e.textContent='Enter a percentage between −100 and 1000';
+    $('fBulkPct').classList.add('inv');return;
+  }
+  e.hidden=true;$('fBulkPct').classList.remove('inv');
+  var cat=state.bulk.cat, f=1+pct/100, n=0;
+  state.prods.forEach(function(p){
+    if(cat&&String(p.cat||'').trim()!==cat)return;
+    n++;
+    p.cost=round(num(p.cost)*f,2);
+    if(state.bulk.ov){
+      Object.keys(p.ov).forEach(function(k){p.ov[k]=round(num(p.ov[k])*f,2);});
+    }
+  });
+  if(!n)return;
+  var m=/^v?(\d+)\.(\d+)$/i.exec(String(state.ver||'').trim());
+  if(m)state.ver=m[1]+'.'+(parseInt(m[2],10)+1);
+  state.log.push({id:uid('l'),date:today(),ver:state.ver,
+    note:(pct>=0?'Increase of ':'Reduction of ')+fx(Math.abs(pct),2)+'% applied to cost on '+
+      (cat?cat:'all categories')+' ('+n+' line'+(n===1?'':'s')+')'+
+      (state.bulk.ov?', typed band prices scaled to match':'')+'.'});
+  state.sample=false;
+  save();renderProds();renderLog();fillForm();refresh();
+}
+function fixMono(){
+  var bs=bandsSorted(), t=showTier();
+  state.prods.forEach(function(p){
+    var prev=null;
+    bs.forEach(function(b){
+      var pub=pubPrice(p,t,b);
+      if(!isFinite(pub)){return;}
+      if(prev!==null&&pub>prev+0.004){p.ov[ovKey(t,b)]=round(prev,2);pub=round(prev,2);}
+      prev=pub;
+    });
+  });
+  save();renderProds();refresh();
+}
+function clearOv(){
+  var t=showTier();
+  state.prods.forEach(function(p){
+    Object.keys(p.ov).forEach(function(k){if(k.indexOf(t.id+'|')===0)delete p.ov[k];});
+  });
+  save();renderProds();refresh();
+}
+
+/* ── wiring ──────────────────────────────────────────────── */
+function bindText(){
+  Object.keys(TXT).forEach(function(id){
+    var el=$(id), k=TXT[id];
+    el.addEventListener('input',function(){state[k]=el.value;state.sample=false;touch();});
+    el.addEventListener('blur',function(){
+      if(id==='fVer'){var bad=blank(el.value);$('eVer').hidden=!bad;$('eVer').textContent=bad?'Give the list a version number':'';el.classList.toggle('inv',bad);}
+      if(id==='fEff'){var b2=blank(el.value);$('eEff').hidden=!b2;$('eEff').textContent=b2?'Set the date the list takes effect':'';el.classList.toggle('inv',b2);}
+    });
+  });
+}
+function init(){
+  /* currency selects */
+  var opts=CURORDER.map(function(c){
+    return '<option value="'+c+'">'+(c==='custom'?'Custom…':c+'  '+CUR[c])+'</option>';}).join('');
+  $('fBase').innerHTML=opts; $('fTgt').innerHTML=opts;
+
+  state=load()||defState();
+  fullRender();
+  bindText();
+
+  $('fBase').addEventListener('change',function(){state.cur.base=this.value;state.sample=false;syncCurUI();save();renderProds();refresh();});
+  $('fTgt').addEventListener('change',function(){state.cur.tgt=this.value;state.sample=false;syncCurUI();save();renderProds();refresh();});
+  ['fBaseSym','fBaseCode','fTgtSym','fTgtCode'].forEach(function(id){
+    var k=id.slice(1); k=k.charAt(0).toLowerCase()+k.slice(1);
+    $(id).addEventListener('input',function(){state.cur[k]=this.value;state.sample=false;syncCurUI();save();renderProds();refresh();});
+  });
+  $('fConv').addEventListener('change',function(){state.cur.conv=this.checked;state.sample=false;syncCurUI();save();renderProds();refresh();});
+  $('fRate').addEventListener('input',function(){state.cur.rate=this.value===''?NaN:num(this.value);state.sample=false;syncCurUI();touch();});
+  $('fRule').addEventListener('change',function(){state.cur.rule=this.value;state.sample=false;touch();});
+  $('fBasis').addEventListener('change',function(){state.basis=this.value;state.sample=false;save();renderProds();refresh();});
+  $('fShowTier').addEventListener('change',function(){state.show=this.value;save();renderProds();refresh();});
+  $('fBulkCat').addEventListener('change',function(){state.bulk.cat=this.value;save();});
+  $('fBulkPct').addEventListener('input',function(){state.bulk.pct=num(this.value);save();});
+  $('fBulkOv').addEventListener('change',function(){state.bulk.ov=this.checked;save();});
+  $('btnBulk').addEventListener('click',applyBulk);
+
+  /* tier table */
+  $('tierBody').addEventListener('input',function(e){
+    var el=e.target, tr=el.closest('tr'); if(!tr)return;
+    var t=state.tiers[+tr.getAttribute('data-i')], k=el.getAttribute('data-k');
+    if(!t||!k)return;
+    if(k==='margin')t.margin=el.value===''?0:num(el.value); else t[k]=el.value;
+    state.sample=false;save();
+    if(k==='name'){renderProdHead();}
+    refresh();
+  });
+  $('tierBody').addEventListener('change',function(e){
+    var el=e.target; if(el.getAttribute('data-k')!=='on')return;
+    var tr=el.closest('tr'), t=state.tiers[+tr.getAttribute('data-i')];
+    if(t){t.on=el.checked;state.sample=false;save();refresh();}
+  });
+  $('tierBody').addEventListener('click',function(e){
+    var b=e.target.closest('[data-act="rmTier"]'); if(!b)return;
+    if(state.tiers.length<2)return;
+    var i=+b.closest('tr').getAttribute('data-i'), id=state.tiers[i].id;
+    state.tiers.splice(i,1);
+    state.prods.forEach(function(p){
+      delete p.tm[id];
+      Object.keys(p.ov).forEach(function(k){if(k.indexOf(id+'|')===0)delete p.ov[k];});
+    });
+    if(state.show===id)state.show=state.tiers[0].id;
+    state.sample=false;save();renderTiers();renderProds();refresh();
+  });
+  $('btnAddTier').addEventListener('click',function(){
+    state.tiers.push({id:uid('t'),name:'New tier',margin:30,on:true});
+    state.sample=false;save();renderTiers();refresh();
+  });
+
+  /* band table */
+  $('bandBody').addEventListener('input',function(e){
+    var el=e.target, tr=el.closest('tr'); if(!tr)return;
+    var b=state.bands[+tr.getAttribute('data-i')], k=el.getAttribute('data-k');
+    if(!b||!k)return;
+    if(k==='label'){b.label=el.value;renderProdHead();}
+    else b[k]=el.value===''?0:num(el.value);
+    state.sample=false;save();refresh();
+  });
+  $('bandBody').addEventListener('click',function(e){
+    var btn=e.target.closest('[data-act="rmBand"]'); if(!btn)return;
+    if(state.bands.length<2)return;
+    var i=+btn.closest('tr').getAttribute('data-i'), id=state.bands[i].id;
+    state.bands.splice(i,1);
+    state.prods.forEach(function(p){
+      Object.keys(p.ov).forEach(function(k){if(k.slice(-(id.length+1))==='|'+id)delete p.ov[k];});
+    });
+    state.sample=false;save();renderBands();renderProds();refresh();
+  });
+  $('btnAddBand').addEventListener('click',function(){
+    var bs=bandsSorted(), last=bs[bs.length-1];
+    var mn=last?Math.max(1,Math.round(num(last.min)*4)||2):1;
+    var dc=last?Math.min(60,round(num(last.disc)+5,2)):0;
+    state.bands.push({id:uid('b'),label:'Qty '+mn+'+',min:mn,disc:dc});
+    state.sample=false;save();renderBands();renderProds();refresh();
+  });
+
+  /* catalogue table */
+  $('pBody').addEventListener('input',function(e){
+    var el=e.target, tr=el.closest('tr'); if(!tr)return;
+    var p=state.prods[+tr.getAttribute('data-i')], k=el.getAttribute('data-k');
+    if(!p||!k)return;
+    if(k==='ov'){
+      var bid=el.getAttribute('data-b'), t=showTier();
+      if(el.value===''){delete p.ov[t.id+'|'+bid];}
+      else p.ov[t.id+'|'+bid]=num(el.value);
+    }else if(k==='tm'){
+      var t2=showTier();
+      if(el.value==='')delete p.tm[t2.id]; else p.tm[t2.id]=num(el.value);
+    }else if(k==='cost'||k==='moq'){
+      p[k]=el.value===''?0:num(el.value);
+    }else{
+      p[k]=el.value;
+    }
+    state.sample=false;save();refresh();
+  });
+  $('pBody').addEventListener('focusout',function(e){
+    var el=e.target;
+    if(el&&el.getAttribute&&el.getAttribute('data-k')==='cost'&&el.value!=='')el.value=num(el.value).toFixed(2);
+    setTimeout(refresh,0);
+  });
+  $('pBody').addEventListener('click',function(e){
+    var b=e.target.closest('[data-act="rmProd"]'); if(!b)return;
+    var i=+b.closest('tr').getAttribute('data-i');
+    state.prods.splice(i,1);
+    state.sample=false;save();renderProds();refresh();
+  });
+  $('btnAddProd').addEventListener('click',addProd);
+  $('btnFixMono').addEventListener('click',fixMono);
+  $('btnClearOv').addEventListener('click',clearOv);
+
+  /* log table */
+  $('logBody').addEventListener('input',function(e){
+    var el=e.target, tr=el.closest('tr'); if(!tr)return;
+    var l=state.log[+tr.getAttribute('data-i')], k=el.getAttribute('data-k');
+    if(l&&k){l[k]=el.value;state.sample=false;save();}
+  });
+  $('logBody').addEventListener('click',function(e){
+    var b=e.target.closest('[data-act="rmLog"]'); if(!b)return;
+    state.log.splice(+b.closest('tr').getAttribute('data-i'),1);
+    state.sample=false;save();renderLog();
+  });
+  $('btnAddLog').addEventListener('click',function(){
+    state.log.push({id:uid('l'),date:today(),ver:state.ver,note:''});
+    state.sample=false;save();renderLog();
+    var rows=$('logBody').rows;
+    if(rows.length){var i=rows[rows.length-1].querySelector('[data-k="note"]');if(i)i.focus();}
+  });
+
+  /* banner */
+  $('btnDismiss').addEventListener('click',function(){state.banner=false;$('banner').hidden=true;save();});
+  $('btnBlank').addEventListener('click',function(){
+    var d=defState();
+    d.sample=false;d.banner=false;
+    d.biz='';d.addr='';d.list='';d.cust='';d.ref='';d.by='';d.terms='';
+    d.prods=[{id:uid('p'),sku:'',name:'',cat:'',unit:'each',moq:1,cost:0,tm:{},ov:{}}];
+    d.log=[];d.ver='1.0';
+    state=d;save();fullRender();
+    window.scrollTo({top:0,behavior:'auto'});
+  });
+
+  /* exports */
+  $('btnPrint').addEventListener('click',function(){window.print();});
+  $('btnPrev').addEventListener('click',function(){
+    var on=document.body.classList.toggle('preview');
+    this.innerHTML=on?'Back to editing':'Preview<span class="hidesm"> customer list</span>';
+    if(on)$('docCard').scrollIntoView({block:'start'});
+  });
+  $('btnCsv').addEventListener('click',function(){
+    dl(slug(state.list)+'-'+slug(showTier().name)+'.csv','text/csv;charset=utf-8;',buildCsv(false));
+  });
+  $('btnCsvInt').addEventListener('click',function(){
+    dl(slug(state.list)+'-'+slug(showTier().name)+'-internal.csv','text/csv;charset=utf-8;',buildCsv(true));
+  });
+  $('btnJson').addEventListener('click',function(){
+    dl(slug(state.list)+'.json','application/json',
+      JSON.stringify({_type:'solvix.price-list-builder',_version:1,savedAt:new Date().toISOString(),state:state},null,2));
+  });
+  $('btnImport').addEventListener('click',function(){$('fileIn').click();});
+  $('fileIn').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        var s=(o&&o.state)?o.state:o;
+        state=normalise(s);state.sample=false;
+        save();fullRender();
+      }catch(e){
+        var w=$('wlist');
+        w.innerHTML='<div class="wrow"><b>Import</b><span>That file could not be read as a saved price list.</span></div>'+w.innerHTML;
+      }
+    };
+    rd.readAsText(f);
+    this.value='';
+  });
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Delete this catalogue and every saved setting from this browser? This cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    state=defState();save();fullRender();
+    window.scrollTo({top:0,behavior:'auto'});
+  });
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+})();
+</script>
+</body>
+</html>

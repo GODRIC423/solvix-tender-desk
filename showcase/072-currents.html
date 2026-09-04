@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Currents · A Flow Field Study</title>
+<meta name="description" content="Currents is a live generative flow field: thousands of walkers steered by a hand-written Perlin noise function, seedable, tunable, and exportable as a PNG.">
+<meta name="theme-color" content="#1B1B3A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231B1B3A'/%3E%3Cpath d='M3 21c6-11 9 5 13-3s6 5 13-7' fill='none' stroke='%23F2E9DC' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M3 27c6-11 9 5 13-3' fill='none' stroke='%23F2E9DC' stroke-width='1.2' stroke-linecap='round' opacity='.55'/%3E%3Ccircle cx='25' cy='8' r='2.7' fill='%23FF6B6B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B1B3A;
+    --ink-deep:#111128;
+    --ink-lift:#26264d;
+    --cream:#F2E9DC;
+    --coral:#FF6B6B;
+    --mist:rgba(242,233,220,.66);
+    --hair:rgba(242,233,220,.18);
+    --rail-h:auto;
+    --pad:clamp(18px,3.2vw,46px);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--cream);
+    font-family:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:16px;
+    line-height:1.55;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  :focus-visible{outline:2px solid var(--coral);outline-offset:3px;border-radius:2px}
+
+  /* ---------- canvas stage ---------- */
+  #stage{position:fixed;inset:0;z-index:0}
+  #field{display:block;width:100%;height:100%}
+  .veil{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(115% 82% at 6% 2%, rgba(17,17,40,.88) 0%, rgba(17,17,40,.38) 36%, rgba(17,17,40,0) 64%),
+      linear-gradient(to top, rgba(17,17,40,.9) 0%, rgba(17,17,40,.35) 16%, rgba(17,17,40,0) 34%);
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    position:fixed;z-index:3;top:var(--pad);left:var(--pad);
+    max-width:min(46ch,72vw);pointer-events:none;
+  }
+  .eyebrow{
+    display:flex;align-items:center;gap:.7em;
+    font-size:.66rem;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--mist);margin:0 0 .9rem;font-weight:500;
+  }
+  .eyebrow::before{
+    content:"";width:34px;height:2px;background:var(--coral);
+    flex:none;transform-origin:left;animation:rule 1.4s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rule{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  h1{
+    font-family:"Instrument Serif",Georgia,serif;
+    font-weight:400;
+    font-size:clamp(3.6rem,10.6vw,9.5rem);
+    line-height:.84;
+    letter-spacing:-.02em;
+    margin:0;
+    color:var(--cream);
+  }
+  h1 em{
+    font-style:italic;color:var(--coral);
+    display:block;font-size:.4em;line-height:1;letter-spacing:-.01em;
+    margin-top:.28em;padding-left:.06em;
+  }
+  .deck{
+    margin:1.5rem 0 0;max-width:34ch;
+    font-size:clamp(.92rem,1.05vw,1.02rem);
+    color:var(--mist);
+    text-wrap:pretty;
+  }
+  .deck b{color:var(--cream);font-weight:500}
+
+  .readout{
+    position:fixed;z-index:3;left:var(--pad);bottom:calc(var(--rail-space) + 22px);
+    display:flex;gap:1.4rem;flex-wrap:wrap;align-items:baseline;
+    font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(242,233,220,.6);
+    pointer-events:none;
+  }
+  .readout span b{color:var(--cream);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:.12em}
+  .readout .dot{width:5px;height:5px;border-radius:50%;background:var(--coral);display:inline-block;margin-right:.5em;vertical-align:middle;animation:pulse 2.6s ease-in-out infinite}
+  .readout.paused .dot{animation:none;background:rgba(242,233,220,.35)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.22}}
+
+  /* ---------- control rail ---------- */
+  .rail-wrap{
+    position:fixed;z-index:4;left:0;right:0;bottom:0;
+    border-top:1px solid var(--hair);
+    background:linear-gradient(to top,rgba(14,14,34,.97),rgba(14,14,34,.86));
+  }
+  .rail-wrap::before{
+    content:"";position:absolute;top:-1px;left:0;width:clamp(80px,14vw,190px);height:1px;background:var(--coral);
+  }
+  .rail{
+    display:flex;align-items:center;gap:clamp(14px,2.4vw,34px);
+    padding:14px var(--pad);
+    overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:thin;scrollbar-color:rgba(242,233,220,.25) transparent;
+  }
+  .rail::-webkit-scrollbar{height:3px}
+  .rail::-webkit-scrollbar-thumb{background:rgba(242,233,220,.25)}
+  .grp{display:flex;flex-direction:column;gap:7px;flex:none}
+  .grp>.lbl{
+    font-size:.6rem;letter-spacing:.26em;text-transform:uppercase;
+    color:rgba(242,233,220,.62);font-weight:500;white-space:nowrap;
+  }
+  .grp .row{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;align-self:stretch;background:var(--hair);flex:none;margin:2px 0}
+  .spacer{flex:1 1 auto;min-width:8px}
+
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+  .stepper{
+    display:flex;align-items:center;border:1px solid var(--hair);border-radius:999px;
+    background:rgba(242,233,220,.03);
+  }
+  .stepper button{
+    width:26px;height:28px;display:grid;place-items:center;
+    color:rgba(242,233,220,.6);font-size:.9rem;line-height:1;transition:color .18s,background .18s;
+  }
+  .stepper button:hover{color:var(--coral)}
+  .seedval{
+    font-size:.82rem;letter-spacing:.16em;font-weight:500;font-variant-numeric:tabular-nums;
+    padding:0 6px;min-width:5.4ch;text-align:center;color:var(--cream);
+  }
+  .shuffle{
+    margin-left:8px;width:30px;height:30px;border:1px solid var(--hair);border-radius:50%;
+    display:grid;place-items:center;transition:transform .4s cubic-bezier(.2,.8,.2,1),border-color .2s,color .2s;
+    color:rgba(242,233,220,.72);
+  }
+  .shuffle:hover{border-color:var(--coral);color:var(--coral)}
+  .shuffle.spin{transform:rotate(360deg)}
+  .shuffle svg{width:14px;height:14px;display:block}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;background:none;
+    width:clamp(84px,10vw,132px);height:22px;margin:0;cursor:ew-resize;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:rgba(242,233,220,.28)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:11px;height:11px;border-radius:50%;
+    background:var(--cream);margin-top:-5px;transition:background .18s,transform .18s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{background:var(--coral);transform:scale(1.25)}
+  input[type=range]::-moz-range-track{height:1px;background:rgba(242,233,220,.28)}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;border-radius:50%;background:var(--cream)}
+  input[type=range]:hover::-moz-range-thumb{background:var(--coral)}
+  .num{font-size:.74rem;color:rgba(242,233,220,.72);font-variant-numeric:tabular-nums;min-width:4.2ch}
+
+  .swatches{display:flex;gap:6px}
+  .sw{
+    width:30px;height:30px;border-radius:50%;border:1px solid var(--hair);
+    position:relative;transition:transform .2s cubic-bezier(.2,.8,.2,1),border-color .2s;
+  }
+  .sw i{position:absolute;inset:5px;border-radius:50%;display:block}
+  .sw:hover{transform:translateY(-2px)}
+  .sw[aria-pressed=true]{border-color:var(--coral)}
+  .sw[aria-pressed=true]::after{
+    content:"";position:absolute;left:50%;bottom:-8px;width:3px;height:3px;border-radius:50%;
+    background:var(--coral);transform:translateX(-50%);
+  }
+
+  .act{
+    height:30px;padding:0 14px;border:1px solid var(--hair);border-radius:999px;
+    font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;font-weight:500;
+    color:rgba(242,233,220,.78);white-space:nowrap;
+    transition:border-color .2s,color .2s,background .2s;
+  }
+  .act:hover{border-color:rgba(242,233,220,.5);color:var(--cream)}
+  .act.primary{border-color:var(--coral);color:var(--coral)}
+  .act.primary:hover{background:var(--coral);color:var(--ink-deep)}
+
+  /* ---------- notes ---------- */
+  .notes-tab{
+    position:fixed;z-index:5;top:var(--pad);right:var(--pad);
+    height:34px;padding:0 16px;border:1px solid var(--hair);border-radius:999px;
+    display:inline-flex;align-items:center;gap:.7em;
+    font-size:.64rem;letter-spacing:.24em;text-transform:uppercase;font-weight:500;
+    color:rgba(242,233,220,.8);background:rgba(17,17,40,.6);
+    transition:border-color .2s,color .2s;
+  }
+  .notes-tab:hover{border-color:var(--coral);color:var(--coral)}
+  .notes-tab .plus{width:9px;height:9px;position:relative;flex:none}
+  .notes-tab .plus::before,.notes-tab .plus::after{
+    content:"";position:absolute;background:currentColor;transition:transform .3s cubic-bezier(.2,.8,.2,1);
+  }
+  .notes-tab .plus::before{left:0;top:4px;width:9px;height:1px}
+  .notes-tab .plus::after{top:0;left:4px;height:9px;width:1px}
+  .notes-tab[aria-expanded=true] .plus::after{transform:rotate(90deg)}
+
+  .notes{
+    position:fixed;z-index:6;top:0;right:0;height:100%;
+    width:min(460px,100vw);
+    background:var(--ink-deep);
+    border-left:1px solid var(--hair);
+    transform:translateX(101%);
+    transition:transform .55s cubic-bezier(.16,.84,.24,1);
+    display:flex;flex-direction:column;
+  }
+  .notes.open{transform:translateX(0)}
+  .notes-inner{
+    overflow-y:auto;padding:clamp(26px,4vw,46px);
+    -webkit-overflow-scrolling:touch;
+  }
+  .notes h2{
+    font-family:"Instrument Serif",Georgia,serif;font-weight:400;
+    font-size:clamp(2rem,4.6vw,2.9rem);line-height:1;letter-spacing:-.015em;margin:0;
+  }
+  .notes h2 em{font-style:italic;color:var(--coral)}
+  .notes h3{
+    font-size:.64rem;letter-spacing:.26em;text-transform:uppercase;font-weight:600;
+    color:var(--coral);margin:2.4rem 0 .7rem;
+  }
+  .notes p{margin:0 0 1rem;font-size:.94rem;color:rgba(242,233,220,.82);text-wrap:pretty}
+  .notes p:last-child{margin-bottom:0}
+  .notes .rule{height:1px;background:var(--hair);margin:1.7rem 0 0}
+  .notes ol{margin:0;padding:0;list-style:none;counter-reset:step}
+  .notes ol li{
+    counter-increment:step;position:relative;padding-left:2.4rem;margin-bottom:.85rem;
+    font-size:.92rem;color:rgba(242,233,220,.82);
+  }
+  .notes ol li::before{
+    content:counter(step,decimal-leading-zero);
+    position:absolute;left:0;top:.05em;
+    font-size:.66rem;letter-spacing:.1em;color:var(--coral);
+    font-variant-numeric:tabular-nums;
+  }
+  .notes ol li b{color:var(--cream);font-weight:500}
+  .notes dl{margin:0;font-size:.9rem}
+  .notes dt{
+    font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(242,233,220,.62);margin-top:1rem;font-weight:500;
+  }
+  .notes dd{margin:.25rem 0 0;color:rgba(242,233,220,.82)}
+  .notes-close{
+    position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--hair);display:grid;place-items:center;color:rgba(242,233,220,.7);
+    font-size:1rem;line-height:1;transition:border-color .2s,color .2s;
+  }
+  .notes-close:hover{border-color:var(--coral);color:var(--coral)}
+  .sig{
+    margin-top:2.4rem;font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;
+    color:rgba(242,233,220,.52);
+  }
+  .scrim{
+    position:fixed;inset:0;z-index:5;background:rgba(10,10,26,.5);
+    opacity:0;pointer-events:none;transition:opacity .45s ease;
+  }
+  .scrim.on{opacity:1;pointer-events:auto}
+
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* ---------- responsive ---------- */
+  :root{--rail-space:60px}
+  @media (max-width:860px){
+    :root{--rail-space:112px}
+    .masthead{max-width:none;right:var(--pad);top:calc(var(--pad) + 44px)}
+    .deck{max-width:30ch;font-size:.88rem;margin-top:1.1rem}
+    h1{font-size:clamp(3.2rem,17vw,5.4rem)}
+    .notes-tab{top:var(--pad);right:var(--pad);left:auto}
+    .readout{bottom:calc(var(--rail-space) + 14px);gap:1rem;font-size:.6rem;right:var(--pad)}
+    .veil{
+      background:
+        linear-gradient(to bottom, rgba(17,17,40,.94) 0%, rgba(17,17,40,.72) 34%, rgba(17,17,40,.12) 52%, rgba(17,17,40,0) 64%),
+        linear-gradient(to top, rgba(17,17,40,.92) 0%, rgba(17,17,40,.3) 14%, rgba(17,17,40,0) 30%);
+    }
+    .rail{gap:16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));padding-right:34px}
+    .rail>div:nth-of-type(1){order:1}
+    .rail>div:nth-of-type(6){order:2}
+    .rail>div:nth-of-type(3){order:3}
+    .rail>div:nth-of-type(4){order:4}
+    .rail>div:nth-of-type(8){order:5}
+    .readout span:nth-child(3){display:none}
+    .sep{display:none}
+    .spacer{display:none}
+    .grp{flex:0 0 auto}
+    input[type=range]{width:64px}
+    .rail-wrap::after{
+      content:"";position:absolute;right:0;top:1px;bottom:0;width:38px;pointer-events:none;
+      background:linear-gradient(to right,rgba(14,14,34,0),rgba(14,14,34,.98));
+    }
+    .notes{width:100%;border-left:none}
+  }
+  @media (max-width:390px){
+    .rail{gap:10px 14px}
+    input[type=range]{width:66px}
+  }
+  @media (max-height:560px) and (min-width:861px){
+    .deck{display:none}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+    .eyebrow::before{transform:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="field" role="img" aria-label="A live generative flow field: thousands of fine cream-coloured particle trails, with occasional coral ones, drifting across a deep indigo ground in currents shaped by Perlin noise."></canvas>
+</div>
+<div class="veil" aria-hidden="true"></div>
+
+<header class="masthead">
+  <p class="eyebrow">Generative Study № 72</p>
+  <h1>Currents<em>a field of drifting things</em></h1>
+  <p class="deck">Every walker on this plate is blind. Each one only ever asks the field, <b>which way here?</b> — and the answer is a single number from a Perlin function written by hand, below. A hundred thousand such answers a second make the weather you are looking at.</p>
+</header>
+
+<p class="readout" id="readout">
+  <span><span class="dot" aria-hidden="true"></span>Seed <b id="rdSeed">—</b></span>
+  <span>Walkers <b id="rdCount">—</b></span>
+  <span>Octaves <b>03</b></span>
+  <span id="rdState">Drifting</span>
+</p>
+
+<button class="notes-tab" id="notesTab" aria-expanded="false" aria-controls="notes">
+  <span class="plus" aria-hidden="true"></span> Field notes
+</button>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="notes" id="notes" aria-labelledby="notesTitle">
+  <div class="notes-inner">
+    <button class="notes-close" id="notesClose" aria-label="Close field notes">&#215;</button>
+    <h2 id="notesTitle">On <em>noise</em>,<br>and the shape of drift</h2>
+
+    <h3>The field is a function</h3>
+    <p>There is no wind here and no water. A flow field is nothing but a function that takes a point on the plane and returns an angle. Ask it at every pixel and you get a map of directions; drop a particle onto that map, let it step forward along whatever angle it lands on, and it draws its own path. Everything you can see on this page is that one idea, repeated about a hundred and forty thousand times a second.</p>
+
+    <h3>Why Perlin, not random</h3>
+    <p>If the angle at each point were simply random, the walkers would jitter in place and the plate would turn to grey fuzz. What is needed is randomness that remembers its neighbours — smooth, continuous, unpredictable at a distance but coherent up close. Ken Perlin built exactly that for the film <i>Tron</i> in 1983, and it remains the workhorse of procedural texture. The version running here is written from scratch in about forty lines: a permutation table shuffled by the seed, a quintic fade curve, gradient dot products at the eight corners of a lattice cell, trilinear interpolation between them.</p>
+
+    <h3>The recipe, in five moves</h3>
+    <ol>
+      <li><b>Seed the table.</b> A small integer hash generates the shuffle, so the same seed always rebuilds the same field.</li>
+      <li><b>Stack three octaves.</b> Each is twice the frequency and half the amplitude of the last — fractal Brownian motion, which adds grain without losing the large gesture.</li>
+      <li><b>Turn value into angle.</b> The noise, in the range −1 to 1, is multiplied by three π. Small changes in scale rotate the whole weather system.</li>
+      <li><b>Walk and record.</b> Every walker strokes a hairline between its last position and its next, at very low opacity. Density is only patience made visible.</li>
+      <li><b>Drift the third axis.</b> The noise is sampled in 3D; the third coordinate creeps forward each frame, so the field itself slowly breathes.</li>
+    </ol>
+
+    <h3>Reading the dials</h3>
+    <dl>
+      <dt>Seed</dt><dd>Rebuilds the permutation table. Step it one at a time to watch a family of related fields, or shuffle for a stranger.</dd>
+      <dt>Scale</dt><dd>How far apart the lattice points sit. Low is a slow ocean swell; high is turbulence and hair.</dd>
+      <dt>Density</dt><dd>How many walkers are alive at once. Fewer reads as drawing; more reads as fog.</dd>
+      <dt>Palette</dt><dd>Cream is the house ink. Ember pushes coral to the front. Tide cools the whole plate toward the indigo it sits on.</dd>
+      <dt>Save</dt><dd>Writes the canvas exactly as you see it to a PNG, at full device resolution, stamped with its seed so the plate can be found again.</dd>
+    </dl>
+
+    <div class="rule"></div>
+    <p class="sig">No libraries · One file · Perlin by hand</p>
+  </div>
+</aside>
+
+<section class="rail-wrap" aria-label="Field controls">
+  <h2 class="sr">Field controls</h2>
+  <div class="rail">
+    <div class="grp">
+      <span class="lbl" id="lblSeed">Seed</span>
+      <div class="row">
+        <div class="stepper">
+          <button type="button" id="seedDown" aria-label="Previous seed">&#8722;</button>
+          <span class="seedval" id="seedVal" aria-live="polite" aria-atomic="true">0000</span>
+          <button type="button" id="seedUp" aria-label="Next seed">+</button>
+        </div>
+        <button type="button" class="shuffle" id="shuffle" aria-label="Shuffle to a random seed">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4h3.2L11 12h3.2M1 12h3.2L11 4h3.2"/><path d="M12.4 2.2 14.8 4l-2.4 1.8M12.4 10.2 14.8 12l-2.4 1.8"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sep" aria-hidden="true"></div>
+
+    <div class="grp">
+      <label class="lbl" for="scale">Scale</label>
+      <div class="row">
+        <input type="range" id="scale" min="6" max="60" step="1" value="20">
+        <span class="num" id="scaleNum">2.0</span>
+      </div>
+    </div>
+
+    <div class="grp">
+      <label class="lbl" for="density">Density</label>
+      <div class="row">
+        <input type="range" id="density" min="150" max="3000" step="50" value="1200">
+        <span class="num" id="densNum">1200</span>
+      </div>
+    </div>
+
+    <div class="sep" aria-hidden="true"></div>
+
+    <div class="grp">
+      <span class="lbl">Palette</span>
+      <div class="row swatches" id="palettes" role="group" aria-label="Palette">
+        <button type="button" class="sw" data-pal="cream" aria-pressed="true" aria-label="Cream palette" title="Cream"><i style="background:linear-gradient(135deg,#F2E9DC 60%,#FF6B6B 60%)"></i></button>
+        <button type="button" class="sw" data-pal="ember" aria-pressed="false" aria-label="Ember palette" title="Ember"><i style="background:linear-gradient(135deg,#FF6B6B 60%,#F2E9DC 60%)"></i></button>
+        <button type="button" class="sw" data-pal="tide" aria-pressed="false" aria-label="Tide palette" title="Tide"><i style="background:linear-gradient(135deg,#9C9CE0 60%,#F2E9DC 60%)"></i></button>
+      </div>
+    </div>
+
+    <div class="spacer" aria-hidden="true"></div>
+
+    <div class="grp">
+      <span class="lbl">Plate</span>
+      <div class="row" style="gap:6px">
+        <button type="button" class="act" id="toggle" aria-pressed="false">Pause</button>
+        <button type="button" class="act" id="clear">Clear</button>
+        <button type="button" class="act primary" id="save">Save PNG</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- seeded PRNG ---------- */
+  function mulberry32(a){
+    return function(){
+      a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- improved Perlin noise, 3D, seeded permutation ---------- */
+  function makePerlin(seed){
+    var rnd = mulberry32(seed >>> 0);
+    var src = new Uint8Array(256), perm = new Uint8Array(512), i, j, t;
+    for(i=0;i<256;i++) src[i] = i;
+    for(i=255;i>0;i--){ j = Math.floor(rnd()*(i+1)); t = src[i]; src[i] = src[j]; src[j] = t; }
+    for(i=0;i<512;i++) perm[i] = src[i & 255];
+
+    function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+    function lerp(a,b,t){ return a + t*(b-a); }
+    function grad(h,x,y,z){
+      h &= 15;
+      var u = h < 8 ? x : y;
+      var v = h < 4 ? y : (h === 12 || h === 14 ? x : z);
+      return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+    }
+    return function(x,y,z){
+      var X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+      x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+      var u = fade(x), v = fade(y), w = fade(z);
+      var A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A+1] + Z;
+      var B = perm[X+1] + Y, BA = perm[B] + Z, BB = perm[B+1] + Z;
+      return lerp(
+        lerp(
+          lerp(grad(perm[AA], x, y, z),     grad(perm[BA], x-1, y, z), u),
+          lerp(grad(perm[AB], x, y-1, z),   grad(perm[BB], x-1, y-1, z), u), v),
+        lerp(
+          lerp(grad(perm[AA+1], x, y, z-1),   grad(perm[BA+1], x-1, y, z-1), u),
+          lerp(grad(perm[AB+1], x, y-1, z-1), grad(perm[BB+1], x-1, y-1, z-1), u), v),
+        w);
+    };
+  }
+
+  /* ---------- palettes (indigo / cream / coral family only) ---------- */
+  var PALETTES = {
+    cream: [
+      { c:'rgba(242,233,220,',  a:0.090, w:0.48, lw:0.95 },
+      { c:'rgba(190,182,200,',  a:0.055, w:0.28, lw:0.65 },
+      { c:'rgba(255,107,107,',  a:0.140, w:0.16, lw:0.85 },
+      { c:'rgba(255,250,242,',  a:0.240, w:0.08, lw:0.55 }
+    ],
+    ember: [
+      { c:'rgba(255,107,107,',  a:0.100, w:0.46, lw:0.95 },
+      { c:'rgba(255,152,124,',  a:0.070, w:0.28, lw:0.70 },
+      { c:'rgba(242,233,220,',  a:0.090, w:0.19, lw:0.70 },
+      { c:'rgba(255,214,196,',  a:0.230, w:0.07, lw:0.55 }
+    ],
+    tide: [
+      { c:'rgba(132,132,214,',  a:0.110, w:0.46, lw:1.05 },
+      { c:'rgba(186,188,236,',  a:0.070, w:0.30, lw:0.72 },
+      { c:'rgba(242,233,220,',  a:0.085, w:0.16, lw:0.62 },
+      { c:'rgba(255,107,107,',  a:0.150, w:0.08, lw:0.75 }
+    ]
+  };
+
+  var BG = '#1B1B3A';
+
+  /* ---------- state ---------- */
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d', { alpha:false });
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var state = {
+    seed: 1729,
+    scale: 20,       // slider units; noise scale = scale/10000
+    density: 1200,
+    palette: 'cream',
+    running: true,
+    z: 0,
+    frame: 0
+  };
+
+  var noise = makePerlin(state.seed);
+  var parts = [];
+  var W = 0, H = 0, dpr = 1;
+  var raf = 0;
+
+  function fbm(x,y,z){
+    var a = 0, amp = 1, f = 1, norm = 0;
+    for(var i=0;i<3;i++){
+      a += noise(x*f, y*f, z*f) * amp;
+      norm += amp; amp *= 0.5; f *= 2.03;
+    }
+    return a / norm;
+  }
+
+  function pickBucket(r){
+    var pal = PALETTES[state.palette], acc = 0;
+    for(var i=0;i<pal.length;i++){ acc += pal[i].w; if(r <= acc) return i; }
+    return pal.length - 1;
+  }
+
+  function spawn(p, rnd){
+    p.x = rnd() * W;
+    p.y = rnd() * H;
+    p.px = p.x; p.py = p.y;
+    p.life = 30 + rnd() * 150;
+    p.b = pickBucket(rnd());
+  }
+
+  var rand = Math.random;
+
+  function areaFactor(){
+    var f = (W * H) / 1296000;
+    return Math.max(0.40, Math.min(1, f));
+  }
+
+  function buildParticles(){
+    var n = Math.max(60, Math.round(state.density * areaFactor()));
+    if(parts.length > n) parts.length = n;
+    while(parts.length < n){
+      var p = {};
+      spawn(p, rand);
+      parts.push(p);
+    }
+    document.getElementById('rdCount').textContent = String(parts.length);
+  }
+
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var r = canvas.getBoundingClientRect();
+    W = Math.max(1, Math.round(r.width));
+    H = Math.max(1, Math.round(r.height));
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round';
+    regenerate(true);
+  }
+
+  function paintGround(){
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }
+
+  function regenerate(keepSeed){
+    noise = makePerlin(state.seed);
+    state.z = (state.seed % 1000) * 0.137;
+    state.frame = 0;
+    parts.length = 0;
+    buildParticles();
+    paintGround();
+    updateReadout();
+  }
+
+  function step(sub){
+    var pal = PALETTES[state.palette];
+    var ns = state.scale / 10000;
+    var i, k, p, ang, paths = [];
+    for(k=0;k<pal.length;k++) paths.push(new Path2D());
+
+    for(i=0;i<parts.length;i++){
+      p = parts[i];
+      p.px = p.x; p.py = p.y;
+      ang = fbm(p.x * ns, p.y * ns, state.z) * Math.PI * 3;
+      p.x += Math.cos(ang) * 1.15;
+      p.y += Math.sin(ang) * 1.15;
+      p.life -= 1;
+      if(p.life <= 0 || p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20){
+        spawn(p, rand);
+        continue;
+      }
+      var pth = paths[p.b];
+      pth.moveTo(p.px, p.py);
+      pth.lineTo(p.x, p.y);
+    }
+    for(k=0;k<pal.length;k++){
+      ctx.strokeStyle = pal[k].c + pal[k].a.toFixed(3) + ')';
+      ctx.lineWidth = pal[k].lw;
+      ctx.stroke(paths[k]);
+    }
+  }
+
+  function tick(){
+    raf = 0;
+    if(!state.running) return;
+    var boot = state.frame < 190;
+    var subs = boot ? 3 : 2;
+    if(!boot && state.frame % 4 === 0){
+      ctx.fillStyle = 'rgba(27,27,58,0.026)';
+      ctx.fillRect(0,0,W,H);
+    }
+    for(var s=0;s<subs;s++) step(s);
+    state.z += 0.0011;
+    state.frame++;
+
+    if(reduce.matches && state.frame > 200){
+      state.running = false;
+      syncToggle();
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function start(){ if(!raf && state.running && !document.hidden) raf = requestAnimationFrame(tick); }
+  function stop(){ if(raf){ cancelAnimationFrame(raf); raf = 0; } }
+
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) stop(); else start();
+  });
+
+  /* ---------- readout ---------- */
+  function seedLabel(){
+    var s = (state.seed >>> 0).toString(36).toUpperCase();
+    while(s.length < 4) s = '0' + s;
+    return s.slice(-4);
+  }
+  function updateReadout(){
+    var lbl = seedLabel();
+    document.getElementById('seedVal').textContent = lbl;
+    document.getElementById('rdSeed').textContent = lbl;
+    document.getElementById('rdCount').textContent = String(parts.length);
+  }
+  function syncToggle(){
+    var b = document.getElementById('toggle');
+    b.textContent = state.running ? 'Pause' : 'Resume';
+    b.setAttribute('aria-pressed', String(!state.running));
+    document.getElementById('rdState').textContent = state.running ? 'Drifting' : 'Settled';
+    document.getElementById('readout').classList.toggle('paused', !state.running);
+  }
+
+  /* ---------- controls ---------- */
+  function setSeed(v){
+    state.seed = ((v % 100000) + 100000) % 100000;
+    regenerate();
+    if(!state.running){ state.running = true; syncToggle(); }
+    start();
+  }
+  document.getElementById('seedUp').addEventListener('click', function(){ setSeed(state.seed + 1); });
+  document.getElementById('seedDown').addEventListener('click', function(){ setSeed(state.seed - 1); });
+  var shuffleBtn = document.getElementById('shuffle');
+  shuffleBtn.addEventListener('click', function(){
+    shuffleBtn.classList.remove('spin');
+    void shuffleBtn.offsetWidth;
+    shuffleBtn.classList.add('spin');
+    setSeed(Math.floor(Math.random() * 100000));
+  });
+
+  var scaleEl = document.getElementById('scale');
+  var scaleNum = document.getElementById('scaleNum');
+  function scaleLabel(){ return (state.scale / 10).toFixed(1); }
+  scaleEl.addEventListener('input', function(){
+    state.scale = +scaleEl.value;
+    scaleNum.textContent = scaleLabel();
+  });
+  scaleNum.textContent = scaleLabel();
+
+  var densEl = document.getElementById('density');
+  var densNum = document.getElementById('densNum');
+  densEl.addEventListener('input', function(){
+    state.density = +densEl.value;
+    densNum.textContent = densEl.value;
+    buildParticles();
+  });
+
+  document.getElementById('palettes').addEventListener('click', function(e){
+    var btn = e.target.closest('.sw');
+    if(!btn) return;
+    state.palette = btn.getAttribute('data-pal');
+    [].forEach.call(this.querySelectorAll('.sw'), function(b){
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+    // re-bucket living walkers so the shift reads immediately
+    for(var i=0;i<parts.length;i++) parts[i].b = pickBucket(Math.random());
+  });
+
+  document.getElementById('toggle').addEventListener('click', function(){
+    state.running = !state.running;
+    syncToggle();
+    if(state.running){ if(reduce.matches) state.frame = 0; start(); } else stop();
+  });
+
+  document.getElementById('clear').addEventListener('click', function(){
+    state.frame = 0;
+    paintGround();
+    for(var i=0;i<parts.length;i++) spawn(parts[i], rand);
+    if(!state.running){ state.running = true; syncToggle(); }
+    start();
+  });
+
+  /* ---------- PNG export (stamped copy) ---------- */
+  document.getElementById('save').addEventListener('click', function(){
+    var btn = this, out, octx, pad, url, a;
+    try{
+      out = document.createElement('canvas');
+      out.width = canvas.width; out.height = canvas.height;
+      octx = out.getContext('2d');
+      octx.drawImage(canvas, 0, 0);
+      pad = Math.round(22 * dpr);
+      octx.font = (Math.round(11 * dpr)) + 'px "Instrument Sans", sans-serif';
+      octx.fillStyle = 'rgba(242,233,220,0.55)';
+      octx.textBaseline = 'bottom';
+      octx.fillText('CURRENTS  ·  SEED ' + seedLabel() + '  ·  ' + state.palette.toUpperCase() + '  ·  ' + parts.length + ' WALKERS', pad, out.height - pad);
+      octx.fillStyle = '#FF6B6B';
+      octx.fillRect(pad, out.height - pad - Math.round(26 * dpr), Math.round(24 * dpr), Math.max(1, Math.round(2 * dpr)));
+
+      url = out.toDataURL('image/png');
+      a = document.createElement('a');
+      a.href = url;
+      a.download = 'currents-' + seedLabel().toLowerCase() + '-' + state.palette + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      btn.textContent = 'Saved';
+    }catch(err){
+      btn.textContent = 'Blocked';
+    }
+    setTimeout(function(){ btn.textContent = 'Save PNG'; }, 1800);
+  });
+
+  /* ---------- notes panel ---------- */
+  var notes = document.getElementById('notes');
+  var tab = document.getElementById('notesTab');
+  var scrim = document.getElementById('scrim');
+  var closeBtn = document.getElementById('notesClose');
+  notes.inert = true;
+
+  function setNotes(open){
+    notes.classList.toggle('open', open);
+    tab.setAttribute('aria-expanded', String(open));
+    notes.inert = !open;
+    scrim.hidden = false;
+    scrim.classList.toggle('on', open);
+    if(open) closeBtn.focus(); else tab.focus();
+  }
+  tab.addEventListener('click', function(){ setNotes(!notes.classList.contains('open')); });
+  closeBtn.addEventListener('click', function(){ setNotes(false); });
+  scrim.addEventListener('click', function(){ setNotes(false); });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && notes.classList.contains('open')) setNotes(false);
+  });
+
+  /* ---------- boot ---------- */
+  var railWrap = document.querySelector('.rail-wrap');
+  function syncRailSpace(){
+    var h = Math.round(railWrap.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--rail-space', h + 'px');
+  }
+  if(window.ResizeObserver){ new ResizeObserver(syncRailSpace).observe(railWrap); }
+  syncRailSpace();
+
+  var rt;
+  window.addEventListener('resize', function(){
+    clearTimeout(rt);
+    rt = setTimeout(function(){ syncRailSpace(); resize(); start(); }, 220);
+  });
+
+  resize();
+  syncToggle();
+  start();
+})();
+</script>
+</body>
+</html>

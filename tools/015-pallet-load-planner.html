@@ -1,0 +1,1279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pallet &amp; Trailer Load Planner — cases per pallet, pallets per trailer, load diagrams</title>
+<meta name="description" content="Offline load planning tool: best-fit cases per pallet layer from both case orientations plus split-block patterns, layers capped by stack height and stack weight, pallet positions computed from real trailer internal dimensions (53 ft, 48 ft, 26 ft box), 45,000 lb payload check, scale pallet layer and trailer floor plan diagrams, printable load plan, CSV and JSON export.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Crect x='7' y='7' width='18' height='18' rx='1.5'/%3E%3Cpath d='M16 7v18M7 16h18'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ 015 Pallet & Trailer Load Planner — tool styles ══════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#5A9BE8;--accent-ink:#8FBEF2;--accent-wash:#14243A;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#5A9BE8;--accent-ink:#8FBEF2;--accent-wash:#14243A;--on-accent:#0B1017}
+
+body{padding-bottom:0}
+.app{padding-bottom:40px}
+.appbar{margin:0;padding:11px 0}
+.appbar-in{max-width:1180px;width:100%;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .row{gap:6px}
+.split>*,.stack>*,.card>.bd,.card>.hd,.card>.ft,.build,.fg>*{min-width:0}
+/* the sticky summary travels within its column; anything below it must paint on top
+   so it never swallows clicks on the cards that follow */
+#colResults>.card.sticky{z-index:1}
+#colResults>.card:not(.sticky){position:relative;z-index:2;background:var(--surface)}
+.card{min-width:0;overflow:hidden}
+.tw{max-width:100%}
+.spacer{height:14px}
+.stack.gap{gap:14px}
+
+/* hero */
+.heroes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.stat.hero .v{font-size:32px;line-height:1.05}
+.stat .v small{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:0}
+.stat .u{display:block;margin-top:4px;line-height:1.35}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin-top:10px}
+.statgrid .stat{padding:8px 10px}
+.statgrid .stat .v{font-size:17px}
+.bar{height:9px;border-radius:5px;background:var(--sunk);border:1px solid var(--line);overflow:hidden}
+.bar>span{display:block;height:100%;background:var(--accent)}
+.bar.warn>span{background:var(--warn)} .bar.bad>span{background:var(--bad)}
+.barrow{display:flex;justify-content:space-between;gap:8px;font:600 10.5px/1.3 var(--sans);
+  letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.barrow b{font-family:var(--mono);font-weight:700;color:var(--ink);letter-spacing:0;text-transform:none}
+
+/* forms */
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+.fg.w2{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.f .unit{font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)}
+.samplebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border:1px dashed var(--accent);
+  background:var(--accent-wash);border-radius:4px;font-size:13px;color:var(--accent-ink)}
+.samplebar strong{font-weight:700}
+.samplebar .btn{margin-left:auto}
+
+/* sku table */
+#skuTable td{padding:4px 6px}
+#skuTable input{width:100%}
+#skuTable td.dsc{min-width:170px}
+#skuTable td.nm{min-width:74px}
+#skuTable .btn.ico{color:var(--muted)}
+#skuTable .btn.ico:hover{color:var(--bad);border-color:var(--bad)}
+.rowno{font:600 11px/1 var(--mono);color:var(--faint)}
+
+/* diagrams */
+.builds{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:12px}
+.build{border:1px solid var(--line);border-radius:4px;background:var(--raise);padding:11px;break-inside:avoid}
+.build h3{font-size:13px;margin-bottom:2px}
+.build .meta{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.build .dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:8px;font-size:12.5px}
+.build .dl dt{color:var(--muted)} .build .dl dd{margin:0;font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.diag{margin:9px 0 7px;background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:6px}
+.diag svg{display:block;width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.tflags{display:flex;justify-content:space-between;font:600 10.5px/1 var(--sans);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:8px;align-items:center}
+.legend i{display:inline-block;width:16px;height:11px;margin-right:5px;vertical-align:-1px;border:1.5px solid var(--accent);background:var(--accent-wash)}
+.legend i.free{border-style:dashed;border-color:var(--line-hard);background:transparent}
+.cap{font-size:12.5px;color:var(--muted);margin-top:6px}
+.cap b{color:var(--ink);font-family:var(--mono)}
+
+/* print document */
+.phead{margin-bottom:7mm}
+.pdoc{display:flex;gap:16px;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:5px}
+.ptitle{font:700 21px/1.1 var(--sans);letter-spacing:-.02em}
+.psub{font:12px/1.4 var(--sans);color:#333;margin-top:2px}
+.pmeta{margin-left:auto;text-align:right;font:11px/1.5 var(--mono)}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:4mm 8mm;margin-top:4mm;font-size:11px}
+.pgrid .k{font:600 9px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:#555}
+.pgrid .v{font:12px/1.4 var(--sans)}
+.sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10mm;margin-top:9mm}
+.sig{border-top:1px solid #000;padding-top:3px;font:10px/1.3 var(--sans);color:#333}
+
+.mobonly{display:none}
+@media(max-width:760px){
+  /* the trailer is 6:1 — at phone width the position numbers vanish, so let it
+     scroll sideways at a legible size instead of shrinking to nothing */
+  #trDiag{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #trDiag svg{min-width:620px}
+  .mobonly{display:block}
+}
+@media(max-width:900px){
+  .sticky{position:static}
+  #colResults{order:-1}
+  .split{gap:12px}
+}
+@media(max-width:560px){
+  .appbar .btn{font-size:12px;padding:8px 9px}
+  .stat.hero .v{font-size:27px}
+}
+@media print{
+  .sticky{position:static!important}
+  .app{padding:0}
+  .build{border:1px solid #bbb}
+  .diag{border:0;padding:0}
+  .builds{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+  .samplebar{display:none}
+  .card{margin-bottom:6mm}
+  .note{border-left:3px solid #000;background:#fff!important;border-top:1px solid #bbb;
+    border-right:1px solid #bbb;border-bottom:1px solid #bbb}
+  .statgrid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .heroes{display:grid;grid-template-columns:1fr 1fr}
+  .pagebreak{break-before:page}
+  .tw{overflow:visible!important}
+  #detTable{font-size:8.2pt;table-layout:fixed;width:100%}
+  #detTable th,#detTable td{padding:4px 3px;overflow-wrap:anywhere}
+  #detTable th{white-space:normal;line-height:1.2;font-size:7.4pt;letter-spacing:.03em}
+  #detTable th:nth-child(1),#detTable td:nth-child(1){width:14%}
+  #detTable th:nth-child(2),#detTable td:nth-child(2){width:12%}
+  #detTable th:nth-child(3),#detTable td:nth-child(3){width:6%}
+  #detTable th:nth-child(4),#detTable td:nth-child(4){width:6%}
+  #detTable th:nth-child(5),#detTable td:nth-child(5){width:9%}
+  #detTable th:nth-child(6),#detTable td:nth-child(6){width:6%}
+  #detTable th:nth-child(7),#detTable td:nth-child(7){width:6%}
+  #detTable th:nth-child(8),#detTable td:nth-child(8){width:8%}
+  #detTable th:nth-child(9),#detTable td:nth-child(9){width:6%}
+  #detTable th:nth-child(10),#detTable td:nth-child(10){width:8%}
+  #detTable th:nth-child(11),#detTable td:nth-child(11){width:9%}
+  #detTable th:nth-child(12),#detTable td:nth-child(12){width:9%}
+  #skuTable{display:none}
+  #trDiag{overflow:visible!important}
+  #trDiag svg{min-width:0!important}
+  .mobonly{display:none!important}
+  .card>.hd h2{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<div class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PL</div>
+    <div style="min-width:0">
+      <h1>Pallet &amp; Trailer Load Planner</h1>
+      <div class="sub" id="subline">GMA 48 × 40 in · 53 ft dry van</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">JSON</button>
+    <button type="button" class="btn" id="btnImport">Import</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</div>
+
+<div class="app">
+
+  <!-- ── printed document header ─────────────────────────────── -->
+  <div class="printonly phead">
+    <div class="pdoc">
+      <div>
+        <div class="ptitle">Load Plan</div>
+        <div class="psub">Pallet build pattern, trailer floor plan and payload check</div>
+      </div>
+      <div class="pmeta" id="pMeta"></div>
+    </div>
+    <div class="pgrid" id="pGrid"></div>
+  </div>
+
+  <div class="split">
+
+    <!-- ── inputs ───────────────────────────────────────────── -->
+    <div class="stack gap noprint" id="colInputs">
+
+      <div class="samplebar" id="sampleBar">
+        <strong>Sample data loaded.</strong>
+        <span>Three SKUs on GMA pallets into a 53 ft dry van — overwrite it with your own.</span>
+        <button type="button" class="btn sm" id="btnClearSample">Start blank</button>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Consignment</h2><span class="chip" id="unitChip">Imperial</span></div>
+        <div class="bd stack">
+          <div class="fg w2">
+            <div class="f"><label for="ref">Reference / order no.</label><input id="ref" data-path="ref" data-kind="txt" autocomplete="off"></div>
+            <div class="f"><label for="date">Ship date</label><input id="date" type="date" data-path="date" data-kind="txt"></div>
+            <div class="f"><label for="shipper">Shipper / origin</label><input id="shipper" data-path="shipper" data-kind="txt" autocomplete="off"></div>
+            <div class="f"><label for="consignee">Consignee / destination</label><input id="consignee" data-path="consignee" data-kind="txt" autocomplete="off"></div>
+            <div class="f"><label for="planner">Planned by</label><input id="planner" data-path="planner" data-kind="txt" autocomplete="off"></div>
+            <div class="f"><label for="units">Units</label>
+              <select id="units"><option value="imp">Imperial — inches / lb</option><option value="met">Metric — cm / kg</option></select>
+            </div>
+          </div>
+          <div class="f"><label for="notes">Loading notes (printed on the plan)</label><textarea id="notes" data-path="notes" data-kind="txt"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Pallet &amp; stacking limits</h2></div>
+        <div class="bd stack">
+          <div class="fg w2">
+            <div class="f"><label for="palletPreset">Pallet size</label>
+              <select id="palletPreset">
+                <option value="gma">GMA / US standard — 48 × 40 in</option>
+                <option value="eur1">Euro EUR1 — 120 × 80 cm</option>
+                <option value="eur2">Euro EUR2 / ISO — 120 × 100 cm</option>
+                <option value="aus">Australian — 116.5 × 116.5 cm</option>
+                <option value="half">Half pallet — 48 × 20 in</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f"><label for="pOverhang">Overhang allowed per side <span class="unit" data-u="len"></span></label>
+              <input id="pOverhang" type="number" step="0.25" min="0" data-path="pallet.overhang" data-kind="len"><div class="err" id="e-pallet-overhang" hidden></div></div>
+          </div>
+          <div class="fg">
+            <div class="f"><label for="pL">Pallet length <span class="unit" data-u="len"></span></label>
+              <input id="pL" type="number" step="0.5" min="0" data-path="pallet.L" data-kind="len"><div class="err" id="e-pallet-L" hidden></div></div>
+            <div class="f"><label for="pW">Pallet width <span class="unit" data-u="len"></span></label>
+              <input id="pW" type="number" step="0.5" min="0" data-path="pallet.W" data-kind="len"><div class="err" id="e-pallet-W" hidden></div></div>
+            <div class="f"><label for="pDeck">Pallet deck height <span class="unit" data-u="len"></span></label>
+              <input id="pDeck" type="number" step="0.25" min="0" data-path="pallet.deck" data-kind="len"><div class="err" id="e-pallet-deck" hidden></div></div>
+            <div class="f"><label for="pTare">Empty pallet weight <span class="unit" data-u="wt"></span></label>
+              <input id="pTare" type="number" step="1" min="0" data-path="pallet.tare" data-kind="wt"><div class="err" id="e-pallet-tare" hidden></div></div>
+            <div class="f"><label for="pMaxH">Max load height <span class="unit" data-u="len"></span></label>
+              <input id="pMaxH" type="number" step="1" min="0" data-path="pallet.maxH" data-kind="len"><div class="err" id="e-pallet-maxH" hidden></div></div>
+            <div class="f"><label for="pMaxWt">Max stack weight <span class="unit" data-u="wt"></span></label>
+              <input id="pMaxWt" type="number" step="10" min="0" data-path="pallet.maxWt" data-kind="wt"><div class="err" id="e-pallet-maxWt" hidden></div></div>
+          </div>
+          <p class="hint">Max load height and max stack weight are measured to the top of the load <em>including</em> the pallet itself. Layers are cut to whichever limit bites first.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Cases to load</h2><button type="button" class="btn sm" id="btnAdd">+ Add case line</button></div>
+        <div class="tw">
+          <table id="skuTable">
+            <caption class="printonly" style="text-align:left;font:600 11px var(--sans);padding:4px 0">Case lines</caption>
+            <thead><tr>
+              <th scope="col" style="width:26px">#</th>
+              <th scope="col">Description / SKU</th>
+              <th scope="col" class="n">Length</th>
+              <th scope="col" class="n">Width</th>
+              <th scope="col" class="n">Height</th>
+              <th scope="col" class="n">Unit wt</th>
+              <th scope="col" class="n">Cases</th>
+              <th scope="col" style="width:34px" aria-label="Remove line"></th>
+            </tr></thead>
+            <tbody id="skuBody"></tbody>
+          </table>
+        </div>
+        <div class="ft"><span class="hint" id="skuFoot">—</span></div>
+      </div>
+
+    </div>
+
+    <!-- ── results ──────────────────────────────────────────── -->
+    <div id="colResults" class="stack gap">
+      <div class="card sticky">
+        <div class="hd"><h2>Load summary</h2><span class="chip" id="fitChip">—</span></div>
+        <div class="bd">
+          <div class="heroes">
+            <div class="stat hero">
+              <div class="k">Pallets to load</div>
+              <div class="v" id="hPallets">—</div>
+              <div class="u" id="hPalletsSub">—</div>
+            </div>
+            <div class="stat hero">
+              <div class="k">Trailer holds</div>
+              <div class="v" id="hPositions">—</div>
+              <div class="u" id="hPositionsSub">—</div>
+            </div>
+          </div>
+
+          <div class="statgrid">
+            <div class="stat"><div class="k">Trailers required</div><div class="v" id="sTrailers">—</div></div>
+            <div class="stat"><div class="k">Total cases</div><div class="v" id="sCases">—</div></div>
+            <div class="stat"><div class="k">Load weight</div><div class="v" id="sWeight">—</div></div>
+            <div class="stat"><div class="k">Load volume</div><div class="v" id="sCube">—</div></div>
+          </div>
+
+          <div class="barrow"><span>Payload used — trailer 1</span><b id="bPayTxt">—</b></div>
+          <div class="bar" id="bPay"><span style="width:0"></span></div>
+          <div class="barrow"><span>Floor positions used — trailer 1</span><b id="bPosTxt">—</b></div>
+          <div class="bar" id="bPos"><span style="width:0"></span></div>
+
+          <div id="alerts" class="stack" style="margin-top:12px"></div>
+
+          <div class="note warn" style="margin-top:12px">
+            <strong>Planning aid — not a securement or weight-compliance certificate.</strong>
+            This tool fits rectangles into a rectangle and totals weight. It does not check axle
+            loading or weight distribution, load securement, stacking strength, product crush limits,
+            hazmat segregation, or bridge-formula and state gross-weight limits. Confirm the finished
+            load against FMCSA cargo securement rules (49 CFR 393 Subpart I), your carrier's tariff
+            and a certified scale before the trailer moves.
+          </div>
+        </div>
+        <div class="ft"><span class="hint" id="ftHint">—</span></div>
+      </div>
+      <div class="card noprint">
+        <div class="hd"><h2>Trailer / container</h2></div>
+        <div class="bd stack">
+          <div class="fg w2">
+            <div class="f"><label for="tPreset">Equipment</label>
+              <select id="tPreset">
+                <option value="dv53">53 ft dry van — 636 × 100 × 110 in</option>
+                <option value="dv48">48 ft dry van — 576 × 100 × 108 in</option>
+                <option value="box26">26 ft box truck — 312 × 96 × 96 in</option>
+                <option value="c20">20 ft container — 232 × 92 × 94 in</option>
+                <option value="c40hc">40 ft high cube — 474 × 92 × 105 in</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f"><label for="tPattern">Floor pattern</label>
+              <select id="tPattern">
+                <option value="best">Best fit — most positions</option>
+                <option value="straight">Straight — pallet length fore/aft</option>
+                <option value="turned">Turned / pinwheel — pallet width fore/aft</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg">
+            <div class="f"><label for="tL">Internal length <span class="unit" data-u="len"></span></label>
+              <input id="tL" type="number" step="1" min="0" data-path="trailer.L" data-kind="len"><div class="err" id="e-trailer-L" hidden></div></div>
+            <div class="f"><label for="tW">Internal width <span class="unit" data-u="len"></span></label>
+              <input id="tW" type="number" step="0.5" min="0" data-path="trailer.W" data-kind="len"><div class="err" id="e-trailer-W" hidden></div></div>
+            <div class="f"><label for="tH">Internal height <span class="unit" data-u="len"></span></label>
+              <input id="tH" type="number" step="0.5" min="0" data-path="trailer.H" data-kind="len"><div class="err" id="e-trailer-H" hidden></div></div>
+            <div class="f"><label for="tPay">Payload limit <span class="unit" data-u="wt"></span></label>
+              <input id="tPay" type="number" step="100" min="0" data-path="trailer.payload" data-kind="wt"><div class="err" id="e-trailer-payload" hidden></div></div>
+          </div>
+          <label class="check" for="tDbl"><input type="checkbox" id="tDbl"><span>Double-stack pallets where the interior height allows it (two loaded pallets per floor position)</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="stack gap">
+
+    <div class="card">
+      <div class="hd"><h2>Pallet builds — layer pattern, to scale</h2><span class="chip" id="palChip">—</span></div>
+      <div class="bd"><div class="builds" id="builds"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Trailer floor plan — to scale</h2>
+        <span class="chip" id="trChip">—</span>
+        <label class="lbl" for="trPick" id="trPickLbl" hidden>Trailer</label>
+        <select id="trPick" style="width:auto" hidden></select>
+      </div>
+      <div class="bd">
+        <div class="tflags"><span>&#9664; Nose / bulkhead</span><span>Rear doors &#9654;</span></div>
+        <div class="diag" id="trDiag"></div>
+        <p class="hint mobonly" style="margin-top:6px">Scroll the plan sideways to see the full trailer.</p>
+        <div class="legend">
+          <span><i></i>Loaded position</span>
+          <span><i class="free"></i>Empty position</span>
+          <span id="legNote"></span>
+        </div>
+        <p class="cap" id="trCap">—</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Load plan detail</h2></div>
+      <div class="tw">
+        <table id="detTable">
+          <thead><tr>
+            <th scope="col">Line / SKU</th>
+            <th scope="col">Case L × W × H</th>
+            <th scope="col" class="n">Unit wt</th>
+            <th scope="col" class="n">Cases</th>
+            <th scope="col">Layer pattern</th>
+            <th scope="col" class="n">Per layer</th>
+            <th scope="col" class="n">Layers</th>
+            <th scope="col" class="n">Cases / pallet</th>
+            <th scope="col" class="n">Pallets</th>
+            <th scope="col" class="n">Loaded ht</th>
+            <th scope="col" class="n">Gross / pallet</th>
+            <th scope="col" class="n">Line weight</th>
+          </tr></thead>
+          <tbody id="detBody"></tbody>
+          <tfoot id="detFoot"></tfoot>
+        </table>
+      </div>
+      <div class="ft"><span class="hint">Pallet counts are rounded <strong>up</strong> — a part-filled pallet still takes a floor position and carries its own pallet weight.</span></div>
+    </div>
+
+    <div class="printonly">
+      <div class="pgrid" id="pSpecs"></div>
+      <div class="sigs">
+        <div class="sig">Loaded by (print &amp; sign)</div>
+        <div class="sig">Checked by (print &amp; sign)</div>
+        <div class="sig">Date / time out</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="hint" style="margin-top:18px;border-top:1px solid var(--line);padding-top:10px">
+    Cases are assumed rectangular and stacked in uniform layers (single block or split block) on one pallet size per line;
+    no interlocking, no mixed-SKU pallets, no slip sheets or dunnage allowance. Layers are limited by max load height
+    and max stack weight, both measured including the pallet. Trailer positions are computed from the internal dimensions
+    entered, not looked up: the stock figures — 53 ft dry van 636 × 100 × 110 in (26 positions straight, 30 turned),
+    48 ft 576 × 100 × 108 in (24 straight), 26 ft box 312 × 96 × 96 in (12 straight) — fall out of the same arithmetic.
+    Payload defaults to 45,000 lb, the usual dry-van maximum under an 80,000 lb gross limit. Verify axle weights on a scale.
+  </footer>
+</div>
+
+<script>
+"use strict";
+(function(){
+var KEY='solvix.pallet-load-planner.v1';
+var EPS=1e-9, IN_CM=2.54, LB_KG=2.2046226218;
+var $=function(s,r){return (r||document).querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+
+/* ── unit helpers ─────────────────────────────────────────────── */
+function isMet(){return S.units==='met';}
+function dLen(v){return isMet()? v*IN_CM : v;}                 // canonical in -> display
+function cLen(v){return isMet()? v/IN_CM : v;}                 // display -> canonical in
+function dWt(v){return isMet()? v/LB_KG : v;}                  // canonical lb -> display
+function cWt(v){return isMet()? v*LB_KG : v;}
+function uLen(){return isMet()?'cm':'in';}
+function uWt(){return isMet()?'kg':'lb';}
+function uVol(){return isMet()?'m³':'ft³';}
+function dVol(v){return isMet()? v*0.000016387064 : v/1728;}   // canonical in3
+
+function fnum(v,dp,minDp){
+  if(v===null||v===undefined||typeof v!=='number'||!isFinite(v))return '—';
+  var x=(v===0?0:v);
+  return x.toLocaleString('en-US',{minimumFractionDigits:(minDp==null?0:minDp),maximumFractionDigits:dp});
+}
+function LEN(v,dp){return fnum(dLen(v), dp==null?(isMet()?1:2):dp);}
+function WT(v,dp){return fnum(dWt(v), dp==null?(isMet()?1:1):dp);}
+function WT0(v){return fnum(dWt(v),0);}
+function VOL(v){return fnum(dVol(v),isMet()?2:1);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function pct(a,b){return (b>0)? (a/b*100) : null;}
+
+/* ── presets (canonical inches / lb) ──────────────────────────── */
+var PAL={
+  gma  :{L:48,   W:40,   deck:5.5,  tare:40},
+  eur1 :{L:120/IN_CM, W:80/IN_CM,  deck:14.4/IN_CM, tare:25*LB_KG},
+  eur2 :{L:120/IN_CM, W:100/IN_CM, deck:16.2/IN_CM, tare:33*LB_KG},
+  aus  :{L:116.5/IN_CM,W:116.5/IN_CM,deck:15/IN_CM, tare:40*LB_KG},
+  half :{L:48,   W:20,   deck:5.5,  tare:25}
+};
+var TRL={
+  dv53 :{L:636,W:100,H:110,payload:45000,name:'53 ft dry van'},
+  dv48 :{L:576,W:100,H:108,payload:45000,name:'48 ft dry van'},
+  box26:{L:312,W:96, H:96, payload:10000,name:'26 ft box truck'},
+  c20  :{L:232,W:92, H:94, payload:47900,name:'20 ft container'},
+  c40hc:{L:474,W:92, H:105,payload:58000,name:'40 ft high cube'}
+};
+function trailerName(){var p=S.trailer.preset; return TRL[p]?TRL[p].name:'Custom equipment';}
+function palletName(){
+  var m={gma:'GMA 48 × 40 in',eur1:'Euro EUR1 120 × 80 cm',eur2:'Euro EUR2 120 × 100 cm',
+         aus:'Australian 116.5 × 116.5 cm',half:'Half pallet 48 × 20 in'};
+  return m[S.pallet.preset]||('Custom '+LEN(S.pallet.L)+' × '+LEN(S.pallet.W)+' '+uLen());
+}
+
+/* ── state ────────────────────────────────────────────────────── */
+var seq=1;
+function todayISO(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+function sampleState(){
+  return {units:'imp',sample:true,
+    ref:'SO-48219',date:todayISO(),
+    shipper:'Northline Distribution — Columbus, OH',
+    consignee:'Marks & Co Regional DC — Nashville, TN',
+    planner:'D. Okafor',
+    notes:'Heaviest SKU to the nose. Do not double-stack the juice pallets. Load bars every 4 rows.',
+    pallet:{preset:'gma',L:48,W:40,deck:5.5,tare:40,maxH:96,maxWt:2200,overhang:0},
+    trailer:{preset:'dv53',L:636,W:100,H:110,payload:45000,pattern:'best',dbl:false},
+    skus:[
+      {id:seq++,desc:'Juice 1 L × 12 — SKU 40218',L:12,W:10,H:10,wt:26,qty:960},
+      {id:seq++,desc:'Paper towel 6 pk — SKU 71130',L:24,W:16,H:12,wt:11,qty:96},
+      {id:seq++,desc:'Soup 24 ct — SKU 55402',L:16,W:12,H:10,wt:28,qty:210}
+    ]};
+}
+function blankState(){
+  var s=sampleState();
+  s.sample=false; s.ref=''; s.shipper=''; s.consignee=''; s.planner=''; s.notes='';
+  s.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+  return s;
+}
+var S=sampleState();
+var viewTrailer=0;
+
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object') return false;
+    S=merge(sampleState(),o);
+    S.skus=(Array.isArray(o.skus)?o.skus:[]).map(function(r){
+      return {id:seq++,desc:String(r&&r.desc||''),L:n(r&&r.L),W:n(r&&r.W),H:n(r&&r.H),wt:n(r&&r.wt),qty:n(r&&r.qty)};
+    });
+    if(!S.skus.length) S.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+    return true;
+  }catch(e){ return false; }
+}
+function n(v){var x=parseFloat(v); return (isFinite(x)&&x>=0)?x:0;}
+function merge(base,o){
+  var out=JSON.parse(JSON.stringify(base));
+  ['units','ref','date','shipper','consignee','planner','notes'].forEach(function(k){
+    if(typeof o[k]==='string') out[k]=o[k]; });
+  out.sample = o.sample===true;
+  if(o.pallet&&typeof o.pallet==='object'){
+    ['L','W','deck','tare','maxH','maxWt','overhang'].forEach(function(k){
+      if(o.pallet[k]!=null) out.pallet[k]=n(o.pallet[k]); });
+    if(typeof o.pallet.preset==='string') out.pallet.preset=o.pallet.preset;
+  }
+  if(o.trailer&&typeof o.trailer==='object'){
+    ['L','W','H','payload'].forEach(function(k){ if(o.trailer[k]!=null) out.trailer[k]=n(o.trailer[k]); });
+    if(typeof o.trailer.preset==='string') out.trailer.preset=o.trailer.preset;
+    if(typeof o.trailer.pattern==='string') out.trailer.pattern=o.trailer.pattern;
+    out.trailer.dbl = o.trailer.dbl===true;
+  }
+  if(out.units!=='met') out.units='imp';
+  return out;
+}
+
+/* ── packing engine ───────────────────────────────────────────── */
+function fl(x){return Math.floor(x+EPS);}
+function packBlock(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var nx=fl(PL/a), ny=fl(PW/b), r=[],i,j;
+  if(nx<1||ny<1) return {count:0,rects:[]};
+  for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b});
+  return {count:nx*ny,rects:r};
+}
+function packSplitL(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var r=[],cnt=0,i,j;
+  var nx=fl(PL/a), ny=fl(PW/b);
+  if(nx>=1&&ny>=1){ for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b}); cnt=nx*ny; }
+  var used=Math.max(nx,0)*a, rl=PL-used;
+  var nx2=fl(rl/b), ny2=fl(PW/a);
+  if(nx2>=1&&ny2>=1){ for(j=0;j<ny2;j++) for(i=0;i<nx2;i++) r.push({x:used+i*b,y:j*a,w:b,h:a}); cnt+=nx2*ny2; }
+  return {count:cnt,rects:r};
+}
+function packSplitW(PL,PW,a,b){
+  if(!(a>0&&b>0&&PL>0&&PW>0)) return {count:0,rects:[]};
+  var r=[],cnt=0,i,j;
+  var nx=fl(PL/a), ny=fl(PW/b);
+  if(nx>=1&&ny>=1){ for(j=0;j<ny;j++) for(i=0;i<nx;i++) r.push({x:i*a,y:j*b,w:a,h:b}); cnt=nx*ny; }
+  var used=Math.max(ny,0)*b, rw=PW-used;
+  var nx2=fl(PL/b), ny2=fl(rw/a);
+  if(nx2>=1&&ny2>=1){ for(j=0;j<ny2;j++) for(i=0;i<nx2;i++) r.push({x:i*b,y:used+j*a,w:b,h:a}); cnt+=nx2*ny2; }
+  return {count:cnt,rects:r};
+}
+/* best of: both pure orientations first (the classic check), then split blocks */
+function bestPack(PL,PW,a,b){
+  var cand=[
+    {label:'Block — lengthwise', p:packBlock(PL,PW,a,b)},
+    {label:'Block — turned',     p:packBlock(PL,PW,b,a)},
+    {label:'Split block',             p:packSplitL(PL,PW,a,b)},
+    {label:'Split block',             p:packSplitL(PL,PW,b,a)},
+    {label:'Split block',             p:packSplitW(PL,PW,a,b)},
+    {label:'Split block',             p:packSplitW(PL,PW,b,a)}
+  ];
+  var best=cand[0];
+  for(var i=1;i<cand.length;i++) if(cand[i].p.count>best.p.count) best=cand[i];
+  return {label:best.label,count:best.p.count,rects:best.p.rects,
+          straight:cand[0].p.count, turned:cand[1].p.count};
+}
+
+/* ── computation ──────────────────────────────────────────────── */
+function compute(){
+  var P=S.pallet, T=S.trailer;
+  var oh=P.overhang||0;
+  var uL=P.L+2*oh, uW=P.W+2*oh;
+  var R={lines:[],warn:[],bad:[]};
+  var palletList=[];
+  var maxLoadH=0;
+
+  R.lines=S.skus.map(function(s,idx){
+    var fit=bestPack(uL,uW,s.L,s.W);
+    var perLayer=fit.count;
+    var hAvail=P.maxH-P.deck;
+    var maxLayH=(s.H>0&&hAvail>0)? fl(hAvail/s.H) : 0;
+    var layerWt=perLayer*s.wt;
+    var wAvail=P.maxWt-P.tare;
+    var maxLayW=(layerWt>0)? ((wAvail>0)? fl(wAvail/layerWt) : 0) : Infinity;
+    var layers=Math.min(maxLayH,maxLayW); if(!isFinite(layers)) layers=maxLayH;
+    layers=Math.max(0,layers);
+    var cpp=perLayer*layers;
+    var pallets=(cpp>0)? Math.ceil(s.qty/cpp-EPS) : null;
+    var full=(cpp>0)? fl(s.qty/cpp) : 0;
+    var rem=(cpp>0)? s.qty-full*cpp : 0;
+    var loadH=P.deck+layers*s.H;
+    var gross=P.tare+cpp*s.wt;
+    var lineWt=s.qty*s.wt+((pallets||0)*P.tare);
+    var cube=s.qty*s.L*s.W*s.H;
+    var limitedBy=(perLayer===0||layers===0)?'—':(maxLayH<=maxLayW?'height':'weight');
+    var o={i:idx,s:s,fit:fit,perLayer:perLayer,layers:layers,maxLayH:maxLayH,
+      maxLayW:isFinite(maxLayW)?maxLayW:null,cpp:cpp,pallets:pallets,full:full,rem:rem,
+      loadH:loadH,gross:gross,lineWt:lineWt,cube:cube,limitedBy:limitedBy,
+      partialH:(perLayer>0&&rem>0)?(P.deck+Math.ceil(rem/perLayer-EPS)*s.H):0,
+      partialWt:P.tare+rem*s.wt};
+    if(s.L>0&&s.W>0&&perLayer===0)
+      R.bad.push('Line '+(idx+1)+': the case footprint is larger than the usable pallet footprint — nothing fits.');
+    if(cpp>0&&loadH>T.H+EPS)
+      R.bad.push('Line '+(idx+1)+': loaded pallet is '+LEN(loadH)+' '+uLen()+' tall — taller than the '+LEN(T.H)+' '+uLen()+' interior height.');
+    if(cpp>0&&s.qty>0){
+      var k;
+      for(k=0;k<full;k++) palletList.push({line:idx,cases:cpp,wt:gross,h:loadH,part:false});
+      if(rem>0) palletList.push({line:idx,cases:rem,wt:o.partialWt,h:o.partialH,part:true});
+      maxLoadH=Math.max(maxLoadH,loadH);
+    }
+    return o;
+  });
+
+  /* trailer floor */
+  var fpL=P.L+2*oh, fpW=P.W+2*oh;
+  var tb=bestPack(T.L,T.W,fpL,fpW);
+  var straightP=packBlock(T.L,T.W,fpL,fpW);
+  var turnedP  =packBlock(T.L,T.W,fpW,fpL);
+  var chosen, label;
+  if(T.pattern==='straight'){ chosen=straightP; label='Straight'; }
+  else if(T.pattern==='turned'){ chosen=turnedP; label='Turned / pinwheel'; }
+  else {
+    chosen={count:tb.count,rects:tb.rects};
+    label = tb.label==='Block — lengthwise' ? 'Straight'
+          : tb.label==='Block — turned' ? 'Turned / pinwheel' : 'Split block';
+  }
+  var rects=chosen.rects.slice().sort(function(a,b){return (a.x-b.x)||(a.y-b.y);});
+  R.positions=chosen.count; R.posLabel=label; R.rects=rects;
+  R.straight=straightP.count; R.turned=turnedP.count; R.bestPositions=tb.count;
+
+  var tiers=1;
+  if(T.dbl&&maxLoadH>0&&T.H>0&&2*maxLoadH<=T.H+EPS) tiers=2;
+  R.tiers=tiers; R.stackable=(maxLoadH>0&&T.H>0&&2*maxLoadH<=T.H+EPS);
+  R.capacity=R.positions*tiers;
+
+  /* fill trailers */
+  var trailers=[];
+  if(R.capacity>=1){
+    var cur={pallets:[],wt:0};
+    palletList.forEach(function(p){
+      var overCount=cur.pallets.length>=R.capacity;
+      var overWt=(T.payload>0)&&(cur.pallets.length>0)&&(cur.wt+p.wt>T.payload+EPS);
+      if(overCount||overWt){ trailers.push(cur); cur={pallets:[],wt:0}; }
+      cur.pallets.push(p); cur.wt+=p.wt;
+    });
+    if(cur.pallets.length) trailers.push(cur);
+  }
+  R.trailers=trailers;
+  R.palletList=palletList;
+  R.totalPallets=palletList.length;
+  R.totalCases=S.skus.reduce(function(a,s){return a+s.qty;},0);
+  R.totalWeight=R.lines.reduce(function(a,l){return a+(isFinite(l.lineWt)?l.lineWt:0);},0);
+  R.totalCube=R.lines.reduce(function(a,l){return a+l.cube;},0);
+  R.trailerCube=T.L*T.W*T.H;
+  R.trailersNeeded=(R.capacity>=1)? trailers.length : null;
+
+  if(R.capacity<1&&R.totalPallets>0)
+    R.bad.push('The pallet footprint does not fit inside the trailer interior — check the trailer dimensions.');
+  if(T.dbl&&!R.stackable&&R.totalPallets>0)
+    R.warn.push('Double-stacking is switched on but the tallest loaded pallet is '+LEN(maxLoadH)+' '+uLen()+
+      ' — two will not fit under the '+LEN(T.H)+' '+uLen()+' interior height, so one tier is planned.');
+  if(R.trailersNeeded&&R.trailersNeeded>1)
+    R.warn.push('This consignment does not fit one load: '+R.trailersNeeded+' trailers are required at '+
+      fnum(R.capacity,0)+' positions and '+WT0(T.payload)+' '+uWt()+' payload each.');
+  R.maxLoadH=maxLoadH;
+  return R;
+}
+
+/* ── SVG diagrams ─────────────────────────────────────────────── */
+function svgRect(x,y,w,h,fill,stroke,sw,dash){
+  return '<rect x="'+r3(x)+'" y="'+r3(y)+'" width="'+r3(w)+'" height="'+r3(h)+'" fill="'+fill+
+    '" stroke="'+stroke+'" stroke-width="'+r3(sw)+'"'+(dash?' stroke-dasharray="'+r3(dash)+'"':'')+
+    ' stroke-linejoin="miter"/>';
+}
+function r3(v){return Math.round(v*1000)/1000;}
+function svgText(x,y,size,txt,fill,weight){
+  return '<text x="'+r3(x)+'" y="'+r3(y)+'" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="'+
+    r3(size)+'" font-weight="'+(weight||600)+'" fill="'+fill+'" text-anchor="middle" dominant-baseline="central">'+esc(txt)+'</text>';
+}
+function layerSVG(l){
+  var P=S.pallet, oh=P.overhang||0;
+  var uL=P.L+2*oh, uW=P.W+2*oh;
+  if(!(uL>0&&uW>0)) return '<p class="hint">Enter pallet dimensions to draw the layer.</p>';
+  var pad=Math.max(uL,uW)*0.03;
+  var sw=Math.max(uL,uW)/170;
+  var out='<svg viewBox="'+r3(-pad)+' '+r3(-pad)+' '+r3(uL+2*pad)+' '+r3(uW+2*pad)+
+    '" role="img" aria-label="Pallet layer pattern, '+l.perLayer+' cases per layer">';
+  if(oh>0) out+=svgRect(0,0,uL,uW,'none','var(--faint)',sw,sw*3);
+  out+=svgRect(oh,oh,P.L,P.W,'var(--sunk)','var(--line-hard)',sw*1.4);
+  l.fit.rects.forEach(function(r,i){
+    out+=svgRect(r.x,r.y,r.w,r.h,'var(--accent-wash)','var(--accent)',sw*1.2);
+    var fs=Math.min(r.w,r.h)*0.44;
+    if(fs>=uL/30) out+=svgText(r.x+r.w/2,r.y+r.h/2,fs,String(i+1),'var(--accent-ink)');
+  });
+  out+='</svg>';
+  return out;
+}
+function trailerSVG(R,idx){
+  var T=S.trailer;
+  if(!(T.L>0&&T.W>0)) return '<p class="hint">Enter trailer dimensions to draw the floor plan.</p>';
+  var pad=T.W*0.06, sw=T.L/430;
+  var load=(R.trailers[idx]&&R.trailers[idx].pallets)||[];
+  var pos=R.positions||0;
+  var perPos=[];
+  for(var k=0;k<load.length;k++){ var pi=(pos>0)? (k%pos) : 0; perPos[pi]=(perPos[pi]||0)+1; }
+  var out='<svg viewBox="'+r3(-pad)+' '+r3(-pad)+' '+r3(T.L+2*pad)+' '+r3(T.W+2*pad)+
+    '" role="img" aria-label="Trailer floor plan, '+load.length+' of '+R.capacity+' positions loaded">';
+  out+=svgRect(0,0,T.L,T.W,'var(--surface)','var(--ink-2)',sw*2.4);
+  out+='<line x1="'+r3(T.L)+'" y1="0" x2="'+r3(T.L)+'" y2="'+r3(T.W)+'" stroke="var(--bad)" stroke-width="'+r3(sw*3)+'"/>';
+  R.rects.forEach(function(r,i){
+    var cnt=perPos[i]||0;
+    if(cnt>0){
+      out+=svgRect(r.x,r.y,r.w,r.h,'var(--accent-wash)','var(--accent)',sw*1.8);
+      var fs=Math.min(r.w,r.h)*0.34;
+      out+=svgText(r.x+r.w/2,r.y+r.h/2,fs,String(i+1)+(cnt>1?'×'+cnt:''),'var(--accent-ink)');
+    }else{
+      out+=svgRect(r.x,r.y,r.w,r.h,'none','var(--line-hard)',sw*1.2,sw*4);
+    }
+  });
+  out+='</svg>';
+  return out;
+}
+
+/* ── rendering ────────────────────────────────────────────────── */
+function setVal(id,v){var el=document.getElementById(id); if(el&&el.value!==String(v)) el.value=v;}
+function inpLen(v){return fnum(dLen(v),isMet()?2:3,0).replace(/,/g,'');}
+function inpWt(v){return fnum(dWt(v),isMet()?2:2,0).replace(/,/g,'');}
+
+function renderInputs(){
+  $$('[data-u="len"]').forEach(function(e){e.textContent='('+uLen()+')';});
+  $$('[data-u="wt"]').forEach(function(e){e.textContent='('+uWt()+')';});
+  $('#units').value=S.units;
+  $('#unitChip').textContent=isMet()?'Metric':'Imperial';
+  setVal('ref',S.ref); setVal('date',S.date); setVal('shipper',S.shipper);
+  setVal('consignee',S.consignee); setVal('planner',S.planner);
+  var nt=$('#notes'); if(nt.value!==S.notes) nt.value=S.notes;
+  setVal('pL',inpLen(S.pallet.L)); setVal('pW',inpLen(S.pallet.W));
+  setVal('pDeck',inpLen(S.pallet.deck)); setVal('pTare',inpWt(S.pallet.tare));
+  setVal('pMaxH',inpLen(S.pallet.maxH)); setVal('pMaxWt',inpWt(S.pallet.maxWt));
+  setVal('pOverhang',inpLen(S.pallet.overhang));
+  setVal('tL',inpLen(S.trailer.L)); setVal('tW',inpLen(S.trailer.W));
+  setVal('tH',inpLen(S.trailer.H)); setVal('tPay',inpWt(S.trailer.payload));
+  $('#palletPreset').value=S.pallet.preset; $('#tPreset').value=S.trailer.preset;
+  $('#tPattern').value=S.trailer.pattern; $('#tDbl').checked=!!S.trailer.dbl;
+  $('#sampleBar').hidden=!S.sample;
+}
+function renderRows(){
+  var tb=$('#skuBody'); tb.innerHTML='';
+  S.skus.forEach(function(s,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td class="rowno">'+(i+1)+'</td>'+
+      '<td class="dsc"><input aria-label="Description, line '+(i+1)+'" data-i="'+i+'" data-f="desc" value="'+esc(s.desc)+'" autocomplete="off"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case length, line '+(i+1)+'" data-i="'+i+'" data-f="L" value="'+inpLen(s.L)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case width, line '+(i+1)+'" data-i="'+i+'" data-f="W" value="'+inpLen(s.W)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.25" min="0" aria-label="Case height, line '+(i+1)+'" data-i="'+i+'" data-f="H" value="'+inpLen(s.H)+'"></td>'+
+      '<td class="nm"><input type="number" step="0.1" min="0" aria-label="Unit weight, line '+(i+1)+'" data-i="'+i+'" data-f="wt" value="'+inpWt(s.wt)+'"></td>'+
+      '<td class="nm"><input type="number" step="1" min="0" aria-label="Case count, line '+(i+1)+'" data-i="'+i+'" data-f="qty" value="'+fnum(s.qty,0).replace(/,/g,'')+'"></td>'+
+      '<td><button type="button" class="btn ico sm" data-del="'+i+'" aria-label="Remove line '+(i+1)+'">✕</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function alertHTML(R){
+  var h='';
+  R.bad.forEach(function(m){h+='<div class="note bad">'+esc(m)+'</div>';});
+  R.warn.forEach(function(m){h+='<div class="note warn">'+esc(m)+'</div>';});
+  return h;
+}
+function render(){
+  var R=compute(); var T=S.trailer, P=S.pallet;
+  $('#subline').textContent=palletName()+' · '+trailerName();
+
+  var haveLoad=R.totalPallets>0;
+  $('#hPallets').textContent=haveLoad?fnum(R.totalPallets,0):'—';
+  $('#hPalletsSub').textContent=haveLoad
+    ? (fnum(R.totalCases,0)+' cases · '+WT0(R.totalWeight)+' '+uWt()+' total')
+    : 'Add case dimensions and a case count';
+  $('#hPositions').innerHTML=(R.positions>0? fnum(R.capacity,0)+' <small>positions</small>' : '—');
+  $('#hPositionsSub').textContent=(R.positions>0)
+    ? (R.posLabel+' pattern in a '+trailerName()+(R.tiers>1?' · 2 tiers high':'')+
+       ' · straight '+R.straight+' / turned '+R.turned)
+    : 'Pallet does not fit this trailer';
+
+  $('#sTrailers').textContent=(R.trailersNeeded==null)?'—':fnum(R.trailersNeeded,0);
+  $('#sCases').textContent=fnum(R.totalCases,0);
+  $('#sWeight').innerHTML=(haveLoad? WT0(R.totalWeight)+' <small>'+uWt()+'</small>' : '—');
+  $('#sCube').innerHTML=(R.totalCube>0? VOL(R.totalCube)+' <small>'+uVol()+'</small>' : '—');
+
+  var t1=R.trailers[0]||{pallets:[],wt:0};
+  var payPct=pct(t1.wt,T.payload), posPct=pct(t1.pallets.length,R.capacity);
+  setBar('#bPay','#bPayTxt',payPct,(haveLoad? WT0(t1.wt)+' / '+WT0(T.payload)+' '+uWt() : '—'));
+  setBar('#bPos','#bPosTxt',posPct,(R.capacity>0? fnum(t1.pallets.length,0)+' / '+fnum(R.capacity,0) : '—'));
+
+  var chip=$('#fitChip');
+  if(!haveLoad){ chip.className='chip'; chip.textContent='No load'; }
+  else if(R.bad.length){ chip.className='chip bad'; chip.textContent='Will not load'; }
+  else if(R.trailersNeeded>1){ chip.className='chip warn'; chip.textContent=R.trailersNeeded+' trailers'; }
+  else if(payPct!=null&&payPct>100){ chip.className='chip bad'; chip.textContent='Over payload'; }
+  else { chip.className='chip ok'; chip.textContent='Fits 1 trailer'; }
+
+  $('#alerts').innerHTML=alertHTML(R);
+  $('#ftHint').innerHTML='Payload limit '+WT0(T.payload)+' '+uWt()+' · interior '+LEN(T.L)+' × '+LEN(T.W)+' × '+LEN(T.H)+' '+uLen()+
+    ' · max stack '+LEN(P.maxH)+' '+uLen()+' / '+WT0(P.maxWt)+' '+uWt();
+
+  /* builds */
+  var b=$('#builds'); var html='';
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    var name=s.desc?esc(s.desc):('Line '+(i+1));
+    html+='<div class="build"><h3>'+(i+1)+'. '+name+'</h3>'+
+      '<div class="meta">Case '+LEN(s.L)+' × '+LEN(s.W)+' × '+LEN(s.H)+' '+uLen()+' · '+WT(s.wt)+' '+uWt()+'</div>'+
+      '<div class="diag">'+layerSVG(l)+'</div>'+
+      '<div class="meta">'+(l.perLayer>0? l.fit.label+' · '+l.perLayer+' per layer on '+LEN(P.L)+' × '+LEN(P.W)+' '+uLen()
+         : 'Case does not fit the pallet footprint')+'</div>'+
+      '<dl class="dl">'+
+        '<dt>Cases per layer</dt><dd>'+(l.perLayer||'—')+'</dd>'+
+        '<dt>Layers high</dt><dd>'+(l.layers||'—')+'</dd>'+
+        '<dt>Cases per pallet</dt><dd>'+(l.cpp||'—')+'</dd>'+
+        '<dt>Loaded height</dt><dd>'+(l.cpp?LEN(l.loadH)+' '+uLen():'—')+'</dd>'+
+        '<dt>Gross per pallet</dt><dd>'+(l.cpp?WT0(l.gross)+' '+uWt():'—')+'</dd>'+
+        '<dt>Pallets</dt><dd>'+(l.pallets==null?'—':fnum(l.pallets,0)+(l.rem>0?' ('+l.full+' full + '+l.rem+' cases)':''))+'</dd>'+
+        '<dt>Cut by</dt><dd>'+(l.limitedBy==='height'?'stack height':l.limitedBy==='weight'?'stack weight':'—')+'</dd>'+
+      '</dl></div>';
+  });
+  b.innerHTML=html||'<p class="empty">Add a case line to see the pallet build.</p>';
+  $('#palChip').textContent=(R.lines.length||0)+' build'+(R.lines.length===1?'':'s');
+
+  /* trailer plan */
+  if(viewTrailer>=Math.max(R.trailers.length,1)) viewTrailer=0;
+  var pick=$('#trPick'), lbl=$('#trPickLbl'), many=R.trailers.length>1;
+  pick.hidden=!many; lbl.hidden=!many;
+  if(many){
+    var o=''; for(var i=0;i<R.trailers.length;i++) o+='<option value="'+i+'">Trailer '+(i+1)+' of '+R.trailers.length+'</option>';
+    pick.innerHTML=o; pick.value=String(viewTrailer);
+  }
+  $('#trDiag').innerHTML=trailerSVG(R,viewTrailer);
+  var tv=R.trailers[viewTrailer]||{pallets:[],wt:0};
+  $('#trChip').textContent=(R.positions>0? R.posLabel+' · '+R.positions+' floor positions' : 'No fit');
+  $('#legNote').textContent=(R.tiers>1?'×2 marks a double-stacked position.':'');
+  $('#trCap').innerHTML='Trailer '+(viewTrailer+1)+(R.trailers.length>1?' of '+R.trailers.length:'')+
+    ': <b>'+fnum(tv.pallets.length,0)+'</b> pallets on <b>'+fnum(R.positions,0)+'</b> floor positions'+
+    (R.tiers>1?' (2 tiers)':'')+', <b>'+WT0(tv.wt)+' '+uWt()+'</b> of <b>'+WT0(T.payload)+' '+uWt()+'</b> payload. '+
+    'Interior '+LEN(T.L)+' × '+LEN(T.W)+' × '+LEN(T.H)+' '+uLen()+
+    ' — straight '+R.straight+' positions, turned '+R.turned+', best fit '+R.bestPositions+'.';
+
+  /* detail table */
+  var body=$('#detBody'), foot=$('#detFoot'); var rows='';
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    rows+='<tr><td>'+(i+1)+'. '+(s.desc?esc(s.desc):'<span class="hint">(unnamed)</span>')+'</td>'+
+      '<td class="n">'+LEN(s.L)+' × '+LEN(s.W)+' × '+LEN(s.H)+'</td>'+
+      '<td class="n">'+WT(s.wt)+'</td>'+
+      '<td class="n">'+fnum(s.qty,0)+'</td>'+
+      '<td>'+(l.perLayer>0?esc(l.fit.label):'—')+'</td>'+
+      '<td class="n">'+(l.perLayer||'—')+'</td>'+
+      '<td class="n">'+(l.layers||'—')+'</td>'+
+      '<td class="n">'+(l.cpp||'—')+'</td>'+
+      '<td class="n">'+(l.pallets==null?'—':fnum(l.pallets,0))+'</td>'+
+      '<td class="n">'+(l.cpp?LEN(l.loadH):'—')+'</td>'+
+      '<td class="n">'+(l.cpp?WT0(l.gross):'—')+'</td>'+
+      '<td class="n">'+(l.lineWt>0?WT0(l.lineWt):'—')+'</td></tr>';
+  });
+  body.innerHTML=rows||'<tr><td colspan="12" class="empty">No case lines yet.</td></tr>';
+  foot.innerHTML=R.lines.length?
+    '<tr><td colspan="3">Totals ('+uLen()+' / '+uWt()+')</td>'+
+    '<td class="n">'+fnum(R.totalCases,0)+'</td><td colspan="4"></td>'+
+    '<td class="n">'+fnum(R.totalPallets,0)+'</td><td class="n"></td><td class="n"></td>'+
+    '<td class="n">'+WT0(R.totalWeight)+'</td></tr>':'';
+
+  $('#skuFoot').textContent=S.skus.length+' case line'+(S.skus.length===1?'':'s')+' · '+
+    fnum(R.totalCases,0)+' cases · '+WT0(R.totalWeight)+' '+uWt()+' incl. pallets';
+
+  renderPrint(R);
+  return R;
+}
+function setBar(barSel,txtSel,p,txt){
+  var bar=$(barSel), span=bar.firstElementChild;
+  var v=(p==null||!isFinite(p))?0:Math.max(0,Math.min(100,p));
+  span.style.width=v+'%';
+  bar.className='bar'+((p!=null&&p>100)?' bad':(p!=null&&p>90)?' warn':'');
+  $(txtSel).textContent=txt+((p==null||!isFinite(p))?'':'  ('+fnum(p,1)+'%)');
+}
+function renderPrint(R){
+  $('#pMeta').innerHTML=esc(S.ref||'—')+'<br>'+esc(S.date||'')+'<br>Printed '+esc(todayISO());
+  function cell(k,v){return '<div><div class="k">'+esc(k)+'</div><div class="v">'+esc(v||'—')+'</div></div>';}
+  $('#pGrid').innerHTML=
+    cell('Shipper / origin',S.shipper)+cell('Consignee / destination',S.consignee)+
+    cell('Planned by',S.planner)+cell('Equipment',trailerName()+' — interior '+LEN(S.trailer.L)+' × '+LEN(S.trailer.W)+' × '+LEN(S.trailer.H)+' '+uLen())+
+    (S.notes?('<div style="grid-column:1/-1"><div class="k">Loading notes</div><div class="v">'+esc(S.notes)+'</div></div>'):'');
+  $('#pSpecs').innerHTML=
+    cell('Pallet',palletName()+' · deck '+LEN(S.pallet.deck)+' '+uLen()+' · tare '+WT(S.pallet.tare)+' '+uWt())+
+    cell('Stack limits','max '+LEN(S.pallet.maxH)+' '+uLen()+' high, '+WT0(S.pallet.maxWt)+' '+uWt()+' gross'+
+      (S.pallet.overhang>0?(' · overhang '+LEN(S.pallet.overhang)+' '+uLen()+' per side'):' · no overhang'))+
+    cell('Floor pattern',R.posLabel+' — '+R.positions+' positions'+(R.tiers>1?' × 2 tiers':'')+
+      ' (straight '+R.straight+', turned '+R.turned+')')+
+    cell('Payload','load '+WT0(R.totalWeight)+' '+uWt()+' against '+WT0(S.trailer.payload)+' '+uWt()+' limit');
+}
+
+/* ── input wiring ─────────────────────────────────────────────── */
+function pathSet(p,val){
+  var parts=p.split('.');
+  if(parts.length===1){ S[parts[0]]=val; } else { S[parts[0]][parts[1]]=val; }
+}
+function pathGet(p){var parts=p.split('.'); return parts.length===1?S[parts[0]]:S[parts[0]][parts[1]];}
+function onField(e){
+  var el=e.target, p=el.getAttribute('data-path'); if(!p) return;
+  var kind=el.getAttribute('data-kind');
+  if(kind==='txt'){ pathSet(p,el.value); }
+  else{
+    var raw=parseFloat(el.value);
+    var v=(isFinite(raw)&&raw>=0)?raw:0;
+    pathSet(p, kind==='len'?cLen(v): kind==='wt'?cWt(v): v);
+    if(p.indexOf('pallet.')===0&&/\.(L|W|deck|tare)$/.test(p)){ S.pallet.preset='custom'; $('#palletPreset').value='custom'; }
+    if(p.indexOf('trailer.')===0){ S.trailer.preset='custom'; $('#tPreset').value='custom'; }
+  }
+  touch(); update();
+}
+function validateField(el){
+  var p=el.getAttribute('data-path'); if(!p) return;
+  var kind=el.getAttribute('data-kind'); if(kind==='txt') return;
+  var box=document.getElementById('e-'+p.replace('.','-'));
+  var raw=el.value.trim(), v=parseFloat(raw);
+  var optional=/overhang/.test(p);
+  var msg='';
+  if(raw===''||!isFinite(v)) msg=optional?'':'Enter a number.';
+  else if(v<0) msg='Cannot be negative.';
+  else if(v===0&&!optional) msg='Must be greater than zero.';
+  el.classList.toggle('inv',!!msg);
+  if(box){ box.textContent=msg; box.hidden=!msg; }
+}
+function onRow(e){
+  var el=e.target, i=el.getAttribute('data-i'); if(i===null) return;
+  var f=el.getAttribute('data-f'), s=S.skus[+i]; if(!s) return;
+  if(f==='desc'){ s.desc=el.value; }
+  else{
+    var raw=parseFloat(el.value); var v=(isFinite(raw)&&raw>=0)?raw:0;
+    s[f]=(f==='qty')? Math.round(v) : (f==='wt'? cWt(v) : cLen(v));
+    el.classList.toggle('inv', el.value.trim()!==''&&!(isFinite(raw)&&raw>=0));
+  }
+  touch(); update();
+}
+function touch(){ if(S.sample){ S.sample=false; $('#sampleBar').hidden=true; } }
+function update(){ render(); save(); }
+
+/* ── exports ──────────────────────────────────────────────────── */
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+  }catch(err){ /* never break the page */ }
+}
+function csvCell(v){ v=(v==null)?'':String(v);
+  return /[",\r\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+/* CSV numbers carry no thousands separators so spreadsheets read them as numbers */
+function rnum(v,dp){
+  if(v==null||typeof v!=='number'||!isFinite(v)) return '';
+  var x=(v===0?0:v), s=x.toFixed(dp);
+  if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
+function toCSV(){
+  var R=compute(), T=S.trailer, P=S.pallet, rows=[];
+  rows.push(['Solvix Pallet & Trailer Load Planner']);
+  rows.push(['Reference',S.ref],['Ship date',S.date],['Shipper',S.shipper],['Consignee',S.consignee],
+            ['Planned by',S.planner],['Units',isMet()?'metric (cm / kg)':'imperial (in / lb)'],['Generated',todayISO()]);
+  rows.push([]);
+  rows.push(['Pallet','size',palletName(),'length ('+uLen()+')',rnum(dLen(P.L),3),'width ('+uLen()+')',rnum(dLen(P.W),3)]);
+  rows.push(['Pallet','deck height ('+uLen()+')',rnum(dLen(P.deck),3),'tare ('+uWt()+')',rnum(dWt(P.tare),2),
+             'overhang per side ('+uLen()+')',rnum(dLen(P.overhang),3)]);
+  rows.push(['Pallet','max load height ('+uLen()+')',rnum(dLen(P.maxH),3),'max stack weight ('+uWt()+')',rnum(dWt(P.maxWt),2)]);
+  rows.push(['Trailer',trailerName(),'internal L ('+uLen()+')',rnum(dLen(T.L),3),'W',rnum(dLen(T.W),3),'H',rnum(dLen(T.H),3),
+             'payload ('+uWt()+')',rnum(dWt(T.payload),2)]);
+  rows.push(['Trailer','floor pattern',R.posLabel,'positions',R.positions,'tiers',R.tiers,
+             'straight',R.straight,'turned',R.turned]);
+  rows.push([]);
+  rows.push(['Line','Description','Case L ('+uLen()+')','Case W','Case H','Unit wt ('+uWt()+')','Cases',
+             'Layer pattern','Cases per layer','Layers','Cases per pallet','Pallets','Full pallets','Remainder cases',
+             'Loaded height ('+uLen()+')','Gross per pallet ('+uWt()+')','Line weight ('+uWt()+')','Limited by']);
+  R.lines.forEach(function(l,i){
+    var s=l.s;
+    rows.push([i+1,s.desc,rnum(dLen(s.L),3),rnum(dLen(s.W),3),rnum(dLen(s.H),3),rnum(dWt(s.wt),3),s.qty,
+      (l.perLayer>0?l.fit.label:'no fit'),l.perLayer,l.layers,l.cpp,(l.pallets==null?'':l.pallets),l.full,l.rem,
+      (l.cpp?rnum(dLen(l.loadH),2):''),(l.cpp?rnum(dWt(l.gross),2):''),rnum(dWt(l.lineWt),2),l.limitedBy]);
+  });
+  rows.push([]);
+  rows.push(['Totals','cases',R.totalCases,'pallets',R.totalPallets,'weight ('+uWt()+')',rnum(dWt(R.totalWeight),2),
+             'volume ('+uVol()+')',rnum(dVol(R.totalCube),3)]);
+  rows.push(['Capacity','positions per trailer',R.capacity,'trailers required',(R.trailersNeeded==null?'':R.trailersNeeded)]);
+  R.trailers.forEach(function(t,i){
+    rows.push(['Trailer '+(i+1),'pallets',t.pallets.length,'weight ('+uWt()+')',rnum(dWt(t.wt),2),
+      'payload used %',rnum(pct(t.wt,T.payload),1)]);
+  });
+  rows.push([]);
+  rows.push(['Planning aid only. Does not check axle loads, weight distribution, securement (49 CFR 393 Subpart I), stacking strength or state weight limits.']);
+  return '﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';
+}
+function fileStem(){
+  var base=(S.ref||'load-plan').toString().replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'');
+  return (base||'load-plan');
+}
+
+/* ── boot ─────────────────────────────────────────────────────── */
+function boot(){
+  if(!load()) S=sampleState();
+  renderInputs(); renderRows(); render();
+
+  document.addEventListener('input',function(e){
+    if(e.target.hasAttribute&&e.target.hasAttribute('data-path')) onField(e);
+    else if(e.target.hasAttribute&&e.target.hasAttribute('data-i')) onRow(e);
+  });
+  document.addEventListener('blur',function(e){
+    if(e.target.hasAttribute&&e.target.hasAttribute('data-path')) validateField(e.target);
+  },true);
+
+  $('#units').addEventListener('change',function(){
+    S.units=this.value==='met'?'met':'imp';
+    renderInputs(); renderRows(); update();
+  });
+  $('#palletPreset').addEventListener('change',function(){
+    var p=PAL[this.value];
+    S.pallet.preset=this.value;
+    if(p){ S.pallet.L=p.L; S.pallet.W=p.W; S.pallet.deck=p.deck; S.pallet.tare=p.tare; }
+    touch(); renderInputs(); update();
+  });
+  $('#tPreset').addEventListener('change',function(){
+    var t=TRL[this.value];
+    S.trailer.preset=this.value;
+    if(t){ S.trailer.L=t.L; S.trailer.W=t.W; S.trailer.H=t.H; S.trailer.payload=t.payload; }
+    touch(); renderInputs(); update();
+  });
+  $('#tPattern').addEventListener('change',function(){ S.trailer.pattern=this.value; touch(); update(); });
+  $('#tDbl').addEventListener('change',function(){ S.trailer.dbl=this.checked; touch(); update(); });
+  $('#trPick').addEventListener('change',function(){ viewTrailer=parseInt(this.value,10)||0; render(); });
+
+  $('#btnAdd').addEventListener('click',function(){
+    S.skus.push({id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0});
+    touch(); renderRows(); update();
+    var rows=$$('#skuBody tr'); var last=rows[rows.length-1];
+    if(last) last.querySelector('input').focus();
+  });
+  $('#skuBody').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('[data-del]'):null; if(!b) return;
+    var i=parseInt(b.getAttribute('data-del'),10);
+    S.skus.splice(i,1);
+    if(!S.skus.length) S.skus=[{id:seq++,desc:'',L:0,W:0,H:0,wt:0,qty:0}];
+    touch(); renderRows(); update();
+  });
+  $('#btnClearSample').addEventListener('click',function(){
+    S=blankState(); S.units=S.units; viewTrailer=0;
+    renderInputs(); renderRows(); update();
+    $('#ref').focus();
+  });
+  $('#btnPrint').addEventListener('click',function(){ window.print(); });
+  $('#btnCsv').addEventListener('click',function(){ download(fileStem()+'.csv','text/csv;charset=utf-8',toCSV()); });
+  $('#btnJson').addEventListener('click',function(){
+    download(fileStem()+'.json','application/json',JSON.stringify({tool:'solvix.pallet-load-planner',version:1,saved:new Date().toISOString(),state:S},null,2));
+  });
+  $('#btnImport').addEventListener('click',function(){ $('#fileIn').click(); });
+  $('#fileIn').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        var st=(o&&o.state)?o.state:o;
+        var keep=S;
+        S=merge(sampleState(),st);
+        S.skus=(Array.isArray(st.skus)?st.skus:[]).map(function(r){
+          return {id:seq++,desc:String(r&&r.desc||''),L:n(r&&r.L),W:n(r&&r.W),H:n(r&&r.H),wt:n(r&&r.wt),qty:n(r&&r.qty)};
+        });
+        if(!S.skus.length) S.skus=keep.skus;
+        S.sample=false; viewTrailer=0;
+        renderInputs(); renderRows(); update();
+        flash('Imported ✓');
+      }catch(err){ flash('That file could not be read as a saved load plan.',true); }
+    };
+    rd.readAsText(f); this.value='';
+  });
+  $('#btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear every field and delete the saved copy in this browser? This cannot be undone.')) return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    var u=S.units; S=blankState(); S.units=u; viewTrailer=0;
+    renderInputs(); renderRows(); update();
+  });
+  window.addEventListener('beforeprint',function(){ render(); });
+}
+function flash(msg,bad){
+  var el=$('#alerts');
+  var d=document.createElement('div');
+  d.className='note '+(bad?'bad':'');
+  d.textContent=msg; el.insertBefore(d,el.firstChild);
+  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); },4000);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();
+</script>
+</body>
+</html>

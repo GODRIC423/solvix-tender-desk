@@ -1,0 +1,1359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rate Confirmation Generator — Solvix Toolkit</title>
+<meta name="description" content="Build a broker-to-carrier rate confirmation: parties with MC/DOT, load and equipment details, stop schedule with appointment windows, linehaul, fuel surcharge and accessorial lines totalled automatically, payment terms, required documents, carrier obligations and signature blocks. Sequential confirmation numbers, saved load records, print-ready document, CSV and JSON export.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F5FA8'/%3E%3Cpath d='M4 12h11v9H4z' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M15 15h6l3 3.2V21h-9z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Ccircle cx='10' cy='23' r='2.2' fill='%23fff'/%3E%3Ccircle cx='20' cy='23' r='2.2' fill='%23fff'/%3E%3Cpath d='M6 8.5h14' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#1F5FA8;--accent-ink:#17497F;--accent-wash:#E6EEF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#5A9BE8;--accent-ink:#8FBDF2;--accent-wash:#152538;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#5A9BE8;--accent-ink:#8FBDF2;--accent-wash:#152538;--on-accent:#0B1017}
+
+.split>*{min-width:0}
+.stack>*{min-width:0}
+.g2{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.g3{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.wide{grid-column:1/-1}
+.appbar .acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.samp{background:var(--warn-wash);color:var(--warn);border:1px solid transparent}
+.hd .cno{font:700 13px/1 var(--mono);color:var(--accent-ink);background:var(--accent-wash);
+  border:1px solid var(--accent);border-radius:3px;padding:5px 8px;letter-spacing:.02em}
+
+/* stop editor */
+.stop{border:1px solid var(--line);border-radius:4px;background:var(--raise);margin-bottom:10px}
+.stop>.sh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--sunk);border-radius:4px 4px 0 0}
+.stop>.sh .seq{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.stop>.sh .sp{margin-left:auto;display:flex;gap:4px}
+.stop>.sb{padding:10px;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.stop select.tsel{width:auto;min-width:104px;font-weight:600;padding:4px 6px;font-size:12.5px}
+.pu .seq{background:var(--ok)} .del .seq{background:var(--accent)}
+
+/* results */
+.brk{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dotted var(--line);font-size:13.5px}
+.brk:last-of-type{border-bottom:0}
+.brk .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.brk.tot{border-top:2px solid var(--line-hard);border-bottom:0;margin-top:4px;padding-top:8px;font-weight:700;font-size:15px}
+.mini{display:grid;gap:8px;grid-template-columns:1fr 1fr;margin-top:10px}
+.mini .stat{padding:8px 10px}
+.mini .stat .v{font-size:16px}
+.flags{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.flag{font-size:12.5px;line-height:1.4;padding:7px 9px;border-radius:3px;border-left:3px solid var(--warn);background:var(--warn-wash);color:var(--ink)}
+.flag.bad{border-color:var(--bad);background:var(--bad-wash)}
+.flag.ok{border-color:var(--ok);background:var(--ok-wash)}
+.route{font-size:12.5px;color:var(--ink-2);margin-top:8px;line-height:1.45}
+.docrow{display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dotted var(--line)}
+.docrow:last-child{border-bottom:0}
+.docrow input[type=text]{border-color:transparent;background:transparent;padding:5px 6px}
+.docrow input[type=text]:hover{border-color:var(--line)}
+.docrow input[type=text]:focus{background:var(--raise)}
+.docrow input[type=checkbox]{width:16px;height:16px;flex:none;accent-color:var(--accent)}
+.cell2{display:flex;gap:6px;align-items:center}
+td .rm{color:var(--bad)}
+.tot-ft{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.tot-ft .big{font:700 19px/1 var(--mono);color:var(--accent-ink)}
+.rescol{display:flex;flex-direction:column;gap:10px}
+@media(max-width:900px){.rescol{display:contents}.rescol>.card.sticky{order:-1;position:static}.rescol>.card.recs{order:1}.stack{order:0}}
+
+/* ══ the deliverable document ══ */
+#doc{display:none;background:var(--surface);color:var(--ink)}
+body.preview #doc{display:block;max-width:820px;margin:18px auto 60px;padding:26px 30px;
+  border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+#doc .dh{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:10px}
+#doc .dh .who{flex:1 1 260px;min-width:0}
+#doc .dh .who .co{font:700 17px/1.2 var(--sans);letter-spacing:-.01em}
+#doc .dh .who .ln{font-size:11.5px;line-height:1.45;color:var(--ink-2)}
+#doc .dh .ttl{text-align:right;flex:0 0 auto}
+#doc .dh .ttl .t{font:700 19px/1.1 var(--sans);letter-spacing:.04em;text-transform:uppercase}
+#doc .dh .ttl .no{font:700 15px/1.3 var(--mono);margin-top:4px}
+#doc .dh .ttl .dt{font-size:11.5px;color:var(--ink-2)}
+#doc h3.sec{font:700 10.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);
+  margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line-hard)}
+#doc .party{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+#doc .pbox{border:1px solid var(--line-hard);border-radius:3px;padding:9px 11px;font-size:12px;line-height:1.5}
+#doc .pbox .pk{font:700 9.5px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);margin-bottom:4px}
+#doc .pbox .nm{font-weight:700;font-size:13.5px}
+#doc .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:9px 14px;font-size:12px}
+#doc .kv>*{min-width:0}
+#doc .kv .v{overflow-wrap:anywhere}
+#doc .kv .k{font:700 9.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+#doc .kv .v{margin-top:2px;font-weight:600}
+#doc table{font-size:11.5px}
+#doc th{background:var(--sunk);padding:6px 8px;font-size:9.5px}
+#doc td{padding:6px 8px;vertical-align:top}
+#doc tbody tr:hover{background:transparent}
+#doc .dtot td{font-weight:700;border-top:2px solid var(--ink);font-size:13px;background:var(--sunk)}
+#doc .terms{font-size:11px;line-height:1.5;white-space:pre-wrap;color:var(--ink-2)}
+#doc .dnote{border:1.5px solid var(--bad);background:var(--bad-wash);color:var(--ink);padding:9px 11px;
+  border-radius:3px;font-size:11px;line-height:1.5;margin-top:12px}
+#doc .sigs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+#doc .sig{border:1px solid var(--line-hard);border-radius:3px;padding:10px 12px}
+#doc .sig .st{font:700 10px/1.2 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin-bottom:4px}
+#doc .sig .sn{font-weight:700;font-size:12.5px}
+#doc .sig .sa{font-size:11px;color:var(--ink-2);margin-bottom:10px;min-height:15px}
+#doc .sl{border-bottom:1px solid var(--ink);height:24px;margin-top:14px}
+#doc .sc{font-size:9.5px;color:var(--ink-2);letter-spacing:.05em;text-transform:uppercase;margin-top:3px}
+#doc .sig2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#doc .dfoot{margin-top:16px;padding-top:8px;border-top:1px solid var(--line-hard);font-size:10px;color:var(--muted);
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#doc .docl{font-size:11.5px;line-height:1.6;margin:0;padding-left:16px}
+@media(max-width:620px){#doc .party,#doc .sigs,#doc .sig2{grid-template-columns:1fr}}
+@media print{
+  .app{display:none!important}
+  #doc{display:block!important;max-width:none;margin:0;padding:0;border:0;box-shadow:none;background:#fff;color:#000}
+  #doc .dnote,#doc .sigs,#doc .pbox,#doc .sig{break-inside:avoid}
+  #doc th{background:#eee!important}
+  #doc .dtot td{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #doc .dnote{background:#fff!important;border:1.5px solid #000}
+}
+</style>
+</head>
+<body>
+
+
+<div class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">RC</div>
+    <div style="min-width:0">
+      <h1>Rate Confirmation Generator</h1>
+      <div class="sub">FREIGHT &amp; LOGISTICS · BROKER → CARRIER</div>
+    </div>
+  </div>
+  <div class="acts">
+    <span class="chip samp" id="sampChip" hidden>Sample data</span>
+    <button type="button" class="btn sm" id="bPrev" aria-pressed="false">Preview document</button>
+    <button type="button" class="btn sm pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="bCsv">CSV register</button>
+    <button type="button" class="btn sm" id="bJson">Export JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import JSON</button>
+    <button type="button" class="btn sm ico" id="bTheme" title="Switch light / dark" aria-label="Switch light or dark theme">Theme</button>
+    <button type="button" class="btn sm dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fJson" accept="application/json,.json" hidden>
+  </div>
+</div>
+
+  <div class="note bad" style="margin:14px 0" id="disc">
+    <strong>Read before you send this.</strong> This tool assembles and totals a rate confirmation from
+    the details you enter. It is a commercial document, not legal advice, and it does not verify carrier
+    authority, insurance, or safety rating — check those in the FMCSA SAFER / Licensing &amp; Insurance
+    systems yourself before dispatch. The terms below are a plain-English starting template; where a signed
+    Broker–Carrier Agreement exists between the parties it governs, and anything you rely on should be
+    reviewed by your own counsel and insurer.
+  </div>
+
+  <div class="split">
+
+    <!-- ══ inputs ══ -->
+    <div class="stack">
+
+      <div class="card">
+        <div class="hd"><h2>Confirmation</h2><span class="cno" id="cnoTop">—</span></div>
+        <div class="bd">
+          <div class="g2">
+            <div class="f"><label for="cPrefix">Number prefix</label>
+              <input id="cPrefix" data-f="conf.prefix" autocomplete="off"></div>
+            <div class="f"><label for="cNum">Sequence no.</label>
+              <input id="cNum" type="number" min="1" step="1" data-f="conf.num" data-t="n"></div>
+            <div class="f"><label for="cDate">Date issued</label>
+              <input id="cDate" type="date" data-f="conf.date"></div>
+            <div class="f"><label for="cCur">Currency</label>
+              <select id="cCur" data-f="cur">
+                <option value="$">$ — US dollar</option><option value="£">£ — pound</option>
+                <option value="€">€ — euro</option><option value="C$">C$ — Canadian dollar</option>
+                <option value="custom">Custom symbol…</option>
+              </select></div>
+            <div class="f" id="wCurC" hidden><label for="cCurC">Custom symbol</label>
+              <input id="cCurC" data-f="curCustom" maxlength="4" autocomplete="off"></div>
+            <div class="f"><label for="cUnits">Units</label>
+              <select id="cUnits" data-f="units">
+                <option value="imperial">Imperial — miles, lb</option>
+                <option value="metric">Metric — km, kg</option>
+              </select></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button type="button" class="btn sm" id="bNew">Next confirmation number</button>
+            <span class="hint">Increments the sequence and clears the load, keeping both companies.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Broker / shipper (issuing party)</h2></div>
+        <div class="bd g2">
+          <div class="f wide"><label for="bCo">Company name</label>
+            <input id="bCo" data-f="broker.co" autocomplete="organization"><p class="err" data-err="broker.co"></p></div>
+          <div class="f wide"><label for="bAddr">Street address</label><input id="bAddr" data-f="broker.addr"></div>
+          <div class="f"><label for="bCity">City / state / ZIP</label><input id="bCity" data-f="broker.city"></div>
+          <div class="f"><label for="bMc">MC number</label><input id="bMc" data-f="broker.mc" placeholder="MC-000000"><p class="err" data-err="broker.mc"></p></div>
+          <div class="f"><label for="bDot">USDOT number</label><input id="bDot" data-f="broker.dot" placeholder="0000000"><p class="err" data-err="broker.dot"></p></div>
+          <div class="f"><label for="bCon">Dispatcher / contact</label><input id="bCon" data-f="broker.contact"></div>
+          <div class="f"><label for="bPh">Phone</label><input id="bPh" type="tel" data-f="broker.phone"></div>
+          <div class="f"><label for="bEm">Email</label><input id="bEm" type="email" data-f="broker.email"><p class="err" data-err="broker.email"></p></div>
+          <div class="f"><label for="bAfter">After-hours phone</label><input id="bAfter" type="tel" data-f="broker.after"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Carrier</h2></div>
+        <div class="bd g2">
+          <div class="f wide"><label for="kCo">Carrier legal name</label>
+            <input id="kCo" data-f="carrier.co" autocomplete="organization"><p class="err" data-err="carrier.co"></p></div>
+          <div class="f wide"><label for="kAddr">Street address</label><input id="kAddr" data-f="carrier.addr"></div>
+          <div class="f"><label for="kCity">City / state / ZIP</label><input id="kCity" data-f="carrier.city"></div>
+          <div class="f"><label for="kMc">MC number</label><input id="kMc" data-f="carrier.mc" placeholder="MC-000000"><p class="err" data-err="carrier.mc"></p></div>
+          <div class="f"><label for="kDot">USDOT number</label><input id="kDot" data-f="carrier.dot" placeholder="0000000"><p class="err" data-err="carrier.dot"></p></div>
+          <div class="f"><label for="kCon">Contact</label><input id="kCon" data-f="carrier.contact"></div>
+          <div class="f"><label for="kPh">Phone</label><input id="kPh" type="tel" data-f="carrier.phone"></div>
+          <div class="f"><label for="kEm">Email</label><input id="kEm" type="email" data-f="carrier.email"><p class="err" data-err="carrier.email"></p></div>
+          <div class="f"><label for="kDrv">Driver name</label><input id="kDrv" data-f="carrier.driver"></div>
+          <div class="f"><label for="kDrvP">Driver mobile</label><input id="kDrvP" type="tel" data-f="carrier.driverPhone"></div>
+          <div class="f"><label for="kTrk">Tractor / unit no.</label><input id="kTrk" data-f="carrier.truck"></div>
+          <div class="f"><label for="kTrl">Trailer no.</label><input id="kTrl" data-f="carrier.trailer"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Load details</h2></div>
+        <div class="bd g2">
+          <div class="f"><label for="lRef">Load / order number</label><input id="lRef" data-f="load.ref"></div>
+          <div class="f"><label for="lEq">Equipment</label>
+            <input id="lEq" data-f="load.equipment" list="eqList" autocomplete="off">
+            <datalist id="eqList">
+              <option value="Dry Van 53'"></option><option value="Dry Van 48'"></option>
+              <option value="Reefer 53'"></option><option value="Reefer 48'"></option>
+              <option value="Flatbed 48'"></option><option value="Flatbed 53'"></option>
+              <option value="Step Deck"></option><option value="Conestoga"></option>
+              <option value="RGN / Lowboy"></option><option value="Power Only"></option>
+              <option value="Box Truck 26'"></option><option value="Sprinter / Cargo Van"></option>
+              <option value="Container Chassis"></option><option value="Hotshot"></option>
+            </datalist></div>
+          <div class="f wide"><label for="lCom">Commodity</label><input id="lCom" data-f="load.commodity"></div>
+          <div class="f"><label for="lWt">Gross weight (<span data-u="wt">lb</span>)</label>
+            <input id="lWt" type="number" min="0" step="1" data-f="load.weight" data-t="n" data-c="wt"><p class="err" data-err="load.weight"></p></div>
+          <div class="f"><label for="lPc">Pieces / pallets</label><input id="lPc" data-f="load.pieces"></div>
+          <div class="f"><label for="lTemp">Temperature / handling</label><input id="lTemp" data-f="load.temp"></div>
+          <div class="f"><label for="lMi">Loaded distance (<span data-u="dist">mi</span>)</label>
+            <input id="lMi" type="number" min="0" step="1" data-f="load.miles" data-t="n" data-c="dist"><p class="err" data-err="load.miles"></p></div>
+          <div class="f"><label for="lTarp">Tarps / straps / securement</label><input id="lTarp" data-f="load.secure"></div>
+          <div class="f wide"><label for="lNotes">Special instructions</label>
+            <textarea id="lNotes" data-f="load.notes" rows="2"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Stop schedule</h2>
+          <button type="button" class="btn sm" data-add-stop="Pickup">+ Pickup</button>
+          <button type="button" class="btn sm" data-add-stop="Delivery">+ Delivery</button>
+        </div>
+        <div class="bd" id="stops"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Rate &amp; charges</h2>
+          <button type="button" class="btn sm" id="bAddCh">+ Add line</button>
+          <button type="button" class="btn sm" id="bCsvLines">CSV lines</button>
+        </div>
+        <div class="tw">
+          <table>
+            <caption class="empty" id="chEmpty" hidden>No charge lines — add the linehaul to start.</caption>
+            <thead><tr>
+              <th scope="col" style="min-width:130px">Description</th>
+              <th scope="col" style="min-width:92px">Category</th>
+              <th scope="col" style="min-width:96px">Basis</th>
+              <th scope="col" class="r" style="min-width:58px">Units</th>
+              <th scope="col" class="r" style="min-width:80px">Rate</th>
+              <th scope="col" class="r" style="min-width:94px">Amount</th>
+              <th scope="col" style="width:36px"><span class="lbl">Del</span></th>
+            </tr></thead>
+            <tbody id="chBody"></tbody>
+          </table>
+        </div>
+        <div class="ft tot-ft">
+          <span class="lbl">Total carrier pay</span>
+          <span class="big" id="ftTotal">—</span>
+          <span class="hint" id="ftRpm">—</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Payment terms &amp; required documents</h2></div>
+        <div class="bd">
+          <div class="g2">
+            <div class="f"><label for="tNet">Payment terms (days)</label>
+              <input id="tNet" type="number" min="0" max="180" step="1" data-f="terms.net" data-t="n"><p class="err" data-err="terms.net"></p></div>
+            <div class="f"><label for="tFrom">Terms run from</label>
+              <select id="tFrom" data-f="terms.from">
+                <option>receipt of complete paperwork</option>
+                <option>delivery date</option>
+                <option>invoice date</option>
+              </select></div>
+            <div class="f"><label for="tMeth">Payment method</label>
+              <select id="tMeth" data-f="terms.method">
+                <option>ACH</option><option>Company check</option><option>Wire transfer</option>
+                <option>Comchek / EFS advance</option><option>Factoring company (NOA on file)</option>
+              </select></div>
+            <div class="f"><label for="tInv">Invoice / paperwork to</label>
+              <input id="tInv" type="email" data-f="terms.invoiceTo"><p class="err" data-err="terms.invoiceTo"></p></div>
+            <div class="f"><label for="tDet">Detention free time (hours)</label>
+              <input id="tDet" type="number" min="0" step="0.5" data-f="terms.detFree" data-t="n"></div>
+            <div class="f"><label for="tDetR">Detention rate (per hour)</label>
+              <input id="tDetR" type="number" min="0" step="1" data-f="terms.detRate" data-t="n"></div>
+            <div class="f"><label for="tTonu">TONU (truck ordered not used)</label>
+              <input id="tTonu" type="number" min="0" step="1" data-f="terms.tonu" data-t="n"></div>
+            <div class="f"><label for="tLay">Layover (per night)</label>
+              <input id="tLay" type="number" min="0" step="1" data-f="terms.layover" data-t="n"></div>
+          </div>
+          <fieldset style="margin-top:12px">
+            <legend>Quick pay option</legend>
+            <label class="check" for="qOn"><input type="checkbox" id="qOn" data-f="terms.qpOn">
+              <span>Offer quick pay</span></label>
+            <div class="g2" style="margin-top:10px">
+              <div class="f"><label for="qDays">Paid within (days)</label>
+                <input id="qDays" type="number" min="0" max="60" step="1" data-f="terms.qpDays" data-t="n"></div>
+              <div class="f"><label for="qPct">Quick pay fee (%)</label>
+                <input id="qPct" type="number" min="0" max="20" step="0.1" data-f="terms.qpPct" data-t="n"></div>
+            </div>
+          </fieldset>
+          <fieldset style="margin-top:12px">
+            <legend>Documents required with the invoice</legend>
+            <div id="docsList"></div>
+            <button type="button" class="btn sm" id="bAddDoc" style="margin-top:8px">+ Add document</button>
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Carrier obligations (printed on the confirmation)</h2>
+          <button type="button" class="btn sm" id="bResetTerms">Restore default text</button></div>
+        <div class="bd">
+          <div class="f"><label for="obl">Terms &amp; conditions</label>
+            <textarea id="obl" data-f="terms.obligations" rows="12"></textarea>
+            <p class="hint">Edit freely — this text prints in full on the confirmation above the signature blocks.</p></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ live results ══ -->
+    <div class="rescol">
+      <div class="card sticky">
+        <div class="hd"><h2>Rate confirmation</h2><span class="chip" id="stopChip">—</span></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k">Total carrier pay</div>
+            <div class="v" id="hero">—</div>
+            <div class="u" id="heroSub">—</div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="brk"><span>Linehaul</span><span class="v" id="oLh">—</span></div>
+            <div class="brk"><span>Fuel surcharge</span><span class="v" id="oFs">—</span></div>
+            <div class="brk"><span>Accessorials</span><span class="v" id="oAc">—</span></div>
+            <div class="brk tot"><span>Total</span><span class="v" id="oTot">—</span></div>
+          </div>
+
+          <div class="mini">
+            <div class="stat"><div class="k">All-in rate</div><div class="v" id="oRpm">—</div></div>
+            <div class="stat"><div class="k">Loaded <span data-u="dist">mi</span></div><div class="v" id="oMi">—</div></div>
+            <div class="stat"><div class="k">Payment due</div><div class="v" id="oDue" style="font-size:14px">—</div></div>
+            <div class="stat"><div class="k" id="oQpK">Quick pay net</div><div class="v" id="oQp" style="font-size:16px">—</div></div>
+          </div>
+
+          <div class="route" id="oRoute">—</div>
+          <div class="flags" id="flags"></div>
+        </div>
+        <div class="ft">
+          <button type="button" class="btn pri" id="bPrint2">Print / PDF</button>
+          <button type="button" class="btn" id="bPrev2">Preview</button>
+          <button type="button" class="btn" id="bSaveRec2">Save load</button>
+        </div>
+      </div>
+      <div class="card recs">
+        <div class="hd"><h2>Saved load records</h2>
+          <button type="button" class="btn sm pri" id="bSaveRec">Save this load</button></div>
+        <div class="tw">
+          <table>
+            <caption class="empty" id="recEmpty">Nothing saved yet. “Save this load” keeps a copy in this browser.</caption>
+            <thead id="recHead" hidden><tr>
+              <th scope="col">Confirmation</th><th scope="col">Carrier</th>
+              <th scope="col">Route</th><th scope="col">Pickup</th>
+              <th scope="col" class="r">Total</th><th scope="col"><span class="lbl">Actions</span></th>
+            </tr></thead>
+            <tbody id="recBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <footer class="hint" style="margin-top:22px;line-height:1.6">
+    Totals are the sum of the charge lines you enter, each rounded to 2 dp: flat lines as entered,
+    per-<span data-u="dist">mi</span> lines × loaded distance, per-unit lines × units, and “% of linehaul”
+    lines applied to the linehaul subtotal only. All-in rate = total ÷ loaded distance. Payment due date =
+    last delivery date + payment terms (calendar days). Carrier liability wording references the Carmack
+    Amendment, 49 U.S.C. § 14706. Nothing here is legal advice or a substitute for verifying carrier
+    authority and insurance with FMCSA. Everything is stored only in this browser.
+  </footer>
+</div>
+
+<!-- ══ the printed deliverable ══ -->
+<div id="doc" role="document" aria-label="Rate confirmation document"></div>
+
+<script>
+"use strict";
+(function(){
+var K='solvix.rate-confirmation.v1';
+var $=function(s,r){return (r||document).querySelector(s)},
+    $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+
+/* ── helpers ─────────────────────────────────────────────── */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function numOr(v,d){var n=typeof v==='number'?v:parseFloat(v);return isFinite(n)?n:d;}
+function r2(n){return Math.round((n+Number.EPSILON)*100)/100;}
+function grp(s){var p=String(s).split('.');p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');return p.join('.');}
+function sym(){return S.cur==='custom'?(S.curCustom||'¤'):S.cur;}
+function money(n){if(n==null||!isFinite(n))return '—';
+  var v=Math.abs(n)<0.005?0:n; return (v<0?'-':'')+sym()+grp(Math.abs(v).toFixed(2));}
+function qty(n,dp){if(n==null||!isFinite(n))return '—';
+  var v=Math.abs(n)<Math.pow(10,-(dp+1))?0:n; return grp(v.toFixed(dp==null?0:dp));}
+function tn(v,dp){if(v===''||v==null||!isFinite(v))return '';
+  var f=Math.pow(10,dp==null?2:dp);return String(Math.round(v*f)/f);}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function dparts(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));
+  return m?{y:+m[1],m:+m[2],d:+m[3]}:null;}
+function fmtDate(s){var p=dparts(s);if(!p)return '—';
+  var dt=new Date(Date.UTC(p.y,p.m-1,p.d));
+  if(isNaN(dt.getTime()))return '—';
+  return DOW[dt.getUTCDay()]+' '+String(p.d).padStart(2,'0')+' '+MON[p.m-1]+' '+p.y;}
+function addDays(s,n){var p=dparts(s);if(!p||!isFinite(n))return null;
+  var dt=new Date(Date.UTC(p.y,p.m-1,p.d));dt.setUTCDate(dt.getUTCDate()+Math.round(n));
+  return dt.toISOString().slice(0,10);}
+function fmtTime(t){var m=/^(\d{2}):(\d{2})$/.exec(String(t||''));if(!m)return '';
+  var h=+m[1],ap=h<12?'AM':'PM',h12=h%12===0?12:h%12;return h12+':'+m[2]+' '+ap;}
+function win(s){var a=fmtTime(s.from),b=fmtTime(s.to);
+  if(a&&b)return a+' – '+b; if(a)return a+' onward'; if(b)return 'by '+b; return '—';}
+function getP(o,p){var a=p.split('.'),i;for(i=0;i<a.length;i++){if(o==null)return undefined;o=o[a[i]];}return o;}
+function setP(o,p,v){var a=p.split('.'),i;for(i=0;i<a.length-1;i++){if(o[a[i]]==null)o[a[i]]={};o=o[a[i]];}
+  o[a[a.length-1]]=v;}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+
+/* unit conversion — canonical is miles + pounds */
+function DF(){return S.units==='metric'?1.609344:1;}   /* display dist = mi * DF */
+function WF(){return S.units==='metric'?0.45359237:1;} /* display wt   = lb * WF */
+function uDist(){return S.units==='metric'?'km':'mi';}
+function uWt(){return S.units==='metric'?'kg':'lb';}
+function toDisp(kind,v){if(v==null||!isFinite(v))return v;
+  if(kind==='dist')return v*DF(); if(kind==='wt')return v*WF();
+  if(kind==='rate')return v/DF(); return v;}
+function toCanon(kind,v){if(v==null||!isFinite(v))return v;
+  if(kind==='dist')return v/DF(); if(kind==='wt')return v/WF();
+  if(kind==='rate')return v*DF(); return v;}
+
+/* ── default terms text ──────────────────────────────────── */
+var DEFAULT_TERMS =
+"1. RATES AND CHARGES. The rates set out above are the carrier's full compensation for the services described. "+
+"Any charge not listed here — including but not limited to detention, layover, extra stops, lumpers, pallet "+
+"exchange, driver assist, reconsignment or storage — must be authorised in writing by the broker BEFORE it is "+
+"incurred. Unauthorised charges will not be paid.\n\n"+
+"2. AUTHORITY AND INSURANCE. Carrier warrants that it holds active operating authority for this movement, is not "+
+"under an FMCSA out-of-service order, and maintains at minimum $1,000,000 commercial auto liability, $100,000 "+
+"cargo liability, and statutory workers' compensation, with the broker listed as certificate holder. Carrier will "+
+"notify the broker immediately of any lapse.\n\n"+
+"3. NO RE-BROKERING. Carrier may not re-broker, co-broker, interline, subcontract or otherwise tender this load to "+
+"any third party without the broker's prior written consent. Doing so is a material breach: the broker may pay the "+
+"performing party directly, and carrier forfeits all compensation for the load.\n\n"+
+"4. EQUIPMENT AND SECUREMENT. Carrier will supply clean, dry, odour-free and roadworthy equipment suitable for the "+
+"commodity, and will load, block, brace and secure in accordance with 49 CFR Part 393 and the shipper's "+
+"instructions. On temperature-controlled loads the reefer must run continuously on the setting stated above and "+
+"the carrier must produce download data on request.\n\n"+
+"5. TRACKING AND COMMUNICATION. Carrier will confirm dispatch, provide a loaded call, and give the broker tracking "+
+"visibility for the duration of the load. Any delay, breakdown, refusal or damage must be reported to the broker "+
+"within one hour of the driver becoming aware of it, and before the driver leaves the facility.\n\n"+
+"6. ACCESSORIALS AND DETENTION. Detention accrues only after the free time stated above, only where arrival and "+
+"departure times are recorded on the bill of lading or verifiable tracking, and only where the broker was notified "+
+"before free time expired. Lumper and similar reimbursements require an original receipt.\n\n"+
+"7. DOCUMENTS AND INVOICING. Payment is due on the terms stated above, running from receipt of a complete invoice "+
+"packet containing every document listed on this confirmation. Illegible, altered or incomplete paperwork "+
+"restarts the clock.\n\n"+
+"8. CARGO CLAIMS. Carrier is liable for loss of or damage to the freight as a common carrier under the Carmack "+
+"Amendment, 49 U.S.C. § 14706, for the full invoice value of the goods. Damaged or refused freight must not be "+
+"returned, sold or destroyed without the broker's written instruction. Claims may be offset against amounts owed.\n\n"+
+"9. CONFIDENTIALITY AND NON-SOLICITATION. Rates, shipper identities and volumes disclosed here are confidential. "+
+"For twelve (12) months after the last load moved, carrier will not solicit freight directly from any shipper, "+
+"consignee or customer first made known to it through the broker.\n\n"+
+"10. ACCEPTANCE. Signing and returning this confirmation, or picking up the freight, constitutes the carrier's "+
+"acceptance of these terms. Where a signed Broker–Carrier Agreement exists between the parties, that agreement "+
+"governs and these terms supplement it.";
+
+/* ── sample state ────────────────────────────────────────── */
+function sample(){return{
+ v:1, sample:true, theme:'auto', cur:'$', curCustom:'', units:'imperial',
+ conf:{prefix:'NLF-RC', num:1042, date:'2026-09-03'},
+ broker:{co:'Northline Freight Solutions LLC', addr:'4400 Kearney Street, Suite 210',
+   city:'Denver, CO 80216', mc:'MC-812446', dot:'2591083', contact:'Marcus Hale — Dispatch',
+   phone:'(303) 555-0142', email:'dispatch@northlinefreight.com', after:'(303) 555-0199'},
+ carrier:{co:'Redstone Trucking Inc.', addr:'118 Gateway Boulevard', city:'Kansas City, MO 64120',
+   mc:'MC-745219', dot:'1874320', contact:'Dana Whitlock', phone:'(816) 555-0198',
+   email:'dispatch@redstonetrucking.com', driver:'Luis Ferreira', driverPhone:'(816) 555-0177',
+   truck:'214', trailer:'R-6620'},
+ load:{ref:'NLF-58217', equipment:"Reefer 53'", commodity:'Palletised frozen bakery goods',
+   weight:38400, pieces:'22 pallets', temp:'-10 °F continuous, no start/stop', miles:604,
+   secure:'Load bars at rear tier; seal applied at origin',
+   notes:'Driver must record the reefer set point on the BOL at both stops. Seal number to be written on the POD before breaking.'},
+ stops:[
+  {type:'Pickup', co:'Prairie Mills Bakery — Plant 3', addr:'2100 W Industrial Drive',
+   city:'Wichita, KS 67213', ref:'PO 448-2210', date:'2026-09-08', from:'07:00', to:'12:00',
+   appt:'FCFS', notes:'Check in at guard shack, dock 14. Driver assist not required.'},
+  {type:'Delivery', co:'Front Range Cold Storage', addr:'880 E 58th Avenue',
+   city:'Denver, CO 80216', ref:'DEL 7741', date:'2026-09-09', from:'06:00', to:'10:00',
+   appt:'Appointment', notes:'Appointment held. 14 pallets here.'},
+  {type:'Delivery', co:'Summit Grocers DC', addr:'4125 Northgate Court',
+   city:'Colorado Springs, CO 80907', ref:'DEL 7742', date:'2026-09-09', from:'13:00', to:'15:00',
+   appt:'Appointment', notes:'Remaining 8 pallets. Lumper paid by carrier, receipt required.'}],
+ charges:[
+  {desc:'Linehaul — Wichita KS to Colorado Springs CO', kind:'Linehaul', basis:'flat', q:1, rate:1780},
+  {desc:'Fuel surcharge', kind:'Fuel Surcharge', basis:'mile', q:1, rate:0.52},
+  {desc:'Extra stop-off (Denver)', kind:'Accessorial', basis:'flat', q:1, rate:75},
+  {desc:'Lumper reimbursement — original receipt required', kind:'Accessorial', basis:'flat', q:1, rate:145}],
+ terms:{net:30, from:'receipt of complete paperwork', method:'ACH',
+   invoiceTo:'accounting@northlinefreight.com', detFree:2, detRate:45, tonu:150, layover:250,
+   qpOn:true, qpDays:2, qpPct:2, obligations:DEFAULT_TERMS},
+ docs:[
+  {label:'Signed original bill of lading (BOL) from every stop', on:true},
+  {label:'Proof of delivery (POD) signed, dated and legible', on:true},
+  {label:'This rate confirmation, signed by the carrier', on:true},
+  {label:'Lumper / unloading receipts (originals)', on:true},
+  {label:'Certified scale ticket', on:false},
+  {label:'Reefer download for the full trip', on:true},
+  {label:'Arrival and departure times written on the BOL', on:true}],
+ records:[]};}
+
+var S=sample(), touched={};
+
+/* ── persistence ─────────────────────────────────────────── */
+function save(){try{localStorage.setItem(K,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{var raw=localStorage.getItem(K); if(!raw)return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object')return false;
+    var base=sample();
+    ['conf','broker','carrier','load','terms'].forEach(function(k){
+      o[k]=Object.assign({},base[k],o[k]||{});});
+    if(!Array.isArray(o.stops))o.stops=base.stops;
+    if(!Array.isArray(o.charges))o.charges=base.charges;
+    if(!Array.isArray(o.docs))o.docs=base.docs;
+    if(!Array.isArray(o.records))o.records=[];
+    S=Object.assign(base,o); return true;
+  }catch(e){return false;}
+}
+
+/* ── computation ─────────────────────────────────────────── */
+function calc(){
+  var miles=numOr(S.load.miles,0);
+  var lines=S.charges.map(function(c){
+    var rate=numOr(c.rate,0), q=numOr(c.q,1), a=null;
+    if(c.basis==='pct') a=null;
+    else if(c.basis==='mile') a=rate*miles;
+    else if(c.basis==='unit') a=rate*q;
+    else a=rate;
+    return {c:c, amt:a};
+  });
+  var lhBase=0;
+  lines.forEach(function(L){ if(L.c.kind==='Linehaul'&&L.amt!=null) lhBase+=L.amt; });
+  lhBase=r2(lhBase);
+  lines.forEach(function(L){ if(L.amt==null) L.amt=numOr(L.c.rate,0)/100*lhBase; });
+  lines.forEach(function(L){ L.amt=r2(L.amt); });
+
+  var by={'Linehaul':0,'Fuel Surcharge':0,'Accessorial':0};
+  lines.forEach(function(L){ by[L.c.kind]=r2((by[L.c.kind]||0)+L.amt); });
+  var total=0; lines.forEach(function(L){ total=r2(total+L.amt); });
+
+  var rpm = miles>0 ? total/miles : null;
+  var dels=S.stops.filter(function(s){return s.type==='Delivery'&&dparts(s.date);});
+  var pus=S.stops.filter(function(s){return s.type==='Pickup'&&dparts(s.date);});
+  var lastDel = dels.length?dels[dels.length-1].date:null;
+  var net=numOr(S.terms.net,null);
+  var due = (lastDel&&net!=null)?addDays(lastDel,net):null;
+  var qp = S.terms.qpOn ? r2(total*(1-numOr(S.terms.qpPct,0)/100)) : null;
+
+  return {lines:lines, lh:by['Linehaul'], fs:by['Fuel Surcharge'], acc:by['Accessorial'],
+    total:total, rpm:rpm, miles:miles, due:due, qp:qp,
+    firstPu:pus.length?pus[0]:null, lastDel:dels.length?dels[dels.length-1]:null};
+}
+
+function confNo(){
+  var n=numOr(S.conf.num,0);
+  return (S.conf.prefix||'RC')+'-'+String(Math.max(0,Math.round(n))).padStart(4,'0');
+}
+
+/* ── validation ──────────────────────────────────────────── */
+var reMC=/^(mc[\s-]*)?\d{4,8}$/i, reDOT=/^\d{4,8}$/, reEM=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+function validate(){
+  var e={};
+  if(!String(S.broker.co||'').trim()) e['broker.co']='Issuing company name is required.';
+  if(!String(S.carrier.co||'').trim()) e['carrier.co']='Carrier legal name is required.';
+  [['broker.mc',S.broker.mc],['carrier.mc',S.carrier.mc]].forEach(function(p){
+    if(String(p[1]||'').trim()&&!reMC.test(String(p[1]).trim())) e[p[0]]='Use MC-123456 or 4–8 digits.';});
+  [['broker.dot',S.broker.dot],['carrier.dot',S.carrier.dot]].forEach(function(p){
+    if(String(p[1]||'').trim()&&!reDOT.test(String(p[1]).trim())) e[p[0]]='USDOT is 4–8 digits.';});
+  [['broker.email',S.broker.email],['carrier.email',S.carrier.email],['terms.invoiceTo',S.terms.invoiceTo]]
+    .forEach(function(p){ if(String(p[1]||'').trim()&&!reEM.test(String(p[1]).trim()))
+      e[p[0]]='That does not look like an email address.';});
+  if(numOr(S.load.weight,0)<0) e['load.weight']='Weight cannot be negative.';
+  if(numOr(S.load.miles,0)<0) e['load.miles']='Distance cannot be negative.';
+  var net=numOr(S.terms.net,null);
+  if(net==null||net<0||net>180) e['terms.net']='Enter 0–180 days.';
+  return e;
+}
+function showErrors(){
+  var e=validate();
+  $$('[data-err]').forEach(function(p){
+    var k=p.getAttribute('data-err'), msg=(touched[k]&&e[k])?e[k]:'';
+    p.textContent=msg||'';
+    var f=$('[data-f="'+k+'"]'); if(f) f.classList.toggle('inv',!!msg);
+  });
+  return e;
+}
+
+/* ── rendering: fixed fields ─────────────────────────────── */
+function fillFixed(){
+  $$('[data-f]').forEach(function(el){
+    var p=el.getAttribute('data-f'), v=getP(S,p);
+    if(el.type==='checkbox'){ el.checked=!!v; return; }
+    if(el.getAttribute('data-t')==='n'){
+      var c=el.getAttribute('data-c');
+      var d=(v===''||v==null)?'':(c?toDisp(c,numOr(v,NaN)):numOr(v,NaN));
+      el.value=(d===''||!isFinite(d))?'':tn(d, c==='wt'?1:(c?2:2));
+      if(!c) el.value=(v===''||v==null||!isFinite(numOr(v,NaN)))?'':String(numOr(v,0));
+      return;
+    }
+    el.value=v==null?'':String(v);
+  });
+  $$('[data-u="dist"]').forEach(function(s){s.textContent=uDist();});
+  $$('[data-u="wt"]').forEach(function(s){s.textContent=uWt();});
+  $('#wCurC').hidden = S.cur!=='custom';
+  $('#sampChip').hidden = !S.sample;
+  $('#cnoTop').textContent=confNo();
+}
+
+/* ── rendering: stops ────────────────────────────────────── */
+function renderStops(){
+  var host=$('#stops');
+  if(!S.stops.length){ host.innerHTML='<div class="empty">No stops yet — add a pickup to begin.</div>'; return; }
+  host.innerHTML=S.stops.map(function(s,i){
+    var cls=s.type==='Pickup'?'pu':'del';
+    return '<div class="stop '+cls+'">'+
+      '<div class="sh"><span class="seq">'+(i+1)+'</span>'+
+      '<label class="lbl" for="st'+i+'" style="position:absolute;left:-9999px">Stop '+(i+1)+' type</label>'+
+      '<select class="tsel" id="st'+i+'" data-s="'+i+'" data-k="type">'+
+        '<option'+(s.type==='Pickup'?' selected':'')+'>Pickup</option>'+
+        '<option'+(s.type==='Delivery'?' selected':'')+'>Delivery</option></select>'+
+      '<span class="hint">'+esc(s.city||'—')+'</span>'+
+      '<span class="sp">'+
+        '<button type="button" class="btn sm ico" data-mv="'+i+'" data-d="-1" title="Move up" aria-label="Move stop '+(i+1)+' up"'+(i===0?' disabled':'')+'>↑</button>'+
+        '<button type="button" class="btn sm ico" data-mv="'+i+'" data-d="1" title="Move down" aria-label="Move stop '+(i+1)+' down"'+(i===S.stops.length-1?' disabled':'')+'>↓</button>'+
+        '<button type="button" class="btn sm ico dgr" data-rms="'+i+'" title="Remove stop" aria-label="Remove stop '+(i+1)+'">✕</button>'+
+      '</span></div>'+
+      '<div class="sb">'+
+        fld(i,'co','Company / facility','wide')+
+        fld(i,'addr','Street address','wide')+
+        fld(i,'city','City / state / ZIP','')+
+        fld(i,'ref','Reference / PO','')+
+        fld(i,'date','Date','','date')+
+        fld(i,'from','Window opens','','time')+
+        fld(i,'to','Window closes','','time')+
+        '<div class="f"><label for="sa'+i+'">Appointment</label>'+
+          '<select id="sa'+i+'" data-s="'+i+'" data-k="appt">'+
+          ['FCFS','Appointment','Drop &amp; hook','Live load','Live unload'].map(function(o){
+            var raw=o.replace('&amp;','&');
+            return '<option'+(s.appt===raw?' selected':'')+'>'+o+'</option>';}).join('')+
+          '</select></div>'+
+        fld(i,'notes','Instructions at this stop','wide')+
+      '</div></div>';
+  }).join('');
+  function fld(i,k,lab,cls,type){
+    var s=S.stops[i];
+    return '<div class="f '+cls+'"><label for="s'+k+i+'">'+lab+'</label>'+
+      '<input id="s'+k+i+'" type="'+(type||'text')+'" data-s="'+i+'" data-k="'+k+'" value="'+esc(s[k]||'')+'"></div>';
+  }
+}
+
+/* ── rendering: charges ──────────────────────────────────── */
+function renderCharges(C){
+  var body=$('#chBody'), cap=$('#chEmpty');
+  cap.hidden=S.charges.length>0;
+  body.innerHTML=S.charges.map(function(c,i){
+    var rateDisp = c.basis==='mile' ? toDisp('rate',numOr(c.rate,0)) : numOr(c.rate,0);
+    var rateStep = c.basis==='pct' ? '0.1' : '0.01';
+    var bases=[['flat','Flat'],['mile','Per '+uDist()],['unit','Per unit'],['pct','% of linehaul']];
+    return '<tr>'+
+      '<td><input type="text" data-c="'+i+'" data-k="desc" value="'+esc(c.desc||'')+'" aria-label="Line '+(i+1)+' description"></td>'+
+      '<td><select data-c="'+i+'" data-k="kind" aria-label="Line '+(i+1)+' category">'+
+        [['Linehaul','Linehaul'],['Fuel Surcharge','Fuel'],['Accessorial','Accessorial']].map(function(o){
+          return '<option value="'+o[0]+'"'+(c.kind===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></td>'+
+      '<td><select data-c="'+i+'" data-k="basis" aria-label="Line '+(i+1)+' basis">'+
+        bases.map(function(b){return '<option value="'+b[0]+'"'+(c.basis===b[0]?' selected':'')+'>'+b[1]+'</option>';}).join('')+
+        '</select></td>'+
+      '<td class="n"><input type="number" min="0" step="1" data-c="'+i+'" data-k="q" value="'+
+        (c.basis==='unit'?esc(tn(numOr(c.q,1),2)):'')+'" '+(c.basis==='unit'?'':'disabled')+
+        ' aria-label="Line '+(i+1)+' units"></td>'+
+      '<td class="n"><input type="number" step="'+rateStep+'" data-c="'+i+'" data-k="rate" value="'+
+        esc(tn(rateDisp,4))+'" aria-label="Line '+(i+1)+' rate"></td>'+
+      '<td class="n" data-amt="'+i+'">'+money(C.lines[i]?C.lines[i].amt:0)+'</td>'+
+      '<td><button type="button" class="btn sm ico dgr rm" data-rmc="'+i+'" aria-label="Remove charge line '+(i+1)+'">✕</button></td>'+
+    '</tr>';}).join('');
+}
+
+/* ── rendering: documents ────────────────────────────────── */
+function renderDocs(){
+  var host=$('#docsList');
+  host.innerHTML=S.docs.map(function(d,i){
+    return '<div class="docrow">'+
+      '<input type="checkbox" id="dk'+i+'" data-d="'+i+'" data-k="on"'+(d.on?' checked':'')+'>'+
+      '<label for="dk'+i+'" style="position:absolute;left:-9999px">Required: '+esc(d.label)+'</label>'+
+      '<input type="text" data-d="'+i+'" data-k="label" value="'+esc(d.label)+'" aria-label="Document '+(i+1)+' description">'+
+      '<button type="button" class="btn sm ico dgr" data-rmd="'+i+'" aria-label="Remove document '+(i+1)+'">✕</button>'+
+    '</div>';}).join('') || '<div class="hint">No documents listed.</div>';
+}
+
+/* ── rendering: records ──────────────────────────────────── */
+function renderRecords(){
+  var body=$('#recBody');
+  $('#recEmpty').hidden=S.records.length>0;
+  $('#recHead').hidden=S.records.length===0;
+  body.innerHTML=S.records.map(function(r,i){
+    return '<tr><td class="mono">'+esc(r.no)+'</td><td>'+esc(r.carrier||'—')+'</td>'+
+      '<td class="hint">'+esc(r.route||'—')+'</td><td class="mono">'+esc(r.pickup||'—')+'</td>'+
+      '<td class="n">'+esc(r.totalText||'—')+'</td>'+
+      '<td><span class="cell2">'+
+        '<button type="button" class="btn sm" data-open="'+i+'">Open</button>'+
+        '<button type="button" class="btn sm ico dgr" data-rmr="'+i+'" aria-label="Delete record '+esc(r.no)+'">✕</button>'+
+      '</span></td></tr>';}).join('');
+}
+
+/* ── rendering: outputs ──────────────────────────────────── */
+function renderOut(C,errs){
+  $('#hero').textContent=money(C.total);
+  var pieces=[];
+  pieces.push(confNo());
+  if(C.rpm!=null) pieces.push(money(toDisp('rate',C.rpm))+' per '+uDist());
+  $('#heroSub').textContent=pieces.join(' · ');
+  $('#oLh').textContent=money(C.lh); $('#oFs').textContent=money(C.fs);
+  $('#oAc').textContent=money(C.acc); $('#oTot').textContent=money(C.total);
+  $('#oRpm').textContent=C.rpm==null?'—':money(toDisp('rate',C.rpm));
+  $('#oMi').textContent=C.miles>0?qty(toDisp('dist',C.miles),0):'—';
+  $('#oDue').textContent=C.due?fmtDate(C.due):'—';
+  $('#oQpK').textContent=S.terms.qpOn?('Quick pay net ('+qty(numOr(S.terms.qpPct,0),1)+'%)'):'Quick pay';
+  $('#oQp').textContent=C.qp==null?'Not offered':money(C.qp);
+  $('#ftTotal').textContent=money(C.total);
+  $('#ftRpm').textContent=C.rpm==null?'Enter loaded distance for an all-in rate':
+    ('All-in '+money(toDisp('rate',C.rpm))+' per '+uDist()+' over '+qty(toDisp('dist',C.miles),0)+' '+uDist());
+  var np=S.stops.filter(function(s){return s.type==='Pickup';}).length,
+      nd=S.stops.filter(function(s){return s.type==='Delivery';}).length;
+  $('#stopChip').textContent=np+' PU · '+nd+' DEL';
+  $('#oRoute').innerHTML= S.stops.length
+    ? S.stops.map(function(s,i){return '<div>'+(i+1)+'. <strong>'+esc(s.type)+'</strong> — '+
+        esc(s.city||s.co||'address to confirm')+' · '+esc(fmtDate(s.date))+' '+esc(win(s))+'</div>';}).join('')
+    : '<em>No stops entered.</em>';
+
+  /* flags */
+  var f=[];
+  Object.keys(errs).forEach(function(k){ f.push(['bad',errs[k]]); });
+  var wtLb=numOr(S.load.weight,0);
+  if(wtLb>45000) f.push(['warn','Gross freight weight '+qty(toDisp('wt',wtLb),0)+' '+uWt()+
+    ' is heavy for a standard 5-axle van — check the tractor/trailer tare keeps you under 80,000 lb and scale before leaving.']);
+  if(!String(S.carrier.mc||'').trim()&&!String(S.carrier.dot||'').trim())
+    f.push(['warn','No carrier MC or USDOT number recorded — verify authority and insurance in FMCSA SAFER before dispatch.']);
+  var badDate=false;
+  for(var i=1;i<S.stops.length;i++){
+    var a=dparts(S.stops[i-1].date), b=dparts(S.stops[i].date);
+    if(a&&b&&(b.y*10000+b.m*100+b.d)<(a.y*10000+a.m*100+a.d)) badDate=true;
+  }
+  if(badDate) f.push(['bad','A stop is dated before the stop ahead of it — check the schedule order.']);
+  if(S.stops.some(function(s){return !dparts(s.date);}))
+    f.push(['warn','At least one stop has no date — the carrier cannot plan hours of service around it.']);
+  if(!S.stops.some(function(s){return s.type==='Pickup';})) f.push(['warn','No pickup stop on this confirmation.']);
+  if(!S.stops.some(function(s){return s.type==='Delivery';})) f.push(['warn','No delivery stop on this confirmation.']);
+  if(C.total<=0) f.push(['warn','Total carrier pay is zero — add the linehaul line before sending.']);
+  if(C.miles<=0) f.push(['warn','No loaded distance entered, so per-'+uDist()+' lines and the all-in rate cannot be worked out.']);
+  if(!f.length) f.push(['ok','Ready to send: parties, stops, charges and terms are all complete.']);
+  $('#flags').innerHTML=f.map(function(x){
+    return '<div class="flag '+(x[0]==='ok'?'ok':x[0]==='bad'?'bad':'')+'">'+esc(x[1])+'</div>';}).join('');
+}
+
+/* ── the document ────────────────────────────────────────── */
+function buildDoc(C){
+  var b=S.broker,k=S.carrier,L=S.load,T=S.terms;
+  function ln(x){return x?'<div class="ln">'+esc(x)+'</div>':'';}
+  function kv(kk,v){return '<div><div class="k">'+esc(kk)+'</div><div class="v">'+esc(v||'—')+'</div></div>';}
+  var wtTxt = numOr(L.weight,0)>0 ? qty(toDisp('wt',numOr(L.weight,0)), S.units==='metric'?1:0)+' '+uWt() : '—';
+  var miTxt = C.miles>0 ? qty(toDisp('dist',C.miles),0)+' '+uDist() : '—';
+
+  var stopRows=S.stops.map(function(s,i){
+    return '<tr><td class="n">'+(i+1)+'</td><td><strong>'+esc(s.type)+'</strong></td>'+
+      '<td><strong>'+esc(s.co||'—')+'</strong>'+(s.addr?'<br>'+esc(s.addr):'')+
+        (s.city?'<br>'+esc(s.city):'')+(s.notes?'<br><em>'+esc(s.notes)+'</em>':'')+'</td>'+
+      '<td>'+esc(s.ref||'—')+'</td>'+
+      '<td>'+esc(fmtDate(s.date))+'<br>'+esc(win(s))+'<br><em>'+esc(s.appt||'')+'</em></td></tr>';}).join('')
+    || '<tr><td colspan="5">No stops entered.</td></tr>';
+
+  var chRows=C.lines.map(function(Lx,i){
+    var c=Lx.c, basis;
+    if(c.basis==='mile') basis=money(toDisp('rate',numOr(c.rate,0)))+' per '+uDist()+' × '+qty(toDisp('dist',C.miles),0)+' '+uDist();
+    else if(c.basis==='unit') basis=money(numOr(c.rate,0))+' × '+qty(numOr(c.q,1),2)+' units';
+    else if(c.basis==='pct') basis=qty(numOr(c.rate,0),2)+'% of linehaul';
+    else basis='Flat';
+    return '<tr><td>'+esc(c.desc||'—')+'</td><td>'+esc(c.kind)+'</td><td>'+basis+'</td>'+
+      '<td class="n">'+money(Lx.amt)+'</td></tr>';}).join('')
+    || '<tr><td colspan="4">No charge lines entered.</td></tr>';
+
+  var docList=S.docs.filter(function(d){return d.on;});
+  var qpTxt = T.qpOn ? ('Quick pay available: '+money(C.qp)+' net, paid within '+qty(numOr(T.qpDays,0),0)+
+      ' day(s), '+qty(numOr(T.qpPct,0),1)+'% fee.') : '';
+
+  $('#doc').innerHTML=
+  '<div class="dh">'+
+    '<div class="who"><div class="co">'+esc(b.co||'—')+'</div>'+
+      ln(b.addr)+ln(b.city)+
+      ln([b.mc?('MC '+String(b.mc).replace(/^mc[\s-]*/i,'')):'', b.dot?('USDOT '+b.dot):''].filter(Boolean).join('  ·  '))+
+      ln([b.phone,b.email].filter(Boolean).join('  ·  '))+
+    '</div>'+
+    '<div class="ttl"><div class="t">Rate Confirmation</div>'+
+      '<div class="no">'+esc(confNo())+'</div>'+
+      '<div class="dt">Issued '+esc(fmtDate(S.conf.date))+'</div>'+
+      '<div class="dt">Load '+esc(L.ref||'—')+'</div></div>'+
+  '</div>'+
+
+  '<h3 class="sec">Parties</h3>'+
+  '<div class="party">'+
+    '<div class="pbox"><div class="pk">Broker / issuing party</div>'+
+      '<div class="nm">'+esc(b.co||'—')+'</div>'+
+      (b.contact?esc(b.contact)+'<br>':'')+
+      (b.phone?'T '+esc(b.phone)+'<br>':'')+
+      (b.after?'After hours '+esc(b.after)+'<br>':'')+
+      (b.email?esc(b.email):'')+'</div>'+
+    '<div class="pbox"><div class="pk">Carrier</div>'+
+      '<div class="nm">'+esc(k.co||'—')+'</div>'+
+      (k.city?esc(k.city)+'<br>':'')+
+      'MC '+esc(String(k.mc||'—').replace(/^mc[\s-]*/i,''))+'  ·  USDOT '+esc(k.dot||'—')+'<br>'+
+      (k.contact?esc(k.contact)+'  ':'')+(k.phone?esc(k.phone):'')+'<br>'+
+      (k.email?esc(k.email)+'<br>':'')+
+      'Driver: '+esc(k.driver||'—')+(k.driverPhone?' · '+esc(k.driverPhone):'')+'<br>'+
+      'Tractor '+esc(k.truck||'—')+' · Trailer '+esc(k.trailer||'—')+'</div>'+
+  '</div>'+
+
+  '<h3 class="sec">Load</h3>'+
+  '<div class="kv">'+kv('Equipment',L.equipment)+kv('Commodity',L.commodity)+kv('Gross weight',wtTxt)+
+    kv('Pieces',L.pieces)+kv('Temperature / handling',L.temp)+kv('Loaded distance',miTxt)+'</div>'+
+  (L.secure?'<div style="font-size:11.5px;margin-top:8px"><strong>Securement:</strong> '+esc(L.secure)+'</div>':'')+
+  (L.notes?'<div style="font-size:11.5px;margin-top:6px"><strong>Special instructions:</strong> '+esc(L.notes)+'</div>':'')+
+
+  '<h3 class="sec">Stop schedule</h3>'+
+  '<table><thead><tr><th scope="col" style="width:26px">#</th><th scope="col" style="width:64px">Type</th>'+
+    '<th scope="col">Facility &amp; address</th><th scope="col" style="width:92px">Reference</th>'+
+    '<th scope="col" style="width:132px">Date &amp; window</th></tr></thead><tbody>'+stopRows+'</tbody></table>'+
+
+  '<h3 class="sec">Rate breakdown</h3>'+
+  '<table><thead><tr><th scope="col">Description</th><th scope="col" style="width:104px">Category</th>'+
+    '<th scope="col" style="width:170px">Basis</th><th scope="col" class="r" style="width:96px">Amount</th></tr></thead>'+
+    '<tbody>'+chRows+'</tbody>'+
+    '<tfoot>'+
+      '<tr><td colspan="3">Linehaul</td><td class="n">'+money(C.lh)+'</td></tr>'+
+      '<tr><td colspan="3">Fuel surcharge</td><td class="n">'+money(C.fs)+'</td></tr>'+
+      '<tr><td colspan="3">Accessorials</td><td class="n">'+money(C.acc)+'</td></tr>'+
+      '<tr class="dtot"><td colspan="3">TOTAL CARRIER PAY'+(C.rpm!=null?' — all-in '+money(toDisp('rate',C.rpm))+' per '+uDist():'')+
+        '</td><td class="n">'+money(C.total)+'</td></tr>'+
+    '</tfoot></table>'+
+
+  '<h3 class="sec">Payment terms</h3>'+
+  '<div class="kv">'+
+    kv('Terms','Net '+qty(numOr(T.net,0),0)+' days from '+(T.from||'receipt of complete paperwork'))+
+    kv('Payment due', C.due?fmtDate(C.due):'—')+
+    kv('Method',T.method)+
+    kv('Invoice to',T.invoiceTo)+
+    kv('Detention', numOr(T.detFree,0)>0?(qty(numOr(T.detFree,0),1)+' h free, then '+money(numOr(T.detRate,0))+'/h'):'By prior written approval only')+
+    kv('TONU / layover', money(numOr(T.tonu,0))+' / '+money(numOr(T.layover,0))+' per night')+
+  '</div>'+
+  (qpTxt?'<div style="font-size:11.5px;margin-top:8px">'+esc(qpTxt)+'</div>':'')+
+
+  '<h3 class="sec">Documents required with the invoice</h3>'+
+  (docList.length?'<ul class="docl">'+docList.map(function(d){return '<li>'+esc(d.label)+'</li>';}).join('')+'</ul>'
+    :'<div style="font-size:11.5px">None specified.</div>')+
+
+  '<h3 class="sec">Carrier obligations — terms &amp; conditions</h3>'+
+  '<div class="terms">'+esc(T.obligations||'')+'</div>'+
+
+  '<div class="dnote"><strong>Notice.</strong> This document was produced with a rate confirmation generator. '+
+    'It records the commercial terms agreed for this load; it is not legal advice and it does not itself verify '+
+    'the carrier’s operating authority, insurance or safety rating — those must be checked against FMCSA '+
+    'records before dispatch. Where a signed Broker–Carrier Agreement exists between the parties, that '+
+    'agreement governs and these terms supplement it. Both parties should have their own counsel and insurer '+
+    'review the terms they rely on.</div>'+
+
+  '<h3 class="sec">Acceptance</h3>'+
+  '<div class="sigs">'+
+    sigBox('Broker / issuing party', b.co, b.contact)+
+    sigBox('Carrier', k.co, k.contact)+
+  '</div>'+
+  '<div class="dfoot"><span>'+esc(confNo())+' · Load '+esc(L.ref||'—')+' · '+esc(b.co||'')+'</span>'+
+    '<span>Sign and return to '+esc(b.email||T.invoiceTo||'the broker')+' before dispatch.</span></div>';
+
+  function sigBox(role,co,who){
+    return '<div class="sig"><div class="st">'+esc(role)+'</div>'+
+      '<div class="sn">'+esc(co||'—')+'</div>'+
+      '<div class="sa">'+(who?'Attn: '+esc(who):'&nbsp;')+'</div>'+
+      '<div class="sl"></div><div class="sc">Signature</div>'+
+      '<div class="sig2">'+
+        '<div><div class="sl"></div><div class="sc">Print name</div></div>'+
+        '<div><div class="sl"></div><div class="sc">Date</div></div>'+
+      '</div></div>';
+  }
+}
+
+/* ── master refresh ──────────────────────────────────────── */
+function refresh(opts){
+  opts=opts||{};
+  var errs=showErrors();
+  var C=calc();
+  if(opts.rows!==false){ renderCharges(C); }
+  else { C.lines.forEach(function(L,i){ var td=$('[data-amt="'+i+'"]'); if(td) td.textContent=money(L.amt); }); }
+  renderOut(C,errs);
+  buildDoc(C);
+  $('#cnoTop').textContent=confNo();
+  save();
+  return C;
+}
+function refreshAll(){ fillFixed(); renderStops(); renderDocs(); renderRecords(); refresh({rows:true}); }
+
+/* ── events ──────────────────────────────────────────────── */
+document.addEventListener('input',function(ev){
+  var el=ev.target; if(!el||!el.tagName)return;
+  var f=el.getAttribute('data-f');
+  if(f!=null){
+    var val;
+    if(el.type==='checkbox') val=el.checked;
+    else if(el.getAttribute('data-t')==='n'){
+      var raw=el.value.trim(), n=raw===''?null:parseFloat(raw);
+      var c=el.getAttribute('data-c');
+      val = (n==null||!isFinite(n))?null:(c?toCanon(c,n):n);
+    } else val=el.value;
+    setP(S,f,val); S.sample=false;
+    if(f==='cur'||f==='units'){ refreshAll(); $('#sampChip').hidden=true; return; }
+    if(f==='terms.qpOn'){ refresh({rows:false}); return; }
+    refresh({rows:false}); $('#sampChip').hidden=true; return;
+  }
+  var si=el.getAttribute('data-s');
+  if(si!=null){ S.stops[+si][el.getAttribute('data-k')]=el.value; S.sample=false;
+    if(el.getAttribute('data-k')==='type'||el.getAttribute('data-k')==='city'){ renderStops(); }
+    refresh({rows:false}); $('#sampChip').hidden=true; return; }
+  var ci=el.getAttribute('data-c');
+  if(ci!=null&&el.closest('#chBody')){
+    var c=S.charges[+ci], key=el.getAttribute('data-k');
+    if(key==='rate'){ var rv=parseFloat(el.value); rv=isFinite(rv)?rv:0;
+      c.rate = c.basis==='mile' ? toCanon('rate',rv) : rv; }
+    else if(key==='q'){ var qv=parseFloat(el.value); c.q=isFinite(qv)?qv:1; }
+    else c[key]=el.value;
+    S.sample=false;
+    if(key==='basis'||key==='kind'){ refresh({rows:true}); } else { refresh({rows:false}); }
+    $('#sampChip').hidden=true; return;
+  }
+  var di=el.getAttribute('data-d');
+  if(di!=null&&el.closest('#docsList')){
+    var d=S.docs[+di], dk=el.getAttribute('data-k');
+    d[dk]= dk==='on' ? el.checked : el.value;
+    S.sample=false; refresh({rows:false}); $('#sampChip').hidden=true; return;
+  }
+});
+document.addEventListener('blur',function(ev){
+  var el=ev.target; if(el&&el.getAttribute&&el.getAttribute('data-f')){
+    touched[el.getAttribute('data-f')]=true; showErrors(); }
+},true);
+
+document.addEventListener('click',function(ev){
+  var t=ev.target.closest?ev.target.closest('button'):null; if(!t)return;
+  var a;
+  if((a=t.getAttribute('data-add-stop'))!=null){
+    var last=S.stops.length?S.stops[S.stops.length-1]:null;
+    S.stops.push({type:a,co:'',addr:'',city:'',ref:'',date:last?last.date:(S.conf.date||''),
+      from:'08:00',to:'16:00',appt:a==='Pickup'?'FCFS':'Appointment',notes:''});
+    S.sample=false; renderStops(); refresh({rows:false}); $('#sampChip').hidden=true;
+    var el=$('#sco'+(S.stops.length-1)); if(el)el.focus(); return;
+  }
+  if((a=t.getAttribute('data-rms'))!=null){ S.stops.splice(+a,1); S.sample=false;
+    renderStops(); refresh({rows:false}); $('#sampChip').hidden=true; return; }
+  if((a=t.getAttribute('data-mv'))!=null){
+    var i=+a, d=+t.getAttribute('data-d'), j=i+d;
+    if(j>=0&&j<S.stops.length){ var tmp=S.stops[i]; S.stops[i]=S.stops[j]; S.stops[j]=tmp;
+      S.sample=false; renderStops(); refresh({rows:false}); $('#sampChip').hidden=true; }
+    return; }
+  if((a=t.getAttribute('data-rmc'))!=null){ S.charges.splice(+a,1); S.sample=false;
+    refresh({rows:true}); $('#sampChip').hidden=true; return; }
+  if((a=t.getAttribute('data-rmd'))!=null){ S.docs.splice(+a,1); S.sample=false;
+    renderDocs(); refresh({rows:false}); $('#sampChip').hidden=true; return; }
+  if((a=t.getAttribute('data-rmr'))!=null){
+    if(confirm('Delete saved record '+S.records[+a].no+'?')){ S.records.splice(+a,1); renderRecords(); save(); }
+    return; }
+  if((a=t.getAttribute('data-open'))!=null){ openRecord(+a); return; }
+
+  switch(t.id){
+    case 'bAddCh':
+      S.charges.push({desc:'',kind:'Accessorial',basis:'flat',q:1,rate:0}); S.sample=false;
+      refresh({rows:true}); $('#sampChip').hidden=true;
+      var rows=$$('#chBody input[data-k="desc"]'); if(rows.length)rows[rows.length-1].focus();
+      return;
+    case 'bAddDoc': S.docs.push({label:'',on:true}); S.sample=false; renderDocs(); refresh({rows:false});
+      var di2=$$('#docsList input[data-k="label"]'); if(di2.length)di2[di2.length-1].focus(); return;
+    case 'bResetTerms':
+      if(confirm('Replace the terms text with the default wording?')){
+        S.terms.obligations=DEFAULT_TERMS; $('#obl').value=DEFAULT_TERMS; refresh({rows:false}); }
+      return;
+    case 'bNew': newConf(); return;
+    case 'bPrint': case 'bPrint2': window.print(); return;
+    case 'bPrev': case 'bPrev2': togglePreview(); return;
+    case 'bCsv': csvRegister(); return;
+    case 'bCsvLines': csvLines(); return;
+    case 'bJson': exportJSON(); return;
+    case 'bImport': $('#fJson').click(); return;
+    case 'bSaveRec': case 'bSaveRec2': saveRecord(); return;
+    case 'bTheme': cycleTheme(); return;
+    case 'bClear': clearAll(); return;
+  }
+});
+
+function togglePreview(){
+  var on=document.body.classList.toggle('preview');
+  [$('#bPrev'),$('#bPrev2')].forEach(function(b){ if(b){ b.setAttribute('aria-pressed',on?'true':'false');
+    if(b.id==='bPrev') b.textContent=on?'Hide document':'Preview document'; }});
+  if(on){ var d=$('#doc'); if(d) d.scrollIntoView({block:'start'}); }
+}
+function cycleTheme(){
+  var order=['auto','light','dark'], i=order.indexOf(S.theme||'auto');
+  S.theme=order[(i+1)%3];
+  applyTheme(); save();
+}
+function applyTheme(){
+  if(S.theme==='auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',S.theme);
+  var b=$('#bTheme'); if(b) b.title='Theme: '+(S.theme||'auto')+' — click to change';
+}
+function newConf(){
+  S.conf.num=Math.max(0,Math.round(numOr(S.conf.num,0)))+1;
+  S.conf.date=new Date().toISOString().slice(0,10);
+  S.load={ref:'',equipment:S.load.equipment,commodity:'',weight:null,pieces:'',temp:'',
+    miles:null,secure:'',notes:''};
+  S.carrier=Object.assign({},S.carrier,{driver:'',driverPhone:'',truck:'',trailer:''});
+  S.stops=[{type:'Pickup',co:'',addr:'',city:'',ref:'',date:S.conf.date,from:'08:00',to:'16:00',appt:'FCFS',notes:''},
+           {type:'Delivery',co:'',addr:'',city:'',ref:'',date:S.conf.date,from:'08:00',to:'16:00',appt:'Appointment',notes:''}];
+  S.charges=[{desc:'Linehaul',kind:'Linehaul',basis:'flat',q:1,rate:0},
+             {desc:'Fuel surcharge',kind:'Fuel Surcharge',basis:'mile',q:1,rate:0}];
+  S.sample=false; touched={}; refreshAll();
+  var el=$('#lRef'); if(el)el.focus();
+}
+
+/* ── records ─────────────────────────────────────────────── */
+function saveRecord(){
+  var C=calc();
+  var snap=clone(S); delete snap.records; snap.sample=false;
+  var pu=C.firstPu, del=C.lastDel;
+  var rec={ id:'r'+Date.now()+'-'+Math.floor(Math.random()*1e4), no:confNo(),
+    carrier:S.carrier.co||'', route:((pu&&pu.city)||'origin')+' → '+((del&&del.city)||'destination'),
+    pickup:(pu&&pu.date)||S.conf.date||'', delivery:(del&&del.date)||'',
+    total:C.total, totalText:money(C.total), state:snap };
+  var ix=-1; S.records.forEach(function(r,i){ if(r.no===rec.no) ix=i; });
+  if(ix>=0){ if(!confirm('A record numbered '+rec.no+' is already saved. Replace it?')) return;
+    S.records[ix]=rec; } else S.records.unshift(rec);
+  renderRecords(); save();
+  flash('Saved '+rec.no+' to this browser.');
+}
+function openRecord(i){
+  var r=S.records[i]; if(!r||!r.state)return;
+  if(!confirm('Open '+r.no+'? The confirmation you are editing now will be replaced (saved records are kept).'))return;
+  var keep=S.records;
+  S=Object.assign(sample(),r.state); S.records=keep; S.sample=false; touched={};
+  applyTheme(); refreshAll(); window.scrollTo({top:0});
+}
+var flashT;
+function flash(msg){
+  var el=$('#flashBar');
+  if(!el){ el=document.createElement('div'); el.id='flashBar'; el.className='noprint';
+    el.setAttribute('role','status');
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:99;'+
+      'background:var(--ink);color:var(--surface);padding:9px 14px;border-radius:4px;font:600 13px var(--sans);'+
+      'box-shadow:0 6px 20px -8px rgba(0,0,0,.5);max-width:92vw';
+    document.body.appendChild(el); }
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(flashT); flashT=setTimeout(function(){ el.style.display='none'; },2600);
+}
+
+/* ── export ──────────────────────────────────────────────── */
+function csvCell(v){ var s=(v==null?'':String(v));
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function csv(rows){ return '﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n'; }
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime||'text/csv;charset=utf-8'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+  }catch(e){ flash('Download blocked by the browser.'); }
+}
+function slug(s){ return String(s||'file').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'') || 'file'; }
+
+function rowFor(st,status){
+  var save0=S; S=st; var C=calc();
+  var pu=C.firstPu, del=C.lastDel;
+  var row=[confNo(), st.conf.date, status, st.carrier.co, st.carrier.mc, st.carrier.dot,
+    st.load.ref, st.load.equipment, st.load.commodity,
+    numOr(st.load.weight,null)==null?'':qty(toDisp('wt',numOr(st.load.weight,0)),1), uWt(),
+    C.miles>0?qty(toDisp('dist',C.miles),0):'', uDist(),
+    (pu&&pu.city)||'', (pu&&pu.date)||'', (del&&del.city)||'', (del&&del.date)||'',
+    C.lh.toFixed(2), C.fs.toFixed(2), C.acc.toFixed(2), C.total.toFixed(2), sym(),
+    C.rpm==null?'':toDisp('rate',C.rpm).toFixed(4),
+    'Net '+qty(numOr(st.terms.net,0),0), C.due||''];
+  S=save0; return row;
+}
+function csvRegister(){
+  var head=['Confirmation no.','Date issued','Status','Carrier','Carrier MC','Carrier USDOT',
+    'Load no.','Equipment','Commodity','Gross weight','Weight unit','Loaded distance','Distance unit',
+    'Origin','Pickup date','Destination','Delivery date',
+    'Linehaul','Fuel surcharge','Accessorials','Total carrier pay','Currency','All-in rate per distance unit',
+    'Payment terms','Payment due'];
+  var rows=[head];
+  rows.push(rowFor(S,'Current'));
+  S.records.forEach(function(r){ if(r.state) rows.push(rowFor(Object.assign(sample(),r.state),'Saved')); });
+  dl(slug('rate-confirmations-'+confNo())+'.csv', csv(rows));
+}
+function csvLines(){
+  var C=calc();
+  var rows=[['Confirmation no.','Load no.','Carrier','Line','Description','Category','Basis',
+    'Units','Rate','Currency','Amount']];
+  C.lines.forEach(function(L,i){
+    var c=L.c, basis = c.basis==='mile'?('Per '+uDist()):c.basis==='unit'?'Per unit':
+      c.basis==='pct'?'% of linehaul':'Flat';
+    var rate = c.basis==='mile'?toDisp('rate',numOr(c.rate,0)):numOr(c.rate,0);
+    rows.push([confNo(),S.load.ref,S.carrier.co,i+1,c.desc,c.kind,basis,
+      c.basis==='unit'?qty(numOr(c.q,1),2):'', rate.toFixed(4), sym(), L.amt.toFixed(2)]);
+  });
+  rows.push(['','','','','TOTAL CARRIER PAY','','','','',sym(),C.total.toFixed(2)]);
+  dl(slug('charges-'+confNo())+'.csv', csv(rows));
+}
+function exportJSON(){
+  dl(slug('rate-confirmation-'+confNo())+'.json',
+     JSON.stringify(S,null,2),'application/json;charset=utf-8');
+}
+$('#fJson').addEventListener('change',function(ev){
+  var f=ev.target.files&&ev.target.files[0]; if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      if(!o||typeof o!=='object'||!o.conf) throw new Error('bad');
+      var base=sample();
+      ['conf','broker','carrier','load','terms'].forEach(function(k){o[k]=Object.assign({},base[k],o[k]||{});});
+      if(!Array.isArray(o.stops))o.stops=[]; if(!Array.isArray(o.charges))o.charges=[];
+      if(!Array.isArray(o.docs))o.docs=base.docs; if(!Array.isArray(o.records))o.records=S.records;
+      S=Object.assign(base,o); S.sample=false; touched={};
+      applyTheme(); refreshAll(); flash('Imported '+confNo()+'.');
+    }catch(e){ flash('That file is not a rate confirmation export.'); }
+    ev.target.value='';
+  };
+  rd.onerror=function(){ flash('Could not read that file.'); ev.target.value=''; };
+  rd.readAsText(f);
+});
+function clearAll(){
+  if(!confirm('Clear every field, the saved load records and the stored copy in this browser? This cannot be undone.'))return;
+  try{ localStorage.removeItem(K); }catch(e){}
+  var th=S.theme;
+  S=sample();
+  S.sample=false; S.theme=th;
+  S.broker={co:'',addr:'',city:'',mc:'',dot:'',contact:'',phone:'',email:'',after:''};
+  S.carrier={co:'',addr:'',city:'',mc:'',dot:'',contact:'',phone:'',email:'',driver:'',driverPhone:'',truck:'',trailer:''};
+  S.load={ref:'',equipment:'',commodity:'',weight:null,pieces:'',temp:'',miles:null,secure:'',notes:''};
+  S.stops=[{type:'Pickup',co:'',addr:'',city:'',ref:'',date:'',from:'',to:'',appt:'FCFS',notes:''},
+           {type:'Delivery',co:'',addr:'',city:'',ref:'',date:'',from:'',to:'',appt:'Appointment',notes:''}];
+  S.charges=[{desc:'Linehaul',kind:'Linehaul',basis:'flat',q:1,rate:null},
+             {desc:'Fuel surcharge',kind:'Fuel Surcharge',basis:'mile',q:1,rate:null}];
+  S.terms.invoiceTo=''; S.records=[]; S.conf.num=1; S.conf.prefix='RC';
+  S.conf.date=new Date().toISOString().slice(0,10);
+  touched={}; applyTheme(); refreshAll();
+  window.scrollTo({top:0});
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+load();
+applyTheme();
+refreshAll();
+window.addEventListener('beforeprint',function(){ refresh({rows:false}); });
+})();
+</script>
+</body>
+</html>

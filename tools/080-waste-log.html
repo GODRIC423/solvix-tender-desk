@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Food Waste Log — turns waste entries into cost rankings and a printable report</title>
+<meta name="description" content="Log each waste entry with product, quantity, cost and reason. See daily and weekly totals by value, the worst reasons and products ranked by cost, waste as a percentage of food cost or sales, an 8-week trend and a target-threshold alert. Saves in your browser, prints a waste report, exports CSV and JSON.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Cpath d='M10 12h12l-1 14a2 2 0 01-2 2H13a2 2 0 01-2-2z' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M8 12h16M13 12V9a1 1 0 011-1h4a1 1 0 011 1v3' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M14 16v8M18 16v8' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Food Waste Log — Retail & Hospitality ═══════════════════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}}
+:root[data-theme="dark"]{--accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}
+
+.appbar .cur{width:auto;padding:7px 8px;font-size:13px}
+.appbar .curC{width:44px;padding:7px 6px;font-size:13px}
+.hero2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.hero2 .stat .v{font-size:17px}
+@media(max-width:560px){.hero2{grid-template-columns:1fr}}
+.barrow{background:var(--sunk);border-radius:3px;height:7px;overflow:hidden;margin-top:5px}
+.bar{height:100%;background:var(--accent);border-radius:3px}
+.rankrow{padding:9px 0;border-bottom:1px solid var(--line)}
+.rankrow:last-child{border-bottom:0}
+.rankrow .rr-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:13.5px}
+.rankrow .rr-name{font-weight:650}
+.rankrow .rr-sub{font-size:11.5px;color:var(--muted)}
+.rankrow .rr-val{font-family:var(--mono);font-weight:650;white-space:nowrap}
+@media print{.barrow{background:#eee}.bar{background:#888}}
+.trow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.trow:last-child{border-bottom:0}
+.trow .tw-label{width:118px;flex:none;color:var(--ink-2)}
+.trow .tw-bar{flex:1;min-width:0}
+.trow .tw-val{width:78px;flex:none;text-align:right;font-family:var(--mono)}
+.trow .tw-d{width:44px;flex:none;text-align:right;font-size:11.5px}
+.doc-hd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;padding:14px var(--pad);border-bottom:2px solid var(--ink)}
+.doc-hd .biz{font-size:13px;line-height:1.5}
+.doc-hd .biz b{display:block;font-size:15.5px}
+.doc-meta{text-align:right;font-size:13px;line-height:1.6}
+.docmark{font:700 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent-wash);
+  display:inline-block;padding:3px 8px;border-radius:3px;margin-bottom:4px}
+.orders-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:10px;margin:22px 0 10px}
+.orders-head h2{font-size:17px}
+.sec-hd{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:12px var(--pad) 0}
+.sig{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;padding:14px var(--pad) 16px}
+.sig div{border-top:1px solid var(--line-hard);padding-top:5px;font-size:11.5px;color:var(--muted)}
+@media print{.sig div{border-top:1px solid #888}}
+.unitcell{width:74px}
+table input.qtycell,table input.costcell{width:76px}
+.targetrow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.targetrow .f{flex:1;min-width:110px}
+@media(max-width:900px){.split>.stack.sticky{order:-1}}
+.smpl{font-size:8pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  border:1pt dashed #000;padding:2pt 5pt;display:inline-block;margin-bottom:8px}
+@media screen{.smpl{border-color:var(--warn);color:var(--warn);background:var(--warn-wash);border-style:dashed}}
+.split>.stack{min-width:0}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="appbar noprint">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">WST</div>
+    <div>
+      <h1>Food Waste Log</h1>
+      <div class="sub">RETAIL &amp; HOSPITALITY</div>
+    </div>
+  </div>
+  <div class="row">
+    <select class="cur" id="cur" aria-label="Currency">
+      <option value="£">£ GBP</option>
+      <option value="$">$ USD</option>
+      <option value="€">€ EUR</option>
+      <option value="custom">Custom…</option>
+    </select>
+    <input class="curC" id="curC" maxlength="3" placeholder="¤" aria-label="Custom currency symbol" hidden>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="bPrint">🖨 Print report</button>
+    <button type="button" class="btn" id="bCsv">⭳ CSV</button>
+    <button type="button" class="btn" id="bJson">⭳ JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import JSON</button>
+    <input type="file" id="fImport" accept="application/json" hidden>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+  </div>
+</header>
+
+  <div class="split noprint">
+    <div class="stack">
+
+      <div class="card">
+        <div class="hd"><h2>Business &amp; report settings</h2><span class="chip" id="sampleChip">Sample data</span></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="bizName">Business name</label><input id="bizName"></div>
+            <div class="f"><label for="bizAddr">Site / address</label><input id="bizAddr"></div>
+            <div class="f"><label for="bizBy">Compiled by</label><input id="bizBy"></div>
+            <div class="f"><label for="defBy">Default "recorded by" for new rows</label><input id="defBy"></div>
+          </div>
+          <div class="grid cols-2">
+            <div class="f"><label for="period">Report period</label>
+              <select id="period">
+                <option value="week">This week (Mon–Sun)</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
+            <div class="f"><label for="basisType">Compare waste against</label>
+              <select id="basisType"><option value="cost">Food cost</option><option value="sales">Sales</option></select>
+            </div>
+          </div>
+          <div class="f"><label for="basisValue" id="basisLbl">Food cost for the selected period</label>
+            <input type="number" id="basisValue" min="0" step="0.01" inputmode="decimal">
+          </div>
+          <div class="targetrow">
+            <div class="f"><label for="targetMode">Target threshold</label>
+              <select id="targetMode"><option value="pct">% of the figure above</option><option value="flat">Flat amount for the period</option></select>
+            </div>
+            <div class="f"><label for="targetValue" id="targetLbl">Target %</label>
+              <input type="number" id="targetValue" min="0" step="0.1" inputmode="decimal">
+            </div>
+          </div>
+          <p class="hint">The period figure and target apply to whichever report period is selected above — re-enter them if you switch periods.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Waste entries</h2>
+          <button type="button" class="btn sm" id="bAdd">+ Entry</button>
+          <button type="button" class="btn sm" id="bAdd5">+5</button>
+        </div>
+        <div class="bd">
+          <div class="tw">
+            <table id="tblEnt">
+              <thead><tr>
+                <th scope="col" style="min-width:128px">Date</th>
+                <th scope="col" style="min-width:150px">Product</th>
+                <th scope="col" class="r">Qty</th>
+                <th scope="col">Unit</th>
+                <th scope="col" class="r">Unit cost</th>
+                <th scope="col" style="min-width:140px">Reason</th>
+                <th scope="col" style="min-width:100px">Recorded by</th>
+                <th scope="col" class="r">Value</th>
+                <th scope="col"><span class="lbl" style="font-size:9.5px">Del</span></th>
+              </tr></thead>
+              <tbody id="tb"></tbody>
+            </table>
+          </div>
+          <datalist id="unitList">
+            <option value="kg"><option value="g"><option value="ltr"><option value="ml">
+            <option value="ea"><option value="portion"><option value="tray"><option value="box">
+          </datalist>
+          <p class="hint">Value = quantity × unit cost, rounded to the nearest cent. Add one row per waste event — small amounts add up.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="stack sticky">
+      <div class="card">
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k" id="heroLbl">Waste value — this week</div>
+            <div class="v" id="heroVal">—</div>
+            <div class="u" id="heroSub">—</div>
+          </div>
+          <div class="hero2">
+            <div class="stat"><div class="k">Today's waste</div><div class="v" id="stToday">—</div></div>
+            <div class="stat"><div class="k" id="stPctLbl">% of food cost</div><div class="v" id="stPct">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note" id="targetNote"></div>
+
+      <div class="card">
+        <div class="hd"><h2>Reasons ranked by cost</h2></div>
+        <div class="bd" id="reasonList"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Products ranked by cost</h2></div>
+        <div class="bd" id="productList"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>8-week trend</h2></div>
+        <div class="bd" id="trendList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="orders-head noprint">
+    <h2>Waste report</h2>
+    <span class="hint">This section is the document — it prints as your waste report.</span>
+  </div>
+  <div id="report" class="stack"></div>
+
+  <footer class="hint noprint" style="padding:18px 2px 0">
+    Value is quantity × unit cost per entry, rounded to the nearest cent. Daily, weekly and period totals sum every
+    logged entry in range. The trend groups entries into Monday–Sunday weeks. A percentage-of-cost or -sales figure
+    only appears once you enter a period figure above, and the target alert only appears once a target is set. This
+    log tracks waste cost only — it is not a food-safety, temperature or allergen record; keep those separately as
+    required. Data is stored only in this browser (localStorage) — export CSV/JSON to back it up or move it to another device.
+  </footer>
+</div>
+
+<script>
+"use strict";
+var KEY="solvix.waste-log.v1";
+var $=function(s,r){return (r||document).querySelector(s);};
+var seq=0;
+function uid(){seq++;return "r"+Date.now().toString(36)+seq.toString(36);}
+function num(v,d){if(v===""||v===null||v===undefined)return d===undefined?0:d;
+  var n=parseFloat(v);return isFinite(n)?n:(d===undefined?0:d);}
+function ok(x){return typeof x==="number"&&isFinite(x);}
+function r2(x){if(!ok(x))return 0;var v=Math.round((x+(x<0?-1e-9:1e-9))*100)/100;return v===0?0:v;}
+function r1(x){if(!ok(x))return 0;var v=Math.round((x+(x<0?-1e-9:1e-9))*10)/10;return v===0?0:v;}
+function esc(s){return String(s===null||s===undefined?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function grp(n,dp){dp=dp===undefined?2:dp;
+  var s=(ok(n)?n:0).toFixed(dp),neg=s[0]==="-";if(neg)s=s.slice(1);
+  var parts=s.split("."),ip=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,",");
+  return (neg?"-":"")+ip+(parts[1]!==undefined?"."+parts[1]:"");}
+function sym(){return S.cur==="custom"?(String(S.curC||"").trim()||"¤"):S.cur;}
+function mny(x){if(!ok(x))return "—";var v=r2(x);if(Object.is(v,-0))v=0;
+  return sym()+grp(Math.abs(v),2)+(v<0?" DR":"");}
+function qFmt(x){if(!ok(x))return "—";var v=Math.round(x*100)/100;if(Object.is(v,-0))v=0;
+  if(Math.abs(v-Math.round(v))<1e-9)return grp(Math.round(v),0);
+  var s=v.toFixed(2).replace(/0$/,"").replace(/\.$/,"");return grp(parseFloat(s),s.indexOf(".")>-1?s.split(".")[1].length:0);}
+function pctFmt(x,dp){if(x===null||!ok(x))return "—";dp=dp===undefined?1:dp;
+  var f=Math.pow(10,dp),v=Math.round((x+(x<0?-1e-9:1e-9))*f)/f;if(Object.is(v,-0))v=0;return grp(v,dp)+"%";}
+function pad2(n){return String(n).length<2?"0"+n:String(n);}
+function todayISO(){var d=new Date();return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());}
+function parseISO(s){var p=String(s||"").split("-");if(p.length!==3)return null;var y=+p[0],m=+p[1],d=+p[2];
+  if(!y||!m||!d)return null;var dt=new Date(y,m-1,d);return isNaN(dt.getTime())?null:dt;}
+function isoOf(d){return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());}
+function addDays(iso,n){var d=parseISO(iso);if(!d)return iso;d.setDate(d.getDate()+n);return isoOf(d);}
+function mondayOf(iso){var d=parseISO(iso);if(!d)return iso;var day=d.getDay();var diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff);return isoOf(d);}
+function dmy(iso){if(!iso)return "—";var p=String(iso).split("-");if(p.length!==3)return esc(iso);
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var mi=parseInt(p[1],10)-1;return p[2]+" "+(M[mi]||p[1])+" "+p[0];}
+function dm(iso){if(!iso)return "—";var p=String(iso).split("-");if(p.length!==3)return esc(iso);
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var mi=parseInt(p[1],10)-1;return p[2]+" "+(M[mi]||p[1]);}
+
+var REASONS=["Spoilage","Over-production","Prep error","Customer return","Spillage","Out of date"];
+
+/* ---- sample & blank state ---- */
+function sampleEntries(){
+  var t=todayISO();
+  var R=[
+    [0,"Chicken Breast",1.4,"kg",7.80,"Spoilage","J.K."],
+    [1,"Mixed Salad Greens",2.0,"kg",3.20,"Spoilage","M.R."],
+    [2,"Fresh Bread Rolls",18,"ea",0.35,"Over-production","J.K."],
+    [3,"Side Salad Portions",12,"portion",1.20,"Over-production","M.R."],
+    [4,"Tomatoes",1.6,"kg",2.10,"Prep error","T.S."],
+    [5,"Milk",3,"ltr",1.05,"Out of date","J.K."],
+    [6,"Soft Drinks",4,"ea",0.60,"Spillage","M.R."],
+    [7,"Chicken Breast",1.1,"kg",7.80,"Spoilage","J.K."],
+    [8,"Mixed Salad Greens",1.5,"kg",3.20,"Spoilage","T.S."],
+    [9,"Fresh Bread Rolls",22,"ea",0.35,"Over-production","M.R."],
+    [10,"Salmon Fillet",0.8,"kg",14.50,"Spoilage","J.K."],
+    [11,"Tomatoes",1.2,"kg",2.10,"Customer return","M.R."],
+    [12,"Side Salad Portions",9,"portion",1.20,"Over-production","J.K."],
+    [13,"Milk",2,"ltr",1.05,"Out of date","T.S."],
+    [14,"Chicken Breast",1.8,"kg",7.80,"Spoilage","M.R."],
+    [15,"Mixed Salad Greens",2.3,"kg",3.20,"Spoilage","J.K."],
+    [16,"Fresh Bread Rolls",15,"ea",0.35,"Over-production","T.S."],
+    [17,"Tomatoes",1.0,"kg",2.10,"Prep error","M.R."],
+    [18,"Salmon Fillet",0.6,"kg",14.50,"Spoilage","J.K."],
+    [19,"Soft Drinks",2,"ea",0.60,"Spillage","T.S."],
+    [20,"Side Salad Portions",7,"portion",1.20,"Over-production","M.R."],
+    [21,"Chicken Breast",1.3,"kg",7.80,"Spoilage","J.K."],
+    [22,"Mixed Salad Greens",1.9,"kg",3.20,"Spoilage","M.R."],
+    [23,"Fresh Bread Rolls",20,"ea",0.35,"Over-production","T.S."],
+    [24,"Milk",2,"ltr",1.05,"Out of date","J.K."],
+    [25,"Tomatoes",0.9,"kg",2.10,"Customer return","M.R."],
+    [26,"Salmon Fillet",0.5,"kg",14.50,"Spoilage","J.K."],
+    [27,"Side Salad Portions",10,"portion",1.20,"Over-production","T.S."]
+  ];
+  return R.map(function(a){
+    return {id:uid(),date:addDays(t,-a[0]),product:a[1],qty:a[2],unit:a[3],cost:a[4],reason:a[5],by:a[6]};
+  });
+}
+function blankEntry(){return {id:uid(),date:todayISO(),product:"",qty:0,unit:"",cost:0,reason:REASONS[0],by:(S&&S.defBy)||""};}
+function sampleState(){
+  return {
+    cur:"£",curC:"",
+    biz:{name:"The Copper Kettle Café",addr:"22 Mill Lane, York YO1 6JD",by:"J. Okafor"},
+    defBy:"",
+    period:"week",basisType:"cost",basisValue:1500,targetMode:"pct",targetValue:2,
+    entries:sampleEntries(),
+    sample:true
+  };
+}
+function blankState(){
+  return {cur:"£",curC:"",biz:{name:"",addr:"",by:""},defBy:"",
+    period:"week",basisType:"cost",basisValue:0,targetMode:"pct",targetValue:0,
+    entries:[],sample:false};
+}
+var S=sampleState();
+
+function normalise(o){
+  var s=blankState();
+  o=o||{};
+  s.cur=(typeof o.cur==="string")?o.cur:"£";
+  s.curC=(typeof o.curC==="string")?o.curC:"";
+  s.biz={name:(o.biz&&o.biz.name)||"",addr:(o.biz&&o.biz.addr)||"",by:(o.biz&&o.biz.by)||""};
+  s.defBy=typeof o.defBy==="string"?o.defBy:"";
+  s.period=["week","7d","30d","all"].indexOf(o.period)>-1?o.period:"week";
+  s.basisType=(o.basisType==="sales")?"sales":"cost";
+  s.basisValue=Math.max(0,num(o.basisValue,0));
+  s.targetMode=(o.targetMode==="flat")?"flat":"pct";
+  s.targetValue=Math.max(0,num(o.targetValue,0));
+  s.entries=Array.isArray(o.entries)?o.entries.map(function(e){
+    return {id:e.id||uid(),date:(typeof e.date==="string"&&parseISO(e.date))?e.date:todayISO(),
+      product:String(e.product||""),qty:Math.max(0,num(e.qty,0)),unit:String(e.unit||""),
+      cost:Math.max(0,num(e.cost,0)),reason:REASONS.indexOf(e.reason)>-1?e.reason:REASONS[0],
+      by:String(e.by||"")};
+  }):[];
+  s.sample=!!o.sample;
+  return s;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);if(!raw)return false;
+    var o=JSON.parse(raw);if(!o||!Array.isArray(o.entries))return false;
+    S=normalise(o);return true;
+  }catch(e){return false;}
+}
+
+/* ---- period range ---- */
+function periodRange(period){
+  var t=todayISO();
+  if(period==="week"){var mon=mondayOf(t);return {start:mon,end:addDays(mon,6),label:"This week",days:7};}
+  if(period==="7d")return {start:addDays(t,-6),end:t,label:"Last 7 days",days:7};
+  if(period==="30d")return {start:addDays(t,-29),end:t,label:"Last 30 days",days:30};
+  return {start:null,end:null,label:"All time",days:null};
+}
+function inRange(dateStr,range){
+  if(range.start===null)return true;
+  return dateStr>=range.start&&dateStr<=range.end;
+}
+
+/* ---- calc ---- */
+function entryValue(e){return r2(num(e.qty,0)*num(e.cost,0));}
+
+function calc(){
+  var t=todayISO();
+  var range=periodRange(S.period);
+  var all=S.entries.map(function(e){return {e:e,value:entryValue(e)};});
+  var periodRows=all.filter(function(x){return inRange(x.e.date,range);});
+  var periodTotal=r2(periodRows.reduce(function(a,x){return a+x.value;},0));
+
+  var todayRows=all.filter(function(x){return x.e.date===t;});
+  var todayTotal=r2(todayRows.reduce(function(a,x){return a+x.value;},0));
+
+  var days;
+  if(range.days!==null)days=range.days;
+  else{
+    if(!S.entries.length)days=0;
+    else{
+      var minDate=S.entries.reduce(function(m,e){return (!m||e.date<m)?e.date:m;},null);
+      var md=parseISO(minDate),tt=parseISO(t);
+      days=(md&&tt)?Math.max(1,Math.round((tt-md)/86400000)+1):0;
+    }
+  }
+  var avgPerDay=days>0?r2(periodTotal/days):null;
+
+  /* ranked reasons */
+  var rgroups={};
+  periodRows.forEach(function(x){
+    var k=x.e.reason||"—";
+    if(!rgroups[k])rgroups[k]={name:k,value:0,count:0};
+    rgroups[k].value=r2(rgroups[k].value+x.value);
+    rgroups[k].count++;
+  });
+  var reasons=Object.keys(rgroups).map(function(k){return rgroups[k];})
+    .sort(function(a,b){return b.value-a.value;})
+    .map(function(g){return {name:g.name,value:g.value,count:g.count,
+      share:periodTotal>0?(g.value/periodTotal*100):(g.value>0?100:0)};});
+
+  /* ranked products */
+  var pgroups={};
+  periodRows.forEach(function(x){
+    var name=(x.e.product||"").trim()||"(unnamed)";
+    var k=name.toLowerCase();
+    if(!pgroups[k])pgroups[k]={name:name,value:0,qty:0,count:0,unit:x.e.unit||""};
+    pgroups[k].value=r2(pgroups[k].value+x.value);
+    pgroups[k].qty+=num(x.e.qty,0);
+    pgroups[k].count++;
+  });
+  var products=Object.keys(pgroups).map(function(k){return pgroups[k];})
+    .sort(function(a,b){return b.value-a.value;})
+    .map(function(g){return {name:g.name,value:g.value,qty:g.qty,unit:g.unit,count:g.count,
+      share:periodTotal>0?(g.value/periodTotal*100):(g.value>0?100:0)};});
+
+  /* target & basis */
+  var basis=Math.max(0,num(S.basisValue,0));
+  var pctOfBasis=basis>0?(periodTotal/basis*100):null;
+  var targetValue=null;
+  if(S.targetMode==="pct"){
+    if(basis>0)targetValue=r2(basis*num(S.targetValue,0)/100);
+  } else {
+    if(num(S.targetValue,0)>0)targetValue=r2(num(S.targetValue,0));
+  }
+  var exceeded=(targetValue!==null)&&periodTotal>targetValue+1e-9;
+  var diff=targetValue!==null?r2(Math.abs(periodTotal-targetValue)):null;
+
+  /* 8-week trend */
+  var curMon=mondayOf(t);
+  var weeks=[];
+  for(var i=7;i>=0;i--){
+    var wm=addDays(curMon,-7*i), we=addDays(wm,6);
+    var val=r2(all.filter(function(x){return x.e.date>=wm&&x.e.date<=we;})
+      .reduce(function(a,x){return a+x.value;},0));
+    weeks.push({start:wm,end:we,value:val});
+  }
+  var maxWeek=Math.max.apply(null,weeks.map(function(w){return w.value;}).concat([0.01]));
+  weeks.forEach(function(w,idx){
+    w.pct=maxWeek>0?(w.value/maxWeek*100):0;
+    w.delta=idx>0?r2(w.value-weeks[idx-1].value):null;
+  });
+
+  var maxReason=Math.max.apply(null,reasons.map(function(g){return g.value;}).concat([0.01]));
+  var maxProduct=Math.max.apply(null,products.map(function(g){return g.value;}).concat([0.01]));
+
+  /* daily totals within the selected period */
+  var dgroups={};
+  periodRows.forEach(function(x){
+    var k=x.e.date||"—";
+    if(!dgroups[k])dgroups[k]={date:k,value:0,count:0};
+    dgroups[k].value=r2(dgroups[k].value+x.value);
+    dgroups[k].count++;
+  });
+  var dailyTotals=Object.keys(dgroups).map(function(k){return dgroups[k];})
+    .sort(function(a,b){return b.date.localeCompare(a.date);});
+
+  return {range:range,periodRows:periodRows,periodTotal:periodTotal,todayTotal:todayTotal,
+    days:days,avgPerDay:avgPerDay,reasons:reasons,products:products,maxReason:maxReason,maxProduct:maxProduct,
+    basis:basis,pctOfBasis:pctOfBasis,targetValue:targetValue,exceeded:exceeded,diff:diff,weeks:weeks,
+    dailyTotals:dailyTotals,entryCount:periodRows.length};
+}
+
+/* ---- entries table ---- */
+function entryById(id){for(var i=0;i<S.entries.length;i++){if(S.entries[i].id===id)return S.entries[i];}return null;}
+function reasonOptions(sel){
+  return REASONS.map(function(r){return '<option value="'+esc(r)+'"'+(r===sel?" selected":"")+'>'+esc(r)+'</option>';}).join("");
+}
+function rowHTML(e){
+  return '<tr data-id="'+e.id+'">'+
+    '<td><input type="date" data-f="date" value="'+esc(e.date)+'" aria-label="Date"></td>'+
+    '<td><input data-f="product" value="'+esc(e.product)+'" placeholder="Product" aria-label="Product"></td>'+
+    '<td class="r"><input class="qtycell" data-f="qty" type="number" min="0" step="0.01" value="'+e.qty+'" aria-label="Quantity"></td>'+
+    '<td><input class="unitcell" list="unitList" data-f="unit" value="'+esc(e.unit)+'" placeholder="unit" aria-label="Unit"></td>'+
+    '<td class="r"><input class="costcell" data-f="cost" type="number" min="0" step="0.01" value="'+e.cost+'" aria-label="Unit cost"></td>'+
+    '<td><select data-f="reason" aria-label="Reason">'+reasonOptions(e.reason)+'</select></td>'+
+    '<td><input data-f="by" value="'+esc(e.by)+'" placeholder="Initials" aria-label="Recorded by"></td>'+
+    '<td class="n valcell">'+mny(entryValue(e))+'</td>'+
+    '<td><button type="button" class="btn ico sm bDel" aria-label="Remove entry" title="Remove entry">✕</button></td>'+
+    '</tr>';
+}
+function buildTable(){
+  $("#tb").innerHTML=S.entries.length?
+    S.entries.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).map(rowHTML).join("")
+    : '';
+  if(!S.entries.length){
+    $("#tb").innerHTML='<tr><td colspan="9" class="empty">No waste logged yet — add an entry above.</td></tr>';
+  }
+}
+function updateValCells(){
+  var trs=$("#tb").querySelectorAll("tr[data-id]");
+  trs.forEach(function(tr){
+    var e=entryById(tr.getAttribute("data-id"));if(!e)return;
+    var c=tr.querySelector(".valcell");if(c)c.textContent=mny(entryValue(e));
+  });
+}
+
+/* ---- rankings render ---- */
+function rankListHTML(list,max,unitLabel){
+  if(!list.length)return '<div class="empty">No entries in this period.</div>';
+  return list.map(function(g,i){
+    var pct=max>0?Math.max(2,Math.round(g.value/max*100)):0;
+    var sub=g.count+" entr"+(g.count===1?"y":"ies")+(unitLabel?(" · "+qFmt(g.qty)+(g.unit?(" "+esc(g.unit)):"")):"");
+    return '<div class="rankrow">'+
+      '<div class="rr-top"><span class="rr-name">'+(i+1)+'. '+esc(g.name)+'</span>'+
+      '<span class="rr-val">'+mny(g.value)+'</span></div>'+
+      '<div class="rr-sub">'+esc(sub)+' · '+pctFmt(g.share,0)+' of period</div>'+
+      '<div class="barrow"><div class="bar" style="width:'+pct+'%"></div></div>'+
+      '</div>';
+  }).join("");
+}
+function trendListHTML(weeks){
+  return weeks.map(function(w){
+    var pct=Math.max(w.value>0?2:0,Math.round(w.pct));
+    var d="—";
+    if(w.delta!==null){
+      if(w.delta>0.004)d='<span style="color:var(--bad)">▲'+mny(Math.abs(w.delta))+'</span>';
+      else if(w.delta<-0.004)d='<span style="color:var(--ok)">▼'+mny(Math.abs(w.delta))+'</span>';
+      else d='<span class="hint">flat</span>';
+    }
+    return '<div class="trow"><div class="tw-label">'+dm(w.start)+' – '+dm(w.end)+'</div>'+
+      '<div class="tw-bar"><div class="barrow"><div class="bar" style="width:'+pct+'%"></div></div></div>'+
+      '<div class="tw-val">'+mny(w.value)+'</div><div class="tw-d">'+d+'</div></div>';
+  }).join("");
+}
+
+/* ---- paint ---- */
+function paint(){
+  var C=calc();
+  $("#sampleChip").hidden=!S.sample;
+
+  $("#heroLbl").textContent="Waste value — "+C.range.label.toLowerCase();
+  $("#heroVal").textContent=mny(C.periodTotal);
+  $("#heroSub").textContent=C.entryCount+" entr"+(C.entryCount===1?"y":"ies")+
+    (C.range.start?(" · "+dmy(C.range.start)+" – "+dmy(C.range.end)):" · all logged dates")+
+    (C.avgPerDay!==null?(" · avg "+mny(C.avgPerDay)+"/day"):"");
+
+  $("#stToday").textContent=mny(C.todayTotal);
+  var basisWord=S.basisType==="sales"?"sales":"food cost";
+  $("#stPctLbl").textContent="% of "+basisWord;
+  $("#stPct").textContent=pctFmt(C.pctOfBasis,1);
+
+  var tn=$("#targetNote");
+  if(C.targetValue===null){
+    tn.className="note";
+    tn.innerHTML='<strong>No target set.</strong> '+
+      (S.targetMode==="pct"?"Enter this period's "+basisWord+" figure above to calculate a % target."
+        :"Enter a flat target amount above to see an alert here.");
+  } else if(C.exceeded){
+    tn.className="note bad";
+    tn.innerHTML='<strong>Over target by '+mny(C.diff)+'.</strong> '+mny(C.periodTotal)+' logged against a target of '+
+      mny(C.targetValue)+' for '+esc(C.range.label.toLowerCase())+'.';
+  } else {
+    tn.className="note";
+    tn.innerHTML='<strong>Within target</strong> — '+mny(C.periodTotal)+' logged against a target of '+mny(C.targetValue)+
+      ' ('+mny(C.diff)+' of headroom left) for '+esc(C.range.label.toLowerCase())+'.';
+  }
+
+  $("#reasonList").innerHTML=rankListHTML(C.reasons,C.maxReason,false);
+  $("#productList").innerHTML=rankListHTML(C.products,C.maxProduct,true);
+  $("#trendList").innerHTML=trendListHTML(C.weeks);
+
+  buildReport(C);
+}
+
+/* ---- printable report ---- */
+function letterhead(C){
+  return '<div class="doc-hd">'+
+    '<div class="biz"><span class="docmark">Food Waste Report</span><b>'+esc(S.biz.name||"Your business name")+'</b>'+
+    (S.biz.addr?esc(S.biz.addr)+'<br>':'')+
+    (S.biz.by?'Compiled by: '+esc(S.biz.by):'')+'</div>'+
+    '<div class="doc-meta">Period<br><b>'+esc(C.range.label)+'</b><br>'+
+    (C.range.start?esc(dmy(C.range.start))+' – '+esc(dmy(C.range.end)):"all logged dates")+
+    '<br>Generated '+esc(dmy(todayISO()))+'</div>'+
+    '</div>';
+}
+function summaryHTML(C){
+  var basisWord=S.basisType==="sales"?"sales":"food cost";
+  return '<div class="bd"><div class="grid cols-3">'+
+    '<div class="stat"><div class="k">Total waste value</div><div class="v" style="font-size:19px">'+mny(C.periodTotal)+'</div></div>'+
+    '<div class="stat"><div class="k">Entries logged</div><div class="v" style="font-size:19px">'+grp(C.entryCount,0)+'</div></div>'+
+    '<div class="stat"><div class="k">Average per day</div><div class="v" style="font-size:19px">'+(C.avgPerDay!==null?mny(C.avgPerDay):"—")+'</div></div>'+
+    '<div class="stat"><div class="k">% of '+basisWord+'</div><div class="v" style="font-size:19px">'+pctFmt(C.pctOfBasis,1)+'</div></div>'+
+    '<div class="stat"><div class="k">Target for period</div><div class="v" style="font-size:19px">'+(C.targetValue!==null?mny(C.targetValue):"—")+'</div></div>'+
+    '<div class="stat"><div class="k">Vs. target</div><div class="v" style="font-size:19px">'+
+      (C.targetValue===null?"—":(C.exceeded?('Over by '+mny(C.diff)):('Under by '+mny(C.diff))))+'</div></div>'+
+    '</div></div>';
+}
+function reasonsTableHTML(C){
+  var rows=C.reasons.length?C.reasons.map(function(g,i){
+    return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(g.name)+'</td><td class="n">'+g.count+'</td>'+
+      '<td class="n">'+mny(g.value)+'</td><td class="n">'+pctFmt(g.share,0)+'</td></tr>';
+  }).join(""):'<tr><td colspan="5" class="empty">No entries in this period.</td></tr>';
+  return '<div class="tw"><table><thead><tr><th scope="col">Rank</th><th scope="col">Reason</th><th scope="col" class="r">Entries</th><th scope="col" class="r">Value</th><th scope="col" class="r">% of period</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+}
+function productsTableHTML(C){
+  var rows=C.products.length?C.products.map(function(g,i){
+    return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(g.name)+'</td><td class="n">'+qFmt(g.qty)+(g.unit?(" "+esc(g.unit)):"")+'</td>'+
+      '<td class="n">'+g.count+'</td><td class="n">'+mny(g.value)+'</td><td class="n">'+pctFmt(g.share,0)+'</td></tr>';
+  }).join(""):'<tr><td colspan="6" class="empty">No entries in this period.</td></tr>';
+  return '<div class="tw"><table><thead><tr><th scope="col">Rank</th><th scope="col">Product</th><th scope="col" class="r">Qty wasted</th><th scope="col" class="r">Entries</th><th scope="col" class="r">Value</th><th scope="col" class="r">% of period</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+}
+function dailyTableHTML(C){
+  var rows=C.dailyTotals.length?C.dailyTotals.map(function(d){
+    return '<tr><td>'+esc(dmy(d.date))+'</td><td class="n">'+d.count+'</td><td class="n">'+mny(d.value)+'</td></tr>';
+  }).join(""):'<tr><td colspan="3" class="empty">No entries in this period.</td></tr>';
+  return '<div class="tw"><table><thead><tr><th scope="col">Date</th><th scope="col" class="r">Entries</th><th scope="col" class="r">Value</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+}
+function trendTableHTML(C){
+  var rows=C.weeks.map(function(w){
+    var d=w.delta===null?"—":(w.delta>0.004?("+"+mny(w.delta)):(w.delta<-0.004?("−"+mny(Math.abs(w.delta))):"flat"));
+    return '<tr><td>'+esc(dmy(w.start))+' – '+esc(dmy(w.end))+'</td><td class="n">'+mny(w.value)+'</td><td class="n">'+d+'</td></tr>';
+  }).join("");
+  return '<div class="tw"><table><thead><tr><th scope="col">Week</th><th scope="col" class="r">Waste value</th><th scope="col" class="r">Vs. previous week</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+}
+function itemsTableHTML(C){
+  var rows=C.periodRows.slice().sort(function(a,b){return b.e.date.localeCompare(a.e.date);});
+  var body=rows.length?rows.map(function(x){
+    var e=x.e;
+    return '<tr><td>'+esc(dmy(e.date))+'</td><td>'+esc(e.product||"(unnamed)")+'</td>'+
+      '<td class="n">'+qFmt(num(e.qty,0))+(e.unit?(" "+esc(e.unit)):"")+'</td>'+
+      '<td class="n">'+mny(num(e.cost,0))+'</td><td>'+esc(e.reason)+'</td><td>'+esc(e.by||"—")+'</td>'+
+      '<td class="n">'+mny(x.value)+'</td></tr>';
+  }).join(""):'<tr><td colspan="7" class="empty">No entries in this period.</td></tr>';
+  return '<div class="tw"><table><thead><tr><th scope="col">Date</th><th scope="col">Product</th><th scope="col" class="r">Qty</th><th scope="col" class="r">Unit cost</th>'+
+    '<th scope="col">Reason</th><th scope="col">Recorded by</th><th scope="col" class="r">Value</th></tr></thead><tbody>'+body+'</tbody>'+
+    '<tfoot><tr><td colspan="6">Total — '+esc(C.range.label)+'</td><td class="n">'+mny(C.periodTotal)+'</td></tr></tfoot></table></div>';
+}
+function buildReport(C){
+  var targetNoteHTML;
+  if(C.targetValue===null){
+    targetNoteHTML='<div class="note" style="margin:0 var(--pad) 12px">No target threshold is set for this period.</div>';
+  } else if(C.exceeded){
+    targetNoteHTML='<div class="note bad" style="margin:0 var(--pad) 12px"><strong>Over target by '+mny(C.diff)+
+      '.</strong> Review the top reasons and products below before next period.</div>';
+  } else {
+    targetNoteHTML='<div class="note" style="margin:0 var(--pad) 12px">Within target, '+mny(C.diff)+' of headroom left for '+
+      esc(C.range.label.toLowerCase())+'.</div>';
+  }
+  var smpl=S.sample?'<div class="smpl">Sample data — not a real waste log</div>':'';
+  var html=
+    smpl+
+    '<div class="card">'+letterhead(C)+summaryHTML(C)+targetNoteHTML+'</div>'+
+    '<div class="card"><div class="sec-hd" style="padding-top:14px">Daily totals — '+esc(C.range.label)+'</div><div class="bd">'+dailyTableHTML(C)+'</div></div>'+
+    '<div class="card"><div class="sec-hd" style="padding-top:14px">Reasons ranked by cost</div><div class="bd">'+reasonsTableHTML(C)+'</div></div>'+
+    '<div class="card"><div class="sec-hd" style="padding-top:14px">Products ranked by cost</div><div class="bd">'+productsTableHTML(C)+'</div></div>'+
+    '<div class="card"><div class="sec-hd" style="padding-top:14px">8-week trend (Monday–Sunday)</div><div class="bd">'+trendTableHTML(C)+'</div></div>'+
+    '<div class="card"><div class="sec-hd" style="padding-top:14px">Itemised entries — '+esc(C.range.label)+'</div><div class="bd">'+itemsTableHTML(C)+'</div>'+
+      '<div class="sig"><div>Reviewed by / date</div><div>Action taken</div><div>Notes</div></div></div>';
+  $("#report").innerHTML=html;
+}
+
+/* ---- CSV / JSON ---- */
+function csvField(v){
+  var s=String(v===null||v===undefined?"":v);
+  if(/[",\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function csv(){
+  var C=calc();
+  var lines=[];
+  lines.push(["Food Waste Report",S.biz.name||"","Period",C.range.label,
+    C.range.start?(dmy(C.range.start)+" - "+dmy(C.range.end)):"all logged dates"].map(csvField).join(","));
+  lines.push("");
+  lines.push(["Date","Product","Qty","Unit","Unit Cost","Reason","Recorded By","Value"].map(csvField).join(","));
+  C.periodRows.slice().sort(function(a,b){return a.e.date.localeCompare(b.e.date);}).forEach(function(x){
+    var e=x.e;
+    lines.push([e.date,e.product,r2(num(e.qty,0)),e.unit,r2(num(e.cost,0)),e.reason,e.by,x.value].map(csvField).join(","));
+  });
+  lines.push("");
+  lines.push(["TOTAL","","","","","","",C.periodTotal].map(csvField).join(","));
+  lines.push("");
+  lines.push(["Reason","Entries","Value","% of period"].map(csvField).join(","));
+  C.reasons.forEach(function(g){lines.push([g.name,g.count,g.value,r1(g.share)].map(csvField).join(","));});
+  lines.push("");
+  lines.push(["Product","Qty Wasted","Unit","Entries","Value","% of period"].map(csvField).join(","));
+  C.products.forEach(function(g){lines.push([g.name,g.qty,g.unit,g.count,g.value,r1(g.share)].map(csvField).join(","));});
+  lines.push("");
+  lines.push(["Date","Entries","Value"].map(csvField).join(","));
+  C.dailyTotals.slice().sort(function(a,b){return a.date.localeCompare(b.date);}).forEach(function(d){
+    lines.push([d.date,d.count,d.value].map(csvField).join(","));
+  });
+  lines.push("");
+  lines.push(["Week Start","Week End","Value"].map(csvField).join(","));
+  C.weeks.forEach(function(w){lines.push([w.start,w.end,w.value].map(csvField).join(","));});
+  lines.push("");
+  lines.push(["Target for period",C.targetValue!==null?C.targetValue:"","Status",C.targetValue===null?"Not set":(C.exceeded?"Over":"Within")].map(csvField).join(","));
+  return lines.join("\r\n");
+}
+function slug(s){return String(s||"waste-log").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"waste-log";}
+function dl(text,name,mime){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b);
+    var a=document.createElement("a");
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
+  }catch(e){flash("Could not create the file for download.",true);}
+}
+
+/* ---- form binding ---- */
+function fillForm(){
+  $("#bizName").value=S.biz.name; $("#bizAddr").value=S.biz.addr; $("#bizBy").value=S.biz.by;
+  $("#defBy").value=S.defBy;
+  var isCustom=(S.cur!=="£"&&S.cur!=="$"&&S.cur!=="€");
+  $("#cur").value=isCustom?"custom":S.cur;
+  $("#curC").value=S.curC||""; $("#curC").hidden=!isCustom;
+  $("#period").value=S.period;
+  $("#basisType").value=S.basisType;
+  $("#basisValue").value=S.basisValue||"";
+  $("#targetMode").value=S.targetMode;
+  $("#targetValue").value=S.targetValue||"";
+  updateDynamicLabels();
+}
+function updateDynamicLabels(){
+  var range=periodRange(S.period);
+  var basisWord=S.basisType==="sales"?"Sales":"Food cost";
+  $("#basisLbl").textContent=basisWord+" for "+range.label.toLowerCase();
+  $("#targetLbl").textContent=S.targetMode==="pct"?"Target %":"Target amount";
+  $("#targetValue").step=S.targetMode==="pct"?"0.1":"0.01";
+}
+function touch(){ if(S.sample){S.sample=false;} }
+
+function bindHead(){
+  var textMap=[["#bizName",function(v){S.biz.name=v;}],["#bizAddr",function(v){S.biz.addr=v;}],
+    ["#bizBy",function(v){S.biz.by=v;}],["#defBy",function(v){S.defBy=v;}]];
+  textMap.forEach(function(m){
+    var el=$(m[0]);
+    el.addEventListener("input",function(){m[1](el.value);touch();paint();save();});
+  });
+  $("#curC").addEventListener("input",function(){S.curC=$("#curC").value;touch();paint();save();});
+  $("#cur").addEventListener("change",function(){
+    var v=$("#cur").value;
+    if(v==="custom"){S.cur="custom";$("#curC").hidden=false;$("#curC").focus();}
+    else{S.cur=v;$("#curC").hidden=true;}
+    touch();paint();save();
+  });
+  $("#period").addEventListener("change",function(){
+    S.period=$("#period").value;touch();updateDynamicLabels();paint();save();
+  });
+  $("#basisType").addEventListener("change",function(){
+    S.basisType=$("#basisType").value;touch();updateDynamicLabels();paint();save();
+  });
+  $("#basisValue").addEventListener("input",function(){
+    S.basisValue=num($("#basisValue").value,0);touch();paint();save();
+  });
+  $("#basisValue").addEventListener("blur",function(){
+    var v=num($("#basisValue").value,NaN);if(ok(v)&&v>=0)$("#basisValue").value=v.toFixed(2);
+  });
+  $("#targetMode").addEventListener("change",function(){
+    S.targetMode=$("#targetMode").value;touch();updateDynamicLabels();paint();save();
+  });
+  $("#targetValue").addEventListener("input",function(){
+    S.targetValue=num($("#targetValue").value,0);touch();paint();save();
+  });
+}
+
+function validateCell(inp){
+  var f=inp.getAttribute("data-f"), v=num(inp.value,NaN), msg="";
+  if((f==="qty"||f==="cost")&&ok(v)&&v<0)msg="Cannot be negative";
+  if((f==="qty"||f==="cost")&&!ok(v)&&inp.value!=="")msg="Enter a number";
+  inp.classList.toggle("inv",!!msg);
+  var e=inp.parentNode.querySelector(".e[data-e='"+f+"']");
+  if(e){e.hidden=!msg;e.textContent=msg;}
+  if(f==="cost"&&!msg&&inp.value!==""&&ok(v))inp.value=v.toFixed(2);
+}
+
+function bindTable(){
+  var tb=$("#tb");
+  tb.addEventListener("input",function(ev){
+    var inp=ev.target;if(!inp.getAttribute)return;
+    var f=inp.getAttribute("data-f");if(!f)return;
+    var tr=inp.closest("tr");if(!tr)return;
+    var e=entryById(tr.getAttribute("data-id"));if(!e)return;
+    if(f==="product"||f==="unit"||f==="by"||f==="date"||f==="reason"){e[f]=inp.value;}
+    else{e[f]=num(inp.value,0);}
+    touch();
+    if(inp.classList.contains("inv"))validateCell(inp);
+    if(f==="qty"||f==="cost"){var c=tr.querySelector(".valcell");if(c)c.textContent=mny(entryValue(e));}
+    paint();save();
+  });
+  tb.addEventListener("blur",function(ev){
+    var inp=ev.target;
+    if(inp.getAttribute&&inp.getAttribute("data-f"))validateCell(inp);
+  },true);
+  tb.addEventListener("click",function(ev){
+    var b=ev.target.closest?ev.target.closest(".bDel"):null;if(!b)return;
+    var tr=b.closest("tr"),id=tr.getAttribute("data-id");
+    S.entries=S.entries.filter(function(e){return e.id!==id;});
+    touch();buildTable();paint();save();
+  });
+}
+
+function addRows(n){
+  var lastId=null;
+  for(var i=0;i<n;i++){var e=blankEntry();lastId=e.id;S.entries.push(e);}
+  touch();buildTable();paint();save();
+  if(lastId){
+    var tr=$('#tb tr[data-id="'+lastId+'"]');
+    var inp=tr&&tr.querySelector('[data-f="product"]');
+    if(inp)inp.focus();
+  }
+}
+
+function flash(msg,bad){
+  var n=$("#flash");
+  if(!n){n=document.createElement("div");n.id="flash";n.className="note";
+    n.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;box-shadow:var(--sh);max-width:min(92vw,460px)";
+    document.body.appendChild(n);}
+  n.className="note"+(bad?" bad":" ");n.textContent=msg;n.hidden=false;
+  clearTimeout(flash._t);flash._t=setTimeout(function(){n.hidden=true;},3200);
+}
+
+function boot(){
+  var restored=load();
+  if(!restored)save();
+  fillForm();buildTable();paint();
+  bindHead();bindTable();
+
+  $("#bAdd").addEventListener("click",function(){addRows(1);});
+  $("#bAdd5").addEventListener("click",function(){addRows(5);});
+  $("#bPrint").addEventListener("click",function(){window.print();});
+  $("#bCsv").addEventListener("click",function(){
+    dl("﻿"+csv(),slug(S.biz.name)+"-waste-log-"+todayISO()+".csv","text/csv;charset=utf-8");
+  });
+  $("#bJson").addEventListener("click",function(){
+    dl(JSON.stringify(S,null,2),slug(S.biz.name)+"-waste-log-"+todayISO()+".json","application/json");
+  });
+  $("#bImport").addEventListener("click",function(){$("#fImport").click();});
+  $("#fImport").addEventListener("change",function(ev){
+    var f=ev.target.files&&ev.target.files[0];if(!f)return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{
+        var o=JSON.parse(String(fr.result));
+        if(!o||!Array.isArray(o.entries))throw new Error("bad");
+        S=normalise(o);fillForm();buildTable();paint();save();
+        flash("Imported "+S.entries.length+" waste entr"+(S.entries.length===1?"y":"ies")+".",false);
+      }catch(e){flash("That file is not a waste log export.",true);}
+      ev.target.value="";
+    };
+    fr.onerror=function(){flash("Could not read that file.",true);ev.target.value="";};
+    fr.readAsText(f);
+  });
+  $("#bClear").addEventListener("click",function(){
+    if(!window.confirm("Clear all waste log data from this browser? This cannot be undone."))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();S.entries=[blankEntry()];
+    fillForm();buildTable();paint();save();
+  });
+  window.addEventListener("beforeprint",function(){paint();});
+}
+boot();
+</script>
+</body>
+</html>

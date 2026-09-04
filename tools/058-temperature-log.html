@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Food Safety Temperature Log — Solvix Toolkit</title>
+<meta name="description" content="HACCP-style fridge, freezer and hot-hold temperature log with automatic out-of-range flagging, twice-daily check prompts, a two-stage cooking-and-cooling log, and a monthly breach summary. Print, CSV and JSON export.">
+<meta name="theme-color" content="#B3261E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23B3261E'/%3E%3Cpath d='M12 4.2a2 2 0 0 0-2 2v6.9a3.4 3.4 0 1 0 4 0V6.2a2 2 0 0 0-2-2z' fill='none' stroke='%23fff' stroke-width='1.4'/%3E%3Ccircle cx='12' cy='16.4' r='1.6' fill='%23fff'/%3E%3Crect x='11.3' y='9' width='1.4' height='5' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ── tool-specific: Food Safety Temperature Log ── */
+:root{--accent:#B3261E;--accent-ink:#8D1E17;--accent-wash:#FBE7E5;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#EE7C71;--accent-ink:#F6A79F;--accent-wash:#331614;--on-accent:#1A0907}}
+:root[data-theme="dark"]{--accent:#EE7C71;--accent-ink:#F6A79F;--accent-wash:#331614;--on-accent:#1A0907}
+
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--raise);color:var(--ink-2);font:600 12.5px/1 var(--sans);
+  padding:8px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button.on{background:var(--accent);color:var(--on-accent)}
+.seg button:hover:not(.on){color:var(--accent)}
+
+.addrow{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:12px;margin-bottom:12px}
+.addrow .grid{margin-bottom:8px}
+.rangehint{font:12px/1.4 var(--mono);color:var(--muted)}
+.unitname{font-weight:650}
+.dailychips{display:flex;gap:5px;flex-wrap:wrap}
+.small{font-size:12.5px;color:var(--muted)}
+.printonly .doc-h{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;
+  border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+.printonly .doc-h h1{font-size:17pt;letter-spacing:-.01em}
+.printonly .doc-h .r{text-align:right;font-size:9.5pt;line-height:1.5}
+.rmbtn{background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 5px}
+.rmbtn:hover{color:var(--bad)}
+.sampleflag{font:600 10px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  background:var(--sunk);border:1px solid var(--line);border-radius:3px;padding:2px 6px;margin-left:6px}
+@media(max-width:560px){.appbar h1{font-size:14px}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="appbar">
+    <div class="brand">
+      <div class="mark">°C</div>
+      <div style="min-width:0">
+        <h1>Food Safety Temperature Log</h1>
+        <div class="sub">Fridge · freezer · hot-hold · cooking &amp; cooling — HACCP-style records</div>
+      </div>
+    </div>
+    <div class="row noprint">
+      <div class="seg" role="group" aria-label="Temperature unit">
+        <button type="button" id="btnC">°C</button>
+        <button type="button" id="btnF">°F</button>
+      </div>
+      <button type="button" class="btn sm" id="btnPrint">🖶 Print</button>
+      <button type="button" class="btn sm" id="btnCsv">⇩ CSV</button>
+      <button type="button" class="btn sm" id="btnJson">⇩ JSON</button>
+      <button type="button" class="btn sm" id="btnImport">⇧ Import</button>
+      <input type="file" id="fileIn" accept="application/json" hidden>
+      <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    </div>
+  </div>
+
+  <div id="sampleBanner" class="note noprint" style="margin:14px 0 0">
+    Sample units and log entries are shown below so you can see how it works. Add your own units and readings —
+    or use <strong>Clear all data</strong> (top right) to start from a blank logbook.
+  </div>
+
+  <div class="printonly" id="docHead">
+    <div class="doc-h">
+      <div>
+        <h1 id="pName">Site name</h1>
+        <div id="pAddr" style="font-size:10pt;color:#333"></div>
+      </div>
+      <div class="r">
+        <div><strong>Temperature logbook</strong></div>
+        <div id="pManager"></div>
+        <div id="pPrinted"></div>
+      </div>
+    </div>
+    <p style="font-size:9pt;line-height:1.5;margin-bottom:4mm">
+      This log is a record-keeping aid for temperature checks under your food safety management system
+      (e.g. HACCP-based procedures). It does not replace a documented food safety management system,
+      independent verification, or the requirements of your local environmental health / food safety
+      authority. Where a reading falls outside the safe range, corrective action must be taken immediately
+      and recorded before the food is used or served.
+    </p>
+  </div>
+
+  <div class="grid cols-3" style="margin:14px 0">
+    <div class="stat hero">
+      <div class="k">Breaches this month</div>
+      <div class="v" id="heroBreach">—</div>
+      <div class="u" id="heroSub">of 0 readings logged</div>
+    </div>
+    <div class="stat">
+      <div class="k">Units monitored</div>
+      <div class="v" id="heroUnits">0</div>
+      <div class="u">fridge / freezer / hot-hold</div>
+    </div>
+    <div class="stat">
+      <div class="k">Today's checks outstanding</div>
+      <div class="v" id="heroOutstanding">—</div>
+      <div class="u" id="heroOutstandingSub">AM + PM checks per unit</div>
+    </div>
+  </div>
+
+  <div class="note warn" id="disclaimerNote" style="margin-bottom:14px">
+    <strong>Not a substitute for your food safety management system.</strong> This tool records the checks
+    you make and flags readings outside the safe ranges below — it does not replace a documented HACCP-based
+    plan, independent verification, or advice from your local environmental health / food safety authority.
+    Act on every breach immediately and record what you did.
+  </div>
+
+  <div class="grid cols-2" style="margin-bottom:14px">
+    <div class="card">
+      <div class="hd"><h2>Site details</h2></div>
+      <div class="bd grid cols-2">
+        <div class="f"><label for="bizName">Site / business name</label><input id="bizName"></div>
+        <div class="f"><label for="bizAddr">Address</label><input id="bizAddr"></div>
+        <div class="f"><label for="bizMgr">Responsible person</label><input id="bizMgr"></div>
+        <div class="f"><label for="bizNote">Notes (optional)</label><input id="bizNote"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Safe ranges applied</h2></div>
+      <div class="bd stack" style="gap:6px">
+        <div class="rangehint" id="rgFridge"></div>
+        <div class="rangehint" id="rgFreezer"></div>
+        <div class="rangehint" id="rgHot"></div>
+        <div class="rangehint" id="rgCook"></div>
+        <div class="rangehint" id="rgCool"></div>
+        <div class="hint">Switch °C/°F at the top right — stored values convert automatically and every
+        reading is re-checked against the matching threshold.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="hd"><h2>Units</h2><span class="hint">Fridges, freezers and hot-hold equipment checked twice daily</span></div>
+    <div class="bd">
+      <div class="addrow noprint">
+        <div class="grid cols-3">
+          <div class="f"><label for="uName">Unit name</label><input id="uName" placeholder="e.g. Walk-in Fridge 2"></div>
+          <div class="f"><label for="uType">Type</label>
+            <select id="uType">
+              <option value="fridge">Fridge / chill</option>
+              <option value="freezer">Freezer</option>
+              <option value="hot">Hot hold</option>
+            </select>
+          </div>
+          <div class="f" style="justify-content:flex-end"><label>&nbsp;</label><button type="button" class="btn pri" id="btnAddUnit">+ Add unit</button></div>
+        </div>
+        <div class="err" id="eUName" hidden>Enter a name for this unit.</div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Unit</th><th>Type</th><th>Safe range</th><th>Today — AM</th><th>Today — PM</th><th></th></tr></thead>
+          <tbody id="unitsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="unitsEmpty" hidden>No units registered yet. Add your first fridge, freezer or hot-hold unit above.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="hd"><h2>Temperature readings</h2><span class="hint">Log every check — out-of-range readings require a corrective action before they save</span></div>
+    <div class="bd">
+      <div class="addrow noprint">
+        <div class="grid cols-3">
+          <div class="f"><label for="rUnit">Unit</label><select id="rUnit"></select></div>
+          <div class="f"><label for="rDate">Date</label><input type="date" id="rDate"></div>
+          <div class="f"><label for="rTime">Time</label><input type="time" id="rTime"></div>
+          <div class="f"><label for="rValue">Reading</label><input type="number" step="0.1" id="rValue" placeholder="e.g. 3.5"></div>
+          <div class="f"><label for="rWho">Checked by</label><input id="rWho" placeholder="Initials or name"></div>
+        </div>
+        <div class="err" id="eRUnit" hidden>Choose a unit.</div>
+        <div class="err" id="eRDate" hidden>Enter a valid date, not in the future.</div>
+        <div class="err" id="eRValue" hidden>Enter the reading as a number.</div>
+        <div class="err" id="eRWho" hidden>Enter who took the reading.</div>
+        <div id="rStatusWrap" hidden style="margin-top:6px">
+          <span class="chip" id="rStatusChip">—</span>
+          <div class="f" style="margin-top:8px">
+            <label for="rAction">Corrective action taken (required — describe what was done)</label>
+            <textarea id="rAction" rows="2" placeholder="e.g. Moved stock to backup unit, adjusted thermostat, rechecked at…"></textarea>
+          </div>
+          <div class="err" id="eRAction" hidden>A corrective action is required before an out-of-range reading can be saved.</div>
+        </div>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn pri" id="btnAddReading">+ Save reading</button></div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>No.</th><th>Date</th><th>Time</th><th>Unit</th><th>Reading</th><th>Status</th><th>By</th><th>Corrective action</th><th></th></tr></thead>
+          <tbody id="readingsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="readingsEmpty" hidden>No readings logged yet. Add a unit above, then log its first check.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="hd"><h2>Cooking &amp; cooling log</h2><span class="hint">Core temperature after cooking, then the two-stage cooling check</span></div>
+    <div class="bd">
+      <div class="addrow noprint">
+        <div class="grid cols-3">
+          <div class="f"><label for="kItem">Food item / batch</label><input id="kItem" placeholder="e.g. Beef chilli batch"></div>
+          <div class="f"><label for="kDate">Date</label><input type="date" id="kDate"></div>
+          <div class="f"><label for="kWho">Checked by</label><input id="kWho" placeholder="Initials or name"></div>
+        </div>
+        <div class="grid cols-3">
+          <div class="f"><label for="kCookTime">Cooking finished — time</label><input type="time" id="kCookTime"></div>
+          <div class="f"><label for="kCoreVal">Core temperature</label><input type="number" step="0.1" id="kCoreVal"></div>
+          <div class="f"></div>
+        </div>
+        <div class="grid cols-3">
+          <div class="f"><label for="kS1Time">Stage 1 reached — time</label><input type="time" id="kS1Time"></div>
+          <div class="f"><label for="kS1Val">Stage 1 temperature</label><input type="number" step="0.1" id="kS1Val"></div>
+          <div class="f"><span class="hint" id="kS1Hint">Must reach 21°C within 2 hours of cooking finishing</span></div>
+        </div>
+        <div class="grid cols-3">
+          <div class="f"><label for="kS2Time">Stage 2 reached — time</label><input type="time" id="kS2Time"></div>
+          <div class="f"><label for="kS2Val">Stage 2 temperature</label><input type="number" step="0.1" id="kS2Val"></div>
+          <div class="f"><span class="hint" id="kS2Hint">Must reach 5°C within a further 4 hours</span></div>
+        </div>
+        <div class="err" id="eKItem" hidden>Enter the food item or batch name.</div>
+        <div class="err" id="eKDate" hidden>Enter a valid date, not in the future.</div>
+        <div class="err" id="eKWho" hidden>Enter who carried out the check.</div>
+        <div class="err" id="eKTimes" hidden>Enter cooking-finished time, core temperature, and both cooling checkpoints (time and temperature) to save this record.</div>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn pri" id="btnAddCook">+ Save record</button></div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>No.</th><th>Date</th><th>Item</th><th>Core temp</th><th>Stage 1 (≤2h)</th><th>Stage 2 (+4h)</th><th>Overall</th><th>By</th><th></th></tr></thead>
+          <tbody id="cookBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="cookEmpty" hidden>No cooking &amp; cooling records yet.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hd">
+      <h2>Monthly summary</h2>
+      <div class="f" style="min-width:150px"><label for="sumMonth" style="position:absolute;left:-9999px">Month</label>
+        <input type="month" id="sumMonth" class="noprint">
+      </div>
+    </div>
+    <div class="bd">
+      <div class="tw">
+        <table>
+          <thead><tr><th>Unit</th><th>Type</th><th class="n">Readings</th><th class="n">Breaches</th><th class="n">Compliance</th></tr></thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="summaryEmpty" hidden>No units to summarise yet.</div>
+    </div>
+    <div class="ft">
+      <span class="hint">Breach = any reading outside the safe range for that unit's type, or a cooking/cooling record that missed its target temperature or time window, in the selected month.</span>
+    </div>
+  </div>
+
+  <div class="printonly" id="signBlock" style="margin-top:6mm">
+    <p style="font-size:9pt;color:#333">Generated by the Solvix Toolkit Food Safety Temperature Log. Retain this
+    logbook per your local food safety authority's record-keeping requirements.</p>
+  </div>
+
+  <footer style="margin-top:20px;font-size:12px;color:var(--muted);line-height:1.6">
+    Assumes fridge 0–5°C (32–41°F), freezer −18°C or below (0°F or below), hot-hold 63°C+ (145°F+), cooked
+    core 75°C+ (165°F+), and the two-stage cooling rule: ≤21°C/70°F within 2 hours of cooking finishing, then
+    ≤5°C/41°F within a further 4 hours. Data is stored only in this browser (localStorage) — nothing is sent
+    anywhere. This is a record-keeping tool, not food safety advice; follow your documented food safety
+    management system and local regulations.
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+
+/* ── constants ───────────────────────────────────────────── */
+var TYPES={
+  fridge:{label:"Fridge / chill", mode:"range", c:{min:0,max:5}, f:{min:32,max:41}},
+  freezer:{label:"Freezer", mode:"max", c:{max:-18}, f:{max:0}},
+  hot:{label:"Hot hold", mode:"min", c:{min:63}, f:{min:145}}
+};
+var COOK_CORE={c:75,f:165};
+var STAGE1={c:21,f:70,hours:2};
+var STAGE2={c:5,f:41,hours:4};
+var KEY="solvix.temperature-log.v1";
+
+/* ── small helpers ───────────────────────────────────────── */
+function pad(n){return n<10?"0"+n:""+n;}
+function todayDate(){var d=new Date();d.setHours(0,0,0,0);return d;}
+function isoLocal(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function hhmm(d){return pad(d.getHours())+":"+pad(d.getMinutes());}
+function todayIso(){return isoLocal(todayDate());}
+function monthOf(iso){return (iso||"").slice(0,7);}
+function uid(){return "id"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:d;}
+function r1(v){if(!isFinite(v))return null;var n=Math.round(v*10)/10;return n===0?0:n;}
+function fmtT(v,sys){return (v===null||v===undefined||!isFinite(v))?"—":r1(v).toFixed(1)+"°"+sys;}
+function cToF(v){return r1(v*9/5+32);}
+function fToC(v){return r1((v-32)*5/9);}
+function convert(v,from,to){if(from===to||v===null||v===undefined)return v;return from==="C"?cToF(v):fToC(v);}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+
+function parseISODate(s){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s||""))return null;
+  var d=new Date(s+"T00:00:00");
+  return isNaN(d.getTime())?null:d;
+}
+function minutesOf(t){var m=/^(\d{2}):(\d{2})$/.exec(t||"");return m?(+m[1]*60+ +m[2]):null;}
+function elapsedMin(t1,t2){
+  var a=minutesOf(t1),b=minutesOf(t2);
+  if(a===null||b===null)return null;
+  var d=b-a; if(d<0)d+=24*60; return d;
+}
+function fmtDur(min){
+  if(min===null||min===undefined)return "—";
+  var h=Math.floor(min/60),m=min%60,parts=[];
+  if(h)parts.push(h+"h");
+  if(m||!h)parts.push(m+"m");
+  return parts.join(" ");
+}
+
+function checkStorage(type,value,sys){
+  var t=TYPES[type]; if(!t||value===null||value===undefined||!isFinite(value))return null;
+  var th=t[sys.toLowerCase()];
+  if(t.mode==="range")return !(value>=th.min && value<=th.max);
+  if(t.mode==="max")return !(value<=th.max);
+  if(t.mode==="min")return !(value>=th.min);
+  return null;
+}
+function rangeText(type,sys){
+  var t=TYPES[type],th=t[sys.toLowerCase()],u="°"+sys;
+  if(t.mode==="range")return th.min+u+"–"+th.max+u;
+  if(t.mode==="max")return th.max+u+" or below";
+  if(t.mode==="min")return th.min+u+" or above";
+  return "—";
+}
+
+/* ── state ───────────────────────────────────────────────── */
+var seq=1;
+function nextSeq(){return seq++;}
+
+function sampleState(){
+  var t=todayIso();
+  var yD=new Date(todayDate().getTime()-86400000);
+  var y=isoLocal(yD);
+  var uFridge=uid(), uFreezer=uid(), uHot=uid();
+  seq=1;
+  var readings=[
+    {id:uid(),seq:nextSeq(),unitId:uFridge,date:y,time:"16:00",value:7.2,who:"J. Lee",
+      action:"Moved stock to the backup fridge, called maintenance, adjusted thermostat and rechecked 30 minutes later at 4.1°C."},
+    {id:uid(),seq:nextSeq(),unitId:uFridge,date:t,time:"07:10",value:3.5,who:"J. Lee",action:""},
+    {id:uid(),seq:nextSeq(),unitId:uFridge,date:t,time:"15:40",value:4.8,who:"J. Lee",action:""},
+    {id:uid(),seq:nextSeq(),unitId:uFreezer,date:t,time:"07:15",value:-19.2,who:"J. Lee",action:""},
+    {id:uid(),seq:nextSeq(),unitId:uHot,date:t,time:"12:05",value:68,who:"M. Patel",action:""}
+  ];
+  readings.forEach(function(r){r.breach=!!checkStorage(unitTypeLookup(r.unitId,[
+    {id:uFridge,type:"fridge"},{id:uFreezer,type:"freezer"},{id:uHot,type:"hot"}
+  ]),r.value,"C");});
+  return {
+    v:1, sys:"C",
+    business:{name:"Bay Street Kitchen",addr:"14 Bay Street, Riverside",mgr:"S. Okafor",note:""},
+    units:[
+      {id:uFridge,name:"Walk-in Fridge 1",type:"fridge"},
+      {id:uFreezer,name:"Chest Freezer",type:"freezer"},
+      {id:uHot,name:"Hot-hold Bain-Marie",type:"hot"}
+    ],
+    readings:readings,
+    cookcool:[
+      {id:uid(),seq:nextSeq(),item:"Beef chilli batch",date:t,who:"M. Patel",
+        cookTime:"11:00",coreVal:82,s1Time:"12:30",s1Val:18,s2Time:"16:00",s2Val:3.8}
+    ],
+    month:t.slice(0,7),
+    sample:true
+  };
+}
+function unitTypeLookup(id,list){for(var i=0;i<list.length;i++)if(list[i].id===id)return list[i].type;return null;}
+
+function blankState(){
+  return {v:1, sys:"C", business:{name:"",addr:"",mgr:"",note:""}, units:[], readings:[], cookcool:[],
+    month:todayIso().slice(0,7), sample:false};
+}
+
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw)return null;
+    var o=JSON.parse(raw);
+    if(!o||!o.state)return null;
+    if(o.seq)seq=Math.max(seq,num(o.seq,1));
+    return normalise(o.state);
+  }catch(e){return null;}
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify({v:1,seq:seq,state:state}));}catch(e){}
+}
+function normalise(s){
+  var b=blankState();
+  if(s.business)b.business={name:s.business.name||"",addr:s.business.addr||"",mgr:s.business.mgr||"",note:s.business.note||""};
+  if(Array.isArray(s.units))b.units=s.units.filter(function(u){return u&&TYPES[u.type];}).map(function(u){
+    return {id:u.id||uid(),name:u.name||"Unit",type:u.type};});
+  var ids={}; b.units.forEach(function(u){ids[u.id]=true;});
+  if(Array.isArray(s.readings))b.readings=s.readings.filter(function(r){return r&&ids[r.unitId];}).map(function(r){
+    return {id:r.id||uid(),seq:r.seq||nextSeq(),unitId:r.unitId,date:r.date||"",time:r.time||"",
+      value:num(r.value,null),who:r.who||"",action:r.action||"",breach:!!r.breach};});
+  if(Array.isArray(s.cookcool))b.cookcool=s.cookcool.map(function(c){
+    return {id:c.id||uid(),seq:c.seq||nextSeq(),item:c.item||"",date:c.date||"",who:c.who||"",
+      cookTime:c.cookTime||"",coreVal:num(c.coreVal,null),s1Time:c.s1Time||"",s1Val:num(c.s1Val,null),
+      s2Time:c.s2Time||"",s2Val:num(c.s2Val,null)};});
+  b.sys=(s.sys==="F")?"F":"C";
+  b.month=/^\d{4}-\d{2}$/.test(s.month||"")?s.month:todayIso().slice(0,7);
+  b.sample=!!s.sample;
+  return b;
+}
+
+var state=load();
+if(!state){state=sampleState();save();}
+
+/* ── rendering ───────────────────────────────────────────── */
+function unitById(id){for(var i=0;i<state.units.length;i++)if(state.units[i].id===id)return state.units[i];return null;}
+
+function renderSegs(){
+  $("btnC").className=state.sys==="C"?"on":"";
+  $("btnF").className=state.sys==="F"?"on":"";
+  $("bizName"); // noop, keep order
+}
+
+function renderRanges(){
+  var sys=state.sys;
+  $("rgFridge").textContent="Fridge / chill: "+rangeText("fridge",sys);
+  $("rgFreezer").textContent="Freezer: "+rangeText("freezer",sys);
+  $("rgHot").textContent="Hot hold: "+rangeText("hot",sys);
+  $("rgCook").textContent="Cooked core: "+ (sys==="C"?COOK_CORE.c+"°C":COOK_CORE.f+"°F") +" or above";
+  $("rgCool").textContent="Cooling: reach "+(sys==="C"?STAGE1.c+"°C":STAGE1.f+"°F")+" within "+STAGE1.hours+
+    "h of cooking finishing, then "+(sys==="C"?STAGE2.c+"°C":STAGE2.f+"°F")+" within a further "+STAGE2.hours+"h";
+  $("kS1Hint").textContent="Must reach "+(sys==="C"?STAGE1.c+"°C":STAGE1.f+"°F")+" within "+STAGE1.hours+" hours of cooking finishing";
+  $("kS2Hint").textContent="Must reach "+(sys==="C"?STAGE2.c+"°C":STAGE2.f+"°F")+" within a further "+STAGE2.hours+" hours";
+}
+
+function renderBusiness(){
+  $("bizName").value=state.business.name;
+  $("bizAddr").value=state.business.addr;
+  $("bizMgr").value=state.business.mgr;
+  $("bizNote").value=state.business.note;
+  $("pName").textContent=state.business.name||"Site name not set";
+  $("pAddr").textContent=state.business.addr||"";
+  $("pManager").textContent=state.business.mgr?("Responsible person: "+state.business.mgr):"";
+  $("pPrinted").textContent="Printed "+new Date().toLocaleString();
+}
+
+function renderUnits(){
+  var sys=state.sys, t=todayIso();
+  var body=$("unitsBody"); body.innerHTML="";
+  $("unitsEmpty").hidden=state.units.length>0;
+  var sel=$("rUnit"); var prevSel=sel.value;
+  sel.innerHTML="";
+  if(!state.units.length){
+    var op=document.createElement("option"); op.textContent="Add a unit first"; op.value=""; sel.appendChild(op);
+  }
+  state.units.forEach(function(u){
+    var todays=state.readings.filter(function(r){return r.unitId===u.id && r.date===t;});
+    var am=todays.filter(function(r){return minutesOf(r.time)!==null && minutesOf(r.time)<720;});
+    var pm=todays.filter(function(r){return minutesOf(r.time)!==null && minutesOf(r.time)>=720;});
+    function chip(list){
+      if(!list.length)return '<span class="chip warn">Not logged</span>';
+      var last=list[list.length-1];
+      var bad=state.readings.filter(function(r){return list.indexOf(r)>-1 && r.breach;}).length>0;
+      return '<span class="chip '+(bad?"bad":"ok")+'">'+esc(last.time)+(bad?" · breach":" · ok")+'</span>';
+    }
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td class='unitname'>"+esc(u.name)+"</td>"+
+      "<td>"+esc(TYPES[u.type].label)+"</td>"+
+      "<td class='mono'>"+rangeText(u.type,sys)+"</td>"+
+      "<td>"+chip(am)+"</td>"+
+      "<td>"+chip(pm)+"</td>"+
+      "<td class='noprint'><button type='button' class='rmbtn' aria-label='Remove unit' data-rm-unit='"+u.id+"'>✕</button></td>";
+    body.appendChild(tr);
+    var o=document.createElement("option"); o.value=u.id; o.textContent=u.name+" ("+TYPES[u.type].label+")";
+    sel.appendChild(o);
+  });
+  if([].slice.call(sel.options).some(function(o){return o.value===prevSel;}))sel.value=prevSel;
+}
+
+function readingBreachChip(r){
+  return r.breach?'<span class="chip bad">Out of range</span>':'<span class="chip ok">OK</span>';
+}
+
+function renderReadings(){
+  var sys=state.sys;
+  var body=$("readingsBody"); body.innerHTML="";
+  var rows=state.readings.slice().sort(function(a,b){
+    var k1=b.date+"T"+b.time, k2=a.date+"T"+a.time; return k1<k2?-1:k1>k2?1:0;
+  });
+  $("readingsEmpty").hidden=rows.length>0;
+  rows.forEach(function(r){
+    var u=unitById(r.unitId);
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td class='mono'>#"+r.seq+"</td><td>"+esc(r.date)+"</td><td>"+esc(r.time)+"</td>"+
+      "<td>"+esc(u?u.name:"(removed unit)")+"</td>"+
+      "<td class='n'>"+fmtT(r.value,sys)+"</td>"+
+      "<td>"+readingBreachChip(r)+"</td>"+
+      "<td>"+esc(r.who)+"</td>"+
+      "<td>"+esc(r.action||(r.breach?"":"—"))+"</td>"+
+      "<td class='noprint'><button type='button' class='rmbtn' aria-label='Delete reading' data-rm-reading='"+r.id+"'>✕</button></td>";
+    body.appendChild(tr);
+  });
+}
+
+function evalCook(c,sys){
+  var coreT=sys==="C"?COOK_CORE.c:COOK_CORE.f;
+  var s1T=sys==="C"?STAGE1.c:STAGE1.f, s2T=sys==="C"?STAGE2.c:STAGE2.f;
+  var corePass=(c.coreVal!==null)&&c.coreVal>=coreT;
+  var e1=elapsedMin(c.cookTime,c.s1Time), e2=elapsedMin(c.s1Time,c.s2Time);
+  var s1TempOk=(c.s1Val!==null)&&c.s1Val<=s1T, s1TimeOk=(e1!==null)&&e1<=STAGE1.hours*60;
+  var s2TempOk=(c.s2Val!==null)&&c.s2Val<=s2T, s2TimeOk=(e2!==null)&&e2<=STAGE2.hours*60;
+  var haveS1=c.s1Time&&c.s1Val!==null, haveS2=c.s2Time&&c.s2Val!==null;
+  return {
+    corePass:corePass, e1:e1, e2:e2,
+    s1Pass: haveS1 ? (s1TempOk&&s1TimeOk) : null,
+    s2Pass: haveS2 ? (s2TempOk&&s2TimeOk) : null,
+    overall: corePass && (haveS1?(s1TempOk&&s1TimeOk):false) && (haveS2?(s2TempOk&&s2TimeOk):false)
+  };
+}
+
+function renderCookCool(){
+  var sys=state.sys;
+  var body=$("cookBody"); body.innerHTML="";
+  var rows=state.cookcool.slice().sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0;});
+  $("cookEmpty").hidden=rows.length>0;
+  rows.forEach(function(c){
+    var ev=evalCook(c,sys);
+    function stageCell(pass,val,thresh,elapsed,limit){
+      if(pass===null)return "<span class='chip warn'>Pending</span>";
+      return "<span class='chip "+(pass?"ok":"bad")+"'>"+fmtT(val,sys)+" by "+fmtDur(elapsed)+(pass?" · ok":" · fail")+"</span>";
+    }
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td class='mono'>#"+c.seq+"</td><td>"+esc(c.date)+"</td><td>"+esc(c.item)+"</td>"+
+      "<td class='n'>"+fmtT(c.coreVal,sys)+" <span class='chip "+(ev.corePass?"ok":"bad")+"' style='margin-left:4px'>"+(ev.corePass?"ok":"fail")+"</span></td>"+
+      "<td>"+stageCell(ev.s1Pass,c.s1Val,STAGE1,ev.e1,STAGE1.hours*60)+"</td>"+
+      "<td>"+stageCell(ev.s2Pass,c.s2Val,STAGE2,ev.e2,STAGE2.hours*60)+"</td>"+
+      "<td>"+(ev.overall?"<span class='chip ok'>Pass</span>":"<span class='chip bad'>Check</span>")+"</td>"+
+      "<td>"+esc(c.who)+"</td>"+
+      "<td class='noprint'><button type='button' class='rmbtn' aria-label='Delete record' data-rm-cook='"+c.id+"'>✕</button></td>";
+    body.appendChild(tr);
+  });
+}
+
+function renderSummary(){
+  $("sumMonth").value=state.month;
+  var body=$("summaryBody"); body.innerHTML="";
+  $("summaryEmpty").hidden=state.units.length>0;
+  state.units.forEach(function(u){
+    var rows=state.readings.filter(function(r){return r.unitId===u.id && monthOf(r.date)===state.month;});
+    var breaches=rows.filter(function(r){return r.breach;}).length;
+    var pct=rows.length?Math.round((1-breaches/rows.length)*100):null;
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td>"+esc(u.name)+"</td><td>"+esc(TYPES[u.type].label)+"</td>"+
+      "<td class='n'>"+rows.length+"</td>"+
+      "<td class='n'>"+(breaches?("<span class='chip bad'>"+breaches+"</span>"):"0")+"</td>"+
+      "<td class='n'>"+(pct===null?"—":pct+"%")+"</td>";
+    body.appendChild(tr);
+  });
+}
+
+function renderHero(){
+  var curMonth=todayIso().slice(0,7);
+  var monthReadings=state.readings.filter(function(r){return monthOf(r.date)===curMonth;});
+  var breaches=monthReadings.filter(function(r){return r.breach;}).length;
+  $("heroBreach").textContent=state.units.length?String(breaches):"—";
+  $("heroSub").textContent=monthReadings.length+" reading"+(monthReadings.length===1?"":"s")+" logged this month";
+  $("heroUnits").textContent=String(state.units.length);
+  var t=todayIso();
+  var outstanding=0;
+  state.units.forEach(function(u){
+    var todays=state.readings.filter(function(r){return r.unitId===u.id && r.date===t;});
+    var amDone=todays.some(function(r){return minutesOf(r.time)!==null && minutesOf(r.time)<720;});
+    var pmDone=todays.some(function(r){return minutesOf(r.time)!==null && minutesOf(r.time)>=720;});
+    if(!amDone)outstanding++;
+    if(!pmDone)outstanding++;
+  });
+  $("heroOutstanding").textContent=state.units.length?String(outstanding):"—";
+  $("heroOutstandingSub").textContent=state.units.length?(outstanding+" of "+(state.units.length*2)+" checks left today"):"Add a unit to start tracking";
+}
+
+function renderSampleBanner(){$("sampleBanner").hidden=!state.sample;}
+
+function renderAll(){
+  renderSegs(); renderRanges(); renderBusiness(); renderUnits(); renderReadings();
+  renderCookCool(); renderSummary(); renderHero(); renderSampleBanner();
+  if(!$("rDate").value)$("rDate").value=todayIso();
+  if(!$("rTime").value)$("rTime").value=hhmm(new Date());
+  if(!$("kDate").value)$("kDate").value=todayIso();
+  resetReadingStatus();
+}
+
+/* ── reading form breach preview ────────────────────────── */
+function currentReadingBreach(){
+  var unit=unitById($("rUnit").value);
+  var val=num($("rValue").value,null);
+  if(!unit||val===null)return null;
+  return checkStorage(unit.type,val,state.sys);
+}
+function resetReadingStatus(){
+  var b=currentReadingBreach();
+  var wrap=$("rStatusWrap");
+  if(b===null){wrap.hidden=true;return;}
+  wrap.hidden=false;
+  $("rStatusChip").className="chip "+(b?"bad":"ok");
+  $("rStatusChip").textContent=b?"Out of range — corrective action required":"Within safe range";
+}
+["rUnit","rValue"].forEach(function(id){
+  $(id).addEventListener("input",resetReadingStatus);
+  $(id).addEventListener("change",resetReadingStatus);
+});
+
+/* ── events: units ──────────────────────────────────────── */
+$("btnAddUnit").addEventListener("click",function(){
+  var name=$("uName").value.trim();
+  var ok=name.length>0;
+  $("eUName").hidden=ok; $("uName").classList.toggle("inv",!ok);
+  if(!ok){$("uName").focus();return;}
+  state.units.push({id:uid(),name:name,type:$("uType").value});
+  state.sample=false; save();
+  $("uName").value="";
+  renderAll();
+});
+$("unitsBody").addEventListener("click",function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute("data-rm-unit");
+  if(!id)return;
+  var hasData=state.readings.some(function(r){return r.unitId===id;});
+  var msg=hasData?"Remove this unit and every reading logged against it? This cannot be undone.":"Remove this unit?";
+  if(!confirm(msg))return;
+  state.units=state.units.filter(function(u){return u.id!==id;});
+  state.readings=state.readings.filter(function(r){return r.unitId!==id;});
+  save(); renderAll();
+});
+
+/* ── events: readings ───────────────────────────────────── */
+$("btnAddReading").addEventListener("click",function(){
+  var unit=unitById($("rUnit").value);
+  var d=parseISODate($("rDate").value);
+  var val=num($("rValue").value,null);
+  var who=$("rWho").value.trim();
+  var okUnit=!!unit, okDate=!!d && d<=todayDate(), okVal=val!==null, okWho=who.length>0;
+  $("eRUnit").hidden=okUnit; $("rUnit").classList.toggle("inv",!okUnit);
+  $("eRDate").hidden=okDate; $("rDate").classList.toggle("inv",!okDate);
+  $("eRValue").hidden=okVal; $("rValue").classList.toggle("inv",!okVal);
+  $("eRWho").hidden=okWho; $("rWho").classList.toggle("inv",!okWho);
+  var breach=okUnit&&okVal?checkStorage(unit.type,val,state.sys):null;
+  var action=$("rAction").value.trim();
+  var okAction=!breach||action.length>=3;
+  $("eRAction").hidden=okAction; $("rAction").classList.toggle("inv",!okAction);
+  if(!(okUnit&&okDate&&okVal&&okWho&&okAction)){
+    (!okUnit?$("rUnit"):!okDate?$("rDate"):!okVal?$("rValue"):!okWho?$("rWho"):$("rAction")).focus();
+    return;
+  }
+  state.readings.push({id:uid(),seq:nextSeq(),unitId:unit.id,date:$("rDate").value,time:$("rTime").value||hhmm(new Date()),
+    value:r1(val),who:who,action:breach?action:"",breach:!!breach});
+  state.sample=false; save();
+  $("rValue").value=""; $("rAction").value=""; $("rTime").value=hhmm(new Date());
+  renderAll();
+  $("rValue").focus();
+});
+$("readingsBody").addEventListener("click",function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute("data-rm-reading");
+  if(!id)return;
+  if(!confirm("Delete this reading? This cannot be undone."))return;
+  state.readings=state.readings.filter(function(r){return r.id!==id;});
+  save(); renderAll();
+});
+
+/* ── events: cooking & cooling ──────────────────────────── */
+$("btnAddCook").addEventListener("click",function(){
+  var item=$("kItem").value.trim();
+  var d=parseISODate($("kDate").value);
+  var who=$("kWho").value.trim();
+  var coreVal=num($("kCoreVal").value,null);
+  var cookTime=$("kCookTime").value, s1Time=$("kS1Time").value, s1Val=num($("kS1Val").value,null);
+  var s2Time=$("kS2Time").value, s2Val=num($("kS2Val").value,null);
+  var okItem=item.length>0, okDate=!!d && d<=todayDate(), okWho=who.length>0;
+  var okTimes=!!cookTime && coreVal!==null && !!s1Time && s1Val!==null && !!s2Time && s2Val!==null;
+  $("eKItem").hidden=okItem; $("kItem").classList.toggle("inv",!okItem);
+  $("eKDate").hidden=okDate; $("kDate").classList.toggle("inv",!okDate);
+  $("eKWho").hidden=okWho; $("kWho").classList.toggle("inv",!okWho);
+  $("eKTimes").hidden=okTimes;
+  if(!(okItem&&okDate&&okWho&&okTimes)){
+    (!okItem?$("kItem"):!okDate?$("kDate"):!okWho?$("kWho"):$("kCookTime")).focus();
+    return;
+  }
+  state.cookcool.push({id:uid(),seq:nextSeq(),item:item,date:$("kDate").value,who:who,
+    cookTime:cookTime,coreVal:r1(coreVal),s1Time:s1Time,s1Val:r1(s1Val),s2Time:s2Time,s2Val:r1(s2Val)});
+  state.sample=false; save();
+  ["kItem","kCookTime","kCoreVal","kS1Time","kS1Val","kS2Time","kS2Val"].forEach(function(id){$(id).value="";});
+  renderAll();
+});
+$("cookBody").addEventListener("click",function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute("data-rm-cook");
+  if(!id)return;
+  if(!confirm("Delete this record? This cannot be undone."))return;
+  state.cookcool=state.cookcool.filter(function(c){return c.id!==id;});
+  save(); renderAll();
+});
+
+/* ── events: business details ───────────────────────────── */
+["bizName","bizAddr","bizMgr","bizNote"].forEach(function(id){
+  $(id).addEventListener("input",function(){
+    var k={bizName:"name",bizAddr:"addr",bizMgr:"mgr",bizNote:"note"}[id];
+    state.business[k]=$(id).value; save();
+    $("pName").textContent=state.business.name||"Site name not set";
+    $("pAddr").textContent=state.business.addr||"";
+    $("pManager").textContent=state.business.mgr?("Responsible person: "+state.business.mgr):"";
+  });
+});
+
+/* ── events: summary month ──────────────────────────────── */
+$("sumMonth").addEventListener("change",function(){
+  if(/^\d{4}-\d{2}$/.test(this.value)){state.month=this.value; save(); renderSummary();}
+});
+
+/* ── events: unit system toggle ─────────────────────────── */
+function switchSystem(sys){
+  if(sys===state.sys)return;
+  var from=state.sys;
+  state.readings.forEach(function(r){
+    if(r.value!==null){r.value=convert(r.value,from,sys);}
+    var u=unitById(r.unitId);
+    if(u)r.breach=!!checkStorage(u.type,r.value,sys);
+  });
+  state.cookcool.forEach(function(c){
+    if(c.coreVal!==null)c.coreVal=convert(c.coreVal,from,sys);
+    if(c.s1Val!==null)c.s1Val=convert(c.s1Val,from,sys);
+    if(c.s2Val!==null)c.s2Val=convert(c.s2Val,from,sys);
+  });
+  state.sys=sys; save(); renderAll();
+}
+$("btnC").addEventListener("click",function(){switchSystem("C");});
+$("btnF").addEventListener("click",function(){switchSystem("F");});
+
+/* ── print / clear ──────────────────────────────────────── */
+$("btnPrint").addEventListener("click",function(){window.print();});
+$("btnClear").addEventListener("click",function(){
+  if(!confirm("Delete every unit, reading and cooking/cooling record stored in this browser? This cannot be undone."))return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  state=blankState(); save(); renderAll();
+  $("bizName").focus();
+});
+
+/* ── export: CSV ─────────────────────────────────────────── */
+function csvCell(v){
+  var s=(v==null?"":String(v));
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvOf(rows){return rows.map(function(r){return r.map(csvCell).join(",");}).join("\r\n")+"\r\n";}
+function download(name,text,mime){
+  var blob=new Blob(["﻿"+text],{type:mime+";charset=utf-8"});
+  var url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=name; a.style.display="none";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(url); a.remove();},400);
+}
+function slug(s){return (s||"temperature-log").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"temperature-log";}
+
+$("btnCsv").addEventListener("click",function(){
+  var sys=state.sys;
+  var out=[["Food safety temperature log"],["Site",state.business.name],["Address",state.business.addr],
+    ["Responsible person",state.business.mgr],["Exported",new Date().toISOString()],[]];
+  out.push(["STORAGE UNIT READINGS"]);
+  out.push(["No.","Date","Time","Unit","Type","Reading","Unit system","Safe range","Status","Checked by","Corrective action"]);
+  state.readings.slice().sort(function(a,b){return a.date+a.time<b.date+b.time?-1:1;}).forEach(function(r){
+    var u=unitById(r.unitId);
+    out.push([r.seq,r.date,r.time,u?u.name:"(removed unit)",u?TYPES[u.type].label:"",
+      r.value===null?"":r.value,sys,u?rangeText(u.type,sys):"",r.breach?"Out of range":"OK",r.who,r.action]);
+  });
+  out.push([]); out.push(["COOKING & COOLING LOG"]);
+  out.push(["No.","Date","Item","Core temp","Core result","Stage1 time","Stage1 temp","Stage1 elapsed","Stage1 result",
+    "Stage2 time","Stage2 temp","Stage2 elapsed","Stage2 result","Overall","Checked by"]);
+  state.cookcool.slice().sort(function(a,b){return a.date<b.date?-1:1;}).forEach(function(c){
+    var ev=evalCook(c,sys);
+    out.push([c.seq,c.date,c.item,c.coreVal===null?"":c.coreVal,ev.corePass?"Pass":"Fail",
+      c.s1Time,c.s1Val===null?"":c.s1Val,fmtDur(ev.e1),ev.s1Pass===null?"Pending":(ev.s1Pass?"Pass":"Fail"),
+      c.s2Time,c.s2Val===null?"":c.s2Val,fmtDur(ev.e2),ev.s2Pass===null?"Pending":(ev.s2Pass?"Pass":"Fail"),
+      ev.overall?"Pass":"Check",c.who]);
+  });
+  download(slug(state.business.name)+"-temperature-log-"+todayIso()+".csv",csvOf(out),"text/csv");
+});
+
+/* ── export / import: JSON ──────────────────────────────── */
+$("btnJson").addEventListener("click",function(){
+  download(slug(state.business.name)+"-temperature-log-"+todayIso()+".json",
+    JSON.stringify({tool:"solvix.temperature-log",v:1,seq:seq,state:state},null,2),"application/json");
+});
+$("btnImport").addEventListener("click",function(){$("fileIn").click();});
+$("fileIn").addEventListener("change",function(){
+  var f=this.files&&this.files[0]; if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      var s=o&&o.state?o.state:o;
+      if(!s||!Array.isArray(s.units)||!Array.isArray(s.readings))throw new Error("shape");
+      if(o&&o.seq)seq=Math.max(seq,num(o.seq,1));
+      state=normalise(s); save(); renderAll();
+    }catch(e){
+      var n=document.createElement("div");
+      n.className="note bad noprint"; n.style.margin="14px 0";
+      n.textContent="That file could not be read as a Temperature Log export. Nothing was changed.";
+      var host=$("sampleBanner"); host.parentNode.insertBefore(n,host.nextSibling);
+      setTimeout(function(){n.remove();},6000);
+    }
+  };
+  rd.readAsText(f);
+  this.value="";
+});
+
+/* ── boot ────────────────────────────────────────────────── */
+renderAll();
+})();
+</script>
+</body>
+</html>

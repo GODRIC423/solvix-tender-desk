@@ -1,0 +1,1509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Staff Holiday Tracker — leave entitlement, bookings, clashes &amp; year chart</title>
+<meta name="description" content="Track annual leave for a team: pro-rata entitlement for mid-year starters and leavers, part-time pro-rata, carry-over with a cap, leave booked as date ranges that exclude weekends and your public holiday list, approval status per request, clash warnings when too many of a team are off the same day, a year leave chart, and who is off on any given date. Prints a year leave record and exports CSV and JSON.">
+<meta name="theme-color" content="#0F6E75">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F6E75'/%3E%3Crect x='6' y='8' width='20' height='18' rx='2.5' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Cpath d='M6 13.5h20M12 8.4V5.8M20 8.4V5.8' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M11 19.6l3.2 3.2 6-6.4' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#0F6E75;--accent-ink:#0B555A;--accent-wash:#E1F0F1;--on-accent:#fff;
+  --ch-hol:#EBD9B4;--ch-pd:#9AC9CD;--ch-ot:#D9A85E;--ch-ne:#CBD2D8;--ch-tdy:#B3261E}
+@media (prefers-colour-scheme:dark){}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB5BE;--accent-ink:#6ED2D9;--accent-wash:#102A2E;--on-accent:#04181A;
+  --ch-hol:#4B3D1B;--ch-pd:#2A6B70;--ch-ot:#7B5A22;--ch-ne:#333B43;--ch-tdy:#E8695F}}
+:root[data-theme="dark"]{--accent:#3FB5BE;--accent-ink:#6ED2D9;--accent-wash:#102A2E;--on-accent:#04181A;
+  --ch-hol:#4B3D1B;--ch-pd:#2A6B70;--ch-ot:#7B5A22;--ch-ne:#333B43;--ch-tdy:#E8695F}
+
+[hidden]{display:none!important}
+.app{max-width:1340px}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(300px,.45fr)}
+@media(max-width:1080px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>*,.stack>*{min-width:0}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
+.trio{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start}
+.fgrid.narrow{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:560px){.span2{grid-column:span 1}}
+
+/* stat band */
+.statband{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(146px,1fr))}
+.statband .stat.hero{grid-column:span 2}
+.stat.hero .v{font-size:31px}
+.stat .sub2{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:3px}
+.stat.flagbad{background:var(--bad-wash);border-color:var(--bad)}
+.stat.flagbad .v{color:var(--bad)}
+.stat.flagok .v{color:var(--ok)}
+
+/* data tables */
+.stbl{min-width:1010px}
+.rtbl{min-width:880px}
+.stbl td,.rtbl td{padding:5px 7px;vertical-align:top}
+.stbl th,.rtbl th{padding:8px 7px}
+.stbl td.n,.rtbl td.n{padding-top:11px}
+.cellwrap{display:flex;flex-direction:column;gap:3px}
+.cellwrap .mini{font:600 9px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+td .err{display:block;margin-top:2px}
+.stbl col.c-nm{width:168px} .stbl col.c-tm{width:158px} .stbl col.c-dt{width:242px}
+.stbl col.c-n1{width:72px} .stbl col.c-n2{width:88px}
+.rtbl col.c-who{width:172px} .rtbl col.c-dt{width:126px} .rtbl col.c-sl{width:136px}
+.rtbl col.c-dy{width:78px} .rtbl col.c-nt{width:190px}
+.cellwrap.two{flex-direction:row;gap:6px}
+.cellwrap.two>div{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wsel{width:100%}
+.rmbtn{border:1px solid var(--line);background:var(--raise);color:var(--muted);border-radius:3px;
+  font:700 12px/1 var(--mono);padding:5px 7px;cursor:pointer}
+.rmbtn:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-wash)}
+td.rmc{text-align:right;width:34px;padding-top:9px}
+.stat-cell{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.stat-cell.neg{color:var(--bad);font-weight:700}
+.stat-cell.strong{font-weight:700}
+.sel-st{font-weight:650}
+tr.declined td:not(.rmc){opacity:.55}
+.dayscell{white-space:nowrap}
+.dayscell .sm{display:block;font:10.5px/1.3 var(--sans);color:var(--muted)}
+
+/* year chart */
+.chartwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.chart{min-width:760px}
+.crow{display:grid;grid-template-columns:158px minmax(0,1fr);gap:10px;align-items:center;margin-bottom:4px}
+.crow .cname{min-width:0;overflow:hidden}
+.crow .cname .nm{font:650 12.5px/1.25 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow .cname .tm{font:11px/1.25 var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));border:1px solid var(--line);
+  border-radius:2px;overflow:hidden;background:var(--raise)}
+.strip .c{height:17px;background:var(--raise)}
+.strip .c.we{background:var(--sunk)}
+.strip .c.bh{background:var(--ch-hol)}
+.strip .c.ne{background:var(--ch-ne)}
+.strip .c.ap{background:var(--accent)}
+.strip .c.pd{background:var(--ch-pd)}
+.strip .c.ot{background:var(--ch-ot)}
+.strip .c.mend{box-shadow:inset -1px 0 0 var(--line-hard)}
+.strip .c.tdy{box-shadow:inset -1px 0 0 var(--ch-tdy),inset 1px 0 0 var(--ch-tdy)}
+.mhdr{height:auto}
+.mhdr .m{font:600 10px/1.3 var(--sans);letter-spacing:.03em;color:var(--muted);text-align:center;
+  overflow:hidden;white-space:nowrap;border-left:1px solid var(--line);padding:2px 0}
+.mhdr .m:first-child{border-left:0}
+.clashrow .strip{border-color:var(--line)}
+.clashrow .c{height:9px;background:transparent}
+.clashrow .c.on{background:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:11.5px/1.4 var(--sans);color:var(--muted);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:13px;height:11px;border-radius:2px;border:1px solid var(--line);display:inline-block}
+.legend i.ap{background:var(--accent)} .legend i.pd{background:var(--ch-pd)}
+.legend i.ot{background:var(--ch-ot)} .legend i.bh{background:var(--ch-hol)}
+.legend i.we{background:var(--sunk)} .legend i.ne{background:var(--ch-ne)}
+.legend i.cl{background:var(--bad)}
+
+/* rail */
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .l{color:var(--ink-2);min-width:0}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
+.kv .v.bad{color:var(--bad)} .kv .v.ok{color:var(--ok)}
+.offlist{display:flex;flex-direction:column;gap:7px}
+.offitem{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;
+  border-left:3px solid var(--accent);background:var(--accent-wash);padding:7px 9px;border-radius:0 3px 3px 0}
+.offitem.pend{border-color:var(--warn);background:var(--warn-wash)}
+.offitem.oth{border-color:var(--ch-ot);background:var(--warn-wash)}
+.offitem .who{font:650 13px/1.3 var(--sans)}
+.offitem .sub{font:11.5px/1.35 var(--sans);color:var(--ink-2)}
+.clashlist{display:flex;flex-direction:column;gap:7px}
+.clashlist .ci{border-left:3px solid var(--bad);background:var(--bad-wash);padding:7px 9px;border-radius:0 3px 3px 0;
+  font:12.5px/1.4 var(--sans)}
+.clashlist .ci b{display:block;font:650 12.5px/1.35 var(--sans)}
+.holrow{display:grid;grid-template-columns:128px minmax(0,1fr) 30px;gap:5px;align-items:center;margin-bottom:5px}
+.holrow input{padding:5px 6px;font-size:13px}
+.hollist{max-height:344px;overflow-y:auto;padding-right:2px}
+.wkdays{display:flex;flex-wrap:wrap;gap:4px}
+.wkdays label{display:inline-flex;align-items:center;gap:4px;font:600 11.5px/1 var(--sans);
+  border:1px solid var(--line-hard);border-radius:3px;padding:6px 7px;cursor:pointer;background:var(--raise)}
+.wkdays input{width:14px;height:14px;margin:0;accent-color:var(--accent)}
+.wkdays label.on{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink)}
+.msg{margin:0}
+.msg:not(:empty){margin-top:10px;padding:8px 11px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 12.5px/1.4 var(--sans)}
+
+/* print document */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:2.5pt solid #000;padding-bottom:6pt;margin-bottom:8pt}
+.doc .lh .org{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.02em}
+.doc .lh .yr{font-family:var(--mono);font-size:10pt;margin-top:3pt;font-weight:700}
+.doc .lh .ref{font-family:var(--mono);font-size:8.5pt;color:#333;margin-top:2pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:4pt 10pt;margin-bottom:8pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:20pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:3pt;table-layout:fixed}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top;word-wrap:break-word}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7.5pt;letter-spacing:.05em;text-transform:uppercase;color:#000}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tfoot td{background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc .pchart{margin-bottom:4pt}
+.doc .pcrow{display:grid;grid-template-columns:30mm minmax(0,1fr);gap:2mm;align-items:center;margin-bottom:1.4pt}
+.doc .pcrow .pn{font-size:8pt;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.doc .pcrow .pn span{display:block;font-weight:400;font-size:7pt;color:#333}
+.doc .pstrip{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));border:.75pt solid #666;height:11pt}
+.doc .pstrip u{display:block;height:100%;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .pstrip u.we{background:#ebebeb} .doc .pstrip u.bh{background:#d2d2d2}
+.doc .pstrip u.ne{background:#f7f7f7} .doc .pstrip u.ap{background:#1a1a1a}
+.doc .pstrip u.pd{background:#8c8c8c} .doc .pstrip u.ot{background:#5c5c5c}
+.doc .pmh{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));margin-bottom:1pt}
+.doc .pmh b{font-size:6.5pt;text-align:center;border-left:.5pt solid #999;overflow:hidden;white-space:nowrap;font-weight:600}
+.doc .pmh b:first-child{border-left:0}
+.doc .plg{display:flex;flex-wrap:wrap;gap:3pt 9pt;font-size:7pt;color:#222;margin-bottom:4pt}
+.doc .plg span{display:inline-flex;align-items:center;gap:3pt}
+.doc .plg i{width:9pt;height:7pt;border:.5pt solid #666;display:inline-block;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .plg i.ap{background:#1a1a1a} .doc .plg i.pd{background:#8c8c8c}
+.doc .plg i.ot{background:#5c5c5c} .doc .plg i.bh{background:#d2d2d2}
+.doc .plg i.we{background:#ebebeb} .doc .plg i.ne{background:#f7f7f7}
+.doc .dis{border:1pt solid #000;padding:5pt 7pt;font-size:7.5pt;line-height:1.4;margin-top:8pt}
+.doc .dis b{display:block;font-size:8pt;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2pt}
+.doc .sign{display:grid;grid-template-columns:1fr 1fr;gap:14pt;margin-top:12pt}
+.doc .sign div{border-top:.75pt solid #000;padding-top:3pt;font-size:8pt}
+.doc .foot{margin-top:8pt;border-top:.75pt solid #999;padding-top:3pt;font-size:7pt;color:#444;
+  display:flex;justify-content:space-between;gap:10pt}
+.doc .hols{font-size:8pt;column-count:3;column-gap:10pt}
+.doc .hols div{break-inside:avoid;padding:1pt 0;border-bottom:.4pt dotted #bbb}
+@media print{
+  .doc{page-break-before:auto}
+  .doc .pchart,.doc .dis,.doc .sign,.doc .hols{break-inside:avoid;page-break-inside:avoid}
+  .doc .pcrow{break-inside:avoid;page-break-inside:avoid}
+  .doc h3.sec{break-after:avoid;page-break-after:avoid}
+  .doc .lh,.doc .meta{break-inside:avoid;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">HL</div>
+    <div>
+      <h1>Staff Holiday Tracker</h1>
+      <div class="sub">ENTITLEMENT · BOOKINGS · CLASHES · YEAR CHART</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint pagestack">
+
+  <!-- ── headline ───────────────────────────────────────────────── -->
+  <section class="card">
+    <div class="hd">
+      <h2>Leave year <span class="mono" id="lyLabel">—</span></h2>
+      <span class="chip warn" id="sampleChip">Sample data — edit or clear</span>
+      <button type="button" class="btn sm" id="bSample">Load sample</button>
+    </div>
+    <div class="bd stack">
+      <div class="statband">
+        <div class="stat hero">
+          <div class="k">Leave days remaining — whole team</div>
+          <div class="v" id="sRemain">—</div>
+          <div class="sub2" id="sRemainSub">&nbsp;</div>
+        </div>
+        <div class="stat">
+          <div class="k">Allowance</div>
+          <div class="v" id="sAllow">—</div>
+          <div class="sub2" id="sAllowSub">&nbsp;</div>
+        </div>
+        <div class="stat">
+          <div class="k">Approved</div>
+          <div class="v" id="sAppr">—</div>
+          <div class="sub2">days taken or booked</div>
+        </div>
+        <div class="stat">
+          <div class="k">Awaiting approval</div>
+          <div class="v" id="sPend">—</div>
+          <div class="sub2" id="sPendSub">&nbsp;</div>
+        </div>
+        <div class="stat" id="clashStat">
+          <div class="k">Clash days</div>
+          <div class="v" id="sClash">—</div>
+          <div class="sub2" id="sClashSub">&nbsp;</div>
+        </div>
+      </div>
+
+      <div class="fgrid">
+        <div class="f">
+          <label for="iLy">Leave year starts</label>
+          <input type="date" id="iLy">
+          <span class="err" id="eLy"></span>
+        </div>
+        <div class="f">
+          <label for="iBase">Full-time entitlement (days/yr)</label>
+          <input type="number" id="iBase" min="0" max="365" step="0.5" inputmode="decimal">
+          <span class="err" id="eBase"></span>
+        </div>
+        <div class="f">
+          <label for="iCap">Carry-over cap (days)</label>
+          <input type="number" id="iCap" min="0" max="365" step="0.5" inputmode="decimal">
+        </div>
+        <div class="f">
+          <label for="iThr">Max off at once, per team</label>
+          <input type="number" id="iThr" min="0" max="99" step="1" inputmode="numeric">
+        </div>
+        <div class="f span2">
+          <span class="lbl" id="wkLbl">Working days of the week</span>
+          <div class="wkdays" id="wkDays" role="group" aria-labelledby="wkLbl"></div>
+        </div>
+      </div>
+
+      <div class="note warn">
+        <strong>Check this against your own contracts and the law where you operate.</strong>
+        This tool does the arithmetic you tell it to: it pro-rates the entitlement <em>you</em> enter by
+        calendar days in post and by contracted days per week, subtracts the leave <em>you</em> record, and
+        flags dates where more of a team are off than the limit <em>you</em> set. It is not a statutory
+        entitlement calculator, it does not know your jurisdiction, it does not apply reference-period
+        averaging, irregular-hours or term-time rules, and it does not decide whether leave can be carried
+        over or must be paid in lieu. Public holidays are only the dates in your own list. For statutory
+        minimums, contractual terms or a dispute, take advice from a qualified employment adviser.
+      </div>
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ── at a glance ─────────────────────────────────────────── -->
+  <section class="trio">
+      <div class="card">
+        <div class="hd"><h2>Who is off</h2></div>
+        <div class="bd stack">
+          <div class="f">
+            <label for="iAsOf">On this date</label>
+            <input type="date" id="iAsOf">
+          </div>
+          <div id="offBox"></div>
+        </div>
+        <div class="ft"><span class="hint" id="offFoot">&nbsp;</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Clash warnings</h2><span class="chip" id="clashChip">—</span></div>
+        <div class="bd" id="clashBox"></div>
+      </div>
+
+      <div class="card">
+        <div class="hd">
+          <h2>Public holidays</h2>
+          <span class="chip" id="holChip">0</span>
+        </div>
+        <div class="bd stack">
+          <div class="hollist" id="holList"></div>
+          <div class="row">
+            <button type="button" class="btn sm" id="bAddHol">+ Add date</button>
+            <button type="button" class="btn sm" id="bUK">England &amp; Wales</button>
+            <button type="button" class="btn sm" id="bUS">US federal</button>
+            <button type="button" class="btn sm dgr" id="bClrHol">Clear</button>
+          </div>
+          <p class="hint">The preset buttons build the standard rule-based list for the calendar year(s) your
+          leave year covers — including Easter (Meeus/Jones/Butcher algorithm) and the usual substitute days
+          when a fixed date falls at a weekend. <strong>Check the result against the official list.</strong>
+          One-off holidays, royal or national days of mourning, Scottish and Northern Irish variations and
+          local holidays are not included.</p>
+        </div>
+      </div>
+  </section>
+
+    <!-- ── staff & balances ─────────────────────────────────── -->
+    <section class="card">
+      <div class="hd">
+        <h2>Staff &amp; balances</h2>
+        <button type="button" class="btn sm" id="bAddStaff">+ Add employee</button>
+      </div>
+      <div class="tw">
+        <table class="stbl">
+          <colgroup><col class="c-nm"><col class="c-tm"><col class="c-dt"><col class="c-n1"><col class="c-n1"><col class="c-n2"><col class="c-n2"><col class="c-n2"><col class="c-n2"><col class="c-n2"><col style="width:38px"></colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Employee</th>
+              <th scope="col">Team</th>
+              <th scope="col">In post from / to</th>
+              <th scope="col" class="r">Days/wk</th>
+              <th scope="col" class="r">B/fwd</th>
+              <th scope="col" class="r">Entitle&shy;ment</th>
+              <th scope="col" class="r">Allow&shy;ance</th>
+              <th scope="col" class="r">Approved</th>
+              <th scope="col" class="r">Pending</th>
+              <th scope="col" class="r">Remaining</th>
+              <th scope="col"><span class="hint">&nbsp;</span></th>
+            </tr>
+          </thead>
+          <tbody id="staffBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5">Team total — <span id="staffCount">0</span> staff</td>
+              <td class="n" id="tEnt">—</td>
+              <td class="n" id="tAllow">—</td>
+              <td class="n" id="tAppr">—</td>
+              <td class="n" id="tPend">—</td>
+              <td class="n" id="tRem">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="ft">
+        <span class="hint" id="entNote">Entitlement = full-time days &times; (days per week &divide; working days per week) &times; (calendar days in post &divide; days in the leave year), rounded <strong>up</strong> to the next half day. Allowance adds carry-over, capped at the figure above.</span>
+      </div>
+    </section>
+
+    <!-- ── requests ─────────────────────────────────────────── -->
+    <section class="card">
+      <div class="hd">
+        <h2>Leave requests</h2>
+        <button type="button" class="btn sm" id="bAddReq">+ Add request</button>
+      </div>
+      <div class="tw">
+        <table class="rtbl">
+          <colgroup><col class="c-who"><col class="c-dt"><col class="c-dt"><col class="c-sl"><col style="width:42px"><col class="c-sl"><col class="c-dy"><col class="c-nt"><col style="width:38px"></colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Employee</th>
+              <th scope="col">From</th>
+              <th scope="col">To</th>
+              <th scope="col">Type</th>
+              <th scope="col" class="r" title="Half day (single working day only)">&frac12;</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="r">Days</th>
+              <th scope="col">Note</th>
+              <th scope="col"><span class="hint">&nbsp;</span></th>
+            </tr>
+          </thead>
+          <tbody id="reqBody"></tbody>
+        </table>
+      </div>
+      <div class="ft">
+        <span class="hint">Days are counted between the two dates inclusive, skipping any day of the week not ticked as a working day and any date on the public holiday list. Only <strong>annual leave</strong> is deducted from the allowance; other absence types still appear on the chart and in the clash check. Declined requests are ignored everywhere except this list.</span>
+      </div>
+    </section>
+
+  <!-- ── year chart ───────────────────────────────────────────── -->
+  <section class="card">
+    <div class="hd">
+      <h2>Year leave chart</h2>
+      <span class="hint" id="chartHint">&nbsp;</span>
+    </div>
+    <div class="bd">
+      <div class="chartwrap">
+        <div class="chart" id="chart" role="group" aria-label="Year leave chart, one row per employee"></div>
+      </div>
+      <div class="legend">
+        <span><i class="ap"></i> Approved leave</span>
+        <span><i class="pd"></i> Awaiting approval</span>
+        <span><i class="ot"></i> Other absence</span>
+        <span><i class="bh"></i> Public holiday</span>
+        <span><i class="we"></i> Non-working day</span>
+        <span><i class="ne"></i> Not in post</span>
+        <span><i class="cl"></i> Clash day</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── document details ───────────────────────────────────── -->
+  <section class="card">
+      <div class="hd"><h2>Document details for the printed record</h2></div>
+      <div class="bd fgrid">
+        <div class="f span2">
+          <label for="iOrg">Organisation</label>
+          <input type="text" id="iOrg" placeholder="Employer name">
+        </div>
+        <div class="f span2">
+          <label for="iDept">Department / site</label>
+          <input type="text" id="iDept" placeholder="e.g. Community Team">
+        </div>
+        <div class="f">
+          <label for="iRef">Reference</label>
+          <input type="text" id="iRef" placeholder="HOL-2026">
+        </div>
+        <div class="f">
+          <label for="iBy">Prepared by</label>
+          <input type="text" id="iBy" placeholder="Name">
+        </div>
+        <div class="f span2 check" style="margin-top:2px">
+          <input type="checkbox" id="iInclPend">
+          <label for="iInclPend" style="font:400 13.5px/1.4 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)">Count requests that are still awaiting approval in the clash check and in “who is off”</label>
+        </div>
+      </div>
+  </section>
+</main>
+
+<section class="printonly doc" id="printdoc"></section>
+
+<footer class="app noprint" style="padding-top:0">
+  <p class="hint">
+    Leave year = the start date you set, running to the day before the same date one year later.
+    Entitlement per employee = full-time annual days &times; (contracted days per week &divide; working days
+    per week) &times; (calendar days in post inside the leave year &divide; calendar days in the leave year),
+    rounded <strong>up</strong> to the next half day so a part-year or part-time figure is never rounded
+    down. Allowance = entitlement + brought-forward days, with brought-forward capped at the carry-over
+    limit. A booking's days = every date from the start to the end inclusive that is both a ticked working
+    day of the week and not on the public holiday list; a booking marked as a half day counts 0.5 and only
+    where it covers a single working day. Only bookings inside the leave year count against it. Remaining =
+    allowance &minus; approved &minus; pending annual leave. A clash day is any date on which more people in
+    the same team are absent than the limit you set. Individual part-time working patterns (which specific
+    weekdays a part-timer works) are not modelled. Data is saved only in this browser; nothing is sent
+    anywhere. Not employment, payroll or legal advice.
+  </p>
+</footer>
+
+<script>
+"use strict";
+/* ══ helpers ════════════════════════════════════════════════════ */
+var $=function(s,r){return (r||document).querySelector(s);};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+var DAY=86400000;
+var KEY="solvix.holiday-tracker.v1";
+var DOWN=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var DOWS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var TYPES=["Annual leave","Unpaid leave","Sick leave","Parental leave","Other absence"];
+var STATUSES=["Approved","Pending","Declined"];
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function ymdNum(s){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s||"")) return null;
+  var p=String(s).split("-"),y=+p[0],m=+p[1],d=+p[2];
+  if(m<1||m>12||d<1||d>31) return null;
+  var t=Date.UTC(y,m-1,d),dt=new Date(t);
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==m-1||dt.getUTCDate()!==d) return null;
+  return Math.round(t/DAY);
+}
+function numYmd(n){return new Date(n*DAY).toISOString().slice(0,10);}
+function dow(n){return ((n+4)%7+7)%7;}
+function todayYmd(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function fmtDate(s){var n=ymdNum(s);if(n===null)return "—";
+  var d=new Date(n*DAY);return String(d.getUTCDate()).padStart(2,"0")+" "+MONS[d.getUTCMonth()]+" "+d.getUTCFullYear();}
+function fmtDateN(n){return fmtDate(numYmd(n));}
+function fmtD(x){ if(x===null||x===undefined||typeof x!=="number"||!isFinite(x)) return "—";
+  var v=Math.round(x*100)/100; if(Object.is(v,-0)) v=0; return String(v); }
+function fmtDU(x){var s=fmtD(x);return s==="—"?s:s+(Math.abs(x)===1?" day":" days");}
+function ceilHalf(x){return Math.ceil(x*2-1e-9)/2;}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:d;}
+function uid(){return "r"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
+
+/* ══ holiday rule engines ═══════════════════════════════════════ */
+function easterNum(y){
+  var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+      f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+      h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+      l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+      mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
+  return Math.round(Date.UTC(y,mo-1,da)/DAY);
+}
+function nthDow(y,mo,wd,n){var first=Math.round(Date.UTC(y,mo,1)/DAY);
+  return first+((wd-dow(first)+7)%7)+(n-1)*7;}
+function lastDow(y,mo,wd){var last=Math.round(Date.UTC(y,mo+1,0)/DAY);
+  return last-((dow(last)-wd+7)%7);}
+function ukHolidays(y){
+  var out=[],taken={};
+  function push(n,name){while(dow(n)===0||dow(n)===6||taken[n]){n++;}taken[n]=1;out.push({d:numYmd(n),n:name});}
+  push(Math.round(Date.UTC(y,0,1)/DAY),"New Year's Day");
+  var e=easterNum(y);
+  taken[e-2]=1;out.push({d:numYmd(e-2),n:"Good Friday"});
+  taken[e+1]=1;out.push({d:numYmd(e+1),n:"Easter Monday"});
+  var m1=nthDow(y,4,1,1);taken[m1]=1;out.push({d:numYmd(m1),n:"Early May bank holiday"});
+  var m2=lastDow(y,4,1);taken[m2]=1;out.push({d:numYmd(m2),n:"Spring bank holiday"});
+  var a1=lastDow(y,7,1);taken[a1]=1;out.push({d:numYmd(a1),n:"Summer bank holiday"});
+  push(Math.round(Date.UTC(y,11,25)/DAY),"Christmas Day");
+  push(Math.round(Date.UTC(y,11,26)/DAY),"Boxing Day");
+  out.sort(function(a,b){return a.d<b.d?-1:1;});
+  return out;
+}
+function usHolidays(y){
+  var out=[];
+  function fixed(mo,da,name){
+    var n=Math.round(Date.UTC(y,mo,da)/DAY);
+    if(dow(n)===6)n-=1; else if(dow(n)===0)n+=1;
+    out.push({d:numYmd(n),n:name});
+  }
+  fixed(0,1,"New Year's Day");
+  out.push({d:numYmd(nthDow(y,0,1,3)),n:"Martin Luther King Jr. Day"});
+  out.push({d:numYmd(nthDow(y,1,1,3)),n:"Washington's Birthday"});
+  out.push({d:numYmd(lastDow(y,4,1)),n:"Memorial Day"});
+  fixed(5,19,"Juneteenth");
+  fixed(6,4,"Independence Day");
+  out.push({d:numYmd(nthDow(y,8,1,1)),n:"Labor Day"});
+  out.push({d:numYmd(nthDow(y,9,1,2)),n:"Columbus Day"});
+  fixed(10,11,"Veterans Day");
+  out.push({d:numYmd(nthDow(y,10,4,4)),n:"Thanksgiving Day"});
+  fixed(11,25,"Christmas Day");
+  out.sort(function(a,b){return a.d<b.d?-1:1;});
+  return out;
+}
+
+/* ══ state ══════════════════════════════════════════════════════ */
+var S=null;
+
+function blankState(){
+  var y=new Date().getFullYear();
+  return {org:"",dept:"",ref:"",by:"",
+    ly:y+"-01-01",base:28,cap:5,thr:2,inclPending:true,
+    pattern:[false,true,true,true,true,true,false],
+    asOf:todayYmd(),holidays:[],staff:[],reqs:[],sample:false};
+}
+function sampleState(){
+  var y=new Date().getFullYear();
+  function D(m,d){return y+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0");}
+  var st={org:"Northgate Care Services Ltd",dept:"Community Team — Bramley depot",
+    ref:"HOL-"+y,by:"J. Ellery, Operations Manager",
+    ly:D(1,1),base:28,cap:5,thr:1,inclPending:true,
+    pattern:[false,true,true,true,true,true,false],
+    asOf:todayYmd(),holidays:ukHolidays(y),
+    staff:[
+      {id:"s1",name:"A. Whitfield",team:"Care Coordination",start:"",end:"",dpw:5,carry:3},
+      {id:"s2",name:"B. Okafor",team:"Care Coordination",start:"",end:"",dpw:5,carry:0},
+      {id:"s3",name:"C. Delgado",team:"Care Coordination",start:D(4,6),end:"",dpw:5,carry:0},
+      {id:"s4",name:"D. Nowak",team:"Field Support",start:"",end:"",dpw:4,carry:2},
+      {id:"s5",name:"E. Marsh",team:"Field Support",start:"",end:"",dpw:5,carry:1.5},
+      {id:"s6",name:"F. Bassey",team:"Field Support",start:D(7,1),end:"",dpw:5,carry:0}
+    ],
+    reqs:[
+      {id:"q1",sid:"s1",from:D(2,16),to:D(2,20),type:"Annual leave",half:false,status:"Approved",note:"Half term"},
+      {id:"q2",sid:"s2",from:D(5,25),to:D(5,29),type:"Annual leave",half:false,status:"Approved",note:""},
+      {id:"q3",sid:"s4",from:D(3,12),to:D(3,13),type:"Sick leave",half:false,status:"Approved",note:"Certified"},
+      {id:"q4",sid:"s4",from:D(7,20),to:D(7,31),type:"Annual leave",half:false,status:"Approved",note:"Family holiday"},
+      {id:"q5",sid:"s1",from:D(8,31),to:D(9,4),type:"Annual leave",half:false,status:"Approved",note:""},
+      {id:"q6",sid:"s3",from:D(8,31),to:D(9,4),type:"Annual leave",half:false,status:"Pending",note:"Clashes — needs cover"},
+      {id:"q7",sid:"s5",from:D(9,1),to:D(9,11),type:"Annual leave",half:false,status:"Approved",note:""},
+      {id:"q8",sid:"s2",from:D(10,12),to:D(10,16),type:"Annual leave",half:false,status:"Pending",note:""},
+      {id:"q9",sid:"s6",from:D(10,26),to:D(10,30),type:"Annual leave",half:false,status:"Pending",note:""},
+      {id:"q10",sid:"s5",from:D(11,6),to:D(11,6),type:"Annual leave",half:true,status:"Approved",note:"Afternoon off"},
+      {id:"q11",sid:"s1",from:D(12,24),to:D(12,31),type:"Annual leave",half:false,status:"Pending",note:"Christmas"},
+      {id:"q12",sid:"s6",from:D(12,21),to:D(12,24),type:"Annual leave",half:false,status:"Declined",note:"Cover not available"}
+    ],
+    sample:true};
+  return st;
+}
+
+/* ══ persistence ════════════════════════════════════════════════ */
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ /* storage blocked — tool still works */ }
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw) return null;
+    var o=JSON.parse(raw);
+    return normalise(o);
+  }catch(e){ return null; }
+}
+function normalise(o){
+  if(!o||typeof o!=="object") return null;
+  var b=blankState();
+  var s={
+    org:String(o.org||""),dept:String(o.dept||""),ref:String(o.ref||""),by:String(o.by||""),
+    ly:(ymdNum(o.ly)!==null?o.ly:b.ly),
+    base:num(o.base,28),cap:num(o.cap,5),thr:Math.max(0,Math.round(num(o.thr,2))),
+    inclPending:o.inclPending!==false,
+    pattern:(Array.isArray(o.pattern)&&o.pattern.length===7)?o.pattern.map(function(x){return !!x;}):b.pattern,
+    asOf:(ymdNum(o.asOf)!==null?o.asOf:todayYmd()),
+    holidays:[],staff:[],reqs:[],sample:!!o.sample
+  };
+  (Array.isArray(o.holidays)?o.holidays:[]).forEach(function(h){
+    if(h&&typeof h==="object") s.holidays.push({d:String(h.d||""),n:String(h.n||"")});
+  });
+  (Array.isArray(o.staff)?o.staff:[]).forEach(function(p){
+    if(!p||typeof p!=="object") return;
+    s.staff.push({id:String(p.id||uid()),name:String(p.name||""),team:String(p.team||""),
+      start:String(p.start||""),end:String(p.end||""),dpw:num(p.dpw,5),carry:num(p.carry,0)});
+  });
+  var ids={};s.staff.forEach(function(p){ids[p.id]=1;});
+  (Array.isArray(o.reqs)?o.reqs:[]).forEach(function(r){
+    if(!r||typeof r!=="object") return;
+    s.reqs.push({id:String(r.id||uid()),sid:ids[r.sid]?String(r.sid):(s.staff[0]?s.staff[0].id:""),
+      from:String(r.from||""),to:String(r.to||""),
+      type:TYPES.indexOf(r.type)>=0?r.type:TYPES[0],half:!!r.half,
+      status:STATUSES.indexOf(r.status)>=0?r.status:"Pending",note:String(r.note||"")});
+  });
+  return s;
+}
+
+/* ══ computation ════════════════════════════════════════════════ */
+var C={};
+function compute(){
+  var lyS=ymdNum(S.ly), lyE=null, totalDays=0;
+  if(lyS!==null){
+    var p=S.ly.split("-");
+    lyE=Math.round(Date.UTC(+p[0]+1,+p[1]-1,+p[2])/DAY)-1;
+    if(lyE<lyS) lyE=lyS;
+    totalDays=lyE-lyS+1;
+  }
+  var patDays=S.pattern.reduce(function(a,x){return a+(x?1:0);},0);
+  var holN={},holCount=0,holInYear=0;
+  S.holidays.forEach(function(h){
+    var n=ymdNum(h.d); if(n===null) return;
+    holN[n]=h.n||"Public holiday"; holCount++;
+    if(lyS!==null&&n>=lyS&&n<=lyE) holInYear++;
+  });
+
+  function wd(a,b){ // working days between two day-numbers inclusive
+    if(a===null||b===null||b<a) return 0;
+    var c=0,lim=Math.min(b,a+1200);
+    for(var n=a;n<=lim;n++){ if(S.pattern[dow(n)]&&!holN[n]) c++; }
+    return c;
+  }
+
+  var byId={};
+  var staff=S.staff.map(function(p){
+    var sN=ymdNum(p.start), eN=ymdNum(p.end);
+    var a=(sN!==null&&lyS!==null)?Math.max(sN,lyS):lyS;
+    var b=(eN!==null&&lyE!==null)?Math.min(eN,lyE):lyE;
+    var inScheme=(a!==null&&b!==null&&b>=a)?(b-a+1):0;
+    var factor=totalDays>0?inScheme/totalDays:0;
+    var dpw=Math.max(0,num(p.dpw,0));
+    var ftF=patDays>0?Math.min(dpw,patDays)/patDays:0;
+    var base=Math.max(0,num(S.base,0));
+    var ent=ceilHalf(base*ftF*factor);
+    var cap=Math.max(0,num(S.cap,0));
+    var carryRaw=Math.max(0,num(p.carry,0));
+    var carry=Math.min(carryRaw,cap);
+    var o={ref:p,id:p.id,name:p.name,team:(p.team||"").trim(),
+      startN:a,endN:b,inScheme:inScheme,factor:factor,dpw:dpw,ftF:ftF,
+      ent:ent,carryRaw:carryRaw,carry:carry,capped:carryRaw>cap+1e-9,
+      allow:ent+carry,appr:0,pend:0,other:0,rem:0,days:{},errs:[]};
+    o.incomplete=!String(p.name||"").trim();
+    if(o.incomplete) o.errs.push("Name required");
+    if(sN!==null&&eN!==null&&eN<sN) o.errs.push("Leaving date is before the start date");
+    if(dpw>patDays&&patDays>0) o.errs.push("More than "+patDays+" working days");
+    byId[p.id]=o;
+    return o;
+  });
+
+  var reqs=S.reqs.map(function(r){
+    var a=ymdNum(r.from),b=ymdNum(r.to);
+    var o={ref:r,id:r.id,sid:r.sid,a:a,b:b,type:r.type,status:r.status,half:!!r.half,
+      note:r.note,dTotal:0,dYear:0,err:"",person:byId[r.sid]||null};
+    if(!o.person) o.err="Pick an employee";
+    else if(a===null||b===null) o.err="Enter both dates";
+    else if(b<a) o.err="End date is before the start date";
+    else if(b-a>731) o.err="Range is longer than two years";
+    if(!o.err&&a!==null&&b!==null){
+      o.dTotal=wd(a,b);
+      var ya=lyS!==null?Math.max(a,lyS):a, yb=lyE!==null?Math.min(b,lyE):b;
+      o.dYear=wd(ya,yb);
+      if(o.half&&o.dTotal===1){ o.dTotal=0.5; o.dYear=o.dYear>0?0.5:0; }
+      o.outside=o.dYear<o.dTotal;
+    }
+    return o;
+  });
+
+  // per-person day map + balances
+  var teamDays={}; // team -> { dayNum -> [names] }
+  reqs.forEach(function(r){
+    if(r.err||!r.person||r.status==="Declined") return;
+    var p=r.person, active=(r.status==="Approved")||(r.status==="Pending"&&S.inclPending);
+    if(r.type===TYPES[0]){
+      if(r.status==="Approved") p.appr+=r.dYear; else if(r.status==="Pending") p.pend+=r.dYear;
+    } else { if(r.status!=="Declined") p.other+=r.dYear; }
+    var lim=Math.min(r.b,r.a+1200);
+    for(var n=r.a;n<=lim;n++){
+      if(lyS!==null&&(n<lyS||n>lyE)) continue;
+      if(!S.pattern[dow(n)]||holN[n]) continue;
+      var prev=p.days[n];
+      if(!prev||(prev.status==="Pending"&&r.status==="Approved")) p.days[n]={status:r.status,type:r.type,note:r.note};
+      if(active){
+        var t=p.team||"— unassigned —";
+        if(!teamDays[t]) teamDays[t]={};
+        if(!teamDays[t][n]) teamDays[t][n]=[];
+        teamDays[t][n].push(p.name||"(unnamed)");
+      }
+    }
+  });
+  staff.forEach(function(p){ p.rem=p.allow-p.appr-p.pend; });
+
+  // clash days
+  var thr=Math.max(0,Math.round(num(S.thr,0)));
+  var clashSet={},clashRuns=[],clashDayCount=0;
+  Object.keys(teamDays).sort().forEach(function(t){
+    var days=Object.keys(teamDays[t]).map(Number).sort(function(x,y){return x-y;});
+    var run=null;
+    days.forEach(function(n){
+      var who=teamDays[t][n];
+      if(who.length>thr){
+        clashSet[n]=(clashSet[n]||0)+1; clashDayCount++;
+        var key=who.slice().sort().join("|");
+        if(run&&run.end===n-1&&run.key===key){ run.end=n; }
+        else { run={team:t,start:n,end:n,key:key,who:who.slice().sort(),count:who.length};
+               clashRuns.push(run); }
+      }
+    });
+  });
+
+  // totals
+  var tot={ent:0,allow:0,appr:0,pend:0,rem:0,other:0},nDone=0;
+  staff.forEach(function(p){
+    if(p.incomplete) return;
+    nDone++;
+    tot.ent+=p.ent;tot.allow+=p.allow;tot.appr+=p.appr;tot.pend+=p.pend;
+    tot.rem+=p.rem;tot.other+=p.other;});
+
+  // who is off on the chosen date
+  var asN=ymdNum(S.asOf),off=[];
+  if(asN!==null){
+    staff.forEach(function(p){
+      var d=p.days[asN];
+      if(d&&(d.status==="Approved"||(d.status==="Pending"&&S.inclPending))) off.push({p:p,d:d});
+    });
+  }
+
+  C={lyS:lyS,lyE:lyE,totalDays:totalDays,patDays:patDays,holN:holN,holCount:holCount,
+     holInYear:holInYear,staff:staff,reqs:reqs,byId:byId,tot:tot,thr:thr,nDone:nDone,
+     clashSet:clashSet,clashRuns:clashRuns,clashDays:Object.keys(clashSet).length,
+     asN:asN,off:off,teamDays:teamDays};
+  return C;
+}
+
+/* ══ rendering — rows (rebuilt only when the row set changes) ═══ */
+function staffRow(p){
+  return '<tr data-sid="'+esc(p.id)+'">'+
+    '<td><input type="text" data-f="name" value="'+esc(p.name)+'" aria-label="Employee name" placeholder="Name">'+
+      '<span class="err" id="es-'+esc(p.id)+'"></span></td>'+
+    '<td><input type="text" data-f="team" value="'+esc(p.team)+'" aria-label="Team" placeholder="Team"></td>'+
+    '<td><div class="cellwrap two">'+
+      '<div><span class="mini">From</span><input type="date" data-f="start" value="'+esc(p.start)+'" aria-label="Start date for '+esc(p.name||"employee")+'" title="Leave blank if in post before the leave year began"></div>'+
+      '<div><span class="mini">To</span><input type="date" data-f="end" value="'+esc(p.end)+'" aria-label="Leaving date for '+esc(p.name||"employee")+'" title="Leaving date, if known"></div>'+
+    '</div></td>'+
+    '<td><input type="number" data-f="dpw" value="'+esc(p.dpw)+'" min="0" max="7" step="0.5" inputmode="decimal" aria-label="Contracted days per week"></td>'+
+    '<td><input type="number" data-f="carry" value="'+esc(p.carry)+'" min="0" max="365" step="0.5" inputmode="decimal" aria-label="Days brought forward"></td>'+
+    '<td class="stat-cell" id="v-ent-'+esc(p.id)+'">—</td>'+
+    '<td class="stat-cell strong" id="v-allow-'+esc(p.id)+'">—</td>'+
+    '<td class="stat-cell" id="v-appr-'+esc(p.id)+'">—</td>'+
+    '<td class="stat-cell" id="v-pend-'+esc(p.id)+'">—</td>'+
+    '<td class="stat-cell strong" id="v-rem-'+esc(p.id)+'">—</td>'+
+    '<td class="rmc"><button type="button" class="rmbtn" data-rm="staff" aria-label="Remove '+esc(p.name||"employee")+'">&times;</button></td>'+
+  '</tr>';
+}
+function reqRow(r){
+  var opts=S.staff.map(function(p){
+    return '<option value="'+esc(p.id)+'"'+(p.id===r.sid?" selected":"")+'>'+esc(p.name||"(unnamed)")+'</option>';
+  }).join("");
+  var tOpts=TYPES.map(function(t){return '<option'+(t===r.type?" selected":"")+'>'+esc(t)+'</option>';}).join("");
+  var sOpts=STATUSES.map(function(t){return '<option'+(t===r.status?" selected":"")+'>'+esc(t)+'</option>';}).join("");
+  return '<tr data-rid="'+esc(r.id)+'">'+
+    '<td><select class="wsel" data-f="sid" aria-label="Employee">'+opts+'</select></td>'+
+    '<td><input type="date" data-f="from" value="'+esc(r.from)+'" aria-label="From date"></td>'+
+    '<td><input type="date" data-f="to" value="'+esc(r.to)+'" aria-label="To date">'+
+      '<span class="err" id="er-'+esc(r.id)+'"></span></td>'+
+    '<td><select class="wsel" data-f="type" aria-label="Absence type">'+tOpts+'</select></td>'+
+    '<td style="text-align:center"><input type="checkbox" data-f="half"'+(r.half?" checked":"")+
+      ' style="width:16px;height:16px;accent-color:var(--accent)" aria-label="Half day" title="Half day — only applies to a single working day"></td>'+
+    '<td><select class="wsel sel-st" data-f="status" aria-label="Approval status">'+sOpts+'</select></td>'+
+    '<td class="stat-cell dayscell" id="v-days-'+esc(r.id)+'">—</td>'+
+    '<td><input type="text" data-f="note" value="'+esc(r.note)+'" aria-label="Note" placeholder="Note"></td>'+
+    '<td class="rmc"><button type="button" class="rmbtn" data-rm="req" aria-label="Remove request">&times;</button></td>'+
+  '</tr>';
+}
+function holRow(h,i){
+  return '<div class="holrow" data-hi="'+i+'">'+
+    '<input type="date" data-f="d" value="'+esc(h.d)+'" aria-label="Public holiday date">'+
+    '<input type="text" data-f="n" value="'+esc(h.n)+'" aria-label="Public holiday name" placeholder="Name">'+
+    '<button type="button" class="rmbtn" data-rm="hol" aria-label="Remove holiday">&times;</button>'+
+  '</div>';
+}
+function renderRows(){
+  $("#staffBody").innerHTML=S.staff.length?S.staff.map(staffRow).join("")
+    :'<tr><td colspan="11"><div class="empty">No employees yet — add one to start tracking leave.</div></td></tr>';
+  $("#reqBody").innerHTML=S.reqs.length?S.reqs.map(reqRow).join("")
+    :'<tr><td colspan="9"><div class="empty">No leave booked yet.</div></td></tr>';
+  $("#holList").innerHTML=S.holidays.length?S.holidays.map(holRow).join("")
+    :'<p class="hint">No public holidays listed — every ticked working day counts as a leave day.</p>';
+}
+function renderSettings(){
+  $("#iLy").value=S.ly; $("#iBase").value=S.base; $("#iCap").value=S.cap; $("#iThr").value=S.thr;
+  $("#iAsOf").value=S.asOf; $("#iOrg").value=S.org; $("#iDept").value=S.dept;
+  $("#iRef").value=S.ref; $("#iBy").value=S.by; $("#iInclPend").checked=!!S.inclPending;
+  $("#wkDays").innerHTML=DOWS.map(function(d,i){
+    return '<label class="'+(S.pattern[i]?"on":"")+'"><input type="checkbox" data-wd="'+i+'"'+
+      (S.pattern[i]?" checked":"")+'><span>'+d+'</span></label>';
+  }).join("");
+  $("#sampleChip").hidden=!S.sample;
+}
+
+/* ══ rendering — computed output ════════════════════════════════ */
+function chartHTML(){
+  if(C.lyS===null||C.totalDays<=0) return '<div class="empty">Set a valid leave year start date.</div>';
+  var n=C.totalDays,html="",today=ymdNum(todayYmd());
+  // month header
+  var months=[],cur=null;
+  for(var i=0;i<n;i++){
+    var dt=new Date((C.lyS+i)*DAY),k=dt.getUTCFullYear()+"-"+dt.getUTCMonth();
+    if(!cur||cur.k!==k){cur={k:k,label:MONS[dt.getUTCMonth()],span:0,last:0};months.push(cur);}
+    cur.span++; cur.last=C.lyS+i;
+  }
+  html+='<div class="crow"><div class="cname"></div><div class="mhdr strip" style="--n:'+n+';border:0;background:none">'+
+    months.map(function(m){return '<div class="m" style="grid-column:span '+m.span+'">'+m.label+'</div>';}).join("")+'</div></div>';
+  var mEnds={};months.forEach(function(m){mEnds[m.last]=1;});
+  C.staff.forEach(function(p){
+    var cells="";
+    for(var i=0;i<n;i++){
+      var d=C.lyS+i,cls="c",title="";
+      var inPost=(p.startN!==null&&p.endN!==null&&d>=p.startN&&d<=p.endN);
+      if(!inPost){ cls+=" ne"; }
+      else if(p.days[d]){
+        var r=p.days[d];
+        if(r.type===TYPES[0]) cls+=(r.status==="Approved"?" ap":" pd");
+        else cls+=" ot";
+        title=fmtDateN(d)+" — "+r.type+" ("+r.status+")";
+      }
+      else if(C.holN[d]!==undefined){ cls+=" bh"; title=fmtDateN(d)+" — "+C.holN[d]; }
+      else if(!S.pattern[dow(d)]){ cls+=" we"; }
+      if(mEnds[d]) cls+=" mend";
+      if(d===today) cls+=" tdy";
+      cells+='<div class="'+cls+'"'+(title?' title="'+esc(title)+'"':"")+'></div>';
+    }
+    html+='<div class="crow"><div class="cname"><div class="nm">'+esc(p.name||"(unnamed)")+'</div>'+
+      '<div class="tm">'+esc(p.team||"—")+' · '+(p.incomplete?"—":fmtD(p.rem)+" left")+'</div></div>'+
+      '<div class="strip" style="--n:'+n+'">'+cells+'</div></div>';
+  });
+  if(C.clashDays>0){
+    var cc="";
+    for(var j=0;j<n;j++){ var dd=C.lyS+j; cc+='<div class="c'+(C.clashSet[dd]?" on":"")+'"></div>'; }
+    html+='<div class="crow clashrow"><div class="cname"><div class="nm" style="color:var(--bad)">Clash days</div>'+
+      '<div class="tm">more than '+C.thr+' off</div></div><div class="strip" style="--n:'+n+'">'+cc+'</div></div>';
+  }
+  return html;
+}
+function offHTML(){
+  if(C.asN===null) return '<p class="hint">Pick a date.</p>';
+  if(C.lyS!==null&&(C.asN<C.lyS||C.asN>C.lyE)) return '<p class="hint">'+fmtDateN(C.asN)+' is outside the leave year.</p>';
+  if(!S.pattern[dow(C.asN)]) return '<p class="hint">'+DOWN[dow(C.asN)]+' is not a working day.</p>';
+  if(C.holN[C.asN]!==undefined) return '<p class="hint">'+esc(C.holN[C.asN])+' — public holiday, nobody is at work.</p>';
+  if(!C.off.length) return '<p class="hint">Everybody is in on '+fmtDateN(C.asN)+'.</p>';
+  return '<div class="offlist">'+C.off.map(function(o){
+    var cls=o.d.type!==TYPES[0]?"oth":(o.d.status==="Pending"?"pend":"");
+    return '<div class="offitem '+cls+'"><div><div class="who">'+esc(o.p.name||"(unnamed)")+'</div>'+
+      '<div class="sub">'+esc(o.p.team||"—")+' · '+esc(o.d.type)+'</div></div>'+
+      '<span class="chip '+(o.d.status==="Approved"?"ok":"warn")+'">'+esc(o.d.status)+'</span></div>';
+  }).join("")+'</div>';
+}
+function clashHTML(){
+  if(!C.clashRuns.length) return '<p class="hint">No clashes. No team has more than '+C.thr+
+    ' '+(C.thr===1?"person":"people")+' off on the same working day'+(S.inclPending?", counting requests still awaiting approval":", counting approved leave only")+'.</p>';
+  return '<div class="clashlist">'+C.clashRuns.map(function(r){
+    return '<div class="ci"><b>'+esc(r.team)+' — '+r.count+' off</b>'+
+      fmtDateN(r.start)+(r.end!==r.start?" to "+fmtDateN(r.end):"")+
+      ' &middot; '+esc(r.who.join(", "))+'</div>';
+  }).join("")+'</div>';
+}
+function setTxt(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+function refresh(){
+  compute();
+  var t=C.tot,any=C.nDone>0;
+  // per-staff cells
+  C.staff.forEach(function(p){
+    var D=function(x){return p.incomplete?"—":fmtD(x);};
+    setTxt("v-ent-"+p.id,D(p.ent));
+    setTxt("v-allow-"+p.id,D(p.allow));
+    setTxt("v-appr-"+p.id,D(p.appr));
+    setTxt("v-pend-"+p.id,D(p.pend));
+    var rc=document.getElementById("v-rem-"+p.id);
+    if(rc){rc.textContent=D(p.rem);rc.classList.toggle("neg",!p.incomplete&&p.rem<-1e-9);}
+    var eE=document.getElementById("es-"+p.id);
+    var msg=p.errs.slice();
+    if(p.capped) msg.push("Carry-over capped at "+fmtD(Math.max(0,num(S.cap,0)))+" — "+fmtD(p.carryRaw)+" entered");
+    if(p.inScheme===0) msg.push("Not in post during this leave year");
+    if(eE) eE.textContent=msg.join(" · ");
+    var row=document.querySelector('tr[data-sid="'+p.id+'"]');
+    if(row){var nmI=row.querySelector('input[data-f="name"]');
+      if(nmI) nmI.classList.toggle("inv",!String(p.name||"").trim());}
+  });
+  // request cells
+  C.reqs.forEach(function(r){
+    var c=document.getElementById("v-days-"+r.id);
+    if(c){
+      if(r.err) c.textContent="—";
+      else{
+        var extra="";
+        if(r.outside) extra='<span class="sm">'+fmtD(r.dTotal)+' total</span>';
+        else if(r.type!==TYPES[0]) extra='<span class="sm">not deducted</span>';
+        else if(r.status==="Declined") extra='<span class="sm">declined</span>';
+        c.innerHTML=fmtD(r.dYear)+extra;
+      }
+    }
+    var e=document.getElementById("er-"+r.id);
+    if(e) e.textContent=r.err||"";
+    var row=document.querySelector('tr[data-rid="'+r.id+'"]');
+    if(row){
+      row.classList.toggle("declined",r.status==="Declined");
+      var fI=row.querySelector('input[data-f="from"]'),tI=row.querySelector('input[data-f="to"]');
+      var bad=!!r.err;
+      if(fI) fI.classList.toggle("inv",bad); if(tI) tI.classList.toggle("inv",bad);
+      var hI=row.querySelector('input[data-f="half"]');
+      if(hI) hI.disabled=false;
+      var sSel=row.querySelector('select[data-f="sid"]');
+      if(sSel) $$("option",sSel).forEach(function(o){
+        var p=C.byId[o.value]; if(p) o.textContent=p.name||"(unnamed)";
+      });
+    }
+  });
+  // totals row
+  setTxt("staffCount",String(C.nDone)+(C.staff.length>C.nDone?" of "+C.staff.length:""));
+  setTxt("tEnt",any?fmtD(t.ent):"—");
+  setTxt("tAllow",any?fmtD(t.allow):"—");
+  setTxt("tAppr",any?fmtD(t.appr):"—");
+  setTxt("tPend",any?fmtD(t.pend):"—");
+  setTxt("tRem",any?fmtD(t.rem):"—");
+  // hero band
+  setTxt("sRemain",any?fmtD(t.rem):"—");
+  setTxt("sRemainSub",any?("of "+fmtD(t.allow)+" allowance · "+fmtD(t.appr)+" approved · "+fmtD(t.pend)+" pending · "+C.nDone+" staff"):"Add an employee and name them to begin");
+  setTxt("sAllow",any?fmtD(t.allow):"—");
+  setTxt("sAllowSub",any?(fmtD(t.ent)+" earned + "+fmtD(t.allow-t.ent)+" brought forward"):" ");
+  setTxt("sAppr",any?fmtD(t.appr):"—");
+  setTxt("sPend",any?fmtD(t.pend):"—");
+  setTxt("sPendSub",any&&t.other>0?(fmtD(t.other)+" other absence days logged"):"days requested, not yet approved");
+  setTxt("sClash",C.lyS!==null?String(C.clashDays):"—");
+  setTxt("sClashSub",C.clashDays>0?("max "+C.thr+" off per team · "+C.clashRuns.length+" period"+(C.clashRuns.length===1?"":"s")):("limit "+C.thr+" per team — none exceeded"));
+  $("#clashStat").classList.toggle("flagbad",C.clashDays>0);
+  var cch=$("#clashChip");
+  cch.textContent=C.clashDays>0?(C.clashDays+" day"+(C.clashDays===1?"":"s")):"None";
+  cch.className="chip "+(C.clashDays>0?"bad":"ok");
+  // labels
+  setTxt("lyLabel",C.lyS!==null?(fmtDateN(C.lyS)+" — "+fmtDateN(C.lyE)):"—");
+  setTxt("chartHint",C.lyS!==null?(C.totalDays+" days · "+C.holInYear+" public holidays · "+C.patDays+"-day working week"):"—");
+  $("#holChip").textContent=String(C.holCount);
+  $("#offBox").innerHTML=offHTML();
+  setTxt("offFoot",C.asN!==null&&C.off.length?(C.off.length+" of "+C.staff.length+" staff away"):"Weekends, public holidays and non-working days are shown as such.");
+  $("#clashBox").innerHTML=clashHTML();
+  $("#chart").innerHTML=chartHTML();
+  // validation on the settings
+  var eLy=$("#eLy"); eLy.textContent=C.lyS===null?"Enter a valid date":"";
+  $("#iLy").classList.toggle("inv",C.lyS===null);
+  var eBase=$("#eBase"),badBase=!(num(S.base,-1)>=0);
+  eBase.textContent=badBase?"Enter 0 or more":(C.patDays===0?"Tick at least one working day of the week":"");
+  $("#iBase").classList.toggle("inv",badBase);
+  save();
+}
+
+/* ══ events ═════════════════════════════════════════════════════ */
+function flash(m){var e=$("#msg");e.textContent=m;clearTimeout(e._t);e._t=setTimeout(function(){e.textContent="";},3500);}
+function dirty(){ if(S.sample){S.sample=false;$("#sampleChip").hidden=true;} }
+
+$("#staffBody").addEventListener("input",function(ev){
+  var el=ev.target,f=el.getAttribute("data-f");if(!f)return;
+  var tr=el.closest("tr"),id=tr&&tr.getAttribute("data-sid");
+  var p=S.staff.filter(function(x){return x.id===id;})[0];if(!p)return;
+  if(f==="dpw"||f==="carry") p[f]=num(el.value,0); else p[f]=el.value;
+  dirty();refresh();
+});
+$("#staffBody").addEventListener("click",function(ev){
+  var b=ev.target.closest('[data-rm="staff"]');if(!b)return;
+  var id=b.closest("tr").getAttribute("data-sid");
+  var p=S.staff.filter(function(x){return x.id===id;})[0];
+  var n=S.reqs.filter(function(r){return r.sid===id;}).length;
+  if(!confirm("Remove "+((p&&p.name)||"this employee")+(n?" and their "+n+" leave request"+(n===1?"":"s"):"")+"?")) return;
+  S.staff=S.staff.filter(function(x){return x.id!==id;});
+  S.reqs=S.reqs.filter(function(r){return r.sid!==id;});
+  dirty();renderRows();refresh();flash("Employee removed.");
+});
+$("#reqBody").addEventListener("input",function(ev){
+  var el=ev.target,f=el.getAttribute("data-f");if(!f)return;
+  var tr=el.closest("tr"),id=tr&&tr.getAttribute("data-rid");
+  var r=S.reqs.filter(function(x){return x.id===id;})[0];if(!r)return;
+  r[f]=(f==="half")?el.checked:el.value;
+  dirty();refresh();
+});
+$("#reqBody").addEventListener("change",function(ev){
+  var el=ev.target,f=el.getAttribute("data-f");if(!f)return;
+  if(el.tagName!=="SELECT"&&el.type!=="checkbox")return;
+  var tr=el.closest("tr"),id=tr&&tr.getAttribute("data-rid");
+  var r=S.reqs.filter(function(x){return x.id===id;})[0];if(!r)return;
+  r[f]=(f==="half")?el.checked:el.value;
+  dirty();refresh();
+});
+$("#reqBody").addEventListener("click",function(ev){
+  var b=ev.target.closest('[data-rm="req"]');if(!b)return;
+  var id=b.closest("tr").getAttribute("data-rid");
+  S.reqs=S.reqs.filter(function(x){return x.id!==id;});
+  dirty();renderRows();refresh();flash("Request removed.");
+});
+$("#holList").addEventListener("input",function(ev){
+  var el=ev.target,f=el.getAttribute("data-f");if(!f)return;
+  var i=+el.closest(".holrow").getAttribute("data-hi");
+  if(!S.holidays[i])return; S.holidays[i][f]=el.value; dirty();refresh();
+});
+$("#holList").addEventListener("click",function(ev){
+  var b=ev.target.closest('[data-rm="hol"]');if(!b)return;
+  var i=+b.closest(".holrow").getAttribute("data-hi");
+  S.holidays.splice(i,1); dirty();renderRows();refresh();
+});
+$("#wkDays").addEventListener("change",function(ev){
+  var el=ev.target,i=el.getAttribute("data-wd");if(i===null)return;
+  S.pattern[+i]=el.checked; dirty();renderSettings();refresh();
+});
+[["iLy","ly","s"],["iBase","base","n"],["iCap","cap","n"],["iThr","thr","i"],["iAsOf","asOf","s"],
+ ["iOrg","org","s"],["iDept","dept","s"],["iRef","ref","s"],["iBy","by","s"]].forEach(function(m){
+  $("#"+m[0]).addEventListener("input",function(){
+    var v=this.value;
+    S[m[1]]=(m[2]==="n")?num(v,0):(m[2]==="i")?Math.max(0,Math.round(num(v,0))):v;
+    dirty();refresh();
+  });
+});
+$("#iInclPend").addEventListener("change",function(){S.inclPending=this.checked;dirty();refresh();});
+
+$("#bAddStaff").addEventListener("click",function(){
+  S.staff.push({id:uid(),name:"",team:(S.staff.length?S.staff[S.staff.length-1].team:""),
+    start:"",end:"",dpw:C.patDays||5,carry:0});
+  dirty();renderRows();refresh();
+  var rows=$$("#staffBody tr");var last=rows[rows.length-1];
+  if(last){var i=last.querySelector('input[data-f="name"]');if(i)i.focus();}
+});
+$("#bAddReq").addEventListener("click",function(){
+  if(!S.staff.length){flash("Add an employee first.");return;}
+  var t=todayYmd();
+  S.reqs.push({id:uid(),sid:S.staff[0].id,from:t,to:t,type:TYPES[0],half:false,status:"Pending",note:""});
+  dirty();renderRows();refresh();
+  var rows=$$("#reqBody tr");var last=rows[rows.length-1];
+  if(last){var i=last.querySelector('select[data-f="sid"]');if(i)i.focus();}
+});
+$("#bAddHol").addEventListener("click",function(){
+  var y=(ymdNum(S.ly)!==null?S.ly:todayYmd()).slice(0,4);
+  S.holidays.push({d:y+"-01-01",n:""});
+  dirty();renderRows();refresh();
+});
+function yearsOfLeaveYear(){
+  var a=ymdNum(S.ly);if(a===null)return [new Date().getFullYear()];
+  var p=S.ly.split("-"),b=Math.round(Date.UTC(+p[0]+1,+p[1]-1,+p[2])/DAY)-1;
+  var y1=new Date(a*DAY).getUTCFullYear(),y2=new Date(b*DAY).getUTCFullYear();
+  var out=[];for(var y=y1;y<=y2;y++) out.push(y);
+  return out;
+}
+function applyPreset(fn,label){
+  var list=[],seen={};
+  yearsOfLeaveYear().forEach(function(y){fn(y).forEach(function(h){if(!seen[h.d]){seen[h.d]=1;list.push(h);}});});
+  S.holidays=list.sort(function(a,b){return a.d<b.d?-1:1;});
+  dirty();renderRows();refresh();flash(label+" — "+list.length+" dates listed. Check them against the official list.");
+}
+$("#bUK").addEventListener("click",function(){applyPreset(ukHolidays,"England & Wales bank holidays");});
+$("#bUS").addEventListener("click",function(){applyPreset(usHolidays,"US federal holidays");});
+$("#bClrHol").addEventListener("click",function(){
+  if(!S.holidays.length)return;
+  if(!confirm("Remove all "+S.holidays.length+" public holiday dates?"))return;
+  S.holidays=[];dirty();renderRows();refresh();
+});
+$("#bSample").addEventListener("click",function(){
+  if(!confirm("Replace everything on this page with the sample data?"))return;
+  S=sampleState();renderSettings();renderRows();refresh();flash("Sample data loaded.");
+});
+$("#bClear").addEventListener("click",function(){
+  if(!confirm("Clear all data? Everything on this page and the saved copy in this browser will be removed."))return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  S=blankState();S.staff.push({id:uid(),name:"",team:"",start:"",end:"",dpw:5,carry:0});
+  renderSettings();renderRows();refresh();flash("All data cleared.");
+});
+
+/* ══ export ═════════════════════════════════════════════════════ */
+function dl(name,text,mime){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b),a=document.createElement("a");
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
+  }catch(e){ flash("Download blocked by the browser."); }
+}
+function cq(v){
+  var s=(v===null||v===undefined)?"":String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvRow(a){return a.map(cq).join(",");}
+function slug(s){return (String(s||"holiday-tracker").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"holiday-tracker");}
+function buildCsv(){
+  compute();
+  var L=[];
+  L.push(csvRow(["Staff holiday tracker"]));
+  L.push(csvRow(["Organisation",S.org]));
+  L.push(csvRow(["Department / site",S.dept]));
+  L.push(csvRow(["Reference",S.ref]));
+  L.push(csvRow(["Leave year",C.lyS!==null?numYmd(C.lyS):"",C.lyE!==null?numYmd(C.lyE):"",C.totalDays+" days"]));
+  L.push(csvRow(["Full-time entitlement (days)",fmtD(num(S.base,0))]));
+  L.push(csvRow(["Working week",S.pattern.map(function(x,i){return x?DOWS[i]:null;}).filter(Boolean).join(" ")||"none",C.patDays+" days"]));
+  L.push(csvRow(["Carry-over cap (days)",fmtD(num(S.cap,0))]));
+  L.push(csvRow(["Max off at once per team",String(C.thr)]));
+  L.push(csvRow(["Pending counted in clash check",S.inclPending?"Yes":"No"]));
+  L.push(csvRow(["Exported",todayYmd()]));
+  L.push("");
+  L.push(csvRow(["STAFF LEAVE BALANCES"]));
+  L.push(csvRow(["Employee","Team","In post from","In post to","Days in post","Days per week",
+    "Entitlement (days)","Brought forward (days)","Allowance (days)","Approved (days)",
+    "Pending (days)","Remaining (days)","Other absence (days)"]));
+  C.staff.forEach(function(p){
+    L.push(csvRow([p.name,p.team,p.startN!==null?numYmd(p.startN):"",p.endN!==null?numYmd(p.endN):"",
+      p.inScheme,fmtD(p.dpw),fmtD(p.ent),fmtD(p.carry),fmtD(p.allow),fmtD(p.appr),fmtD(p.pend),
+      fmtD(p.rem),fmtD(p.other)]));
+  });
+  L.push(csvRow(["TOTAL","","","","","",fmtD(C.tot.ent),fmtD(C.tot.allow-C.tot.ent),fmtD(C.tot.allow),
+    fmtD(C.tot.appr),fmtD(C.tot.pend),fmtD(C.tot.rem),fmtD(C.tot.other)]));
+  L.push("");
+  L.push(csvRow(["LEAVE REQUESTS"]));
+  L.push(csvRow(["Employee","Team","From","To","Type","Half day","Status","Days in leave year",
+    "Days total","Note","Problem"]));
+  C.reqs.forEach(function(r){
+    L.push(csvRow([r.person?r.person.name:"",r.person?r.person.team:"",r.ref.from,r.ref.to,r.type,
+      r.half?"Yes":"",r.status,r.err?"":fmtD(r.dYear),r.err?"":fmtD(r.dTotal),r.note,r.err]));
+  });
+  L.push("");
+  L.push(csvRow(["CLASH DAYS — more than "+C.thr+" of a team off"]));
+  L.push(csvRow(["Team","From","To","People off","Names"]));
+  if(!C.clashRuns.length) L.push(csvRow(["None"]));
+  else C.clashRuns.forEach(function(r){
+    L.push(csvRow([r.team,numYmd(r.start),numYmd(r.end),r.count,r.who.join("; ")]));
+  });
+  L.push("");
+  L.push(csvRow(["PUBLIC HOLIDAYS"]));
+  L.push(csvRow(["Date","Name","In leave year"]));
+  S.holidays.slice().sort(function(a,b){return a.d<b.d?-1:1;}).forEach(function(h){
+    var n=ymdNum(h.d);
+    L.push(csvRow([h.d,h.n,(n!==null&&C.lyS!==null&&n>=C.lyS&&n<=C.lyE)?"Yes":"No"]));
+  });
+  return "﻿"+L.join("\r\n")+"\r\n";
+}
+$("#bCsv").addEventListener("click",function(){
+  dl(slug(S.org||S.dept)+"-leave-"+(ymdNum(S.ly)!==null?S.ly.slice(0,4):"year")+".csv",
+     buildCsv(),"text/csv;charset=utf-8");
+  flash("CSV exported.");
+});
+$("#bJson").addEventListener("click",function(){
+  dl(slug(S.org||S.dept)+"-leave-"+(ymdNum(S.ly)!==null?S.ly.slice(0,4):"year")+".json",
+     JSON.stringify(S,null,2),"application/json");
+  flash("JSON exported.");
+});
+$("#bImport").addEventListener("click",function(){$("#fImport").click();});
+$("#fImport").addEventListener("change",function(){
+  var f=this.files&&this.files[0];if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    var o=null;
+    try{ o=normalise(JSON.parse(String(fr.result))); }catch(e){ o=null; }
+    if(!o){ flash("That file could not be read as a saved tracker."); return; }
+    S=o;renderSettings();renderRows();refresh();flash("Data imported.");
+  };
+  fr.onerror=function(){flash("That file could not be read.");};
+  fr.readAsText(f);
+  this.value="";
+});
+
+/* ══ print document ═════════════════════════════════════════════ */
+function pStrip(p,n){
+  var cells="";
+  for(var i=0;i<n;i++){
+    var d=C.lyS+i,cls="";
+    var inPost=(p.startN!==null&&p.endN!==null&&d>=p.startN&&d<=p.endN);
+    if(!inPost) cls="ne";
+    else if(p.days[d]){var r=p.days[d];cls=(r.type===TYPES[0])?(r.status==="Approved"?"ap":"pd"):"ot";}
+    else if(C.holN[d]!==undefined) cls="bh";
+    else if(!S.pattern[dow(d)]) cls="we";
+    cells+='<u class="'+cls+'"></u>';
+  }
+  return cells;
+}
+function buildDoc(){
+  compute();
+  var n=C.totalDays,d=$("#printdoc");
+  var wk=S.pattern.map(function(x,i){return x?DOWS[i]:null;}).filter(Boolean).join(" ")||"none";
+  var h="";
+  h+='<div class="lh"><div><div class="org">'+esc(S.org||"—")+'</div>'+
+     '<div class="oaddr">'+esc(S.dept||"")+'</div></div>'+
+     '<div class="ttl"><h2>Annual Leave Record</h2>'+
+     '<div class="yr">'+(C.lyS!==null?fmtDateN(C.lyS)+" to "+fmtDateN(C.lyE):"—")+'</div>'+
+     '<div class="ref">'+esc(S.ref||"")+(S.ref?" · ":"")+"Printed "+fmtDate(todayYmd())+'</div></div></div>';
+  h+='<div class="meta">'+
+     '<div><b>Leave year</b><span>'+n+' days</span></div>'+
+     '<div><b>Full-time entitlement</b><span>'+fmtDU(num(S.base,0))+'</span></div>'+
+     '<div><b>Working week</b><span>'+esc(wk)+' ('+C.patDays+')</span></div>'+
+     '<div><b>Carry-over cap</b><span>'+fmtDU(num(S.cap,0))+'</span></div>'+
+     '<div><b>Staff</b><span>'+C.nDone+'</span></div>'+
+     '<div><b>Public holidays in year</b><span>'+C.holInYear+'</span></div>'+
+     '<div><b>Max off per team</b><span>'+C.thr+'</span></div>'+
+     '<div><b>Prepared by</b><span>'+esc(S.by||"—")+'</span></div>'+
+     '</div>';
+
+  var PD=function(p,x){return p.incomplete?"—":fmtD(x);};
+  h+='<h3 class="sec">Leave balances</h3>';
+  h+='<table><colgroup><col style="width:19%"><col style="width:15%"><col style="width:13%"><col style="width:7%">'+
+     '<col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:10%"></colgroup>'+
+     '<thead><tr><th>Employee</th><th>Team</th><th>In post</th><th class="n">D/wk</th>'+
+     '<th class="n">Entitle&shy;ment</th><th class="n">B/fwd</th><th class="n">Allow&shy;ance</th>'+
+     '<th class="n">Booked</th><th class="n">Remaining</th></tr></thead><tbody>';
+  if(!C.staff.length) h+='<tr><td colspan="9">No employees recorded.</td></tr>';
+  C.staff.forEach(function(p){
+    var inpost=(p.ref.start||p.ref.end)
+      ? ((p.ref.start?fmtDate(p.ref.start):"year start")+" – "+(p.ref.end?fmtDate(p.ref.end):"year end"))
+      : "full year";
+    h+='<tr><td>'+esc(p.name||"(unnamed)")+'</td><td>'+esc(p.team||"—")+'</td><td>'+esc(inpost)+'</td>'+
+      '<td class="n">'+fmtD(p.dpw)+'</td><td class="n">'+PD(p,p.ent)+'</td><td class="n">'+PD(p,p.carry)+'</td>'+
+      '<td class="n">'+PD(p,p.allow)+'</td><td class="n">'+PD(p,p.appr+p.pend)+'</td>'+
+      '<td class="n">'+PD(p,p.rem)+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="4">Total — '+C.nDone+' staff</td>'+
+    '<td class="n">'+fmtD(C.tot.ent)+'</td><td class="n">'+fmtD(C.tot.allow-C.tot.ent)+'</td>'+
+    '<td class="n">'+fmtD(C.tot.allow)+'</td><td class="n">'+fmtD(C.tot.appr+C.tot.pend)+'</td>'+
+    '<td class="n">'+fmtD(C.tot.rem)+'</td></tr></tfoot></table>';
+  h+='<p style="font-size:7.5pt;color:#333;margin-bottom:4pt">Booked = approved + awaiting approval. '+
+     'Remaining = allowance &minus; booked. Entitlement is pro-rated by calendar days in post and by '+
+     'contracted days per week, rounded up to the next half day.</p>';
+
+  if(C.lyS!==null&&C.staff.length){
+    h+='<h3 class="sec">Year leave chart</h3>';
+    var months=[],cur=null;
+    for(var i=0;i<n;i++){
+      var dt=new Date((C.lyS+i)*DAY),k=dt.getUTCFullYear()+"-"+dt.getUTCMonth();
+      if(!cur||cur.k!==k){cur={k:k,label:MONS[dt.getUTCMonth()],span:0};months.push(cur);}
+      cur.span++;
+    }
+    h+='<div class="pchart"><div class="pcrow"><div class="pn"></div>'+
+       '<div class="pmh" style="--n:'+n+'">'+months.map(function(m){
+         return '<b style="grid-column:span '+m.span+'">'+m.label+'</b>';}).join("")+'</div></div>';
+    C.staff.forEach(function(p){
+      h+='<div class="pcrow"><div class="pn">'+esc(p.name||"(unnamed)")+
+         '<span>'+esc(p.team||"—")+'</span></div>'+
+         '<div class="pstrip" style="--n:'+n+'">'+pStrip(p,n)+'</div></div>';
+    });
+    h+='</div>';
+    h+='<div class="plg"><span><i class="ap"></i>Approved</span><span><i class="pd"></i>Awaiting approval</span>'+
+       '<span><i class="ot"></i>Other absence</span><span><i class="bh"></i>Public holiday</span>'+
+       '<span><i class="we"></i>Non-working day</span><span><i class="ne"></i>Not in post</span></div>';
+  }
+
+  h+='<h3 class="sec">Leave bookings</h3>';
+  h+='<table><colgroup><col style="width:19%"><col style="width:14%"><col style="width:14%"><col style="width:15%">'+
+     '<col style="width:8%"><col style="width:12%"><col style="width:18%"></colgroup>'+
+     '<thead><tr><th>Employee</th><th>From</th><th>To</th><th>Type</th><th class="n">Days</th>'+
+     '<th>Status</th><th>Note</th></tr></thead><tbody>';
+  if(!C.reqs.length) h+='<tr><td colspan="7">No leave booked.</td></tr>';
+  C.reqs.slice().sort(function(a,b){
+    var x=a.ref.from||"9999",y=b.ref.from||"9999";return x<y?-1:x>y?1:0;}).forEach(function(r){
+    h+='<tr><td>'+esc(r.person?(r.person.name||"(unnamed)"):"—")+'</td>'+
+      '<td>'+esc(fmtDate(r.ref.from))+'</td><td>'+esc(fmtDate(r.ref.to))+'</td>'+
+      '<td>'+esc(r.type)+(r.half?" (½ day)":"")+'</td>'+
+      '<td class="n">'+(r.err?"—":fmtD(r.dYear))+'</td><td>'+esc(r.status)+'</td>'+
+      '<td>'+esc(r.err?r.err:r.note)+'</td></tr>';
+  });
+  h+='</tbody></table>';
+
+  h+='<h3 class="sec">Cover clashes — more than '+C.thr+' of a team off</h3>';
+  if(!C.clashRuns.length) h+='<p style="font-size:8.5pt">None. No team exceeds the limit on any working day'+
+    (S.inclPending?", counting requests still awaiting approval":", counting approved leave only")+'.</p>';
+  else{
+    h+='<table><colgroup><col style="width:22%"><col style="width:17%"><col style="width:17%"><col style="width:8%">'+
+       '<col style="width:36%"></colgroup><thead><tr><th>Team</th><th>From</th><th>To</th>'+
+       '<th class="n">Off</th><th>Who</th></tr></thead><tbody>';
+    C.clashRuns.forEach(function(r){
+      h+='<tr><td>'+esc(r.team)+'</td><td>'+fmtDateN(r.start)+'</td><td>'+fmtDateN(r.end)+'</td>'+
+        '<td class="n">'+r.count+'</td><td>'+esc(r.who.join(", "))+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  h+='<h3 class="sec">Public holidays used in this calculation</h3>';
+  if(!S.holidays.length) h+='<p style="font-size:8.5pt">None listed — every working day of the week counted as a leave day.</p>';
+  else h+='<div class="hols">'+S.holidays.slice().sort(function(a,b){return a.d<b.d?-1:1;}).map(function(hh){
+      return '<div>'+esc(fmtDate(hh.d))+' — '+esc(hh.n||"Public holiday")+'</div>';}).join("")+'</div>';
+
+  h+='<div class="dis"><b>Important — please read</b>'+
+     'This record is an arithmetic summary of the figures entered by the person named above. Entitlement is '+
+     'pro-rated from the full-time figure entered here by calendar days in post within the leave year and by '+
+     'contracted days per week, and rounded up to the next half day. It is <strong>not</strong> a statement of '+
+     'statutory entitlement: no jurisdiction, reference-period averaging, irregular-hours, term-time, sickness '+
+     'or maternity rule has been applied, individual part-time working patterns are not modelled, and public '+
+     'holidays are only the dates listed above. Carry-over shown here is capped at the figure set in this tool '+
+     'and does not confirm that the days may lawfully or contractually be carried over. Check every figure '+
+     'against the contract of employment and the law where you operate before relying on it, and take advice '+
+     'from a qualified employment adviser in any dispute. Not employment, payroll, tax or legal advice.</div>';
+  h+='<div class="sign"><div>Signed — manager<br><br></div><div>Signed — employee &amp; date<br><br></div></div>';
+  h+='<div class="foot"><span>'+esc(S.org||"")+(S.dept?" · "+esc(S.dept):"")+'</span>'+
+     '<span>Leave year '+(C.lyS!==null?fmtDateN(C.lyS)+" – "+fmtDateN(C.lyE):"—")+'</span>'+
+     '<span>Page 1</span></div>';
+  d.innerHTML=h;
+}
+$("#bPrint").addEventListener("click",function(){buildDoc();window.print();});
+window.addEventListener("beforeprint",buildDoc);
+
+/* ══ boot ═══════════════════════════════════════════════════════ */
+S=load();
+if(!S||(!S.staff.length&&!S.reqs.length&&!S.org)) S=sampleState();
+renderSettings();renderRows();refresh();
+</script>
+</body>
+</html>

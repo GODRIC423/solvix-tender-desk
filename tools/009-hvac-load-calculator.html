@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HVAC Rough Load Sizing &mdash; Solvix Toolkit</title>
+<meta name="description" content="Preliminary heating and cooling load for a dwelling by the BTU-per-square-foot rule of thumb: base index by climate zone (30 to 60 BTU/h/ft2), insulation and glazing adjustments, occupant and kitchen allowances, tons at BTU divided by 12,000. Room by room, metric or imperial, works offline, prints a clean sizing sheet with the Manual J notice, exports CSV and JSON.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23B45309'/%3E%3Cpath d='M13 5 h6 M13 5 v14.5 a5.5 5.5 0 1 0 6 0 V5' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='24' r='2.6' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool 009 — HVAC Rough Load Sizing · Trades & Construction ══ */
+:root{--accent:#B45309; --accent-ink:#8F4207; --accent-wash:#FBF0DC; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E9922E; --accent-ink:#F5B15F; --accent-wash:#33230D; --on-accent:#1B1206}}
+:root[data-theme="dark"]{--accent:#E9922E; --accent-ink:#F5B15F; --accent-wash:#33230D; --on-accent:#1B1206}
+
+.grid.tight{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.tiny{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.right{margin-left:auto}
+.vh{position:absolute!important;left:0;top:0;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden!important;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.appbar .acts{display:flex;flex-wrap:wrap;gap:7px}
+.stack.gap{gap:14px}
+[hidden]{display:none!important}
+.pri-only{display:none}
+/* keep grid/flex children from being widened by their widest content */
+#inCol,#resCol{min-width:0}
+#inCol>*,#resCol>*{min-width:0;max-width:100%}
+.card,.card>.bd,.card>.hd,.card>.ft{min-width:0}
+.tw{max-width:100%}
+#mNotes{min-height:92px}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+
+/* hero + stats */
+.stat.hero .v{font-size:38px;line-height:1.04}
+.stat.hero .u{margin-top:5px;display:block;color:var(--accent-ink);opacity:.95;line-height:1.45}
+.stat .v.sm{font-size:18.5px}
+.stat .u{display:block;margin-top:2px;line-height:1.35}
+.statgrid{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+.statgrid.three{grid-template-columns:1fr 1fr 1fr}
+.kv{display:flex;gap:10px;align-items:baseline;font-size:13.5px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .k b{color:var(--ink-2);font-weight:650}
+.kv .v{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.kv.tot{font-weight:650;font-size:15px;border-top:1px solid var(--line-hard);border-bottom:0;padding-top:8px;margin-top:2px}
+.kv .v.pos{color:var(--bad)} .kv .v.neg{color:var(--ok)}
+.ftot{display:flex;align-items:baseline;gap:10px;width:100%}
+.ftot .k{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.ftot .v{margin-left:auto;font:700 21px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+
+/* room table */
+#roomTbl th{font-size:9.5px;letter-spacing:0;white-space:normal;line-height:1.25;vertical-align:bottom}
+#roomTbl td,#roomTbl th{padding:6px 4px}
+#roomTbl td:first-child,#roomTbl th:first-child{min-width:120px;width:26%}
+#roomTbl td.nm input{text-align:left;font-family:var(--sans);min-width:104px}
+#roomTbl input[type=number]{min-width:56px;padding:5px 3px}
+#roomTbl select{padding:5px 3px;font-size:12px;min-width:92px}
+#roomTbl td.n{white-space:nowrap;font-size:13px}
+#roomTbl td.bx{font-weight:650;color:var(--accent-ink);white-space:nowrap}
+#roomTbl td.kt{text-align:center}
+#roomTbl td.kt input{width:16px;height:16px;accent-color:var(--accent)}
+td.act,th.act{width:34px;text-align:center}
+tr.erow td{padding:0 6px 7px;border-bottom:1px solid var(--line)}
+tr.erow .err{display:block}
+tr.kitrow td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+
+.mini th,.mini td{padding:7px 8px;font-size:13.5px}
+.mini th{font-size:9.5px;white-space:normal;line-height:1.25}
+#brkTbl td:first-child,#brkTbl th:first-child{min-width:118px}
+#brkTbl td,#brkTbl th{padding:6px 7px;font-size:12.5px}
+#brkTbl th{font-size:9px}
+#brkTbl .sub{display:block;font:400 10.5px/1.35 var(--sans);color:var(--muted);letter-spacing:0;text-transform:none}
+#brkTbl tfoot td{font-size:13px}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.f.inline{flex-direction:row;align-items:center;gap:8px}
+.f.inline>label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+
+#sampleBar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:12px}
+#sampleBar .btn{margin-left:auto}
+#warnBar{margin-bottom:14px}
+footer{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.6}
+footer b{color:var(--ink-2);font-weight:650}
+.spec dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:13px;line-height:1.45}
+.spec dt{font-weight:650;color:var(--muted);white-space:nowrap}
+.spec dd{margin:0;color:var(--ink-2)}
+.fx{font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--sunk);border:1px solid var(--line);border-radius:3px;padding:7px 9px;line-height:1.65;overflow-x:auto}
+.zonetbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.zonetbl td{padding:3px 6px;border-bottom:1px dotted var(--line)}
+.zonetbl td:last-child{text-align:right;white-space:nowrap}
+.zonetbl tr.on td{background:var(--accent-wash);color:var(--accent-ink);font-weight:700}
+
+/* printed document */
+.doc{margin-bottom:5mm}
+.doc .top{display:flex;justify-content:space-between;gap:12mm;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:2.5mm}
+.doc .biz{font:700 15.5pt/1.12 var(--sans)}
+.doc .bizc{font-size:9.5pt;color:#333;margin-top:1.5mm}
+.doc .ttl{text-align:right;font:700 12pt/1.2 var(--sans);text-transform:uppercase;letter-spacing:.06em}
+.doc .ref{text-align:right;font:10pt/1.5 var(--mono);margin-top:1.5mm}
+.doc dl{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:1.2mm 4mm;margin:3mm 0 0;font-size:9.5pt}
+.doc dt{font-weight:700;color:#333}
+.doc dd{margin:0}
+.doc .nt{margin-top:2.5mm;font-size:9pt;line-height:1.4}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:10mm;margin-top:6mm;font-size:9pt}
+.sign .ln{border-top:1px solid #000;padding-top:1.5mm;margin-top:9mm}
+
+@media print{
+  .split{display:block!important}
+  #inCol{display:none!important}
+  #resCol{display:block!important}
+  .sticky{position:static}
+  #sampleBar{display:none!important}
+  .card{margin-bottom:6mm}
+  .card>.bd{padding:8px 10px}
+  .card>.hd{padding:7px 11px}
+  .card>.ft{padding:7px 11px}
+  .stat{padding:5px 8px}
+  .stat .k{font-size:7.5pt}
+  .stat .v.sm{font-size:12pt}
+  .stat .u{font-size:8pt}
+  .stat.hero{padding:6px 10px}
+  .stat.hero .v{font-size:19pt}
+  .stat.hero .u{margin-top:2px;font-size:8.5pt}
+  .statgrid{display:grid!important;grid-template-columns:1fr 1fr 1fr;gap:3mm}
+  .ftot .v{font-size:13pt}
+  .note{font-size:8.6pt;line-height:1.45;border-left:3px solid #000;background:#fff!important;padding:2mm 3mm}
+  .note.warn,.note.bad{border-left:3px solid #000}
+  #warnBar{margin-bottom:5mm}
+  .pri-only{display:inline!important}
+  .kv{font-size:8.8pt;padding:2px 0}
+  .kv.tot{font-size:10pt;padding-top:4px}
+  .tw{overflow:visible!important}
+  #brkTbl{font-size:9pt}
+  #brkTbl td,#brkTbl th{padding:2.5px 5px;font-size:9pt}
+  #brkTbl thead{display:table-header-group}
+  .card>.bd.stack{display:block}
+  .card>.bd.stack>*{margin-bottom:4mm}
+  .card>.bd.stack>*:last-child{margin-bottom:0}
+  .stat,.note,.kv,.card>.ft,.card>.hd{break-inside:avoid}
+  #resCol>.card,#resCol>.card>.bd{break-inside:auto}
+  #methodCard{break-inside:avoid}
+  .spec dl{grid-template-columns:auto 1fr auto 1fr;gap:1.5mm 4mm;font-size:9.5pt}
+  .spec dt{color:#333}
+  .fx{background:#fff;border:1px solid #bbb;font-size:8.5pt}
+  .zonetbl{font-size:8.5pt}
+  .zonetbl tr.on td{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  footer{font-size:8.5pt;color:#333}
+}
+@media(max-width:900px){
+  #resCol{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:520px){
+  .stat.hero .v{font-size:30px}
+  .appbar .acts .btn{flex:1 1 auto;justify-content:center}
+  .statgrid{gap:7px}
+  .stat{padding:9px 10px}
+  .stat .v.sm{font-size:17px}
+  .statgrid.three{grid-template-columns:1fr 1fr}
+}
+@media(max-width:339px){.statgrid,.statgrid.three{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<main class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">HV</div>
+    <div style="min-width:0">
+      <h1>HVAC Rough Load Sizing</h1>
+      <div class="sub">SOLVIX TOOLKIT &middot; 009</div>
+    </div>
+  </div>
+  <div class="acts noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Save .json</button>
+    <button type="button" class="btn" id="btnImport">Load .json</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept="application/json,.json" class="vh" tabindex="-1" aria-hidden="true">
+  </div>
+</header>
+
+<!-- ── printed document header ───────────────────────────────── -->
+<section class="printonly doc">
+  <div class="top">
+    <div>
+      <div class="biz" id="dBiz"></div>
+      <div class="bizc" id="dContact"></div>
+    </div>
+    <div>
+      <div class="ttl">Preliminary load sizing<br>heating &amp; cooling</div>
+      <div class="ref" id="dRef"></div>
+    </div>
+  </div>
+  <dl>
+    <dt>Property</dt><dd id="dProject"></dd>
+    <dt>Client</dt><dd id="dClient"></dd>
+    <dt>Address</dt><dd id="dSite"></dd>
+    <dt>Date</dt><dd id="dDate"></dd>
+    <dt>Prepared by</dt><dd id="dBy"></dd>
+    <dt>Basis</dt><dd id="dBasis"></dd>
+  </dl>
+  <div class="nt" id="dNotes"></div>
+</section>
+
+<div class="note noprint" id="sampleBar">
+  <strong>Sample survey loaded</strong> &mdash; a 3-bed detached house in zone&nbsp;5 with a single-glazed conservatory, so every adjustment is exercised. Type straight over it.
+  <button type="button" class="btn sm" id="btnBlank">Start a blank survey</button>
+</div>
+
+<div class="note bad" id="warnBar">
+  <strong>Preliminary rule-of-thumb figure &mdash; this is not a Manual&nbsp;J.</strong>
+  It multiplies floor area by a BTU/ft&sup2; index and fixed percentages. It ignores orientation, shading, infiltration, duct loss and latent gain.
+  <strong>Do not submit it for a permit and do not select equipment from it.</strong>
+  A full room-by-room ACCA Manual&nbsp;J &mdash; with Manual&nbsp;S for equipment selection and Manual&nbsp;D for ducts, or an equivalent such as BS&nbsp;EN&nbsp;12831 &mdash; must be carried out by a qualified HVAC designer before anything is ordered or installed.<span class="pri-only"> This sheet is issued for budget and feasibility discussion only and carries no warranty as to equipment size.</span>
+</div>
+
+<div class="split">
+
+  <!-- ── inputs ─────────────────────────────────────────────── -->
+  <div class="stack gap" id="inCol">
+
+    <section class="card">
+      <div class="hd">
+        <h2>Job &amp; document details</h2>
+        <span class="tiny right">Printed at the top of the sheet</span>
+      </div>
+      <div class="bd stack">
+        <div class="grid cols-2 tight">
+          <div class="f"><label for="mBiz">Your business</label><input id="mBiz" autocomplete="organization"></div>
+          <div class="f"><label for="mContact">Phone / email</label><input id="mContact"></div>
+          <div class="f"><label for="mProject">Property</label><input id="mProject"></div>
+          <div class="f"><label for="mClient">Client</label><input id="mClient"></div>
+          <div class="f"><label for="mSite">Address</label><input id="mSite"></div>
+          <div class="f"><label for="mRef">Survey ref.</label><input id="mRef"></div>
+          <div class="f"><label for="mDate">Date</label><input id="mDate" type="date"></div>
+          <div class="f"><label for="mBy">Prepared by</label><input id="mBy"></div>
+        </div>
+        <div class="f"><label for="mNotes">Notes shown on the printed sheet</label><textarea id="mNotes"></textarea></div>
+        <div class="row">
+          <div class="f inline"><label for="curSel">Currency</label>
+            <select id="curSel" style="width:auto">
+              <option value="&#163;">&#163; GBP</option>
+              <option value="$">$ USD</option>
+              <option value="&#8364;">&#8364; EUR</option>
+              <option value="custom">Other&hellip;</option>
+            </select></div>
+          <div class="f inline" id="curCustomWrap" hidden><label for="curCustom">Symbol</label>
+            <input id="curCustom" maxlength="4" style="width:70px;text-align:center"></div>
+          <div class="row right" role="group" aria-label="Measurement units">
+            <span class="lbl">Units</span>
+            <span class="seg">
+              <button type="button" id="uImp" data-units="imp" aria-pressed="true">Imperial &middot; ft&sup2;</button>
+              <button type="button" id="uMet" data-units="met" aria-pressed="false">Metric &middot; m&sup2;</button>
+            </span>
+          </div>
+        </div>
+        <p class="tiny">Switching units converts every floor area and the base index &mdash; it does not just relabel them. 1&nbsp;m&sup2;&nbsp;=&nbsp;10.7639&nbsp;ft&sup2;.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Building &amp; climate</h2>
+        <span class="chip right" id="zoneChip">&mdash;</span>
+      </div>
+      <div class="bd stack">
+        <div class="grid cols-2 tight">
+          <div class="f">
+            <label for="fZone">Climate zone</label>
+            <select id="fZone">
+              <option value="1">Zone 1 &mdash; very hot (Miami, FL)</option>
+              <option value="2">Zone 2 &mdash; hot (Houston, TX)</option>
+              <option value="3">Zone 3 &mdash; warm (Atlanta, GA)</option>
+              <option value="4">Zone 4 &mdash; mixed (Baltimore, MD)</option>
+              <option value="5">Zone 5 &mdash; cool (Chicago, IL)</option>
+              <option value="6">Zone 6 &mdash; cold (Minneapolis, MN)</option>
+              <option value="7">Zone 7 &mdash; very cold (Duluth, MN)</option>
+            </select>
+            <span class="hint" id="zoneHint">&nbsp;</span>
+          </div>
+          <div class="f">
+            <label for="fOcc">Occupants in the dwelling</label>
+            <input id="fOcc" type="number" min="0" max="50" step="1" inputmode="numeric">
+            <span class="hint">Each occupant over 2 adds 600&nbsp;BTU/h.</span>
+            <span class="err" id="eOcc" hidden></span>
+          </div>
+          <div class="f">
+            <label for="fIns">Insulation &mdash; whole building</label>
+            <select id="fIns">
+              <option value="poor">Poor / uninsulated &mdash; +25%</option>
+              <option value="avg">Average &mdash; no change</option>
+              <option value="good">Good / upgraded &mdash; &minus;15%</option>
+            </select>
+          </div>
+          <div class="f">
+            <label for="fGlz">Glazing &mdash; whole building</label>
+            <select id="fGlz">
+              <option value="sgl">Single &mdash; +15%</option>
+              <option value="dbl">Double &mdash; no change</option>
+              <option value="tri">Triple &mdash; &minus;10%</option>
+            </select>
+          </div>
+        </div>
+        <p class="tiny">Any room can override these two in the table below &mdash; useful for a conservatory, a loft conversion or an extension built to a different standard.</p>
+      </div>
+    </section>
+
+    <section class="card" id="roomCard">
+      <div class="hd">
+        <h2>Rooms &amp; zones</h2>
+        <span class="chip" id="rowChip">0 rooms</span>
+        <span class="right row noprint">
+          <button type="button" class="btn sm" id="btnAdd">+ Add room</button>
+        </span>
+      </div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table id="roomTbl">
+            <caption class="vh">Rooms with floor area, insulation and glazing, and the resulting load</caption>
+            <thead><tr>
+              <th scope="col">Room / zone</th>
+              <th scope="col" class="n"><span id="thArea">Area ft&sup2;</span></th>
+              <th scope="col">Insulation</th>
+              <th scope="col">Glazing</th>
+              <th scope="col" style="text-align:center">Kitchen</th>
+              <th scope="col" class="n">Load BTU/h</th>
+              <th scope="col" class="act"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="roomBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="roomEmpty" hidden>No rooms yet &mdash; add one to start sizing.</div>
+      </div>
+      <div class="ft">
+        <span class="tiny">Kitchen adds a flat 4,000&nbsp;BTU/h to each room you flag.</span>
+        <span class="right chip" id="areaChip">&mdash;</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Equipment notes <span class="tiny" style="text-transform:none;letter-spacing:0">&mdash; optional</span></h2></div>
+      <div class="bd stack">
+        <div class="grid cols-2 tight">
+          <div class="f">
+            <label for="fAfue">Furnace / boiler efficiency %</label>
+            <input id="fAfue" type="number" min="50" max="100" step="0.1" inputmode="decimal">
+            <span class="hint">AFUE or gross seasonal efficiency, used only to convert the required output into a nameplate input rating.</span>
+            <span class="err" id="eAfue" hidden></span>
+          </div>
+          <div class="f">
+            <label for="fCost">Installed cost per ton</label>
+            <input id="fCost" type="number" min="0" step="1" inputmode="decimal">
+            <span class="hint">Your own rate. Applied to the nominal size, not the raw load. Leave blank to omit.</span>
+            <span class="err" id="eCost" hidden></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── results ────────────────────────────────────────────── -->
+  <div class="stack gap" id="resCol">
+
+    <section class="card sticky" id="loadCard">
+      <div class="hd"><h2>Preliminary design load</h2><span class="chip warn right">Rule of thumb</span></div>
+      <div class="bd stack">
+        <div class="stat hero">
+          <div class="k">Total design load</div>
+          <div class="v" id="oTotal">&mdash;</div>
+          <span class="u" id="oTotalSub">&mdash;</span>
+        </div>
+        <div class="statgrid">
+          <div class="stat">
+            <div class="k">Heating output required</div>
+            <div class="v sm" id="oHeat">&mdash;</div>
+            <span class="u" id="oHeatSub">&mdash;</span>
+          </div>
+          <div class="stat">
+            <div class="k">Cooling capacity</div>
+            <div class="v sm" id="oCool">&mdash;</div>
+            <span class="u" id="oCoolSub">&mdash;</span>
+          </div>
+        </div>
+        <div class="statgrid three">
+          <div class="stat">
+            <div class="k">Nominal unit size</div>
+            <div class="v sm" id="oNom">&mdash;</div>
+            <span class="u">rounded up, &frac12; ton</span>
+          </div>
+          <div class="stat">
+            <div class="k">Furnace input</div>
+            <div class="v sm" id="oInput">&mdash;</div>
+            <span class="u" id="oInputSub">&mdash;</span>
+          </div>
+          <div class="stat">
+            <div class="k">Rough equipment budget</div>
+            <div class="v sm" id="oBudget">&mdash;</div>
+            <span class="u" id="oBudgetSub">&mdash;</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="lbl" style="margin-bottom:5px">How the total is built</div>
+          <div class="kv"><span class="k">Conditioned floor area</span><span class="v" id="kArea">&mdash;</span></div>
+          <div class="kv"><span class="k">Base load &mdash; area &times; <b id="kIdx">&mdash;</b></span><span class="v" id="kBase">&mdash;</span></div>
+          <div class="kv"><span class="k">Insulation adjustment</span><span class="v" id="kIns">&mdash;</span></div>
+          <div class="kv"><span class="k">Glazing adjustment</span><span class="v" id="kGlz">&mdash;</span></div>
+          <div class="kv"><span class="k">Kitchen allowance <b id="kKitN"></b></span><span class="v" id="kKit">&mdash;</span></div>
+          <div class="kv"><span class="k">Occupant allowance <b id="kOccN"></b></span><span class="v" id="kOcc">&mdash;</span></div>
+          <div class="kv tot"><span class="k">Total design load</span><span class="v" id="kTot">&mdash;</span></div>
+        </div>
+
+        <div class="note warn" id="sameNote">
+          <strong>Heating and cooling are shown from one index.</strong> This rule of thumb produces a single BTU/h figure, and it is weighted towards heating &mdash; the base index rises as the climate gets colder. Converting it straight to tons will usually <em>overstate</em> the cooling capacity a dwelling needs, and an oversized cooling unit short-cycles and fails to dehumidify. Treat the tonnage as an upper bound for budgeting only.
+        </div>
+      </div>
+      <div class="ft">
+        <span class="ftot"><span class="k">Total design load</span><span class="v" id="fTot">&mdash;</span></span>
+      </div>
+    </section>
+
+    <section class="card" id="brkCard">
+      <div class="hd"><h2>Room-by-room breakdown</h2><span class="tiny right" id="brkUnits">&mdash;</span></div>
+      <div class="bd" style="padding:0">
+        <div class="tw">
+          <table id="brkTbl" class="mini">
+            <caption class="vh">Load contribution of each room</caption>
+            <thead><tr>
+              <th scope="col">Room / zone</th>
+              <th scope="col" class="n" id="bthArea">Area</th>
+              <th scope="col" class="n">Base BTU/h</th>
+              <th scope="col" class="n">Insul.</th>
+              <th scope="col" class="n">Glazing</th>
+              <th scope="col" class="n">Kitchen</th>
+              <th scope="col" class="n">Load BTU/h</th>
+            </tr></thead>
+            <tbody id="brkBody"></tbody>
+            <tfoot id="brkFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card spec" id="methodCard">
+      <div class="hd"><h2>Method &amp; assumptions</h2></div>
+      <div class="bd stack">
+        <div class="fx" id="fxLine">&mdash;</div>
+        <dl>
+          <dt>Base index</dt><dd id="mIdx">&mdash;</dd>
+          <dt>Insulation</dt><dd>Poor&nbsp;+25% &middot; Average&nbsp;0% &middot; Good&nbsp;&minus;15% (multiplied on the base load)</dd>
+          <dt>Glazing</dt><dd>Single&nbsp;+15% &middot; Double&nbsp;0% &middot; Triple&nbsp;&minus;10% (multiplied after insulation)</dd>
+          <dt>Occupants</dt><dd>Each occupant over 2 adds 600&nbsp;BTU/h to the dwelling</dd>
+          <dt>Kitchen</dt><dd>4,000&nbsp;BTU/h added for each room flagged as a kitchen</dd>
+          <dt>Tons</dt><dd>BTU/h &divide; 12,000; nominal size rounded <b>up</b> to the next &frac12;&nbsp;ton</dd>
+          <dt>Conversions</dt><dd>1&nbsp;BTU/h = 0.293071&nbsp;W &middot; 1&nbsp;m&sup2; = 10.7639&nbsp;ft&sup2; &middot; 1&nbsp;ton = 12,000&nbsp;BTU/h</dd>
+        </dl>
+        <div>
+          <div class="lbl" style="margin-bottom:5px">Base index by climate zone</div>
+          <table class="zonetbl" id="zoneTbl"><caption class="vh">Base BTU per hour per square foot by climate zone</caption><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <section class="printonly">
+      <div class="sign">
+        <div><div class="ln">Prepared by &mdash; signature &amp; date</div></div>
+        <div><div class="ln">Manual J to be carried out by &mdash; name &amp; date</div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<footer>
+  <b>HVAC Rough Load Sizing</b> &mdash; implements the BTU-per-square-foot rule of thumb exactly as stated: base index 30/35/40/45/50/55/60&nbsp;BTU/h&middot;ft&sup2; for climate zones 1&ndash;7, insulation +25%/0/&minus;15%, glazing +15%/0/&minus;10%, +600&nbsp;BTU/h per occupant over two, +4,000&nbsp;BTU/h per kitchen, tons = BTU/h &divide; 12,000.
+  Zone names follow the broad IECC climate zone bands; Great Britain and Ireland sit broadly in zone&nbsp;5. Assumes a conditioned dwelling of ordinary ceiling height with no allowance for orientation, shading, infiltration, duct loss or latent gain.
+  <b>It is not a substitute for an ACCA Manual&nbsp;J (or BS&nbsp;EN&nbsp;12831) calculation and must not be used for permit submission or equipment selection.</b>
+  Everything runs in your browser; nothing is uploaded.
+</footer>
+</main>
+
+<script>
+(function(){
+'use strict';
+var KEY='solvix.hvac-load-calculator.v1';
+
+/* ── the method, exactly as specified ─────────────────────────── */
+var ZONE={1:30,2:35,3:40,4:45,5:50,6:55,7:60};
+var ZONE_DESC={1:'Very hot — Miami, FL',2:'Hot — Houston, TX',3:'Warm — Atlanta, GA',
+  4:'Mixed — Baltimore, MD',5:'Cool — Chicago, IL. Great Britain and Ireland sit broadly here.',
+  6:'Cold — Minneapolis, MN',7:'Very cold — Duluth, MN'};
+var INS={poor:{l:'Poor',f:1.25,t:'+25%'},avg:{l:'Average',f:1,t:'0%'},good:{l:'Good',f:0.85,t:'−15%'}};
+var GLZ={sgl:{l:'Single',f:1.15,t:'+15%'},dbl:{l:'Double',f:1,t:'0%'},tri:{l:'Triple',f:0.9,t:'−10%'}};
+var OCC_BTU=600, OCC_FREE=2, KITCHEN_BTU=4000, BTU_PER_TON=12000;
+var FT2_PER_M2=10.7639104167097, W_PER_BTUH=0.29307107017;
+
+/* ── helpers ──────────────────────────────────────────────────── */
+var $=function(id){return document.getElementById(id);};
+function num(v){ if(v===''||v===null||v===undefined) return NaN; var n=Number(v); return isFinite(n)?n:NaN; }
+function fmt(x,dp){
+  if(x===null||x===undefined||typeof x!=='number'||!isFinite(x)) return '—';
+  if(Object.is(x,-0)) x=0;
+  return x.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+}
+function btu(x){ return (typeof x==='number'&&isFinite(x))? fmt(Math.round(x),0)+' BTU/h' : '—'; }
+function signed(x){
+  if(typeof x!=='number'||!isFinite(x)) return '—';
+  var r=Math.round(x); if(r===0) return '0 BTU/h';
+  return (r>0?'+':'−')+fmt(Math.abs(r),0)+' BTU/h';
+}
+function trimNum(x,dp){ if(typeof x!=='number'||!isFinite(x)) return ''; return String(Number(x.toFixed(dp))); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function longDate(iso){
+  if(!iso) return '—';
+  var p=String(iso).split('-'); if(p.length!==3) return iso;
+  var M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var mi=Number(p[1])-1; if(!(mi>=0&&mi<12)) return iso;
+  return Number(p[2])+' '+M[mi]+' '+p[0];
+}
+
+/* ── state ────────────────────────────────────────────────────── */
+var uid=1;
+function newRoom(name,area,ins,glz,kit){ return {id:'r'+(uid++),name:name||'',area:(area===undefined?'':area),ins:ins||'',glz:glz||'',kitchen:!!kit}; }
+
+function sampleState(){
+  uid=1;
+  return {
+    v:1, sample:true, units:'imp', cur:'£', curCustom:'',
+    meta:{biz:'Halstead Heating & Cooling Ltd',contact:'01482 770 145 · surveys@halsteadhc.co.uk',
+      project:'3-bed detached — Willow Lane',client:'Mr & Mrs A. Doyle',site:'14 Willow Lane, Beverley HU17 8QP',
+      ref:'HL-2609-014',date:todayISO(),by:'R. Halstead',
+      notes:'Survey visit 2 Sep. Conservatory is a later addition, single glazed on a solid slab with no wall insulation, and is included as a conditioned zone at the client’s request. Figures below are a budget indication only; a Manual J will follow before any equipment is ordered.'},
+    zone:5, ins:'avg', glz:'dbl', occ:4, afue:95, cost:1850,
+    rooms:[
+      newRoom('Living room',320),
+      newRoom('Kitchen / diner',240,'','',true),
+      newRoom('Bedroom 1',180),
+      newRoom('Bedroom 2',150),
+      newRoom('Bedroom 3',130),
+      newRoom('Hall, stairs & landing',180),
+      newRoom('Bathroom & en-suite',110),
+      newRoom('Conservatory',120,'poor','sgl')
+    ]
+  };
+}
+function blankState(){
+  uid=1;
+  return {
+    v:1, sample:false, units:'imp', cur:'£', curCustom:'',
+    meta:{biz:'',contact:'',project:'',client:'',site:'',ref:'',date:todayISO(),by:'',notes:''},
+    zone:4, ins:'avg', glz:'dbl', occ:2, afue:95, cost:'',
+    rooms:[newRoom('',''),newRoom('',''),newRoom('','')]
+  };
+}
+var S=sampleState();
+
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object'||!Array.isArray(o.rooms)) return false;
+    S=normalise(o); return true;
+  }catch(e){ return false; }
+}
+function normalise(o){
+  var b=blankState();
+  var s={
+    v:1, sample:!!o.sample,
+    units:(o.units==='met'?'met':'imp'),
+    cur:(typeof o.cur==='string'&&o.cur)?o.cur.slice(0,4):'£',
+    curCustom:(typeof o.curCustom==='string')?o.curCustom.slice(0,4):'',
+    meta:{}, zone:5, ins:'avg', glz:'dbl', occ:2, afue:95, cost:'', rooms:[]
+  };
+  var mk=['biz','contact','project','client','site','ref','date','by','notes'];
+  for(var i=0;i<mk.length;i++){ var k=mk[i]; s.meta[k]=(o.meta&&typeof o.meta[k]==='string')?o.meta[k]:b.meta[k]; }
+  var z=Number(o.zone); s.zone=(ZONE[z]!==undefined)?z:4;
+  s.ins=INS[o.ins]?o.ins:'avg';
+  s.glz=GLZ[o.glz]?o.glz:'dbl';
+  s.occ=(o.occ===''||o.occ===null||o.occ===undefined)?'':(isFinite(Number(o.occ))?Number(o.occ):'');
+  s.afue=(o.afue===''||o.afue===null||o.afue===undefined)?'':(isFinite(Number(o.afue))?Number(o.afue):'');
+  s.cost=(o.cost===''||o.cost===null||o.cost===undefined)?'':(isFinite(Number(o.cost))?Number(o.cost):'');
+  uid=1;
+  for(var j=0;j<o.rooms.length && j<300;j++){
+    var r=o.rooms[j]||{};
+    s.rooms.push({
+      id:'r'+(uid++),
+      name:typeof r.name==='string'?r.name.slice(0,80):'',
+      area:(r.area===''||r.area===null||r.area===undefined)?'':(isFinite(Number(r.area))?Number(r.area):''),
+      ins:INS[r.ins]?r.ins:'',
+      glz:GLZ[r.glz]?r.glz:'',
+      kitchen:!!r.kitchen
+    });
+  }
+  if(!s.rooms.length) s.rooms.push(newRoom('',''));
+  return s;
+}
+
+/* ── unit handling: areas are always stored in ft² ─────────────── */
+function isMet(){ return S.units==='met'; }
+function areaLabel(){ return isMet()?'m²':'ft²'; }
+function toDisplayArea(ft2){ return isMet()? ft2/FT2_PER_M2 : ft2; }
+function fromDisplayArea(v){ return isMet()? v*FT2_PER_M2 : v; }
+function idxLabel(){
+  var i=ZONE[S.zone];
+  return isMet()? fmt(i*W_PER_BTUH/(1/FT2_PER_M2),1)+' W/m²' : fmt(i,0)+' BTU/h·ft²';
+}
+
+/* ── the calculation ──────────────────────────────────────────── */
+function calc(){
+  var idx=ZONE[S.zone];
+  var rows=[], areaFt=0, base=0, afterIns=0, afterGlz=0, kit=0, kitN=0, bad=0;
+  for(var i=0;i<S.rooms.length;i++){
+    var r=S.rooms[i];
+    var a=(r.area===''?NaN:Number(r.area));
+    var insK=r.ins||S.ins, glzK=r.glz||S.glz;
+    var fi=INS[insK].f, fg=GLZ[glzK].f;
+    if(!(a>0)){ if(r.area!=='' ) bad++; rows.push({r:r,ok:false,insK:insK,glzK:glzK}); continue; }
+    var b=a*idx, bi=b*fi, bg=bi*fg, k=r.kitchen?KITCHEN_BTU:0;
+    areaFt+=a; base+=b; afterIns+=bi; afterGlz+=bg; kit+=k; if(r.kitchen) kitN++;
+    rows.push({r:r,ok:true,insK:insK,glzK:glzK,area:a,base:b,fi:fi,fg:fg,insD:bi-b,glzD:bg-bi,kit:k,total:bg+k});
+  }
+  var occ=(S.occ===''?0:Number(S.occ));
+  if(!(occ>=0)||!isFinite(occ)) occ=0;
+  var occExtra=Math.max(0,Math.floor(occ)-OCC_FREE);
+  var occLoad=occExtra*OCC_BTU;
+  var any=areaFt>0;
+  var total=any?(afterGlz+kit+occLoad):NaN;
+  var tons=any?total/BTU_PER_TON:NaN;
+  var nominal=any?Math.ceil(tons*2)/2:NaN;
+  var kw=any?total*W_PER_BTUH/1000:NaN;
+  var afue=(S.afue===''?NaN:Number(S.afue));
+  var input=(any&&isFinite(afue)&&afue>0)?total/(afue/100):NaN;
+  var cost=(S.cost===''?NaN:Number(S.cost));
+  var budget=(any&&isFinite(cost)&&cost>=0&&isFinite(nominal))?nominal*cost:NaN;
+  return {idx:idx,rows:rows,areaFt:areaFt,base:base,insD:afterIns-base,glzD:afterGlz-afterIns,
+    kit:kit,kitN:kitN,occExtra:occExtra,occLoad:occLoad,total:total,tons:tons,nominal:nominal,
+    kw:kw,input:input,afue:afue,budget:budget,any:any,bad:bad};
+}
+function cur(){ return S.cur==='custom'? (S.curCustom||'¤') : S.cur; }
+function money(x){ return (typeof x==='number'&&isFinite(x))? cur()+fmt(x,2) : '—'; }
+
+/* ── room table (rebuilt only on structural change) ───────────── */
+function optSel(map,val,inheritLabel){
+  var h='<option value=""'+(val?'':' selected')+'>'+esc(inheritLabel)+'</option>';
+  for(var k in map){ if(!Object.prototype.hasOwnProperty.call(map,k)) continue;
+    h+='<option value="'+k+'"'+(val===k?' selected':'')+'>'+map[k].l+' '+map[k].t+'</option>'; }
+  return h;
+}
+function renderRooms(){
+  var tb=$('roomBody'); tb.innerHTML='';
+  var au=areaLabel();
+  for(var i=0;i<S.rooms.length;i++){
+    var r=S.rooms[i], n=i+1;
+    var tr=document.createElement('tr');
+    tr.setAttribute('data-id',r.id);
+    if(r.kitchen) tr.className='kitrow';
+    var areaVal=(r.area===''?'':trimNum(toDisplayArea(Number(r.area)),2));
+    tr.innerHTML=
+      '<td class="nm"><input id="rn'+r.id+'" data-f="name" value="'+esc(r.name)+'" placeholder="Room '+n+'" aria-label="Name of room '+n+'"></td>'+
+      '<td><input id="ra'+r.id+'" data-f="area" type="number" min="0" step="any" inputmode="decimal" value="'+esc(areaVal)+'" aria-label="Floor area of room '+n+' in '+au+'"></td>'+
+      '<td><select id="ri'+r.id+'" data-f="ins" aria-label="Insulation for room '+n+'">'+optSel(INS,r.ins,'Default')+'</select></td>'+
+      '<td><select id="rg'+r.id+'" data-f="glz" aria-label="Glazing for room '+n+'">'+optSel(GLZ,r.glz,'Default')+'</select></td>'+
+      '<td class="kt"><input id="rk'+r.id+'" data-f="kitchen" type="checkbox"'+(r.kitchen?' checked':'')+' aria-label="Room '+n+' is a kitchen"></td>'+
+      '<td class="n bx" data-out="load">—</td>'+
+      '<td class="act"><button type="button" class="btn ico sm" data-del="1" aria-label="Remove room '+n+'">×</button></td>';
+    tb.appendChild(tr);
+    var er=document.createElement('tr');
+    er.className='erow'; er.setAttribute('data-err',r.id); er.hidden=true;
+    er.innerHTML='<td colspan="7"><span class="err"></span></td>';
+    tb.appendChild(er);
+  }
+  $('roomEmpty').hidden=S.rooms.length>0;
+  $('thArea').textContent='Area '+au;
+}
+
+/* ── render everything downstream ─────────────────────────────── */
+function render(){
+  var c=calc(), au=areaLabel();
+
+  /* per-row outputs + validation */
+  for(var i=0;i<c.rows.length;i++){
+    var row=c.rows[i], id=row.r.id;
+    var tr=document.querySelector('tr[data-id="'+id+'"]');
+    if(!tr) continue;
+    var cell=tr.querySelector('[data-out="load"]');
+    cell.textContent=row.ok?fmt(Math.round(row.total),0):'—';
+    tr.className=row.r.kitchen?'kitrow':'';
+    var inp=tr.querySelector('[data-f="area"]');
+    var er=document.querySelector('tr[data-err="'+id+'"]');
+    var msg='';
+    if(row.r.area!==''){
+      var a=Number(row.r.area);
+      if(!isFinite(a)||a<=0) msg='Floor area must be a number greater than zero.';
+      else if(toDisplayArea(a)>200000) msg='That area looks implausible — check the units.';
+    }
+    if(msg){ inp.classList.add('inv'); er.hidden=false; er.querySelector('.err').textContent=msg; }
+    else { inp.classList.remove('inv'); er.hidden=true; er.querySelector('.err').textContent=''; }
+  }
+
+  /* headline */
+  $('oTotal').textContent=c.any?fmt(Math.round(c.total),0)+' BTU/h':'—';
+  $('oTotalSub').textContent=c.any
+    ? '≈ '+fmt(c.kw,2)+' kW · '+fmt(c.tons,2)+' tons (BTU/h ÷ 12,000) · zone '+S.zone+' at '+idxLabel()
+    : 'Enter a floor area to size the dwelling.';
+  $('oHeat').textContent=c.any?fmt(Math.round(c.total),0):'—';
+  $('oHeatSub').textContent=c.any?'BTU/h · '+fmt(c.kw,2)+' kW':'—';
+  $('oCool').textContent=c.any?fmt(c.tons,2)+' tons':'—';
+  $('oCoolSub').textContent=c.any?fmt(Math.round(c.total),0)+' BTU/h':'—';
+  $('oNom').textContent=c.any?fmt(c.nominal,1)+' tons':'—';
+  $('oInput').textContent=isFinite(c.input)?fmt(Math.round(c.input),0):'—';
+  $('oInputSub').textContent=isFinite(c.input)?('BTU/h at '+fmt(c.afue,1)+'% efficiency'):'Enter an efficiency %';
+  $('oBudget').textContent=money(c.budget);
+  $('oBudgetSub').textContent=isFinite(c.budget)
+    ? fmt(c.nominal,1)+' tons × '+money(Number(S.cost))+' per ton'
+    : 'Enter a cost per ton';
+
+  /* build-up */
+  $('kArea').textContent=c.any?fmt(toDisplayArea(c.areaFt),2)+' '+au:'—';
+  $('kIdx').textContent=idxLabel();
+  $('kBase').textContent=c.any?btu(c.base):'—';
+  $('kIns').textContent=c.any?signed(c.insD):'—';
+  $('kIns').className='v'+(c.any&&Math.round(c.insD)>0?' pos':(c.any&&Math.round(c.insD)<0?' neg':''));
+  $('kGlz').textContent=c.any?signed(c.glzD):'—';
+  $('kGlz').className='v'+(c.any&&Math.round(c.glzD)>0?' pos':(c.any&&Math.round(c.glzD)<0?' neg':''));
+  $('kKit').textContent=c.any?signed(c.kit):'—';
+  $('kKitN').textContent=c.kitN?('— '+c.kitN+' × 4,000'):'— none flagged';
+  $('kOcc').textContent=c.any?signed(c.occLoad):'—';
+  $('kOccN').textContent='— '+c.occExtra+' over '+OCC_FREE+' × 600';
+  $('kTot').textContent=c.any?btu(c.total):'—';
+  $('fTot').textContent=c.any?fmt(Math.round(c.total),0)+' BTU/h · '+fmt(c.tons,2)+' tons':'—';
+
+  /* chips */
+  $('rowChip').textContent=S.rooms.length+(S.rooms.length===1?' room':' rooms');
+  $('areaChip').textContent=c.any?('Conditioned area '+fmt(toDisplayArea(c.areaFt),2)+' '+au):'No area entered';
+  $('zoneChip').textContent='Zone '+S.zone+' · '+idxLabel();
+  $('zoneHint').textContent=ZONE_DESC[S.zone]||'';
+  $('brkUnits').textContent='Areas in '+au+' · zone '+S.zone+' at '+idxLabel();
+  $('bthArea').textContent='Area '+au;
+
+  /* breakdown table */
+  var bb=$('brkBody'), h='';
+  for(var j=0;j<c.rows.length;j++){
+    var w=c.rows[j];
+    var nm=w.r.name||('Room '+(j+1));
+    if(!w.ok){
+      h+='<tr><th scope="row">'+esc(nm)+'<span class="sub">no area entered</span></th>'+
+         '<td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>';
+      continue;
+    }
+    h+='<tr'+(w.r.kitchen?' class="kitrow"':'')+'><th scope="row">'+esc(nm)+
+       '<span class="sub">'+INS[w.insK].l+(w.r.ins?'*':'')+' insulation · '+GLZ[w.glzK].l+(w.r.glz?'*':'')+' glazing</span></th>'+
+       '<td class="n">'+fmt(toDisplayArea(w.area),2)+'</td>'+
+       '<td class="n">'+fmt(Math.round(w.base),0)+'</td>'+
+       '<td class="n">'+signedShort(w.insD)+'</td>'+
+       '<td class="n">'+signedShort(w.glzD)+'</td>'+
+       '<td class="n">'+(w.kit?fmt(w.kit,0):'—')+'</td>'+
+       '<td class="n"><b>'+fmt(Math.round(w.total),0)+'</b></td></tr>';
+  }
+  bb.innerHTML=h||'<tr><td colspan="7" class="empty">No rooms.</td></tr>';
+  $('brkFoot').innerHTML=c.any
+    ? '<tr><td>Rooms subtotal</td><td class="n">'+fmt(toDisplayArea(c.areaFt),2)+'</td>'+
+      '<td class="n">'+fmt(Math.round(c.base),0)+'</td><td class="n">'+signedShort(c.insD)+'</td>'+
+      '<td class="n">'+signedShort(c.glzD)+'</td><td class="n">'+(c.kit?fmt(c.kit,0):'—')+'</td>'+
+      '<td class="n">'+fmt(Math.round(c.base+c.insD+c.glzD+c.kit),0)+'</td></tr>'+
+      '<tr><td colspan="6">Occupant allowance — '+c.occExtra+' over '+OCC_FREE+' × 600 BTU/h</td>'+
+      '<td class="n">'+fmt(c.occLoad,0)+'</td></tr>'+
+      '<tr><td colspan="6">Total preliminary design load</td><td class="n">'+fmt(Math.round(c.total),0)+'</td></tr>'
+    : '';
+
+  /* method */
+  $('mIdx').textContent='Zone '+S.zone+' = '+fmt(c.idx,0)+' BTU/h·ft²'+(isMet()?(' ('+idxLabel()+')'):'');
+  $('fxLine').textContent='load = Σ [ area × '+fmt(c.idx,0)+' × '+
+    'insulation × glazing ] + kitchens × 4,000 + (occupants − 2) × 600   →   tons = load ÷ 12,000';
+  var zt=$('zoneTbl').getElementsByTagName('tbody')[0], zh='';
+  for(var z=1;z<=7;z++){
+    zh+='<tr'+(z===S.zone?' class="on"':'')+'><td>Zone '+z+'</td><td>'+esc(ZONE_DESC[z].split(' — ')[0])+'</td><td>'+ZONE[z]+' BTU/h·ft²</td></tr>';
+  }
+  zt.innerHTML=zh;
+
+  /* printed header */
+  $('dBiz').textContent=S.meta.biz||'—';
+  $('dContact').textContent=S.meta.contact||'';
+  $('dRef').innerHTML=(S.meta.ref?('Ref. '+esc(S.meta.ref)+'<br>'):'')+'Preliminary &mdash; not a Manual J';
+  $('dProject').textContent=S.meta.project||'—';
+  $('dClient').textContent=S.meta.client||'—';
+  $('dSite').textContent=S.meta.site||'—';
+  $('dDate').textContent=longDate(S.meta.date);
+  $('dBy').textContent=S.meta.by||'—';
+  $('dBasis').textContent='BTU/ft² rule of thumb · climate zone '+S.zone+' at '+idxLabel()+
+    ' · '+INS[S.ins].l.toLowerCase()+' insulation, '+GLZ[S.glz].l.toLowerCase()+' glazing · '+
+    (S.occ===''?'0':fmt(Math.floor(Number(S.occ)||0),0))+' occupants';
+  $('dNotes').textContent=S.meta.notes||'';
+
+  $('sampleBar').hidden=!S.sample;
+}
+function signedShort(x){
+  if(typeof x!=='number'||!isFinite(x)) return '—';
+  var r=Math.round(x); if(r===0) return '—';
+  return (r>0?'+':'−')+fmt(Math.abs(r),0);
+}
+
+/* ── field validation for the single fields ───────────────────── */
+function fieldErr(inpId,errId,msg){
+  var i=$(inpId), e=$(errId);
+  if(msg){ i.classList.add('inv'); e.hidden=false; e.textContent=msg; }
+  else { i.classList.remove('inv'); e.hidden=true; e.textContent=''; }
+}
+function validateSingles(){
+  var o=$('fOcc').value, a=$('fAfue').value, k=$('fCost').value;
+  fieldErr('fOcc','eOcc', o===''? 'Enter the number of occupants (0 if unknown).' :
+    (!(Number(o)>=0)? 'Occupants cannot be negative.' : (Number(o)>50?'More than 50 occupants — check the figure.':'')));
+  fieldErr('fAfue','eAfue', a===''? '' :
+    (!(Number(a)>0)? 'Efficiency must be greater than zero.' : (Number(a)>100?'Efficiency above 100% — check the figure.':'')));
+  fieldErr('fCost','eCost', k===''? '' : (!(Number(k)>=0)? 'Cost per ton cannot be negative.':''));
+}
+
+/* ── bind form ────────────────────────────────────────────────── */
+function fillForm(){
+  $('mBiz').value=S.meta.biz; $('mContact').value=S.meta.contact;
+  $('mProject').value=S.meta.project; $('mClient').value=S.meta.client;
+  $('mSite').value=S.meta.site; $('mRef').value=S.meta.ref;
+  $('mDate').value=S.meta.date; $('mBy').value=S.meta.by; $('mNotes').value=S.meta.notes;
+  $('fZone').value=String(S.zone); $('fIns').value=S.ins; $('fGlz').value=S.glz;
+  $('fOcc').value=S.occ===''?'':String(S.occ);
+  $('fAfue').value=S.afue===''?'':String(S.afue);
+  $('fCost').value=S.cost===''?'':String(S.cost);
+  var known=(S.cur==='£'||S.cur==='$'||S.cur==='€');
+  $('curSel').value=known?S.cur:'custom';
+  $('curCustomWrap').hidden=known;
+  $('curCustom').value=known?'':(S.curCustom||S.cur||'');
+  $('uImp').setAttribute('aria-pressed',String(!isMet()));
+  $('uMet').setAttribute('aria-pressed',String(isMet()));
+}
+function touched(){ if(S.sample){ S.sample=false; } }
+
+function bind(){
+  var metaMap={mBiz:'biz',mContact:'contact',mProject:'project',mClient:'client',mSite:'site',mRef:'ref',mDate:'date',mBy:'by',mNotes:'notes'};
+  Object.keys(metaMap).forEach(function(id){
+    $(id).addEventListener('input',function(){ S.meta[metaMap[id]]=this.value; save(); render(); });
+  });
+  $('fZone').addEventListener('change',function(){ S.zone=Number(this.value); touched(); save(); render(); });
+  $('fIns').addEventListener('change',function(){ S.ins=this.value; touched(); save(); render(); });
+  $('fGlz').addEventListener('change',function(){ S.glz=this.value; touched(); save(); render(); });
+  $('fOcc').addEventListener('input',function(){ S.occ=this.value===''?'':Number(this.value); touched(); save(); render(); });
+  $('fAfue').addEventListener('input',function(){ S.afue=this.value===''?'':Number(this.value); touched(); save(); render(); });
+  $('fCost').addEventListener('input',function(){ S.cost=this.value===''?'':Number(this.value); touched(); save(); render(); });
+  ['fOcc','fAfue','fCost'].forEach(function(id){
+    $(id).addEventListener('blur',validateSingles);
+    $(id).addEventListener('input',function(){ if(this.classList.contains('inv')) validateSingles(); });
+  });
+
+  $('curSel').addEventListener('change',function(){
+    if(this.value==='custom'){ S.cur='custom'; $('curCustomWrap').hidden=false; $('curCustom').focus(); }
+    else { S.cur=this.value; $('curCustomWrap').hidden=true; }
+    save(); render();
+  });
+  $('curCustom').addEventListener('input',function(){ S.curCustom=this.value.slice(0,4); S.cur='custom'; save(); render(); });
+
+  document.querySelectorAll('.seg [data-units]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var u=this.getAttribute('data-units');
+      if(u===S.units) return;
+      S.units=u; save(); fillForm(); renderRooms(); render();
+    });
+  });
+
+  $('roomBody').addEventListener('input',function(e){
+    var t=e.target, f=t.getAttribute('data-f'); if(!f) return;
+    var tr=t.closest('tr'); if(!tr) return;
+    var r=find(tr.getAttribute('data-id')); if(!r) return;
+    if(f==='name') r.name=t.value;
+    else if(f==='area') r.area=(t.value===''?'':fromDisplayArea(Number(t.value)));
+    touched(); save(); render();
+  });
+  $('roomBody').addEventListener('change',function(e){
+    var t=e.target, f=t.getAttribute('data-f'); if(!f) return;
+    var tr=t.closest('tr'); if(!tr) return;
+    var r=find(tr.getAttribute('data-id')); if(!r) return;
+    if(f==='ins') r.ins=t.value;
+    else if(f==='glz') r.glz=t.value;
+    else if(f==='kitchen') r.kitchen=t.checked;
+    touched(); save(); render();
+  });
+  $('roomBody').addEventListener('click',function(e){
+    var b=e.target.closest('[data-del]'); if(!b) return;
+    var tr=b.closest('tr'); var id=tr.getAttribute('data-id');
+    S.rooms=S.rooms.filter(function(r){ return r.id!==id; });
+    if(!S.rooms.length) S.rooms.push(newRoom('',''));
+    touched(); save(); renderRooms(); render();
+  });
+  $('btnAdd').addEventListener('click',function(){
+    S.rooms.push(newRoom('','')); touched(); save(); renderRooms(); render();
+    var tb=$('roomBody'); var inputs=tb.querySelectorAll('input[data-f="name"]');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  });
+  $('btnBlank').addEventListener('click',function(){ S=blankState(); save(); fillForm(); renderRooms(); render(); validateSingles(); });
+  $('btnPrint').addEventListener('click',function(){ window.print(); });
+  $('btnCsv').addEventListener('click',exportCsv);
+  $('btnJson').addEventListener('click',exportJson);
+  $('btnImport').addEventListener('click',function(){ $('fileIn').click(); });
+  $('fileIn').addEventListener('change',importJson);
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all data on this sheet and delete the saved copy in this browser? This cannot be undone.')) return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    S=blankState(); save(); fillForm(); renderRooms(); render(); validateSingles();
+  });
+}
+function find(id){ for(var i=0;i<S.rooms.length;i++){ if(S.rooms[i].id===id) return S.rooms[i]; } return null; }
+
+/* ── exports ──────────────────────────────────────────────────── */
+function cell(v){ v=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function csvRow(a){ return a.map(cell).join(','); }
+function dl(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+  }catch(e){}
+}
+function slug(){
+  var s=(S.meta.ref||S.meta.project||'hvac-load').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  return s||'hvac-load';
+}
+function exportCsv(){
+  var c=calc(), au=areaLabel(), L=[];
+  L.push(csvRow(['Solvix Toolkit 009 - HVAC Rough Load Sizing (preliminary, not a Manual J)']));
+  L.push(csvRow(['Business',S.meta.biz]));
+  L.push(csvRow(['Contact',S.meta.contact]));
+  L.push(csvRow(['Property',S.meta.project]));
+  L.push(csvRow(['Client',S.meta.client]));
+  L.push(csvRow(['Address',S.meta.site]));
+  L.push(csvRow(['Survey ref',S.meta.ref]));
+  L.push(csvRow(['Date',S.meta.date]));
+  L.push(csvRow(['Prepared by',S.meta.by]));
+  L.push(csvRow(['Notes',S.meta.notes]));
+  L.push(csvRow([]));
+  L.push(csvRow(['Climate zone',S.zone,'Base index BTU/h per sq ft',c.idx]));
+  L.push(csvRow(['Building insulation',INS[S.ins].l+' '+INS[S.ins].t,'Building glazing',GLZ[S.glz].l+' '+GLZ[S.glz].t]));
+  L.push(csvRow(['Occupants',S.occ===''?'':S.occ,'Occupants over 2',c.occExtra]));
+  L.push(csvRow(['Units',au]));
+  L.push(csvRow([]));
+  L.push(csvRow(['Room','Area '+au,'Insulation','Glazing','Kitchen','Base BTU/h','Insulation adj BTU/h','Glazing adj BTU/h','Kitchen BTU/h','Room load BTU/h']));
+  for(var i=0;i<c.rows.length;i++){
+    var w=c.rows[i], nm=w.r.name||('Room '+(i+1));
+    if(!w.ok){ L.push(csvRow([nm,'','','','','','','','',''])); continue; }
+    L.push(csvRow([nm,toDisplayArea(w.area).toFixed(2),
+      INS[w.insK].l+(w.r.ins?' (override)':''),GLZ[w.glzK].l+(w.r.glz?' (override)':''),
+      w.r.kitchen?'Yes':'No',
+      Math.round(w.base),Math.round(w.insD),Math.round(w.glzD),Math.round(w.kit),Math.round(w.total)]));
+  }
+  L.push(csvRow([]));
+  L.push(csvRow(['Conditioned floor area',c.any?toDisplayArea(c.areaFt).toFixed(2):'',au]));
+  L.push(csvRow(['Base load BTU/h',c.any?Math.round(c.base):'']));
+  L.push(csvRow(['Insulation adjustment BTU/h',c.any?Math.round(c.insD):'']));
+  L.push(csvRow(['Glazing adjustment BTU/h',c.any?Math.round(c.glzD):'']));
+  L.push(csvRow(['Kitchen allowance BTU/h',c.any?Math.round(c.kit):'']));
+  L.push(csvRow(['Occupant allowance BTU/h',c.any?Math.round(c.occLoad):'']));
+  L.push(csvRow(['TOTAL DESIGN LOAD BTU/h',c.any?Math.round(c.total):'']));
+  L.push(csvRow(['Heating output kW',c.any?c.kw.toFixed(2):'']));
+  L.push(csvRow(['Cooling capacity tons',c.any?c.tons.toFixed(2):'']));
+  L.push(csvRow(['Nominal unit size tons (rounded up)',c.any?c.nominal.toFixed(1):'']));
+  L.push(csvRow(['Furnace input BTU/h at '+(isFinite(c.afue)?c.afue:'-')+'% efficiency',isFinite(c.input)?Math.round(c.input):'']));
+  L.push(csvRow(['Rough equipment budget',isFinite(c.budget)?(cur()+c.budget.toFixed(2)):'']));
+  L.push(csvRow([]));
+  L.push(csvRow(['DISCLAIMER','Preliminary rule-of-thumb figure. Not an ACCA Manual J calculation. Not valid for permit submission or equipment selection. A full room-by-room Manual J (with Manual S and Manual D), or an equivalent recognised method such as BS EN 12831, must be carried out by a qualified HVAC designer before equipment is ordered or installed.']));
+  dl(slug()+'-load-sizing.csv','text/csv;charset=utf-8','﻿'+L.join('\r\n')+'\r\n');
+}
+function exportJson(){
+  dl(slug()+'-load-sizing.json','application/json',JSON.stringify({tool:'solvix-009-hvac-load-calculator',version:1,saved:new Date().toISOString(),state:S},null,2));
+}
+function importJson(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      var st=(o&&o.state)?o.state:o;
+      if(!st||!Array.isArray(st.rooms)) throw new Error('bad');
+      S=normalise(st); save(); fillForm(); renderRooms(); render(); validateSingles();
+      $('sampleBar').hidden=true;
+    }catch(err){
+      var w=$('warnBar');
+      var p=document.createElement('div');
+      p.className='err'; p.style.marginTop='6px';
+      p.textContent='That file could not be read as a saved HVAC load sheet. Nothing was changed.';
+      w.appendChild(p); setTimeout(function(){ if(p.parentNode) p.parentNode.removeChild(p); },6000);
+    }
+    e.target.value='';
+  };
+  rd.readAsText(f);
+}
+
+/* ── boot ─────────────────────────────────────────────────────── */
+if(!load()){ S=sampleState(); save(); }
+fillForm(); bind(); renderRooms(); render(); validateSingles();
+})();
+</script>
+</body>
+</html>
