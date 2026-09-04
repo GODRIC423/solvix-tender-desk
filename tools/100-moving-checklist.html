@@ -167,6 +167,7 @@ table input:focus,table select:focus{background:var(--raise)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ══ tool-specific ══════════════════════════════════════════════ */
+.split>.stack{min-width:0}
 .grp{border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:10px}
 .grp:last-child{margin-bottom:0}
 .grp>.gh{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--sunk);border-bottom:1px solid var(--line)}
@@ -193,8 +194,11 @@ table input:focus,table select:focus{background:var(--raise)}
   color:var(--bad);border:1.5px solid var(--bad);border-radius:3px;padding:2px 6px}
 @media print{
   .labelsSheet{display:none}
+  /* The labels card is only a live preview on screen — printing the ordinary
+     checklist would otherwise show its header with an empty body under it. */
+  body:not(.labels-print) .labelsCard{display:none!important}
   body.labels-print .card:not(.labelsCard){display:none!important}
-  body.labels-print .labelsSheet{display:block!important}
+  body.labels-print .labelsSheet{display:grid!important}
   body.labels-print .labelsGrid{grid-template-columns:repeat(3,1fr)}
   body.labels-print .label{min-height:34mm;border:1.5px dashed #666;break-inside:avoid}
   body.labels-print .label .lnum{font-size:28pt}
@@ -207,26 +211,39 @@ table input:focus,table select:focus{background:var(--raise)}
 .printonly.phead{padding-bottom:6px;margin-bottom:6px;border-bottom:2px solid #000}
 .printonly.phead h1{font-size:19pt}
 @media(max-width:480px){.pillhead .big{font-size:26px}}
+/* Grid/flex items default to min-width:auto, so a nested minmax() grid (the
+   two utility-reading tables) can force its ancestor wider than the viewport
+   on narrow screens unless every level is explicitly allowed to shrink. */
+.split>*,.stack>*,.grid>*{min-width:0}
+.tw{min-width:0}
+.pchk,.pdate{display:none;font-family:var(--mono)}
+@media print{
+  /* Native checkboxes can print with no visible mark, and empty date pickers
+     print a raw "mm/dd/yyyy" placeholder — swap both for plain text on paper. */
+  input[type="checkbox"],input[type="date"]{display:none!important}
+  .pchk,.pdate{display:inline-block!important}
+  /* An empty text input still shows its grey placeholder on paper otherwise. */
+  input::placeholder{color:transparent!important}
+}
 </style>
 </head>
 <body>
-<div class="appbar noprint">
-  <div class="brand">
-    <div class="mark">MV</div>
-    <div>
-      <h1>Moving House Planner</h1>
-      <div class="sub">CHECKLIST · BOXES · ADDRESSES</div>
+<div class="app">
+  <div class="appbar noprint">
+    <div class="brand">
+      <div class="mark">MV</div>
+      <div>
+        <h1>Moving House Planner</h1>
+        <div class="sub">CHECKLIST · BOXES · ADDRESSES</div>
+      </div>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="btnPrint">🖨 Print checklist</button>
+      <button type="button" class="btn" id="btnPrintLabels">🏷 Print labels</button>
+      <button type="button" class="btn" id="btnCsv">⬇ Export CSV</button>
+      <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
     </div>
   </div>
-  <div class="row">
-    <button type="button" class="btn" id="btnPrint">🖨 Print checklist</button>
-    <button type="button" class="btn" id="btnPrintLabels">🏷 Print labels</button>
-    <button type="button" class="btn" id="btnCsv">⬇ Export CSV</button>
-    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
-  </div>
-</div>
-
-<div class="app">
 
   <div class="printonly phead">
     <h1>Moving House Plan</h1>
@@ -236,7 +253,7 @@ table input:focus,table select:focus{background:var(--raise)}
   <div class="split" style="margin-top:14px">
     <div class="stack">
 
-      <div class="card">
+      <div class="card noprint">
         <div class="hd"><h2>Move details</h2></div>
         <div class="bd">
           <p class="hint" style="margin-bottom:10px">Sample plan pre-filled below — edit every field for your own move, or clear it and start fresh.</p>
@@ -258,7 +275,7 @@ table input:focus,table select:focus{background:var(--raise)}
         <div class="bd">
           <div class="tw">
             <table>
-              <thead><tr><th style="width:52px">#</th><th>Room</th><th>Contents summary</th><th style="width:80px">Fragile</th><th style="width:36px"></th></tr></thead>
+              <thead><tr><th style="width:44px">#</th><th style="width:140px">Room</th><th>Contents summary</th><th style="width:74px">Fragile</th><th style="width:36px"></th></tr></thead>
               <tbody id="boxBody"></tbody>
             </table>
           </div>
@@ -347,7 +364,7 @@ table input:focus,table select:focus{background:var(--raise)}
   </div>
 
   <footer style="margin-top:20px;padding:14px 2px;color:var(--muted);font-size:12px;line-height:1.6">
-    Timeframes (8/4/2/1 weeks) are common-practice moving guidelines, not a fixed standard — reorder or rename groups to fit your own move. Box numbers are assigned by row order and match the printed labels automatically. This is a personal planning tool, not legal, tax or removals advice.
+    Timeframes (8/4/2/1 weeks) are common-practice moving guidelines, not a fixed standard — reorder or rename groups to fit your own move. Each box keeps the number it was given when added, even if you delete another box, so a label already taped to a box never goes out of date. This is a personal planning tool, not legal, tax or removals advice.
   </footer>
 </div>
 
@@ -400,12 +417,13 @@ function defaultState(){
       {id:'t29',group:'after',text:'Set up utilities and broadband at the new address',done:false},
       {id:'t30',group:'after',text:'Unpack the essentials box first, then room by room',done:false}
     ],
+    boxSeq: 5,
     boxes: [
-      {room:'Kitchen', contents:'Pots, pans, utensils, small appliances', fragile:false},
-      {room:'Kitchen', contents:'Glassware, mugs, plates', fragile:true},
-      {room:'Living room', contents:'Books, DVDs, photo frames', fragile:false},
-      {room:'Bedroom', contents:'Wardrobe box — hanging clothes', fragile:false},
-      {room:'Office', contents:'Desk lamp, monitor, cables', fragile:true}
+      {id:1, room:'Kitchen', contents:'Pots, pans, utensils, small appliances', fragile:false},
+      {id:2, room:'Kitchen', contents:'Glassware, mugs, plates', fragile:true},
+      {id:3, room:'Living room', contents:'Books, DVDs, photo frames', fragile:false},
+      {id:4, room:'Bedroom', contents:'Wardrobe box — hanging clothes', fragile:false},
+      {id:5, room:'Office', contents:'Desk lamp, monitor, cables', fragile:true}
     ],
     addresses: [
       {org:'Bank / building society', notified:true, date:'2026-08-20'},
@@ -472,6 +490,14 @@ function load(){
     if(typeof parsed.moveDate!=='string') parsed.moveDate=d.moveDate;
     if(typeof parsed.fromAddr!=='string') parsed.fromAddr=d.fromAddr;
     if(typeof parsed.toAddr!=='string') parsed.toAddr=d.toAddr;
+    // box numbers must stay fixed once assigned (so printed labels never drift) —
+    // backfill an id for any box that predates this, and keep the counter in sync.
+    var maxId = 0;
+    parsed.boxes.forEach(function(b){
+      if(typeof b.id!=='number'){ b.id = ++maxId; }
+      else if(b.id > maxId){ maxId = b.id; }
+    });
+    if(typeof parsed.boxSeq!=='number' || parsed.boxSeq < maxId) parsed.boxSeq = maxId;
     return parsed;
   }catch(e){ return defaultState(); }
 }
@@ -508,6 +534,12 @@ function formatLong(dateObj){
   var mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return days[dateObj.getDay()]+', '+dateObj.getDate()+' '+mons[dateObj.getMonth()]+' '+dateObj.getFullYear();
 }
+function formatShort(dateStr){
+  var d = parseISO(dateStr);
+  if(!d) return '—';
+  var mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return d.getDate()+' '+mons[d.getMonth()]+' '+d.getFullYear();
+}
 
 /* ---------- render: move details ---------- */
 function renderHead(){
@@ -539,6 +571,7 @@ function renderTasks(){
       var li = document.createElement('li');
       if(t.done) li.className='done';
       li.innerHTML = '<input type="checkbox" '+(t.done?'checked':'')+' aria-label="Mark task done">'+
+        '<span class="pchk">'+(t.done?'☑':'☐')+'</span>'+
         '<span class="tlabel">'+esc(t.text)+'</span>'+
         '<button type="button" class="btn sm ico rowbtn" title="Remove task" aria-label="Remove task">✕</button>';
       li.querySelector('input').addEventListener('change', function(){
@@ -573,10 +606,10 @@ function renderBoxes(){
   state.boxes.forEach(function(b, idx){
     var tr = document.createElement('tr');
     tr.innerHTML =
-      '<td class="mono">'+(idx+1)+'</td>'+
+      '<td class="mono">#'+b.id+'</td>'+
       '<td><input type="text" data-f="room" value="'+esc(b.room)+'" placeholder="Room"></td>'+
       '<td><input type="text" data-f="contents" value="'+esc(b.contents)+'" placeholder="Contents summary"></td>'+
-      '<td style="text-align:center"><input type="checkbox" data-f="fragile" '+(b.fragile?'checked':'')+' aria-label="Fragile"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-f="fragile" '+(b.fragile?'checked':'')+' aria-label="Fragile"><span class="pchk">'+(b.fragile?'☑ Fragile':'☐')+'</span></td>'+
       '<td><button type="button" class="btn sm ico" aria-label="Remove box">✕</button></td>';
     var roomI = tr.querySelector('[data-f=room]');
     var contI = tr.querySelector('[data-f=contents]');
@@ -603,7 +636,7 @@ function renderLabels(){
     var d = document.createElement('div');
     d.className='label';
     d.innerHTML =
-      '<div class="lnum">#'+(idx+1)+'</div>'+
+      '<div class="lnum">#'+b.id+'</div>'+
       '<div class="lroom">'+esc(b.room||'Unlabelled room')+'</div>'+
       '<div class="lcontents">'+esc(b.contents||'—')+'</div>'+
       (b.fragile?'<div class="lfrag">Fragile</div>':'');
@@ -619,8 +652,8 @@ function renderAddresses(){
     var tr = document.createElement('tr');
     tr.innerHTML =
       '<td><input type="text" data-f="org" value="'+esc(a.org)+'" placeholder="Organisation name"></td>'+
-      '<td style="text-align:center"><input type="checkbox" data-f="notified" '+(a.notified?'checked':'')+' aria-label="Notified"></td>'+
-      '<td><input type="date" data-f="date" value="'+esc(a.date||'')+'"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-f="notified" '+(a.notified?'checked':'')+' aria-label="Notified"><span class="pchk">'+(a.notified?'☑ Yes':'☐ No')+'</span></td>'+
+      '<td><input type="date" data-f="date" value="'+esc(a.date||'')+'"><span class="pdate">'+(a.date?formatShort(a.date):'—')+'</span></td>'+
       '<td><button type="button" class="btn sm ico" aria-label="Remove organisation">✕</button></td>';
     tr.querySelector('[data-f=org]').addEventListener('input', function(){ a.org=this.value; save(); });
     tr.querySelector('[data-f=notified]').addEventListener('change', function(){ a.notified=this.checked; save(); updateSummary(); });
@@ -644,7 +677,7 @@ function renderUtil(prop){
     tr.innerHTML =
       '<td><input type="text" data-f="name" value="'+esc(u.name)+'" placeholder="Utility"></td>'+
       '<td><input type="text" inputmode="decimal" data-f="reading" value="'+esc(u.reading)+'" placeholder="Reading"></td>'+
-      '<td><input type="date" data-f="date" value="'+esc(u.date||'')+'"></td>'+
+      '<td><input type="date" data-f="date" value="'+esc(u.date||'')+'"><span class="pdate">'+(u.date?formatShort(u.date):'—')+'</span></td>'+
       '<td><button type="button" class="btn sm ico" aria-label="Remove meter">✕</button></td>';
     tr.querySelector('[data-f=name]').addEventListener('input', function(){ u.name=this.value; save(); });
     tr.querySelector('[data-f=reading]').addEventListener('input', function(){ u.reading=this.value; save(); });
@@ -665,6 +698,7 @@ function renderEssentials(){
     var li = document.createElement('li');
     if(e.done) li.className='done';
     li.innerHTML = '<input type="checkbox" '+(e.done?'checked':'')+' aria-label="Packed">'+
+      '<span class="pchk">'+(e.done?'☑':'☐')+'</span>'+
       '<span class="tlabel">'+esc(e.text)+'</span>'+
       '<button type="button" class="btn sm ico rowbtn" aria-label="Remove item">✕</button>';
     li.querySelector('input').addEventListener('change', function(){ e.done=this.checked; save(); renderEssentials(); updateSummary(); });
@@ -753,7 +787,8 @@ $('fromAddr').addEventListener('input', function(){ state.fromAddr=this.value; s
 $('toAddr').addEventListener('input', function(){ state.toAddr=this.value; save(); updateSummary(); });
 
 $('addBox').addEventListener('click', function(){
-  state.boxes.push({room:'', contents:'', fragile:false});
+  if(typeof state.boxSeq!=='number') state.boxSeq = state.boxes.length;
+  state.boxes.push({id: ++state.boxSeq, room:'', contents:'', fragile:false});
   save(); renderBoxes(); renderLabels(); updateSummary();
   var rows = $('boxBody').querySelectorAll('input[data-f=room]');
   if(rows.length) rows[rows.length-1].focus();
@@ -820,8 +855,8 @@ $('btnCsv').addEventListener('click', function(){
   rows.push('');
   rows.push(csvRow(['BOX INVENTORY']));
   rows.push(csvRow(['Box #','Room','Contents','Fragile']));
-  state.boxes.forEach(function(b, idx){
-    rows.push(csvRow([idx+1, b.room, b.contents, b.fragile?'Yes':'No']));
+  state.boxes.forEach(function(b){
+    rows.push(csvRow([b.id, b.room, b.contents, b.fragile?'Yes':'No']));
   });
   rows.push('');
   rows.push(csvRow(['ADDRESS-CHANGE TRACKER']));
