@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13-Week Cash Flow Forecast — Solvix</title>
+<meta name="description" content="Rolling 13-week cash flow forecast: track opening and closing balances by week, flag the exact week you run short, and model a worst-case delay in receipts.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Cpath d='M7 21 L13 14 L18 18 L25 9' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M20 9 H25 V14' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1B7A4B; --accent-ink:#145C39; --accent-wash:#E3F2EA; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#3FBE83; --accent-ink:#7FE0AE; --accent-wash:#12281C; --on-accent:#07150F;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#3FBE83; --accent-ink:#7FE0AE; --accent-wash:#12281C; --on-accent:#07150F;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+.appbar .acts{display:flex;gap:8px;flex-wrap:wrap}
+.setupgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.curwrap{display:flex;gap:6px}
+.curwrap select{flex:1}
+.curwrap input{width:56px;flex:none}
+.itemhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+table.items td,table.items th{white-space:normal}
+table.items input,table.items select{min-width:64px}
+table.items td.nmcol{min-width:120px}
+table.items td.amtcol input{min-width:76px}
+.wkcol{width:52px}
+.delbtn{color:var(--bad);border-color:var(--line-hard);background:transparent;font-weight:700;line-height:1;padding:5px 8px}
+.delbtn:hover{background:var(--bad-wash);border-color:var(--bad)}
+.fctable{min-width:1180px}
+.fctable th,.fctable td{text-align:right;white-space:nowrap;padding:7px 8px}
+.fctable th:first-child,.fctable td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:1px 0 0 var(--line)}
+.fctable thead th:first-child{background:var(--sunk);z-index:3}
+.fctable .wkhead{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.fctable .wkhead .d{font:400 10px/1 var(--sans);color:var(--muted);text-transform:none;letter-spacing:0}
+.fctable tr.cat td:first-child{padding-left:22px;color:var(--ink-2);font-weight:400}
+.fctable tr.subtotal td{font-weight:650;background:var(--sunk)}
+.fctable tr.subtotal td:first-child{background:var(--sunk)}
+.fctable tr.net td{font-weight:650}
+.fctable tr.closing td{font-weight:700;background:var(--accent-wash)}
+.fctable tr.closing td:first-child{background:var(--accent-wash)}
+.fctable tr.closing td{color:var(--accent-ink)}
+.fctable tr.worst td{font-style:italic;color:var(--ink-2)}
+.fctable tr.status td{padding-top:4px;padding-bottom:4px}
+.fctable td.short{color:var(--bad);font-weight:700}
+.fctable td input{width:78px;text-align:right;padding:4px 5px}
+.fctable td.novar{color:var(--faint)}
+.scenline{font-size:13px;line-height:1.5;color:var(--ink-2)}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:420px){.statgrid{grid-template-columns:1fr}}
+.printonly .doctitle{font-size:19px;font-weight:700;margin-bottom:2px}
+.printonly .docsub{font-size:12px;color:#333;margin-bottom:10px}
+.printonly table{margin-bottom:4px}
+.legend{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">SX</div>
+    <div>
+      <h1>13-Week Cash Flow Forecast</h1>
+      <div class="sub">FINANCE &amp; PRICING</div>
+    </div>
+  </div>
+  <div class="acts">
+    <button type="button" class="btn" id="btnPrint">🖶 Print</button>
+    <button type="button" class="btn" id="btnCsv">⭳ CSV</button>
+    <button type="button" class="btn" id="btnJson">⭳ JSON</button>
+    <button type="button" class="btn" id="btnImport">⭱ Import</button>
+    <input type="file" id="fileImport" accept="application/json" style="display:none">
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</div>
+
+<div class="app">
+
+  <div class="printonly" id="printHead">
+    <div class="doctitle" id="pdTitle">Cash Flow Forecast</div>
+    <div class="docsub" id="pdSub"></div>
+  </div>
+
+  <div class="stack" style="margin-top:14px">
+    <div class="note warn" id="disclaimer">
+      <strong>Planning tool, not an audited statement.</strong> This forecast is only as
+      accurate as the figures you enter. It assumes recurring items repeat exactly as
+      scheduled and does not know about bank fees, bounced payments, or timing surprises.
+      Update it weekly and confirm funding or lending decisions with your accountant or bank.
+    </div>
+
+    <div class="note bad noprint" id="importMsg" role="status" hidden></div>
+
+    <div class="split">
+      <!-- LEFT: inputs -->
+      <div class="stack">
+
+        <div class="card">
+          <div class="hd"><h2>Forecast setup</h2></div>
+          <div class="bd stack">
+            <div class="setupgrid">
+              <div class="f">
+                <label for="inBiz">Business name</label>
+                <input id="inBiz" type="text" placeholder="Your business">
+              </div>
+              <div class="f">
+                <label for="inPrep">Prepared by</label>
+                <input id="inPrep" type="text" placeholder="Name">
+              </div>
+              <div class="f">
+                <label for="inStart">Week 1 starts</label>
+                <input id="inStart" type="date">
+              </div>
+              <div class="f">
+                <label for="inCurSel">Currency</label>
+                <div class="curwrap">
+                  <select id="inCurSel">
+                    <option value="£">£ GBP</option>
+                    <option value="$">$ USD</option>
+                    <option value="€">€ EUR</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <input id="inCurCustom" type="text" maxlength="3" placeholder="¤" style="display:none">
+                </div>
+              </div>
+              <div class="f">
+                <label for="inOpen">Opening balance (wk 1)</label>
+                <input id="inOpen" type="number" step="0.01">
+                <span class="err" id="errOpen" hidden></span>
+              </div>
+              <div class="f">
+                <label for="inMin">Minimum balance to hold</label>
+                <input id="inMin" type="number" step="0.01" min="0">
+                <span class="err" id="errMin" hidden></span>
+              </div>
+              <div class="f">
+                <label for="inDelay">Worst case: receipts late by (days)</label>
+                <input id="inDelay" type="number" step="1" min="0" max="90">
+                <span class="err" id="errDelay" hidden></span>
+              </div>
+            </div>
+            <p class="hint">Any week below your minimum balance is flagged. The worst-case
+            column pushes every receipt later by the days above, rounded up to whole weeks —
+            money that would then fall outside the 13-week window is shown as not received.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd itemhead">
+            <h2>Receipts &amp; payments</h2>
+            <span class="hint" id="itemCount"></span>
+          </div>
+          <div class="bd">
+            <div class="tw">
+              <table class="items">
+                <thead>
+                  <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Timing</th>
+                    <th scope="col" class="wkcol">Week</th>
+                    <th scope="col" class="r">Amount</th>
+                    <th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0"></span></th>
+                  </tr>
+                </thead>
+                <tbody id="itemsBody"></tbody>
+              </table>
+            </div>
+            <datalist id="catlist">
+              <option value="Sales"></option>
+              <option value="Other income"></option>
+              <option value="Loans / grants"></option>
+              <option value="VAT / tax refund"></option>
+              <option value="Payroll"></option>
+              <option value="Rent"></option>
+              <option value="Suppliers / COGS"></option>
+              <option value="Utilities"></option>
+              <option value="Tax / VAT"></option>
+              <option value="Loan repayment"></option>
+              <option value="Insurance"></option>
+              <option value="Other"></option>
+            </datalist>
+            <div class="row" style="margin-top:10px">
+              <button type="button" class="btn pri sm" id="btnAddItem">+ Add item</button>
+              <span class="hint">Recurring items repeat automatically at the chosen frequency until week 13. One-off items land in the exact week you set.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: results -->
+      <div class="stack sticky">
+        <div class="card">
+          <div class="hd"><h2>Result</h2></div>
+          <div class="bd stack">
+            <div class="stat hero">
+              <div class="k" id="heroK">First week short</div>
+              <div class="v" id="heroV">—</div>
+              <div class="hint" id="heroSub"></div>
+            </div>
+            <div class="statgrid">
+              <div class="stat">
+                <div class="k">Lowest balance</div>
+                <div class="v" id="statLow">—</div>
+                <div class="u" id="statLowSub"></div>
+              </div>
+              <div class="stat">
+                <div class="k">Worst case: first short</div>
+                <div class="v" id="statWorst">—</div>
+                <div class="u" id="statWorstSub"></div>
+              </div>
+            </div>
+            <div class="note" id="scenNote"><p class="scenline" id="scenLine"></p></div>
+          </div>
+          <div class="ft">
+            <span class="hint">Recalculates live as you type. Saved automatically on this device.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FULL WIDTH: 13-week matrix -->
+    <div class="card">
+      <div class="hd">
+        <h2>13-week forecast</h2>
+        <span class="hint">Scroll sideways for all 13 weeks →</span>
+      </div>
+      <div class="bd">
+        <div class="tw">
+          <table class="fctable" id="fcTable"></table>
+        </div>
+        <p class="legend">Recurring items are grouped into one row per category. Enter an
+        <strong>actual closing balance</strong> for a week once it has passed — it becomes
+        next week's opening balance and the variance line shows how far off the forecast was.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer style="text-align:center;padding:18px 10px 40px;color:var(--muted);font:12px/1.5 var(--sans)" class="noprint">
+  Solvix Toolkit — assumes recurring items repeat exactly on schedule with no bank fees,
+  bounced payments or bank-holiday shifts modelled. Not a substitute for accounting advice.
+</footer>
+
+<script>
+(function(){
+"use strict";
+var STORAGE_KEY = "solvix.cash-flow-forecast.v1";
+var WEEKS = 13;
+var FREQ_INTERVAL = { once:0, weekly:1, fortnight:2, "4weekly":4 };
+var CUR_MAP = { "£":"£", "$":"$", "€":"€" };
+
+function uid(){ return "i" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
+function clampNum(v,min,max,fallback){ v=Number(v); if(!isFinite(v)) return fallback; if(min!=null&&v<min)v=min; if(max!=null&&v>max)v=max; return v; }
+function round2(n){ if(!isFinite(n)) return 0; return Math.round((n+Number.EPSILON)*100)/100; }
+function fixZero(n){ return Object.is(n,-0) ? 0 : n; }
+
+function defaultState(){
+  return {
+    biz: "", prepared: "",
+    startDate: todayISO(),
+    curChoice: "£", curCustom: "",
+    opening: 12000,
+    minBalance: 2000,
+    delayDays: 10,
+    items: [
+      { id: uid(), name: "Customer invoices", type: "receipt", category: "Sales", freq: "weekly", week: 1, amount: 3000 },
+      { id: uid(), name: "Grant payment", type: "receipt", category: "Other income", freq: "once", week: 6, amount: 5000 },
+      { id: uid(), name: "Payroll", type: "payment", category: "Payroll", freq: "fortnight", week: 1, amount: 4200 },
+      { id: uid(), name: "Rent", type: "payment", category: "Rent", freq: "4weekly", week: 1, amount: 2500 },
+      { id: uid(), name: "Supplier payment", type: "payment", category: "Suppliers / COGS", freq: "once", week: 4, amount: 9000 }
+    ],
+    actuals: {}
+  };
+}
+
+var state = defaultState();
+
+function load(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === "object"){
+        var d = defaultState();
+        state = {
+          biz: typeof parsed.biz === "string" ? parsed.biz : d.biz,
+          prepared: typeof parsed.prepared === "string" ? parsed.prepared : d.prepared,
+          startDate: typeof parsed.startDate === "string" ? parsed.startDate : d.startDate,
+          curChoice: typeof parsed.curChoice === "string" ? parsed.curChoice : d.curChoice,
+          curCustom: typeof parsed.curCustom === "string" ? parsed.curCustom : d.curCustom,
+          opening: isFinite(Number(parsed.opening)) ? Number(parsed.opening) : d.opening,
+          minBalance: isFinite(Number(parsed.minBalance)) ? Number(parsed.minBalance) : d.minBalance,
+          delayDays: isFinite(Number(parsed.delayDays)) ? Number(parsed.delayDays) : d.delayDays,
+          items: Array.isArray(parsed.items) ? parsed.items.map(sanitizeItem) : d.items,
+          actuals: (parsed.actuals && typeof parsed.actuals === "object") ? parsed.actuals : {}
+        };
+      }
+    }
+  }catch(e){ /* storage blocked or corrupt — keep defaults */ }
+}
+function sanitizeItem(it){
+  return {
+    id: it.id || uid(),
+    name: typeof it.name === "string" ? it.name : "Item",
+    type: (it.type === "payment") ? "payment" : "receipt",
+    category: typeof it.category === "string" ? it.category : "",
+    freq: FREQ_INTERVAL.hasOwnProperty(it.freq) ? it.freq : "once",
+    week: clampNum(it.week,1,WEEKS,1),
+    amount: Math.max(0, round2(Number(it.amount)||0))
+  };
+}
+function save(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* ignore */ }
+}
+
+function currencySymbol(){
+  if(state.curChoice === "custom") return (state.curCustom || "¤").slice(0,3);
+  return CUR_MAP[state.curChoice] || "£";
+}
+function money(n){
+  n = fixZero(round2(n));
+  if(!isFinite(n)) return "—";
+  var neg = n < 0;
+  var v = Math.abs(n);
+  var s = v.toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return (neg?"-":"") + currencySymbol() + s;
+}
+function plainNum(n){
+  n = fixZero(round2(n));
+  if(!isFinite(n)) return "";
+  return n.toFixed(2);
+}
+
+function weekDate(w){
+  var d = new Date(state.startDate + "T00:00:00");
+  if(isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + (w-1)*7);
+  return d;
+}
+function weekDateLabel(w){
+  var d = weekDate(w);
+  if(!d) return "";
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+}
+
+function weeksApplicable(item){
+  var out = [];
+  var start = clampNum(item.week,1,WEEKS,1);
+  if(item.freq === "once"){
+    if(start>=1 && start<=WEEKS) out.push(start);
+    return out;
+  }
+  var interval = FREQ_INTERVAL[item.freq] || 1;
+  for(var w=start; w<=WEEKS; w+=interval) out.push(w);
+  return out;
+}
+
+function computeForecast(){
+  var i, w;
+  var receiptCats = [], paymentCats = [];
+  var receiptsByCat = {}, paymentsByCat = {};
+  var totalReceipts = new Array(WEEKS).fill(0);
+  var totalPayments = new Array(WEEKS).fill(0);
+  var totalReceiptsWorst = new Array(WEEKS).fill(0);
+
+  var shiftWeeks = Math.max(0, Math.ceil((Number(state.delayDays)||0)/7));
+
+  for(i=0;i<state.items.length;i++){
+    var it = state.items[i];
+    var amt = Math.max(0, Number(it.amount)||0);
+    var cat = (it.category || "Uncategorised").trim() || "Uncategorised";
+    var weeks = weeksApplicable(it);
+    if(it.type === "receipt"){
+      if(receiptCats.indexOf(cat) === -1) receiptCats.push(cat);
+      if(!receiptsByCat[cat]) receiptsByCat[cat] = new Array(WEEKS).fill(0);
+      for(var a=0;a<weeks.length;a++){
+        var w1 = weeks[a];
+        receiptsByCat[cat][w1-1] += amt;
+        totalReceipts[w1-1] += amt;
+        var target = w1 + shiftWeeks;
+        if(target <= WEEKS) totalReceiptsWorst[target-1] += amt;
+      }
+    } else {
+      if(paymentCats.indexOf(cat) === -1) paymentCats.push(cat);
+      if(!paymentsByCat[cat]) paymentsByCat[cat] = new Array(WEEKS).fill(0);
+      for(var b=0;b<weeks.length;b++){
+        var w2 = weeks[b];
+        paymentsByCat[cat][w2-1] += amt;
+        totalPayments[w2-1] += amt;
+      }
+    }
+  }
+
+  var openingBase = new Array(WEEKS).fill(0);
+  var closingBase = new Array(WEEKS).fill(0);
+  var net = new Array(WEEKS).fill(0);
+  var flagged = new Array(WEEKS).fill(false);
+  var shortfall = new Array(WEEKS).fill(0);
+  var actualClosing = new Array(WEEKS).fill(null);
+  var variance = new Array(WEEKS).fill(null);
+
+  var minBal = Number(state.minBalance)||0;
+  var openBal = Number(state.opening)||0;
+
+  for(w=1; w<=WEEKS; w++){
+    var idx = w-1;
+    openingBase[idx] = (w===1) ? openBal : (actualClosing[idx-1] !== null ? actualClosing[idx-1] : closingBase[idx-1]);
+    net[idx] = totalReceipts[idx] - totalPayments[idx];
+    closingBase[idx] = openingBase[idx] + net[idx];
+    if(closingBase[idx] < minBal){
+      flagged[idx] = true;
+      shortfall[idx] = minBal - closingBase[idx];
+    }
+    var av = state.actuals[String(w)];
+    if(av !== undefined && av !== null && av !== "" && isFinite(Number(av))){
+      actualClosing[idx] = Number(av);
+      variance[idx] = actualClosing[idx] - closingBase[idx];
+    }
+  }
+
+  var openingWorst = new Array(WEEKS).fill(0);
+  var closingWorst = new Array(WEEKS).fill(0);
+  var netWorst = new Array(WEEKS).fill(0);
+  for(w=1; w<=WEEKS; w++){
+    var j = w-1;
+    openingWorst[j] = (w===1) ? openBal : closingWorst[j-1];
+    netWorst[j] = totalReceiptsWorst[j] - totalPayments[j];
+    closingWorst[j] = openingWorst[j] + netWorst[j];
+  }
+
+  var firstShort = -1, firstShortWorst = -1, lowestIdx = 0;
+  for(w=0; w<WEEKS; w++){
+    if(firstShort === -1 && flagged[w]) firstShort = w+1;
+    if(firstShortWorst === -1 && closingWorst[w] < minBal) firstShortWorst = w+1;
+    if(closingBase[w] < closingBase[lowestIdx]) lowestIdx = w;
+  }
+
+  return {
+    receiptCats: receiptCats, paymentCats: paymentCats,
+    receiptsByCat: receiptsByCat, paymentsByCat: paymentsByCat,
+    totalReceipts: totalReceipts, totalPayments: totalPayments,
+    totalReceiptsWorst: totalReceiptsWorst,
+    openingBase: openingBase, closingBase: closingBase, net: net,
+    flagged: flagged, shortfall: shortfall,
+    actualClosing: actualClosing, variance: variance,
+    closingWorst: closingWorst, netWorst: netWorst,
+    firstShort: firstShort, firstShortWorst: firstShortWorst, lowestIdx: lowestIdx,
+    shiftWeeks: shiftWeeks, minBal: minBal
+  };
+}
+
+/* ---------- rendering ---------- */
+var els = {};
+["inBiz","inPrep","inStart","inCurSel","inCurCustom","inOpen","inMin","inDelay",
+ "errOpen","errMin","errDelay","itemsBody","itemCount","heroK","heroV","heroSub",
+ "statLow","statLowSub","statWorst","statWorstSub","scenLine","fcTable","pdTitle","pdSub"
+].forEach(function(id){ els[id]=document.getElementById(id); });
+
+function captureFocus(){
+  var a = document.activeElement;
+  if(a && a.id && document.body.contains(a)){
+    return { id: a.id, start: (typeof a.selectionStart==="number")?a.selectionStart:null, end: (typeof a.selectionEnd==="number")?a.selectionEnd:null };
+  }
+  return null;
+}
+function restoreFocus(f){
+  if(!f) return;
+  var el = document.getElementById(f.id);
+  if(el){
+    el.focus();
+    if(f.start!=null && el.setSelectionRange){
+      try{ el.setSelectionRange(f.start, f.end); }catch(e){}
+    }
+  }
+}
+
+function renderSetupInputs(){
+  els.inBiz.value = state.biz;
+  els.inPrep.value = state.prepared;
+  els.inStart.value = state.startDate;
+  els.inCurSel.value = (state.curChoice==="£"||state.curChoice==="$"||state.curChoice==="€") ? state.curChoice : "custom";
+  els.inCurCustom.style.display = state.curChoice === "custom" ? "" : "none";
+  els.inCurCustom.value = state.curCustom;
+  els.inOpen.value = state.opening;
+  els.inMin.value = state.minBalance;
+  els.inDelay.value = state.delayDays;
+}
+
+function renderItems(){
+  var rows = state.items.map(function(it){
+    return '<tr data-id="'+it.id+'">' +
+      '<td class="nmcol"><label class="hint" style="display:none" for="nm-'+it.id+'">Item name</label>' +
+        '<input id="nm-'+it.id+'" type="text" value="'+escAttr(it.name)+'" data-f="name" aria-label="Item name"></td>' +
+      '<td><select id="ty-'+it.id+'" data-f="type" aria-label="Type">' +
+        '<option value="receipt"'+(it.type==="receipt"?" selected":"")+'>Receipt (in)</option>' +
+        '<option value="payment"'+(it.type==="payment"?" selected":"")+'>Payment (out)</option>' +
+        '</select></td>' +
+      '<td><input id="ct-'+it.id+'" type="text" list="catlist" value="'+escAttr(it.category)+'" data-f="category" aria-label="Category"></td>' +
+      '<td><select id="fq-'+it.id+'" data-f="freq" aria-label="Timing">' +
+        '<option value="once"'+(it.freq==="once"?" selected":"")+'>Once</option>' +
+        '<option value="weekly"'+(it.freq==="weekly"?" selected":"")+'>Weekly</option>' +
+        '<option value="fortnight"'+(it.freq==="fortnight"?" selected":"")+'>Every 2 weeks</option>' +
+        '<option value="4weekly"'+(it.freq==="4weekly"?" selected":"")+'>Every 4 weeks</option>' +
+        '</select></td>' +
+      '<td class="wkcol"><input id="wk-'+it.id+'" type="number" min="1" max="13" step="1" value="'+it.week+'" data-f="week" aria-label="Week"></td>' +
+      '<td class="amtcol"><input id="am-'+it.id+'" type="number" min="0" step="0.01" value="'+it.amount+'" data-f="amount" aria-label="Amount"></td>' +
+      '<td><button type="button" class="btn delbtn sm" data-del="'+it.id+'" aria-label="Delete '+escAttr(it.name)+'">×</button></td>' +
+      '</tr>';
+  }).join("");
+  els.itemsBody.innerHTML = rows || '<tr><td colspan="7" class="empty">No items yet. Add a receipt or payment below.</td></tr>';
+  var nR = state.items.filter(function(i){return i.type==="receipt";}).length;
+  var nP = state.items.filter(function(i){return i.type==="payment";}).length;
+  els.itemCount.textContent = nR+" receipt line(s), "+nP+" payment line(s)";
+}
+
+function fmtChip(flagged, closing){
+  if(flagged) return '<span class="chip bad">SHORT</span>';
+  return '<span class="chip ok">OK</span>';
+}
+
+function renderMatrix(fc){
+  var i, w;
+  var headCells = '<th scope="col">Row</th>';
+  for(w=1; w<=WEEKS; w++){
+    headCells += '<th scope="col"><span class="wkhead">Wk '+w+'<span class="d">'+weekDateLabel(w)+'</span></span></th>';
+  }
+  headCells += '<th scope="col">13-wk total</th>';
+
+  function sumRow(arr){ var s=0; for(var k=0;k<arr.length;k++) s+=arr[k]; return s; }
+
+  function row(label, arr, cls, opts){
+    opts = opts || {};
+    var cells = '<th scope="row">'+label+'</th>';
+    for(w=0; w<WEEKS; w++){
+      var v = arr[w];
+      var cellCls = "";
+      if(opts.shortIf && opts.shortIf[w]) cellCls = ' class="short"';
+      cells += '<td'+cellCls+'>'+ (v===null||v===undefined ? "—" : money(v)) +'</td>';
+    }
+    var tot = opts.noTotal ? "—" : money(sumRow(arr));
+    cells += '<td>'+tot+'</td>';
+    return '<tr class="'+(cls||"")+'">'+cells+'</tr>';
+  }
+
+  var body = row("Opening balance", fc.openingBase, "", {noTotal:true});
+
+  fc.receiptCats.forEach(function(cat){
+    body += row(cat, fc.receiptsByCat[cat], "cat");
+  });
+  body += row("Total receipts", fc.totalReceipts, "subtotal");
+
+  fc.paymentCats.forEach(function(cat){
+    body += row(cat, fc.paymentsByCat[cat], "cat");
+  });
+  body += row("Total payments", fc.totalPayments, "subtotal");
+
+  body += row("Net movement", fc.net, "net");
+  body += row("Closing balance — on time (best case)", fc.closingBase, "closing", {shortIf:fc.flagged});
+
+  // status row
+  var statusCells = '<th scope="row">Status</th>';
+  for(w=0; w<WEEKS; w++){
+    statusCells += '<td>'+ fmtChip(fc.flagged[w]) +'</td>';
+  }
+  statusCells += '<td>—</td>';
+  body += '<tr class="status">'+statusCells+'</tr>';
+
+  body += row("Closing balance — worst case (+"+ (Number(state.delayDays)||0) +"d receipts)", fc.closingWorst, "worst", {shortIf: fc.closingWorst.map(function(v){return v<fc.minBal;})});
+
+  // actual row (editable inputs)
+  var actualCells = '<th scope="row">Actual closing balance</th>';
+  for(w=1; w<=WEEKS; w++){
+    var av = state.actuals[String(w)];
+    var val = (av===undefined||av===null) ? "" : av;
+    actualCells += '<td><input id="ac-'+w+'" type="number" step="0.01" value="'+escAttr(String(val))+'" data-actual="'+w+'" aria-label="Actual closing balance week '+w+'" placeholder="—"></td>';
+  }
+  actualCells += '<td>—</td>';
+  body += '<tr class="actualrow">'+actualCells+'</tr>';
+
+  // variance row
+  var varCells = '<th scope="row">Variance (actual − forecast)</th>';
+  var varSum = 0, varCount=0;
+  for(w=0; w<WEEKS; w++){
+    var vv = fc.variance[w];
+    if(vv===null){ varCells += '<td class="novar">—</td>'; }
+    else{
+      varSum += vv; varCount++;
+      var cls = vv<0 ? ' class="short"' : '';
+      varCells += '<td'+cls+'>'+ (vv>=0?"+":"") + money(vv) +'</td>';
+    }
+  }
+  varCells += '<td>'+ (varCount? ((varSum>=0?"+":"")+money(varSum)) : "—") +'</td>';
+  body += '<tr>'+varCells+'</tr>';
+
+  els.fcTable.innerHTML = '<thead><tr>'+headCells+'</tr></thead><tbody>'+body+'</tbody>';
+}
+
+function renderStats(fc){
+  var w1 = state.startDate ? weekDate(1) : null;
+  var w13 = state.startDate ? weekDate(13) : null;
+
+  if(fc.firstShort > 0){
+    els.heroK.textContent = "First week short";
+    els.heroV.textContent = "Week " + fc.firstShort;
+    els.heroSub.textContent = "Balance falls to " + money(fc.closingBase[fc.firstShort-1]) + " — " +
+      money(fc.shortfall[fc.firstShort-1]) + " under your " + money(fc.minBal) + " minimum.";
+  } else {
+    els.heroK.textContent = "First week short";
+    els.heroV.textContent = "None";
+    els.heroSub.textContent = "Balance stays at or above your " + money(fc.minBal) + " minimum through all 13 weeks.";
+  }
+
+  els.statLow.textContent = money(fc.closingBase[fc.lowestIdx]);
+  els.statLowSub.textContent = "in Week " + (fc.lowestIdx+1);
+
+  if(fc.firstShortWorst > 0){
+    els.statWorst.textContent = "Week " + fc.firstShortWorst;
+    els.statWorstSub.textContent = "closing " + money(fc.closingWorst[fc.firstShortWorst-1]);
+  } else {
+    els.statWorst.textContent = "None";
+    els.statWorstSub.textContent = "stays clear even with the delay";
+  }
+
+  var scen;
+  if(fc.firstShort>0 && fc.firstShortWorst>0 && fc.firstShortWorst < fc.firstShort){
+    scen = "Delaying receipts by " + (Number(state.delayDays)||0) + " days pulls the first shortfall forward from Week " + fc.firstShort + " to Week " + fc.firstShortWorst + ".";
+  } else if(fc.firstShort===-1 && fc.firstShortWorst>0){
+    scen = "On time, cash never dips below minimum — but a " + (Number(state.delayDays)||0) + "-day receipt delay would cause a shortfall in Week " + fc.firstShortWorst + ".";
+  } else if(fc.firstShort>0 && fc.firstShortWorst===-1){
+    scen = "Odd result: check your figures — the worst case should not be healthier than the base forecast.";
+  } else if(fc.firstShort===-1 && fc.firstShortWorst===-1){
+    scen = "Cash stays above minimum in both the on-time and delayed-receipts scenarios across all 13 weeks.";
+  } else {
+    scen = "The shortfall week is unchanged by the receipt delay you've configured.";
+  }
+  els.scenLine.textContent = scen;
+
+  // print header
+  var symbol = currencySymbol();
+  els.pdTitle.textContent = (state.biz ? state.biz + " — " : "") + "13-Week Cash Flow Forecast";
+  var range = (w1 && w13) ? (w1.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) + " to " + w13.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})) : "";
+  els.pdSub.textContent = [
+    range ? ("Forecast period: " + range) : "",
+    "Currency: " + symbol,
+    state.prepared ? ("Prepared by: " + state.prepared) : "",
+    "Generated: " + new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})
+  ].filter(Boolean).join("  ·  ");
+}
+
+function render(){
+  var f = captureFocus();
+  var fc = computeForecast();
+  renderSetupInputs();
+  renderItems();
+  renderMatrix(fc);
+  renderStats(fc);
+  restoreFocus(f);
+}
+
+function escAttr(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ---------- validation ---------- */
+function validateSetup(){
+  var ok = true;
+  if(!isFinite(Number(els.inOpen.value))){
+    els.inOpen.classList.add("inv"); els.errOpen.hidden=false; els.errOpen.textContent="Enter a number."; ok=false;
+  } else { els.inOpen.classList.remove("inv"); els.errOpen.hidden=true; }
+
+  var mv = Number(els.inMin.value);
+  if(!isFinite(mv) || mv<0){
+    els.inMin.classList.add("inv"); els.errMin.hidden=false; els.errMin.textContent="Enter 0 or more."; ok=false;
+  } else { els.inMin.classList.remove("inv"); els.errMin.hidden=true; }
+
+  var dv = Number(els.inDelay.value);
+  if(!isFinite(dv) || dv<0){
+    els.inDelay.classList.add("inv"); els.errDelay.hidden=false; els.errDelay.textContent="Enter 0 or more."; ok=false;
+  } else { els.inDelay.classList.remove("inv"); els.errDelay.hidden=true; }
+  return ok;
+}
+
+/* ---------- events ---------- */
+els.inBiz.addEventListener("input", function(){ state.biz = els.inBiz.value; save(); render(); });
+els.inPrep.addEventListener("input", function(){ state.prepared = els.inPrep.value; save(); render(); });
+els.inStart.addEventListener("input", function(){ state.startDate = els.inStart.value || todayISO(); save(); render(); });
+els.inCurSel.addEventListener("change", function(){
+  state.curChoice = els.inCurSel.value;
+  save(); render();
+});
+els.inCurCustom.addEventListener("input", function(){ state.curCustom = els.inCurCustom.value; save(); render(); });
+
+els.inOpen.addEventListener("input", function(){ state.opening = Number(els.inOpen.value)||0; save(); render(); });
+els.inOpen.addEventListener("blur", validateSetup);
+els.inMin.addEventListener("input", function(){ state.minBalance = Number(els.inMin.value)||0; save(); render(); });
+els.inMin.addEventListener("blur", validateSetup);
+els.inDelay.addEventListener("input", function(){ state.delayDays = Number(els.inDelay.value)||0; save(); render(); });
+els.inDelay.addEventListener("blur", validateSetup);
+
+document.getElementById("btnAddItem").addEventListener("click", function(){
+  var it = { id: uid(), name: "New item", type: "receipt", category: "", freq: "once", week: 1, amount: 0 };
+  state.items.push(it);
+  save(); render();
+  var el = document.getElementById("nm-"+it.id);
+  if(el){ el.focus(); el.select(); }
+});
+
+els.itemsBody.addEventListener("input", function(e){
+  var t = e.target;
+  var tr = t.closest("tr[data-id]");
+  if(!tr) return;
+  var id = tr.getAttribute("data-id");
+  var it = state.items.find(function(x){ return x.id===id; });
+  if(!it) return;
+  var f = t.getAttribute("data-f");
+  if(f==="name") it.name = t.value;
+  else if(f==="category") it.category = t.value;
+  else if(f==="type") it.type = (t.value==="payment") ? "payment" : "receipt";
+  else if(f==="freq") it.freq = FREQ_INTERVAL.hasOwnProperty(t.value) ? t.value : "once";
+  else if(f==="week") it.week = Number(t.value)||1;
+  else if(f==="amount") it.amount = Number(t.value)||0;
+  save(); render();
+});
+els.itemsBody.addEventListener("change", function(e){
+  var t = e.target;
+  if(t.getAttribute("data-f")==="type" || t.getAttribute("data-f")==="freq"){
+    // already applied on input above for selects; nothing extra needed
+  }
+});
+els.itemsBody.addEventListener("blur", function(e){
+  var t = e.target;
+  if(t.getAttribute("data-f")==="week"){
+    var tr = t.closest("tr[data-id]");
+    var id = tr && tr.getAttribute("data-id");
+    var it = state.items.find(function(x){ return x.id===id; });
+    if(it){ it.week = clampNum(t.value,1,WEEKS,1); save(); render(); }
+  }
+  if(t.getAttribute("data-f")==="amount"){
+    var tr2 = t.closest("tr[data-id]");
+    var id2 = tr2 && tr2.getAttribute("data-id");
+    var it2 = state.items.find(function(x){ return x.id===id2; });
+    if(it2){ it2.amount = Math.max(0, round2(Number(t.value)||0)); save(); render(); }
+  }
+}, true);
+
+els.itemsBody.addEventListener("click", function(e){
+  var btn = e.target.closest("button[data-del]");
+  if(!btn) return;
+  var id = btn.getAttribute("data-del");
+  state.items = state.items.filter(function(x){ return x.id!==id; });
+  save(); render();
+});
+
+els.fcTable.addEventListener("input", function(e){
+  var t = e.target;
+  var wk = t.getAttribute("data-actual");
+  if(!wk) return;
+  if(t.value === ""){ delete state.actuals[wk]; }
+  else { state.actuals[wk] = Number(t.value); }
+  save(); render();
+});
+els.fcTable.addEventListener("blur", function(e){
+  var t = e.target;
+  var wk = t.getAttribute("data-actual");
+  if(!wk) return;
+  if(t.value !== "" && !isFinite(Number(t.value))){
+    delete state.actuals[wk]; save(); render();
+  }
+}, true);
+
+document.getElementById("btnClear").addEventListener("click", function(){
+  if(window.confirm("This clears your entered figures and restores the sample forecast. Continue?")){
+    state = defaultState();
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    save(); render();
+  }
+});
+
+document.getElementById("btnPrint").addEventListener("click", function(){ window.print(); });
+
+/* ---------- CSV export ---------- */
+function csvField(v){
+  v = String(v==null?"":v);
+  if(/[",\n\r]/.test(v)){ v = '"' + v.replace(/"/g,'""') + '"'; }
+  return v;
+}
+function downloadBlob(content, mime, filename){
+  var blob = new Blob([content], {type: mime});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 250);
+}
+function slugName(){
+  var base = (state.biz || "cash-flow-forecast").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+  return base || "cash-flow-forecast";
+}
+
+document.getElementById("btnCsv").addEventListener("click", function(){
+  var fc = computeForecast();
+  var lines = [];
+  var header = ["Row"];
+  for(var w=1; w<=WEEKS; w++) header.push("Week "+w+" ("+weekDateLabel(w)+")");
+  header.push("13-week total");
+  lines.push(header.map(csvField).join(","));
+
+  function addRow(label, arr, total){
+    var row = [label];
+    for(var i=0;i<WEEKS;i++) row.push(arr[i]===null||arr[i]===undefined ? "" : plainNum(arr[i]));
+    row.push(total===undefined ? "" : plainNum(total));
+    lines.push(row.map(csvField).join(","));
+  }
+  function sum(arr){ var s=0; for(var i=0;i<arr.length;i++) s+= (arr[i]||0); return s; }
+
+  addRow("Opening balance", fc.openingBase);
+  fc.receiptCats.forEach(function(cat){ addRow(cat+" (receipt)", fc.receiptsByCat[cat], sum(fc.receiptsByCat[cat])); });
+  addRow("Total receipts", fc.totalReceipts, sum(fc.totalReceipts));
+  fc.paymentCats.forEach(function(cat){ addRow(cat+" (payment)", fc.paymentsByCat[cat], sum(fc.paymentsByCat[cat])); });
+  addRow("Total payments", fc.totalPayments, sum(fc.totalPayments));
+  addRow("Net movement", fc.net, sum(fc.net));
+  addRow("Closing balance - on time (best case)", fc.closingBase);
+  var statusRow = ["Status"];
+  for(var s=0;s<WEEKS;s++) statusRow.push(fc.flagged[s] ? "SHORT" : "OK");
+  statusRow.push("");
+  lines.push(statusRow.map(csvField).join(","));
+  addRow("Closing balance - worst case (+"+(Number(state.delayDays)||0)+"d)", fc.closingWorst);
+  var actualRow = ["Actual closing balance"];
+  for(var a=0;a<WEEKS;a++){ var v=fc.actualClosing[a]; actualRow.push(v===null?"":plainNum(v)); }
+  actualRow.push("");
+  lines.push(actualRow.map(csvField).join(","));
+  var varRow = ["Variance (actual - forecast)"];
+  var vs=0, vc=0;
+  for(var vv=0;vv<WEEKS;vv++){ var x=fc.variance[vv]; if(x===null) varRow.push(""); else { varRow.push(plainNum(x)); vs+=x; vc++; } }
+  varRow.push(vc? plainNum(vs) : "");
+  lines.push(varRow.map(csvField).join(","));
+
+  var csv = "﻿" + lines.join("\r\n") + "\r\n";
+  downloadBlob(csv, "text/csv;charset=utf-8", slugName()+"-13wk-cashflow.csv");
+});
+
+/* ---------- JSON export/import ---------- */
+document.getElementById("btnJson").addEventListener("click", function(){
+  var json = JSON.stringify(state, null, 2);
+  downloadBlob(json, "application/json", slugName()+"-13wk-cashflow.json");
+});
+document.getElementById("btnImport").addEventListener("click", function(){
+  document.getElementById("fileImport").click();
+});
+document.getElementById("fileImport").addEventListener("change", function(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(){
+    try{
+      var parsed = JSON.parse(String(reader.result));
+      var d = defaultState();
+      state = {
+        biz: typeof parsed.biz === "string" ? parsed.biz : d.biz,
+        prepared: typeof parsed.prepared === "string" ? parsed.prepared : d.prepared,
+        startDate: typeof parsed.startDate === "string" ? parsed.startDate : d.startDate,
+        curChoice: typeof parsed.curChoice === "string" ? parsed.curChoice : d.curChoice,
+        curCustom: typeof parsed.curCustom === "string" ? parsed.curCustom : d.curCustom,
+        opening: isFinite(Number(parsed.opening)) ? Number(parsed.opening) : d.opening,
+        minBalance: isFinite(Number(parsed.minBalance)) ? Number(parsed.minBalance) : d.minBalance,
+        delayDays: isFinite(Number(parsed.delayDays)) ? Number(parsed.delayDays) : d.delayDays,
+        items: Array.isArray(parsed.items) ? parsed.items.map(sanitizeItem) : d.items,
+        actuals: (parsed.actuals && typeof parsed.actuals === "object") ? parsed.actuals : {}
+      };
+      save(); render();
+      var m = document.getElementById("importMsg");
+      m.hidden = true; m.textContent = "";
+    }catch(err){
+      var msg = document.getElementById("importMsg");
+      msg.textContent = "That file could not be read as a saved forecast — it isn't valid JSON from this tool.";
+      msg.hidden = false;
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+
+/* ---------- init ---------- */
+load();
+render();
+})();
+</script>
+</body>
+</html>
