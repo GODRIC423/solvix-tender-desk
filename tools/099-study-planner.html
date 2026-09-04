@@ -168,6 +168,8 @@ table input:focus,table select:focus{background:var(--raise)}
 
 /* ══ tool-specific ══════════════════════════════════════════════ */
 .split>*{min-width:0}
+.stack{min-width:0}
+.stack>*{min-width:0}
 @media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.split>.results{order:-1}}
 
 .daychecks{display:flex;flex-wrap:wrap;gap:6px}
@@ -215,6 +217,7 @@ select.sm-inline{width:auto;display:inline-block}
 </style>
 </head>
 <body>
+<div class="app">
 <div class="appbar noprint">
   <div class="brand">
     <div class="mark">SP</div>
@@ -234,11 +237,9 @@ select.sm-inline{width:auto;display:inline-block}
   </div>
 </div>
 
-<div class="app">
-
   <div class="printonly" id="printBlock"></div>
 
-  <div class="grid" style="margin:14px 0">
+  <div class="grid noprint" style="margin:14px 0">
     <div class="note" id="topNote">
       <strong>How this works:</strong> add your subjects, topics and exam dates below. Each topic is scored by
       <strong>importance × how unsure you are</strong>, and gets revisited at expanding gaps of 1, 3, 7, 14 then 30 days
@@ -248,7 +249,7 @@ select.sm-inline{width:auto;display:inline-block}
     </div>
   </div>
 
-  <div class="split">
+  <div class="split noprint">
     <div class="stack">
       <div class="card">
         <div class="hd"><h2>Study settings</h2></div>
@@ -332,7 +333,7 @@ select.sm-inline{width:auto;display:inline-block}
     </div>
   </div>
 
-  <div class="card" style="margin-top:14px">
+  <div class="card noprint" style="margin-top:14px">
     <div class="hd">
       <h2>Full timetable</h2>
       <span class="hint" id="tableRange"></span>
@@ -644,6 +645,27 @@ function renderHero(plan){
 function renderToday(plan){
   var t0iso=toISO(plan.start);
   var rows=plan.rows.filter(function(r){return r.date===t0iso;});
+
+  /* A topic marked done today advances past "due" in the fresh simulation above and
+     drops out of `rows` — surface it anyway (struck through, with Undo) so completing
+     a session never makes it silently vanish from the list. */
+  var seenTopicIds={};
+  rows.forEach(function(r){ seenTopicIds[r.topicId]=true; });
+  state.subjects.forEach(function(subj){
+    (subj.topics||[]).forEach(function(t){
+      if(t.lastDone===t0iso && !seenTopicIds[t.id]){
+        rows.push({
+          date:t0iso, subject:subj.name||"Untitled subject", topic:t.name||"Untitled topic",
+          sessionLen:Math.max(1,clean(+state.settings.sessionLen,40)),
+          confidence:Math.min(5,Math.max(1,clean(+t.confidence,3))),
+          importance:Math.min(5,Math.max(1,clean(+t.importance,3))),
+          topicId:t.id, subjectId:subj.id, completedExtra:true
+        });
+        seenTopicIds[t.id]=true;
+      }
+    });
+  });
+
   q("todayDateLbl").textContent = fmtShort(plan.start);
   q("statToday").textContent = rows.length;
   q("statTodaySlots").textContent = plan.slots>0? plan.slots : "0";

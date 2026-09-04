@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Inventory Par Level Sheet — count against par, order by supplier</title>
-<meta name="description" content="Set a par level and pack size for every product, enter what is actually on the shelf, and get the order — rounded up to whole packs and grouped into one order per supplier, with a minimum-order-value warning and a flag on products whose usage suggests the par is set too low or too high. Saves in your browser, prints a purchase order per supplier, exports CSV and JSON.">
+<title>Inventory Par Level Sheet — Solvix Toolkit</title>
+<meta name="description" content="Set par levels and current counts per product and get the reorder grouped by supplier: order quantity rounded up to whole packs, order value per supplier, a minimum-order-value warning, and a flag for products that repeatedly run out or repeatedly overstock. Print per-supplier orders, export CSV, autosaves in the browser.">
 <meta name="theme-color" content="#A8434F">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Crect x='7' y='7' width='7' height='7' rx='1.3' fill='none' stroke='%23fff' stroke-width='1.9'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1.3' fill='none' stroke='%23fff' stroke-width='1.9' opacity='.55'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1.3' fill='none' stroke='%23fff' stroke-width='1.9' opacity='.55'/%3E%3Cpath d='M19.5 25.2l2.3 2.3 4.2-4.6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Crect x='7' y='16' width='4' height='9' fill='%23fff'/%3E%3Crect x='14' y='9' width='4' height='16' fill='%23fff'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%23fff'/%3E%3Cline x1='5' y1='12' x2='27' y2='12' stroke='%23fff' stroke-width='1.6' stroke-dasharray='2,2'/%3E%3C/svg%3E">
 <style>
 /* ══ Solvix Toolkit — shared design system ══════════════════════════
    Inline this whole block in every tool. System fonts only: the tools
@@ -166,913 +166,798 @@ table input:focus,table select:focus{background:var(--raise)}
 .printonly{display:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* ══ Inventory Par Level Sheet — Retail & Hospitality ═══════════════ */
+/* ══ tool-specific ══════════════════════════════════════════════════ */
 :root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}}
-:root[data-theme="dark"]{
-  --accent:#C26671;--accent-ink:#D18A93;--accent-wash:#2E1519;--on-accent:#140A0C}
+  --accent:#E1808C;--accent-ink:#EFA9B1;--accent-wash:#3A1519;--on-accent:#210A0C;
+}}
+:root[data-theme="dark"]{--accent:#E1808C;--accent-ink:#EFA9B1;--accent-wash:#3A1519;--on-accent:#210A0C}
 
-.app{max-width:1280px}
-[hidden]{display:none!important}
+.split>div{min-width:0}
+.stack{min-width:0}
+.stack>*{min-width:0}
+
+.mbar{display:none}
+@media(max-width:900px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,58px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 10px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 19px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+}
+
+.curRow{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:end}
+#curCustom{max-width:64px}
+.rmCell{width:34px;text-align:center}
+.tbl-suppliers th:nth-child(1),.tbl-suppliers td:nth-child(1){min-width:150px}
+.tbl-products th,.tbl-products td{white-space:nowrap}
+.tbl-products th:nth-child(2),.tbl-products td:nth-child(2){min-width:150px;white-space:normal}
+.tbl-products th:nth-child(9),.tbl-products td:nth-child(9){min-width:110px;white-space:normal}
+.tbl-products input[type=number]{min-width:58px}
+.tbl-products select{min-width:118px}
+.addRowBar{padding:9px var(--pad);border-top:1px solid var(--line)}
+.sBanner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.subgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.poCard .hd{gap:8px 10px}
+.poCard .hd h3{margin-right:auto}
+.poMeta{font:12px/1.4 var(--sans);color:var(--muted)}
+.poNone{padding:14px var(--pad);color:var(--muted);font-size:13.5px}
+.flagList{display:flex;flex-direction:column;gap:8px}
+.flagRow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;font-size:13.5px;
+  border-bottom:1px dotted var(--line);padding-bottom:8px}
+.flagRow:last-child{border-bottom:0;padding-bottom:0}
+.flagRow .nm{font-weight:600}
+.flagRow .why{color:var(--muted);font-size:12.5px;margin-top:1px}
+.docHead{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:10px}
+.docHead h2{font-size:17px}
+.docHead .r{text-align:right}
+.vh{position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* fix: wide tables inside flex/grid ancestors must be free to shrink so
+   .tw's own overflow-x:auto can scroll them, instead of stretching the
+   whole page past the viewport */
 .split>*,.stack>*,.grid>*{min-width:0}
+.tw{max-width:100%}
 
-.top{position:sticky;top:0;z-index:45;background:var(--surface);border-bottom:1px solid var(--line-hard)}
-.top .appbar{position:static;margin:0 auto;max-width:1280px;padding-left:clamp(10px,2vw,22px);
-  padding-right:clamp(10px,2vw,22px)}
-.hband{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:1px;max-width:1280px;margin:0 auto;
-  background:var(--line);border-top:1px solid var(--line)}
-.hband .hs{background:var(--surface);padding:7px clamp(10px,2vw,22px) 8px;min-width:0}
-.hband .hs:not(:first-child){padding-left:12px;padding-right:12px}
-.hband .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hband .v{font:700 21px/1.15 var(--mono);letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hband .s{font:400 11px/1.3 var(--sans);color:var(--muted);margin-top:2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hband .hs.hero{background:var(--accent-wash)}
-.hband .hs.hero .k{color:var(--accent-ink)}
-.hband .hs.hero .v{font-size:27px;color:var(--accent-ink)}
-.hband .hs.hero .s{color:var(--accent-ink);opacity:.85}
-.hband .v.bad{color:var(--bad)!important}
-.hband .v.warn{color:var(--warn)!important}
-@media(max-width:600px){
-  .hideSm{display:none}
-  .appbar .btn{font-size:12.5px;padding:8px 10px}
-  .appbar{padding-top:9px;padding-bottom:9px;gap:8px}
-}
-@media(max-width:820px){
-  .hband{grid-template-columns:1.3fr 1fr}
-  .hband .hs:nth-child(n+3){display:none}
-  .hband .hs.hero .v{font-size:22px} .hband .v{font-size:17px}
-}
-
-.wrap{padding-top:14px}
-.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
-.span2{grid-column:span 2}
-@media(max-width:560px){.span2{grid-column:span 1}.fgrid{grid-template-columns:1fr}}
-.card+.card,.note+.card,.card+.note,.note+.note{margin-top:14px}
-
-/* sample banner */
-.sample{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px;
-  border:1px dashed var(--line-hard);background:var(--sunk);border-radius:4px;padding:8px 12px;margin-bottom:14px}
-.sample b{font-weight:650}
-.sample .btn{margin-left:auto}
-
-/* suppliers table */
-#supTbl{font-size:13.5px}
-#supTbl td,#supTbl th{padding:6px 8px}
-#supTbl input{font-size:13.5px}
-#supTbl .x{width:30px;text-align:center}
-#supTbl td.n{background:var(--sunk)}
-
-/* products table */
-#tbl{font-size:13px;min-width:1140px}
-#tbl th{padding:6px 5px;font-size:9.5px;letter-spacing:.04em}
-#tbl td{padding:4px 4px;border-bottom:1px solid var(--line)}
-#tbl th[scope=row]{padding:4px 5px;font:inherit;letter-spacing:0;text-transform:none;
-  color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line);white-space:normal;vertical-align:middle;min-width:150px}
-#tbl input,#tbl select{padding:4px 5px;font-size:13px}
-#tbl input[type=number]{-moz-appearance:textfield;appearance:textfield}
-#tbl input[type=number]::-webkit-outer-spin-button,#tbl input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-#tbl input[type=text]{text-align:left;font-family:var(--sans)}
-#tbl td.c{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;background:var(--sunk)}
-#tbl td.c.k{background:var(--accent-wash);font-weight:650}
-#tbl td.x{width:30px;text-align:center;background:var(--surface)}
-#tbl tfoot td{padding:7px 5px;font-size:12.5px}
-#tbl .e{display:block;font:10.5px/1.3 var(--sans);color:var(--bad);text-align:right;margin-top:1px}
-#tbl th[scope=row],#tbl thead th:first-child,#tbl tfoot td:first-child{position:sticky;left:0;z-index:2;
-  border-right:1px solid var(--line)}
-#tbl thead th:first-child{z-index:3;background:var(--sunk)}
-#tbl tfoot td:first-child{background:var(--sunk)}
-#tbl tbody tr:hover th[scope=row],#tbl tbody tr:hover td{background:var(--accent-wash)}
-#tbl tbody tr:hover td.x{background:var(--accent-wash)}
-#tbl tr.f-bad th[scope=row]{box-shadow:inset 3px 0 0 var(--bad)}
-#tbl tr.f-warn th[scope=row]{box-shadow:inset 3px 0 0 var(--warn)}
-#tbl tr.f-ok th[scope=row]{box-shadow:inset 3px 0 0 var(--ok)}
-.w4{width:42px} .w5{width:50px} .w6{width:62px} .w7{width:70px} .w9{width:106px}
-#tbl input.w4,#tbl input.w5,#tbl input.w6,#tbl input.w7{min-width:0}
-.rowbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted)}
-.legend b{color:var(--ink-2);font-weight:650}
-
-.mini{width:100%;font-size:13px}
-.mini thead th{font-size:9.5px;padding:6px 8px}
-.mini td{padding:5px 8px}
-.mini th[scope=row]{font:500 13px/1.4 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink-2);
-  background:transparent;white-space:normal;padding:5px 8px;border-bottom:1px solid var(--line)}
-.mini th[scope=row] b{color:var(--ink);font-weight:650}
-.empty2{padding:16px;text-align:center;color:var(--muted);font-size:13px}
-
-/* ══ printed document ═══════════════════════════════════════════ */
-.doc{color:#000;font-family:var(--sans)}
-.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
-  border-bottom:1.5pt solid #000;padding-bottom:5pt;margin-bottom:7pt}
-.doc .lh .bz{font-size:13pt;font-weight:700;letter-spacing:-.01em}
-.doc .lh .ad{font-size:8.6pt;color:#333;margin-top:2pt;white-space:pre-line}
-.doc .lh .ttl{text-align:right;flex:none}
-.doc .lh h2{font-size:12pt;letter-spacing:.03em}
-.doc .lh .dt{font-family:var(--mono);font-size:9.2pt;margin-top:3pt;font-weight:700}
-.doc .lh .rf{font-family:var(--mono);font-size:8.2pt;color:#333;margin-top:2pt}
-.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:8pt}
-.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:21pt}
-.doc .meta b{display:block;font-size:6.6pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
-.doc .meta span{font-size:10pt;font-family:var(--mono);font-weight:700}
-.doc .meta span.sm{font-size:8.4pt;font-family:var(--sans);font-weight:400}
-.doc .hero{border:1.5pt solid #000;padding:5pt 7pt;margin-bottom:8pt;display:flex;
-  justify-content:space-between;gap:12pt;align-items:flex-end}
-.doc .hero b.t{display:block;font-size:7.4pt;letter-spacing:.09em;text-transform:uppercase;margin-bottom:2pt}
-.doc .hero .big{font-size:16pt;font-weight:700;font-family:var(--mono);line-height:1.1}
-.doc .hero .sm{font-size:8pt;line-height:1.4;text-align:right}
-.doc .dnote{border:1pt solid #000;padding:5pt 7pt;font-size:8.2pt;line-height:1.42;margin-top:8pt}
-.doc .dnote b{display:block;font-size:8pt;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2pt}
-.doc h3.sec{font-size:8.4pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 3pt;
-  border-bottom:.75pt solid #000;padding-bottom:1.5pt}
-.doc table{width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:3pt;table-layout:fixed}
-.doc thead{display:table-header-group} .doc tfoot{display:table-row-group}
-.doc th,.doc td{border:.75pt solid #999;padding:2.4pt 3.4pt;text-align:left;vertical-align:top;word-wrap:break-word}
-.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
-  font-size:6.8pt;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#000}
-.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
-.doc td.c,.doc th.c{text-align:center}
-.doc tfoot td{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
-.doc .kvp{display:flex;justify-content:space-between;gap:8pt;font-size:8.4pt;padding:1.6pt 0;border-bottom:.5pt dotted #bbb}
-.doc .kvp b{font-family:var(--mono)}
-.doc .kvp.tt{border-bottom:0;border-top:1pt solid #000;margin-top:2pt;padding-top:3pt;font-weight:700}
-.doc .basis{font-size:7.4pt;line-height:1.42;color:#222;margin-top:4pt}
-.doc .sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14pt;margin-top:12pt}
-.doc .sign div{border-top:.75pt solid #000;padding-top:2.5pt;font-size:7.4pt;letter-spacing:.06em;text-transform:uppercase;color:#333}
-.doc .sign div u{display:block;height:16pt;text-decoration:none}
-.doc .foot{margin-top:9pt;border-top:.75pt solid #999;padding-top:3pt;font-size:7pt;color:#444;
-  display:flex;justify-content:space-between;gap:10pt}
-.doc .smpl{font-size:8pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-  border:1pt dashed #000;padding:2pt 5pt;display:inline-block;margin-bottom:6pt}
-.doc .chipd{display:inline-block;font-size:7pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  padding:1.5pt 4pt;border:.75pt solid #000}
-@media print{ .top,.wrap,footer.app{display:none!important}
-  .doc{display:block!important} .breakb{break-before:page} }
+/* overflow fixes: .appbar sits outside .app here so the kit's negative bleed
+   margins pushed past the viewport; grid/flex children need min-width:0 before
+   they will shrink below max-content; and visually-hidden .sr elements need a
+   left/top anchor or they resolve after wide content and drag the page out. */
+.appbar{margin-left:0!important;margin-right:0!important}
+.split>*,.stack>*,.grid>*{min-width:0}
+.tw{min-width:0;max-width:100%}
+.sr,.sr-only,.vh,.visually-hidden{position:absolute!important;left:0!important;top:0!important;
+  width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;
+  overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;
+  white-space:nowrap!important;border:0!important}
 </style>
 </head>
 <body>
 
-<div class="top">
-<header class="appbar">
+<header class="appbar" id="appbar">
   <div class="brand">
-    <div class="mark" aria-hidden="true">PL</div>
-    <div>
+    <span class="mark">079</span>
+    <div style="min-width:0">
       <h1>Inventory Par Level Sheet</h1>
-      <div class="sub">PAR · COUNT · ORDER · SUPPLIER</div>
+      <div class="sub">RETAIL &amp; HOSPITALITY · REORDER FROM PAR</div>
     </div>
   </div>
-  <div class="row">
-    <button type="button" class="btn pri" id="bPrint">Print<span class="hideSm"> orders</span></button>
-    <button type="button" class="btn" id="bCsv">CSV</button>
-    <button type="button" class="btn" id="bJson">JSON</button>
-    <button type="button" class="btn" id="bImport">Import</button>
-    <button type="button" class="btn dgr" id="bClear" aria-label="Clear all data">Clear<span class="hideSm"> all data</span></button>
-    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrint">🖨 Print orders</button>
+    <button type="button" class="btn" id="btnCsv">⬇ CSV</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
   </div>
 </header>
-<div class="hband" id="hband">
-  <div class="hs hero">
-    <div class="k">Total order value</div>
-    <div class="v" id="hTot">—</div>
-    <div class="s" id="hTotSub">—</div>
+
+<div class="app">
+
+  <div class="mbar noprint" id="mbar">
+    <span class="k">Total order</span>
+    <span class="v" id="mbarV">—</span>
   </div>
-  <div class="hs"><div class="k">Suppliers to order</div><div class="v" id="hSup">—</div><div class="s" id="hSupSub">—</div></div>
-  <div class="hs"><div class="k">Below minimum</div><div class="v" id="hMin">—</div><div class="s" id="hMinSub">—</div></div>
-  <div class="hs"><div class="k">Stockout risk</div><div class="v" id="hRisk">—</div><div class="s" id="hRiskSub">—</div></div>
-  <div class="hs"><div class="k">Overstocked</div><div class="v" id="hOver">—</div><div class="s" id="hOverSub">—</div></div>
-</div>
-</div>
 
-<main class="app wrap">
+  <div class="split">
 
-<div class="sample" id="sampleBar">
-  <b>Sample par sheet loaded</b>
-  <span class="hint">A weekly count for a demo café/bar, so you can see the ordering logic working. Replace it with your own.</span>
-  <button type="button" class="btn sm" id="bBlank">Start a blank sheet</button>
-</div>
+    <!-- ── inputs ── -->
+    <div class="stack noprint">
 
-<div class="split">
-  <section class="card">
-    <div class="hd"><h2>Sheet details</h2></div>
-    <div class="bd stack">
-      <div class="fgrid">
-        <div class="f span2"><label for="bizName">Business</label><input id="bizName" type="text" autocomplete="organization"></div>
-        <div class="f"><label for="ref">Sheet reference</label><input id="ref" type="text"></div>
+      <div class="card" id="sampleBanner">
+        <div class="bd sBanner">
+          <div><strong>Sample data loaded.</strong> <span class="hint">This is a worked example — edit any field to use your own stock sheet, or clear it below.</span></div>
+        </div>
       </div>
-      <div class="fgrid">
-        <div class="f span2"><label for="bizAddr">Address</label><textarea id="bizAddr" rows="3" style="min-height:64px"></textarea></div>
-        <div class="f"><label for="orderDate">Order date</label><input id="orderDate" type="date"></div>
-        <div class="f"><label for="orderedBy">Ordered by</label><input id="orderedBy" type="text"></div>
-      </div>
-      <div class="fgrid">
-        <div class="f"><label for="interval">Days since last count</label><input id="interval" type="number" min="1" step="1" inputmode="numeric">
-          <span class="err" id="eInterval" hidden></span></div>
-        <div class="f"><label for="cur">Currency</label>
-          <select id="cur"><option value="£">£ Pound</option><option value="$">$ Dollar</option><option value="€">€ Euro</option><option value="custom">Custom symbol</option></select></div>
-        <div class="f" id="curCWrap" hidden><label for="curC">Custom symbol</label><input id="curC" type="text" maxlength="4"></div>
-      </div>
-      <p class="hint">Usage rate for every product is worked out from the change between the previous count and this one, over
-        the number of days you set above. Order quantity = par level minus current count, rounded <b>up</b> to whole packs.</p>
-    </div>
-  </section>
 
-  <section class="card sticky" id="resCard">
-    <div class="hd"><h2>Orders by supplier</h2><span class="chip" id="cStatus">—</span></div>
-    <div class="bd stack">
-      <div class="stat hero"><div class="k">Total order value</div><div class="v" id="sTot">—</div><div class="u" id="sTotU">—</div></div>
-      <div class="tw">
-        <table class="mini" id="supSum">
-          <thead><tr><th scope="col">Supplier</th><th scope="col" class="n">Lines</th><th scope="col" class="n">Order value</th>
-            <th scope="col" class="n">Minimum</th><th scope="col" class="c">Status</th></tr></thead>
-          <tbody id="supSumB"></tbody>
-        </table>
-      </div>
-      <p class="hint">A supplier below its minimum order value is flagged — add lines, raise par on a product from that
-        supplier, or hold the order until next count.</p>
+      <section class="card">
+        <div class="hd"><h2>Document &amp; currency</h2></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="bizName">Business name</label>
+              <input id="bizName" type="text" autocomplete="off" placeholder="Your business name"></div>
+            <div class="f"><label for="bizPrep">Prepared by</label>
+              <input id="bizPrep" type="text" autocomplete="off" placeholder="Name"></div>
+            <div class="f"><label for="bizDate">Count / order date</label>
+              <input id="bizDate" type="date"></div>
+            <div class="f"><label for="curSel">Currency</label>
+              <div class="curRow">
+                <select id="curSel" style="width:auto">
+                  <option value="$">$ Dollar</option>
+                  <option value="£">£ Pound</option>
+                  <option value="€">€ Euro</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <input id="curCustom" type="text" maxlength="3" placeholder="Kr" style="display:none">
+                <span></span>
+              </div>
+            </div>
+          </div>
+          <p class="hint">The order date stands in for when this sheet was counted — it prints on every supplier order below.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Suppliers</h2><span class="hint">minimum order value, per supplier</span></div>
+        <div class="tw">
+          <table class="tbl-suppliers">
+            <thead><tr>
+              <th scope="col">Supplier</th>
+              <th scope="col" class="r">Min. order value</th>
+              <th scope="col"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="tbSuppliers"></tbody>
+          </table>
+        </div>
+        <div class="addRowBar"><button type="button" class="btn sm" id="btnAddSupplier">+ Add supplier</button></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Products &amp; par levels</h2></div>
+        <div class="tw">
+          <table class="tbl-products">
+            <thead><tr>
+              <th scope="col">Product</th>
+              <th scope="col">Supplier</th>
+              <th scope="col" class="r">Par level</th>
+              <th scope="col" class="r">On hand</th>
+              <th scope="col" class="r">Pack size</th>
+              <th scope="col" class="r">Unit cost</th>
+              <th scope="col" class="r">Lead (d)</th>
+              <th scope="col">Recent counts</th>
+              <th scope="col" class="r">Needed</th>
+              <th scope="col" class="r">Order qty</th>
+              <th scope="col" class="r">Order value</th>
+              <th scope="col">Par check</th>
+              <th scope="col"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="tbProducts"></tbody>
+          </table>
+        </div>
+        <div class="addRowBar"><button type="button" class="btn sm" id="btnAddProduct">+ Add product</button></div>
+        <div class="bd" style="padding-top:0">
+          <p class="hint">Order qty = par level minus on-hand, rounded up to whole packs — never a part-pack. Enter 3–8 recent stock-check counts (comma-separated, e.g. <span class="mono">0, 4, 0, 2</span>) so the tool can flag products that keep hitting zero or that never really get used before the next delivery.</p>
+        </div>
+      </section>
+
     </div>
-  </section>
+
+    <!-- ── results ── -->
+    <div class="stack">
+      <section class="card sticky" id="resCard">
+        <div class="hd"><h2>Reorder now</h2></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k">Total order value</div>
+            <div class="v" id="sTotal">—</div>
+            <div class="u" id="sTotalSub">—</div>
+          </div>
+          <div class="subgrid">
+            <div class="stat"><div class="k">Suppliers below minimum</div><div class="v" id="sBelowMin" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k">Par-level flags</div><div class="v" id="sFlags" style="font-size:18px">—</div></div>
+          </div>
+          <p class="hint" style="margin-top:10px">Based on the counts entered — this tool does not read your till or place orders. Recount the shelf before you actually send these numbers.</p>
+        </div>
+      </section>
+
+      <div class="printonly" id="printHead">
+        <div class="docHead">
+          <div>
+            <h2 id="phBiz">Business name</h2>
+            <div class="poMeta">Purchase orders — generated from shelf counts</div>
+          </div>
+          <div class="r poMeta">
+            <div>Count / order date: <strong id="phDate">—</strong></div>
+            <div>Prepared by: <strong id="phPrep">—</strong></div>
+            <div>Grand total, all suppliers: <strong id="phTotal">—</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack" id="poWrap"></div>
+
+      <section class="card noprint" id="flagCard">
+        <div class="hd"><h2>Products to review</h2><span class="hint">from your recent-counts history</span></div>
+        <div class="bd" id="flagBody"><div class="empty">Add recent counts to at least two products to see flags here.</div></div>
+      </section>
+
+    </div>
+  </div>
 </div>
 
-<div class="note warn" style="margin-top:14px" id="discl">
-  <strong>The par-right flag is a guide, not a stock policy.</strong> It is worked out from a single count-to-count
-  usage rate, which can be thrown off by one busy or quiet period, a delivery logged in the wrong place, spoilage or
-  wastage, seasonality, and promotions. It does not account for shelf life — do not raise a par on a perishable item
-  just because this sheet suggests it. Treat every flag as a prompt to look at the line, not an instruction, and have
-  a manager review the order before it is placed.
-</div>
-
-<section class="card" style="margin-top:14px">
-  <div class="hd">
-    <h2>Suppliers</h2>
-    <div class="rowbar"><button type="button" class="btn sm" id="bAddSup">+ Add supplier</button></div>
-  </div>
-  <div class="tw">
-    <table id="supTbl">
-      <thead><tr><th scope="col">Supplier name</th><th scope="col" class="r">Minimum order value</th><th scope="col"></th></tr></thead>
-      <tbody id="supB"></tbody>
-    </table>
-  </div>
-  <div class="ft"><span class="hint">Products are assigned to a supplier in the table below. Each supplier becomes its own order.</span></div>
-</section>
-
-<section class="card" style="margin-top:14px">
-  <div class="hd">
-    <h2>Products <span class="mono" id="hCount"></span></h2>
-    <div class="rowbar">
-      <button type="button" class="btn sm" id="bAdd">+ Add product</button>
-      <button type="button" class="btn sm" id="bAdd5">+ 5 products</button>
-    </div>
-  </div>
-  <div class="tw">
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th scope="col">Product</th>
-          <th scope="col">Supplier</th>
-          <th scope="col" class="r">Pack<br>size</th>
-          <th scope="col" class="r">Par<br>level</th>
-          <th scope="col" class="r">Current<br>count</th>
-          <th scope="col" class="r">Previous<br>count</th>
-          <th scope="col" class="r">Received<br>since</th>
-          <th scope="col" class="r">Lead<br>time d</th>
-          <th scope="col" class="r">Unit<br>cost</th>
-          <th scope="col" class="r">Usage<br>/day</th>
-          <th scope="col" class="r">Cover<br>at par d</th>
-          <th scope="col" class="r">Order<br>packs</th>
-          <th scope="col" class="r">Order<br>value</th>
-          <th scope="col">Flag</th>
-          <th scope="col"><span class="lbl" style="font-size:9.5px">Del</span></th>
-        </tr>
-      </thead>
-      <tbody id="tb"></tbody>
-      <tfoot>
-        <tr>
-          <td>Totals</td><td></td><td></td>
-          <td class="n" id="fPar">—</td><td class="n" id="fCount">—</td><td class="n" id="fPrev">—</td>
-          <td class="n" id="fRecv">—</td><td></td><td></td><td></td><td></td>
-          <td class="n" id="fPacks">—</td><td class="n" id="fVal">—</td><td></td><td></td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-  <div class="ft">
-    <div class="legend">
-      <span><b>Usage/day</b> = (previous count + received − current count) ÷ days since last count.</span>
-      <span><b>Cover at par</b> = par ÷ usage per day — how long par would last at the current rate.</span>
-      <span><b>Order</b> = par − current count, rounded up to whole packs.</span>
-    </div>
-  </div>
-</section>
-
-</main>
-
-<footer class="app wrap" style="padding-bottom:34px">
-  <p class="hint">Order quantity = (par level − current count) rounded up to the next whole pack; a product at or above
-    par is not ordered. Usage per day = (previous count + received since − current count) ÷ days since last count, floored
-    at zero. A product is flagged <b>stockout risk</b> when its current count would run out before the lead time on a new
-    order elapses; <b>overstocked</b> when the par level holds more than four times the lead time's worth of stock at the
-    current usage rate; otherwise it is left unflagged. These are heuristics from one usage sample, not a forecast or a
-    reorder-point model — review before ordering. Money in this sheet is not VAT/tax adjusted; enter costs on whatever
-    basis you buy at and be consistent. Everything stays in this browser until you export it.</p>
+<footer class="app noprint" style="padding-top:6px">
+  <p class="hint">Assumes on-hand counts and par levels are in the same unit as the pack size shown; order quantities always round up to a whole pack and never down. Par-level flags compare each product's own recent counts against its own par — they are a prompt to review the number, not a demand forecast. Saved automatically in this browser only (localStorage) — nothing is sent anywhere.</p>
 </footer>
-
-<section class="doc printonly" id="doc"></section>
 
 <script>
 "use strict";
-/* ══ helpers ════════════════════════════════════════════════════ */
-var $=function(s,r){return (r||document).querySelector(s);};
-var KEY="solvix.par-level.v1";
-var MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-var seq=0;
-function uid(p){seq++;return (p||"r")+Date.now().toString(36)+seq.toString(36);}
-function num(v,d){if(v===""||v===null||v===undefined)return d===undefined?0:d;
-  var n=parseFloat(v);return isFinite(n)?n:(d===undefined?0:d);}
-function ok(x){return typeof x==="number"&&isFinite(x);}
-function r2(x){if(!ok(x))return 0;var v=Math.round((x+(x<0?-1e-9:1e-9))*100)/100;return v===0?0:v;}
-function esc(s){return String(s===null||s===undefined?"":s)
-  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-function grp(n,dp){dp=dp===undefined?2:dp;
-  var p=Math.abs(n).toFixed(dp).split(".");
-  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,",")+(p[1]?"."+p[1]:"");}
-function sym(){return S.cur==="custom"?(String(S.curC||"").trim()||"¤"):S.cur;}
-function mny(x,dp){if(!ok(x))return "—";var v=r2(x);
-  return (v<0?"−":"")+sym()+grp(v,dp===undefined?2:dp);}
-function u3(x,dp){if(!ok(x))return "—";dp=dp===undefined?2:dp;
-  var v=Math.round((x+(x<0?-1e-9:1e-9))*Math.pow(10,dp))/Math.pow(10,dp);if(v===0)v=0;
-  return (v<0?"−":"")+grp(v,dp);}
-function dmy(iso){if(!iso)return "—";var p=String(iso).split("-");
-  if(p.length!==3)return String(iso);var d=parseInt(p[2],10),m=parseInt(p[1],10);
-  if(!(d>=1&&m>=1&&m<=12))return String(iso);return d+" "+MONS[m-1]+" "+p[0];}
-function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+var KEY = "solvix.par-level.v1";
+function $(id){ return document.getElementById(id); }
+function uid(p){ return p + "_" + Math.random().toString(36).slice(2,9); }
+function todayISO(){ var d = new Date(); var m = String(d.getMonth()+1).padStart(2,"0"); var day = String(d.getDate()).padStart(2,"0"); return d.getFullYear() + "-" + m + "-" + day; }
+function num(v){ var n = parseFloat(v); return isFinite(n) ? n : NaN; }
+function numOr(v, fb){ var n = num(v); return isFinite(n) ? n : fb; }
+function round2(n){ if(!isFinite(n)) return 0; var r = Math.round((n + (n>=0?1:-1)*1e-9) * 100) / 100; return r === 0 ? 0 : r; }
+function fmtMoney(n, sym){ if(!isFinite(n)) return "—"; var v = round2(n); if(Object.is(v,-0)) v = 0; return sym + v.toFixed(2); }
+function fmtQty(n){ if(!isFinite(n)) return "—"; var v = Math.round(n); if(Object.is(v,-0)) v = 0; return String(v); }
 
-/* ══ state ══════════════════════════════════════════════════════ */
-function sampleSuppliers(){
-  return [
-    {id:"s1",name:"Harbour Wholesale Foods",minOrder:150},
-    {id:"s2",name:"Coastal Drinks Distributors",minOrder:200},
-    {id:"s3",name:"CleanPro Supplies",minOrder:75}
-  ];
+/* ── product row model ─────────────────────────────────────────── */
+function product(name, supplierId, par, count, pack, cost, lead, hist){
+  return { id: uid("p"), name: name, supplierId: supplierId, par: par, count: count, pack: pack, cost: cost, lead: lead, hist: hist };
 }
-function sampleRows(){
-  var R=[
-   ["Sourdough Loaves (case of 8)","s1",8,40,24,40,8,3,2.20],
-   ["Free-range Eggs (tray of 30)","s1",30,180,60,150,0,2,0.32],
-   ["House Red Wine 75cl (case of 6)","s2",6,30,9,21,0,4,8.75],
-   ["Craft IPA 330ml (case of 24)","s2",24,96,12,84,0,5,1.35],
-   ["Kitchen Roll (case of 12)","s3",12,60,48,60,0,4,1.10],
-   ["Sanitiser Spray 750ml (case of 6)","s3",6,24,3,15,0,3,3.60]
-  ];
-  return R.map(function(a){return {id:uid(),name:a[0],sup:a[1],pack:a[2],par:a[3],count:a[4],
-    prev:a[5],recv:a[6],lead:a[7],cost:a[8]};});
-}
-function blankRow(supId){return {id:uid(),name:"",sup:supId||"",pack:1,par:0,count:0,prev:0,recv:0,lead:1,cost:0};}
-function sampleState(){
-  return {v:1,sample:true,
-    biz:{name:"The Fennel & Fig",addr:"18 Harbour Street\nWhitstable CT5 1AQ\n01227 555 0140",ref:"PAR-2026-09"},
-    order:{date:"2026-09-03",by:"R. Okafor (Bar Manager)"},
-    interval:7,cur:"£",curC:"",
-    suppliers:sampleSuppliers(),
-    rows:sampleRows()};
-}
+function supplier(name, mov){ return { id: uid("sup"), name: name, mov: mov }; }
+
 function blankState(){
-  var sup=[{id:uid("s"),name:"",minOrder:0}];
-  return {v:1,sample:false,
-    biz:{name:"",addr:"",ref:""},
-    order:{date:todayISO(),by:""},
-    interval:7,cur:"£",curC:"",
-    suppliers:sup,
-    rows:[blankRow(sup[0].id),blankRow(sup[0].id),blankRow(sup[0].id)]};
+  var s1 = supplier("", 0);
+  return {
+    sample: false,
+    currency: "$", customSym: "",
+    biz: { name: "", prepared: "", date: todayISO() },
+    suppliers: [ s1 ],
+    products: [ product("", s1.id, 0, 0, 1, 0, 0, "") ]
+  };
 }
-var S=sampleState();
+function sampleState(){
+  var sFresh = supplier("Fresh Farm Produce", 150);
+  var sBev = supplier("City Beverage Co", 200);
+  var sDry = supplier("Bulk Dry Goods", 100);
+  return {
+    sample: true,
+    currency: "$", customSym: "",
+    biz: { name: "Riverside Café & Deli", prepared: "Jordan", date: todayISO() },
+    suppliers: [ sFresh, sBev, sDry ],
+    products: [
+      product("Whole milk 2L bottle", sFresh.id, 24, 6, 6, 3.00, 2, "0, 4, 0, 2"),
+      product("Free-range eggs (dozen)", sFresh.id, 15, 9, 5, 3.50, 2, "10, 11, 9, 12"),
+      product("Coffee beans 1kg", sFresh.id, 30, 36, 6, 14.00, 2, "34, 36, 32, 35"),
+      product("Cola 330ml can", sBev.id, 240, 48, 24, 0.80, 3, "24, 0, 24, 0"),
+      product("Sparkling water 500ml", sBev.id, 96, 84, 12, 1.20, 3, "90, 96, 92, 96"),
+      product("Rice 1kg bag", sDry.id, 60, 15, 10, 2.20, 5, "5, 20, 10, 18"),
+      product("Paper napkins, pack of 100", sDry.id, 200, 40, 20, 1.50, 5, "")
+    ]
+  };
+}
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function merge(base, o){
+  var out = {}, k;
+  for(k in base){ if(Object.prototype.hasOwnProperty.call(base,k)) out[k] = base[k]; }
+  for(k in o){
+    if(!Object.prototype.hasOwnProperty.call(o,k)) continue;
+    var bv = base[k], ov = o[k];
+    if(bv && typeof bv === "object" && !Array.isArray(bv) && ov && typeof ov === "object" && !Array.isArray(ov)) out[k] = merge(bv, ov);
+    else out[k] = ov;
+  }
+  return out;
+}
+
+var S = sampleState();
+
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ /* storage blocked — tool still works */ } }
 function load(){
-  try{
-    var raw=localStorage.getItem(KEY);if(!raw)return false;
-    var o=JSON.parse(raw);if(!o||typeof o!=="object"||!Array.isArray(o.rows))return false;
-    S=normalise(o);return true;
-  }catch(e){return false;}
-}
-function normalise(o){
-  var s={v:1,sample:!!o.sample,
-    biz:{name:String((o.biz&&o.biz.name)||""),addr:String((o.biz&&o.biz.addr)||""),ref:String((o.biz&&o.biz.ref)||"")},
-    order:{date:String((o.order&&o.order.date)||todayISO()),by:String((o.order&&o.order.by)||"")},
-    interval:ok(num(o.interval,NaN))&&num(o.interval,7)>=1?num(o.interval,7):7,
-    cur:["£","$","€","custom"].indexOf(o.cur)>=0?o.cur:"£",
-    curC:String(o.curC||""),
-    suppliers:[],rows:[]};
-  s.suppliers=(Array.isArray(o.suppliers)?o.suppliers:[]).map(function(x){
-    x=x||{};return {id:String(x.id||uid("s")),name:String(x.name||""),minOrder:Math.max(0,num(x.minOrder,0))};
-  });
-  if(!s.suppliers.length)s.suppliers=[{id:uid("s"),name:"",minOrder:0}];
-  var supIds={};s.suppliers.forEach(function(x){supIds[x.id]=true;});
-  var fallback=s.suppliers[0].id;
-  s.rows=(o.rows||[]).map(function(r){
-    r=r||{};
-    return {id:String(r.id||uid()),name:String(r.name||""),
-      sup:supIds[r.sup]?r.sup:fallback,
-      pack:num(r.pack,1),par:num(r.par,0),count:num(r.count,0),prev:num(r.prev,0),
-      recv:num(r.recv,0),lead:num(r.lead,1),cost:num(r.cost,0)};
-  });
-  return s;
+  try {
+    var raw = localStorage.getItem(KEY);
+    if(!raw) return false;
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object") return false;
+    var base = blankState();
+    S = merge(base, o);
+    if(!Array.isArray(S.suppliers)) S.suppliers = base.suppliers;
+    if(!Array.isArray(S.products)) S.products = base.products;
+    if(!S.suppliers.length) S.suppliers = [ supplier("", 0) ];
+    if(!S.products.length) S.products = [ product("", S.suppliers[0].id, 0, 0, 1, 0, 0, "") ];
+    return true;
+  } catch(e){ return false; }
 }
 
-/* ══ the maths ══════════════════════════════════════════════════ */
-function periodDays(){var d=num(S.interval,7);return d>=1?d:1;}
-function supName(id){var s=supById(id);return s?(s.name||"(unnamed supplier)"):"Unassigned";}
-function supById(id){for(var i=0;i<S.suppliers.length;i++){if(S.suppliers[i].id===id)return S.suppliers[i];}return null;}
+/* ── par-accuracy from recent counts ──────────────────────────────
+   Compares each entry in a product's recent-count history to its own
+   par. A count of zero (or below) is a stockout. A count at 60% of
+   par or higher is "still nearly full" — barely used before the next
+   check. Two thirds+ stockouts among the entries → raise the par.
+   Six tenths+ still-nearly-full → the par is probably set too high. */
+function parAccuracy(histStr, par){
+  var parts = String(histStr || "").split(/[,;\s]+/);
+  var entries = [];
+  for(var i=0;i<parts.length;i++){
+    if(parts[i] === "") continue;
+    var n = num(parts[i]);
+    if(isFinite(n) && n >= 0) entries.push(n);
+  }
+  if(entries.length < 2) return { status:"insufficient", label:"Add recent counts", chip:"" };
+  var stockouts = 0, stillFull = 0;
+  var overThresh = par > 0 ? par * 0.6 : Infinity;
+  for(i=0;i<entries.length;i++){
+    if(entries[i] <= 0) stockouts++;
+    if(entries[i] >= overThresh) stillFull++;
+  }
+  var stockRate = stockouts / entries.length;
+  var fullRate = stillFull / entries.length;
+  if(stockRate >= 0.4) return { status:"raise", label:"Raise par — hit zero " + stockouts + "/" + entries.length + " checks", chip:"bad" };
+  if(fullRate >= 0.6) return { status:"lower", label:"Lower par — still near full " + stillFull + "/" + entries.length + " checks", chip:"warn" };
+  return { status:"ok", label:"Par looks right", chip:"ok" };
+}
 
+function currencySymbol(){ return S.currency === "custom" ? (S.customSym || "$") : S.currency; }
+
+/* ── the maths ─────────────────────────────────────────────────── */
 function calc(){
-  var days=periodDays();
-  var t={par:0,count:0,prev:0,recv:0,packs:0,units:0,value:0,
-    riskLines:0,overLines:0,lowLines:0,okLines:0,noUseLines:0,ordSuppliers:0,belowMin:0,lines:S.rows.length};
-  var groups={}; /* supId -> {sup,rows:[],value,lines} */
-  S.suppliers.forEach(function(sp){groups[sp.id]={sup:sp,rows:[],value:0,lines:0};});
-  var rows=S.rows.map(function(r){
-    var pack=num(r.pack,0), par=num(r.par,0), count=num(r.count,0), prev=num(r.prev,0),
-        recv=num(r.recv,0), lead=num(r.lead,0), cost=num(r.cost,0);
-    var usageRaw=prev+recv-count;
-    var usage=usageRaw>0?usageRaw:0;
-    var rate=usage>0?usage/days:0;
-    var coverCur=rate>0?count/rate:null;
-    var coverPar=rate>0?par/rate:null;
-    var leadEff=lead>0?lead:1;
-    var packEff=pack>0?pack:1;
-    var orderUnitsRaw=Math.max(0,par-count);
-    var orderPacks=orderUnitsRaw>1e-9?Math.ceil(orderUnitsRaw/packEff-1e-9):0;
-    var orderUnits=orderPacks*packEff;
-    var orderValue=orderUnits*cost;
-    var flag,note;
-    if(rate<=0){
-      flag="none"; note="No usage recorded between counts — nothing to base a rate on yet.";
-    } else if(coverCur!==null&&coverCur<leadEff-1e-9){
-      flag="risk"; note="Covers about "+u3(coverCur,1)+" day(s) at the current count — the lead time is "+u3(leadEff,1)+" day(s), so stock may run out before a fresh order arrives.";
-    } else if(coverPar!==null&&coverPar<leadEff*1.25-1e-9){
-      flag="low"; note="Par covers about "+u3(coverPar,1)+" day(s) at this usage rate against a "+u3(leadEff,1)+"-day lead time — little buffer. Consider raising the par.";
-    } else if(coverPar!==null&&coverPar>leadEff*4+1e-9){
-      flag="over"; note="Par covers about "+u3(coverPar,1)+" day(s) at this usage rate — more than four times the "+u3(leadEff,1)+"-day lead time. Consider lowering the par.";
-    } else {
-      flag="ok"; note="Par covers about "+u3(coverPar,1)+" day(s) against a "+u3(leadEff,1)+"-day lead time — looks reasonably set.";
+  var sym = currencySymbol();
+  var groups = {}, order = [];
+  S.suppliers.forEach(function(s){
+    groups[s.id] = { id:s.id, name:(s.name && s.name.trim()) || "(unnamed supplier)", mov:Math.max(0, numOr(s.mov,0)), items:[], subtotal:0 };
+    order.push(s.id);
+  });
+  var unassigned = { id:"__unassigned", name:"Unassigned", mov:0, items:[], subtotal:0 };
+
+  var flagged = [];
+  var totalOrderValue = 0, itemsNeedingReorder = 0;
+  var computedById = {};
+
+  S.products.forEach(function(p){
+    var par = Math.max(0, numOr(p.par,0));
+    var count = Math.max(0, numOr(p.count,0));
+    var packRaw = numOr(p.pack,0);
+    var packSafe = packRaw > 0 ? packRaw : 1;
+    var cost = Math.max(0, numOr(p.cost,0));
+    var lead = Math.max(0, numOr(p.lead,0));
+
+    var needed = Math.max(0, par - count);
+    var packs = needed > 0 ? Math.ceil(needed / packSafe) : 0;
+    var orderQty = packs * packSafe;
+    var orderValue = round2(orderQty * cost);
+    if(orderQty > 0){ itemsNeedingReorder++; totalOrderValue = round2(totalOrderValue + orderValue); }
+
+    var acc = parAccuracy(p.hist, par);
+    var name = (p.name && p.name.trim()) || "(unnamed product)";
+    if(acc.status === "raise" || acc.status === "lower") flagged.push({ name:name, acc:acc });
+
+    var row = { id:p.id, name:name, par:par, count:count, pack:packSafe, packValid: packRaw>0, cost:cost, lead:lead,
+                needed:needed, packs:packs, orderQty:orderQty, orderValue:orderValue, acc:acc };
+    computedById[p.id] = row;
+
+    var g = (p.supplierId && groups[p.supplierId]) ? groups[p.supplierId] : unassigned;
+    g.items.push(row);
+    g.subtotal = round2(g.subtotal + orderValue);
+  });
+
+  var groupList = order.map(function(id){ return groups[id]; });
+  if(unassigned.items.length) groupList.push(unassigned);
+
+  groupList.forEach(function(g){
+    g.hasOrder = g.items.some(function(it){ return it.orderQty > 0; });
+    g.belowMin = g.hasOrder && g.mov > 0 && g.subtotal < g.mov;
+    g.shortfall = g.belowMin ? round2(g.mov - g.subtotal) : 0;
+  });
+
+  var suppliersWithOrders = groupList.filter(function(g){ return g.hasOrder; }).length;
+  var suppliersBelowMin = groupList.filter(function(g){ return g.belowMin; }).length;
+
+  return { sym:sym, groups:groupList, totalOrderValue: round2(totalOrderValue), itemsNeedingReorder:itemsNeedingReorder,
+            suppliersWithOrders:suppliersWithOrders, suppliersBelowMin:suppliersBelowMin, flagged:flagged, byId:computedById };
+}
+
+/* ── validation on blur ───────────────────────────────────────── */
+function markInvalid(input, errEl, msg){
+  if(msg){ input.classList.add("inv"); errEl.textContent = msg; errEl.hidden = false; }
+  else { input.classList.remove("inv"); errEl.hidden = true; errEl.textContent = ""; }
+}
+function validateNonNeg(input, errEl, label){
+  if(input.value === "") { markInvalid(input, errEl, ""); return; }
+  var n = num(input.value);
+  if(!isFinite(n) || n < 0) markInvalid(input, errEl, label + " must be 0 or more");
+  else markInvalid(input, errEl, "");
+}
+function validatePack(input, errEl){
+  if(input.value === "") { markInvalid(input, errEl, "Pack size is required"); return; }
+  var n = num(input.value);
+  if(!isFinite(n) || n <= 0) markInvalid(input, errEl, "Must be at least 1");
+  else markInvalid(input, errEl, "");
+}
+
+/* ── suppliers table ──────────────────────────────────────────── */
+function renderSuppliers(){
+  var tb = $("tbSuppliers");
+  tb.textContent = "";
+  S.suppliers.forEach(function(s){
+    var tr = document.createElement("tr");
+
+    var tdN = document.createElement("td");
+    var iN = document.createElement("input");
+    iN.type = "text"; iN.value = s.name; iN.setAttribute("aria-label","Supplier name"); iN.autocomplete = "off"; iN.placeholder = "Supplier name";
+    iN.addEventListener("input", function(){ s.name = iN.value; S.sample = false; renderProducts(); update(); });
+    tdN.appendChild(iN); tr.appendChild(tdN);
+
+    var tdM = document.createElement("td"); tdM.className = "r";
+    var wrapM = document.createElement("div");
+    var iM = document.createElement("input");
+    iM.type = "number"; iM.min = "0"; iM.step = "0.01"; iM.inputMode = "decimal";
+    iM.value = s.mov; iM.setAttribute("aria-label", "Minimum order value for " + (s.name || "this supplier"));
+    var eM = document.createElement("span"); eM.className = "err"; eM.hidden = true;
+    iM.addEventListener("input", function(){ s.mov = iM.value; S.sample = false; update(); });
+    iM.addEventListener("blur", function(){ validateNonNeg(iM, eM, "Minimum order value"); });
+    wrapM.appendChild(iM); wrapM.appendChild(eM);
+    tdM.appendChild(wrapM); tr.appendChild(tdM);
+
+    var tdX = document.createElement("td"); tdX.className = "rmCell";
+    var bx = document.createElement("button");
+    bx.type = "button"; bx.className = "btn sm ico"; bx.textContent = "✕";
+    bx.setAttribute("aria-label", "Remove supplier " + (s.name || ""));
+    bx.addEventListener("click", function(){
+      S.suppliers = S.suppliers.filter(function(x){ return x.id !== s.id; });
+      S.products.forEach(function(p){ if(p.supplierId === s.id) p.supplierId = null; });
+      if(!S.suppliers.length) S.suppliers.push(supplier("", 0));
+      S.sample = false; renderSuppliers(); renderProducts(); update();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    tb.appendChild(tr);
+  });
+}
+
+/* ── products table ───────────────────────────────────────────── */
+var productRefs = [];
+function renderProducts(){
+  var tb = $("tbProducts");
+  tb.textContent = "";
+  productRefs = [];
+  S.products.forEach(function(p){
+    var tr = document.createElement("tr");
+
+    function textCell(value, ph, label, prop){
+      var td = document.createElement("td");
+      var i = document.createElement("input");
+      i.type = "text"; i.value = value; i.placeholder = ph || ""; i.autocomplete = "off"; i.setAttribute("aria-label", label);
+      i.addEventListener("input", function(){ p[prop] = i.value; S.sample = false; update(); });
+      td.appendChild(i); tr.appendChild(td);
+      return i;
     }
-    var g=groups[r.sup];
-    if(!g){g=groups[r.sup]={sup:null,rows:[],value:0,lines:0};}
-    if(orderUnits>0){g.value+=orderValue;g.lines++;g.rows.push(null);}
-    t.par+=par;t.count+=count;t.prev+=prev;t.recv+=recv;
-    t.packs+=orderPacks;t.units+=orderUnits;t.value+=orderValue;
-    if(flag==="risk")t.riskLines++; else if(flag==="over")t.overLines++;
-    else if(flag==="low")t.lowLines++; else if(flag==="ok")t.okLines++; else t.noUseLines++;
-    var o={r:r,pack:pack,par:par,count:count,prev:prev,recv:recv,lead:leadEff,cost:cost,
-      usage:usage,rate:rate,coverCur:coverCur,coverPar:coverPar,
-      orderPacks:orderPacks,orderUnits:orderUnits,orderValue:orderValue,flag:flag,note:note};
-    g.rows[g.rows.length-1]=o;
-    return o;
+    function numCell(value, label, prop, opts){
+      opts = opts || {};
+      var td = document.createElement("td"); td.className = "r";
+      var wrap = document.createElement("div");
+      var i = document.createElement("input");
+      i.type = "number"; i.min = opts.min !== undefined ? opts.min : "0"; i.step = opts.step || "1"; i.inputMode = "decimal";
+      i.value = value; i.setAttribute("aria-label", label);
+      var e = document.createElement("span"); e.className = "err"; e.hidden = true;
+      i.addEventListener("input", function(){ p[prop] = i.value; S.sample = false; update(); });
+      i.addEventListener("blur", function(){ if(opts.pack) validatePack(i, e); else validateNonNeg(i, e, opts.errLabel || label); });
+      wrap.appendChild(i); wrap.appendChild(e);
+      td.appendChild(wrap); tr.appendChild(td);
+      return i;
+    }
+
+    textCell(p.name, "Product name", "Product name", "name");
+
+    var tdS = document.createElement("td");
+    var sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Supplier for " + (p.name || "this product"));
+    var optNone = document.createElement("option"); optNone.value = ""; optNone.textContent = "— unassigned —"; sel.appendChild(optNone);
+    S.suppliers.forEach(function(s){
+      var op = document.createElement("option"); op.value = s.id; op.textContent = s.name || "(unnamed supplier)";
+      if(p.supplierId === s.id) op.selected = true;
+      sel.appendChild(op);
+    });
+    if(!p.supplierId) optNone.selected = true;
+    sel.addEventListener("change", function(){ p.supplierId = sel.value || null; S.sample = false; update(); });
+    tdS.appendChild(sel); tr.appendChild(tdS);
+
+    numCell(p.par, "Par level", "par", {});
+    numCell(p.count, "On hand", "count", {});
+    numCell(p.pack, "Pack size", "pack", { min:"1", pack:true });
+    numCell(p.cost, "Unit cost", "cost", { step:"0.01" });
+    numCell(p.lead, "Lead time, days", "lead", {});
+    textCell(p.hist, "e.g. 0, 4, 0, 2", "Recent stock counts for " + (p.name || "this product"), "hist");
+
+    var tdNeeded = document.createElement("td"); tdNeeded.className = "n";
+    var tdQty = document.createElement("td"); tdQty.className = "n";
+    var tdVal = document.createElement("td"); tdVal.className = "n";
+    tr.appendChild(tdNeeded); tr.appendChild(tdQty); tr.appendChild(tdVal);
+
+    var tdChip = document.createElement("td");
+    var chip = document.createElement("span"); chip.className = "chip";
+    tdChip.appendChild(chip); tr.appendChild(tdChip);
+
+    var tdX = document.createElement("td"); tdX.className = "rmCell";
+    var bx = document.createElement("button");
+    bx.type = "button"; bx.className = "btn sm ico"; bx.textContent = "✕";
+    bx.setAttribute("aria-label", "Remove product " + (p.name || ""));
+    bx.addEventListener("click", function(){
+      S.products = S.products.filter(function(x){ return x.id !== p.id; });
+      if(!S.products.length) S.products.push(product("", S.suppliers[0] ? S.suppliers[0].id : null, 0, 0, 1, 0, 0, ""));
+      S.sample = false; renderProducts(); update();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    productRefs.push({ id:p.id, tdNeeded:tdNeeded, tdQty:tdQty, tdVal:tdVal, chip:chip });
+    tb.appendChild(tr);
   });
-  var supList=S.suppliers.map(function(sp){
-    var g=groups[sp.id]||{value:0,lines:0,rows:[]};
-    var below=g.value>1e-9&&g.value<sp.minOrder-0.004;
-    if(g.value>1e-9){t.ordSuppliers++;if(below)t.belowMin++;}
-    return {sup:sp,value:g.value,lines:g.lines,rows:g.rows,below:below};
+}
+function syncProductCells(c){
+  productRefs.forEach(function(ref){
+    var row = c.byId[ref.id];
+    if(!row){ ref.tdNeeded.textContent = "—"; ref.tdQty.textContent = "—"; ref.tdVal.textContent = "—"; ref.chip.textContent = "—"; ref.chip.className = "chip"; return; }
+    ref.tdNeeded.textContent = fmtQty(row.needed);
+    ref.tdQty.textContent = fmtQty(row.orderQty);
+    ref.tdVal.textContent = fmtMoney(row.orderValue, c.sym);
+    ref.chip.textContent = row.acc.status === "insufficient" ? "Add counts" : row.acc.label;
+    ref.chip.className = "chip" + (row.acc.chip ? " " + row.acc.chip : "");
   });
-  return {days:days,rows:rows,t:t,suppliers:supList};
 }
 
-/* ══ suppliers table ════════════════════════════════════════════ */
-function supRowHTML(s){
-  return '<tr data-id="'+esc(s.id)+'">'+
-    '<td><input type="text" data-sf="name" value="'+esc(s.name)+'" aria-label="Supplier name" placeholder="Supplier name"></td>'+
-    '<td class="r"><input type="number" class="ta-r" data-sf="minOrder" min="0" step="0.01" inputmode="decimal" value="'+esc(num(s.minOrder).toFixed(2))+'" aria-label="Minimum order value"></td>'+
-    '<td class="x"><button type="button" class="btn ico sm bDelSup" aria-label="Delete supplier" title="Delete supplier">✕</button></td>'+
-    '</tr>';
+/* ── results panel ───────────────────────────────────────────── */
+function line(k, v){
+  var d = document.createElement("div"); d.className = "flagRow";
+  var l = document.createElement("div");
+  var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = k;
+  var why = document.createElement("div"); why.className = "why"; why.textContent = v;
+  l.appendChild(nm); l.appendChild(why);
+  d.appendChild(l);
+  return d;
 }
-function buildSuppliers(){
-  $("#supB").innerHTML=S.suppliers.map(supRowHTML).join("");
-  fillSupplierSelects();
-}
-function fillSupplierSelects(){
-  var opts=S.suppliers.map(function(s){return '<option value="'+esc(s.id)+'">'+esc(s.name||"(unnamed)")+'</option>';}).join("");
-  var sels=document.querySelectorAll('#tb select[data-f="sup"]');
-  sels.forEach(function(sel){var v=sel.value;sel.innerHTML=opts;
-    if(S.suppliers.some(function(s){return s.id===v;}))sel.value=v;});
-}
+function renderPO(c){
+  var wrap = $("poWrap");
+  wrap.textContent = "";
+  var any = false;
+  c.groups.forEach(function(g){
+    if(!g.items.length) return;
+    any = true;
+    var card = document.createElement("section");
+    card.className = "card poCard" + (g.hasOrder ? "" : " noprint");
 
-/* ══ products table ═════════════════════════════════════════════ */
-function rowHTML(r){
-  var o=[];
-  o.push('<tr data-id="'+esc(r.id)+'">');
-  o.push('<th scope="row"><input type="text" data-f="name" value="'+esc(r.name)+'" aria-label="Product name" placeholder="Product name"></th>');
-  o.push('<td><select class="w9" data-f="sup" aria-label="Supplier"></select></td>');
-  o.push('<td><input type="number" class="w5" data-f="pack" min="0.01" step="0.01" inputmode="decimal" value="'+esc(r.pack)+'" aria-label="Pack size, units per pack"><span class="e" data-e="pack" hidden></span></td>');
-  o.push('<td><input type="number" class="w5" data-f="par" min="0" step="1" inputmode="decimal" value="'+esc(r.par)+'" aria-label="Par level, units"></td>');
-  o.push('<td><input type="number" class="w5" data-f="count" min="0" step="1" inputmode="decimal" value="'+esc(r.count)+'" aria-label="Current count, units"></td>');
-  o.push('<td><input type="number" class="w5" data-f="prev" min="0" step="1" inputmode="decimal" value="'+esc(r.prev)+'" aria-label="Previous count, units"></td>');
-  o.push('<td><input type="number" class="w5" data-f="recv" min="0" step="1" inputmode="decimal" value="'+esc(r.recv)+'" aria-label="Received since previous count, units"></td>');
-  o.push('<td><input type="number" class="w4" data-f="lead" min="0" step="1" inputmode="decimal" value="'+esc(r.lead)+'" aria-label="Lead time, days"></td>');
-  o.push('<td><input type="number" class="w6" data-f="cost" min="0" step="0.01" inputmode="decimal" value="'+esc(num(r.cost).toFixed(2))+'" aria-label="Unit cost"><span class="e" data-e="cost" hidden></span></td>');
-  o.push('<td class="c" data-c="rate">—</td>');
-  o.push('<td class="c" data-c="cov">—</td>');
-  o.push('<td class="c" data-c="packs">—</td>');
-  o.push('<td class="c k" data-c="val">—</td>');
-  o.push('<td data-c="flag">—</td>');
-  o.push('<td class="x"><button type="button" class="btn ico sm bDel" aria-label="Delete product" title="Delete product">✕</button></td>');
-  o.push('</tr>');
-  return o.join("");
+    var hd = document.createElement("div"); hd.className = "hd";
+    var h3 = document.createElement("h3"); h3.textContent = g.name; hd.appendChild(h3);
+    var chip = document.createElement("span"); chip.className = "chip" + (g.belowMin ? " bad" : (g.hasOrder ? " ok" : ""));
+    chip.textContent = g.belowMin ? "Below minimum" : (g.hasOrder ? "Ready to send" : "No order needed");
+    hd.appendChild(chip);
+    card.appendChild(hd);
+
+    if(!g.hasOrder){
+      var bd0 = document.createElement("div"); bd0.className = "bd poNone";
+      bd0.textContent = "Every product from this supplier is at or above par right now — nothing to order.";
+      card.appendChild(bd0);
+      wrap.appendChild(card);
+      return;
+    }
+
+    var orderItems = g.items.filter(function(it){ return it.orderQty > 0; });
+    var tw = document.createElement("div"); tw.className = "tw";
+    var table = document.createElement("table");
+    var thead = document.createElement("thead");
+    thead.innerHTML = '<tr><th scope="col">Product</th><th scope="col" class="r">Par</th><th scope="col" class="r">On hand</th><th scope="col" class="r">Order qty</th><th scope="col" class="r">Unit cost</th><th scope="col" class="r">Lead (d)</th><th scope="col" class="r">Line value</th></tr>';
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    orderItems.forEach(function(it){
+      var tr = document.createElement("tr");
+      var cells = [
+        [it.name, false],
+        [fmtQty(it.par), true],
+        [fmtQty(it.count), true],
+        [fmtQty(it.orderQty), true],
+        [fmtMoney(it.cost, c.sym), true],
+        [fmtQty(it.lead), true],
+        [fmtMoney(it.orderValue, c.sym), true]
+      ];
+      cells.forEach(function(pair){
+        var td = document.createElement("td"); if(pair[1]) td.className = "n";
+        td.textContent = pair[0]; tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    var tfoot = document.createElement("tfoot");
+    var trf = document.createElement("tr");
+    var tdfl = document.createElement("td"); tdfl.colSpan = 6; tdfl.textContent = "Order subtotal — " + g.name;
+    var tdfv = document.createElement("td"); tdfv.className = "n"; tdfv.textContent = fmtMoney(g.subtotal, c.sym);
+    trf.appendChild(tdfl); trf.appendChild(tdfv); tfoot.appendChild(trf);
+    table.appendChild(tfoot);
+    tw.appendChild(table);
+    card.appendChild(tw);
+
+    var ft = document.createElement("div"); ft.className = "ft";
+    if(g.belowMin){
+      var b = document.createElement("span"); b.className = "chip bad";
+      b.textContent = "Add " + fmtMoney(g.shortfall, c.sym) + " to reach the " + fmtMoney(g.mov, c.sym) + " minimum";
+      ft.appendChild(b);
+    } else if(g.mov > 0){
+      var okc = document.createElement("span"); okc.className = "chip ok";
+      okc.textContent = "Meets the " + fmtMoney(g.mov, c.sym) + " minimum order value";
+      ft.appendChild(okc);
+    } else {
+      var nomov = document.createElement("span"); nomov.className = "hint"; nomov.textContent = "No minimum order value set for this supplier.";
+      ft.appendChild(nomov);
+    }
+    card.appendChild(ft);
+
+    wrap.appendChild(card);
+  });
+  if(!any){
+    var empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Add a product to see supplier orders here.";
+    wrap.appendChild(empty);
+  }
 }
-function buildTable(){
-  var tb=$("#tb");
-  if(!S.rows.length){
-    tb.innerHTML='<tr><td colspan="15"><div class="empty">No products yet — press <b>+ Add product</b> to start a par sheet.</div></td></tr>';
+function renderFlags(c){
+  var body = $("flagBody");
+  body.textContent = "";
+  if(!c.flagged.length){
+    var empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No products flagged — either counts look steady, or add more recent-count history to check.";
+    body.appendChild(empty);
     return;
   }
-  tb.innerHTML=S.rows.map(rowHTML).join("");
-  fillSupplierSelects();
-  var trs=tb.children;
-  for(var i=0;i<S.rows.length;i++){
-    var sel=trs[i].querySelector('select[data-f="sup"]');
-    if(sel)sel.value=S.rows[i].sup;
-  }
-}
-function rowById(id){for(var i=0;i<S.rows.length;i++){if(S.rows[i].id===id)return S.rows[i];}return null;}
-function supRowById(id){for(var i=0;i<S.suppliers.length;i++){}return null;}
-
-/* ══ paint ══════════════════════════════════════════════════════ */
-function setTxt(id,v){var e=$(id);if(e)e.textContent=v;}
-var FLAG_LABEL={risk:"Stockout risk",low:"Par low",over:"Overstocked",ok:"Par OK",none:"No usage data"};
-var FLAG_CLASS={risk:"bad",low:"warn",over:"warn",ok:"ok",none:""};
-function paint(){
-  var C=calc(), t=C.t, dash="—";
-  var has=S.rows.length>0;
-
-  var trs=$("#tb").children;
-  for(var i=0;i<C.rows.length;i++){
-    var o=C.rows[i], tr=trs[i];
-    if(!tr||tr.getAttribute("data-id")!==o.r.id)continue;
-    var q=function(k){return tr.querySelector('[data-c="'+k+'"]');};
-    q("rate").textContent=o.rate>0?u3(o.rate,1):dash;
-    q("cov").textContent=o.coverPar===null?dash:u3(o.coverPar,1);
-    q("packs").textContent=o.orderPacks>0?u3(o.orderPacks,0):"–";
-    var vv=q("val");vv.textContent=o.orderValue>0?mny(o.orderValue):"–";
-    var fl=q("flag");
-    fl.innerHTML=o.orderUnits>0||o.flag!=="none"?
-      '<span class="chip '+FLAG_CLASS[o.flag]+'">'+FLAG_LABEL[o.flag]+'</span>':'<span class="chip">—</span>';
-    tr.className=o.flag==="risk"?"f-bad":(o.flag==="low"||o.flag==="over"?"f-warn":(o.flag==="ok"?"f-ok":""));
-    tr.title=o.note;
-  }
-
-  setTxt("#fPar",has?u3(t.par,0):dash);
-  setTxt("#fCount",has?u3(t.count,0):dash);
-  setTxt("#fPrev",has?u3(t.prev,0):dash);
-  setTxt("#fRecv",has?u3(t.recv,0):dash);
-  setTxt("#fPacks",has?u3(t.packs,0):dash);
-  setTxt("#fVal",has?mny(t.value):dash);
-  setTxt("#hCount",S.rows.length?S.rows.length+" products":"");
-
-  var hasOrder=t.value>0.004;
-  var hv=$("#hTot"),sv=$("#sTot");
-  hv.textContent=has?mny(t.value):dash;
-  sv.textContent=has?mny(t.value):dash;
-  setTxt("#hTotSub",has?(hasOrder?(u3(t.units,0)+" units across "+u3(t.packs,0)+" packs":"nothing to order"):"Add products to see the order");
-  setTxt("#sTotU",has?(t.ordSuppliers+" supplier order"+(t.ordSuppliers===1?"":"s")):dash);
-  setTxt("#hSup",has?String(t.ordSuppliers):dash);
-  setTxt("#hSupSub",has?"of "+S.suppliers.length+" suppliers":dash);
-  var hm=$("#hMin");hm.textContent=has?String(t.belowMin):dash;
-  hm.className="v"+(t.belowMin>0?" bad":"");
-  setTxt("#hMinSub",t.belowMin>0?"add lines or hold order":"all orders clear minimum");
-  var hr=$("#hRisk");hr.textContent=has?String(t.riskLines):dash;
-  hr.className="v"+(t.riskLines>0?" bad":"");
-  setTxt("#hRiskSub",t.riskLines>0?"may run out before resupply":"none flagged");
-  var ho=$("#hOver");ho.textContent=has?String(t.overLines):dash;
-  ho.className="v"+(t.overLines>0?" warn":"");
-  setTxt("#hOverSub",t.overLines>0?"par may be set too high":"none flagged");
-
-  var chip=$("#cStatus");
-  var st=!has?"none":(t.riskLines>0?"bad":(t.belowMin>0||t.overLines>0||t.lowLines>0?"warn":"ok"));
-  chip.className="chip "+(st==="ok"?"ok":(st==="warn"?"warn":(st==="bad"?"bad":"")));
-  chip.textContent=st==="ok"?"Looks clear":(st==="warn"?"Review":(st==="bad"?"Stockout risk":"No data"));
-
-  /* supplier summary */
-  var ssb=$("#supSumB");
-  var withOrder=C.suppliers.filter(function(g){return g.value>0.004;});
-  ssb.innerHTML=C.suppliers.length?C.suppliers.map(function(g){
-    var status=g.value<=0.004?'<span class="chip">No order</span>':
-      (g.below?'<span class="chip bad">Below min</span>':'<span class="chip ok">Meets min</span>');
-    return '<tr><th scope="row">'+esc(g.sup.name||"(unnamed)")+'</th><td class="n">'+g.lines+'</td>'+
-      '<td class="n">'+(g.value>0.004?mny(g.value):"–")+'</td><td class="n">'+mny(g.sup.minOrder)+'</td>'+
-      '<td class="c">'+status+'</td></tr>';
-  }).join("")+'<tr><th scope="row"><b>All suppliers</b></th><td class="n"><b>'+t.units+'</b></td>'.replace(t.units,
-      C.suppliers.reduce(function(a,g){return a+g.lines;},0))+'<td class="n"><b>'+mny(t.value)+'</b></td><td class="n"></td><td class="c"></td></tr>'
-    :'<tr><td colspan="5"><div class="empty2">Add a supplier to begin.</div></td></tr>';
-
-  $("#sampleBar").hidden=!S.sample;
-  buildDoc(C);
-}
-
-/* ══ printed document ═══════════════════════════════════════════ */
-function letterhead(title,sub){
-  var b=S.biz;
-  return '<div class="lh"><div><div class="bz">'+esc(b.name||"Purchase order")+'</div>'+
-    (b.addr?'<div class="ad">'+esc(b.addr)+'</div>':'')+
-    '</div><div class="ttl"><h2>'+title+'</h2>'+
-    '<div class="dt">'+dmy(S.order.date)+'</div>'+
-    (sub?'<div class="rf">'+sub+'</div>':'')+
-    '<div class="rf">Ref '+esc(b.ref||"—")+' · printed '+dmy(todayISO())+'</div></div></div>';
-}
-function docFoot(){
-  return '<div class="foot"><span>'+esc(S.biz.name||"Purchase order")+'</span>'+
-    '<span>Order qty = par − count, rounded up to whole packs · Usage/day = (previous + received − current) ÷ '+
-    u3(S.interval,0)+' days</span></div>';
-}
-function docNote(){
-  return '<div class="dnote"><b>Guide, not a stock policy</b>'+
-    'Usage rates and flags are worked out from a single count-to-count change and can be thrown off by a busy or '+
-    'quiet period, a delivery logged in the wrong place, spoilage, seasonality or promotions. They do not account for '+
-    'shelf life. Review every flagged line, and have a manager check this order, before it is placed.</div>';
-}
-function buildDoc(C){
-  var d=$("#doc"),t=C.t,dash="—",o=[];
-  var smpl=S.sample?'<div class="smpl">Sample data — not a real order</div>':'';
-
-  /* ── summary page ── */
-  o.push(smpl);
-  o.push(letterhead("PAR LEVEL — ORDER SUMMARY"));
-  o.push('<div class="meta"><div><b>Products counted</b><span>'+t.lines+'</span></div>'+
-    '<div><b>Count interval</b><span>'+u3(S.interval,0)+' days</span></div>'+
-    '<div><b>Ordered by</b><span class="sm">'+esc(S.order.by||"—")+'</span></div>'+
-    '<div><b>Currency</b><span class="sm">'+esc(sym())+'</span></div></div>');
-  o.push('<div class="hero"><div><b class="t">Total order value across all suppliers</b><div class="big">'+
-    mny(t.value)+'</div></div><div class="sm">'+u3(t.units,0)+' units in '+u3(t.packs,0)+' packs<br>'+
-    t.ordSuppliers+' supplier order'+(t.ordSuppliers===1?"":"s")+', '+t.belowMin+' below minimum</div></div>');
-  o.push('<h3 class="sec">Orders by supplier</h3>');
-  o.push('<table><colgroup><col style="width:34%"><col style="width:14%"><col style="width:18%"><col style="width:18%"><col style="width:16%"></colgroup>'+
-    '<thead><tr><th>Supplier</th><th class="n">Lines</th><th class="n">Order value</th><th class="n">Minimum</th><th class="c">Status</th></tr></thead><tbody>');
-  if(!C.suppliers.length){o.push('<tr><td colspan="5">No suppliers set up.</td></tr>');}
-  C.suppliers.forEach(function(g){
-    var status=g.value<=0.004?"No order needed":(g.below?"BELOW MINIMUM":"Meets minimum");
-    o.push('<tr><td>'+esc(g.sup.name||"(unnamed)")+'</td><td class="n">'+g.lines+'</td><td class="n">'+
-      (g.value>0.004?mny(g.value):"–")+'</td><td class="n">'+mny(g.sup.minOrder)+'</td><td class="c">'+status+'</td></tr>');
+  var list = document.createElement("div"); list.className = "flagList";
+  c.flagged.forEach(function(f){
+    var row = document.createElement("div"); row.className = "flagRow";
+    var l = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = f.name;
+    var why = document.createElement("div"); why.className = "why"; why.textContent = f.acc.status === "raise" ? "Runs out repeatedly — consider a higher par." : "Stays near full — consider a lower par.";
+    l.appendChild(nm); l.appendChild(why);
+    var chip = document.createElement("span"); chip.className = "chip " + f.acc.chip; chip.textContent = f.acc.status === "raise" ? "Raise par" : "Lower par";
+    row.appendChild(l); row.appendChild(chip);
+    list.appendChild(row);
   });
-  o.push('</tbody><tfoot><tr><td colspan="2">Total</td><td class="n">'+mny(t.value)+'</td><td class="n"></td><td class="c"></td></tr></tfoot></table>');
-  o.push('<h3 class="sec">Products flagged for review</h3>');
-  var flagged=C.rows.filter(function(x){return x.flag==="risk"||x.flag==="low"||x.flag==="over";});
-  if(flagged.length){
-    o.push('<table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:14%"><col style="width:14%"><col style="width:26%"></colgroup>'+
-      '<thead><tr><th>Product</th><th>Supplier</th><th class="n">Usage/day</th><th class="n">Cover at par</th><th>Flag &amp; note</th></tr></thead><tbody>');
-    flagged.forEach(function(x){
-      var lab=FLAG_LABEL[x.flag];
-      o.push('<tr><td>'+esc(x.r.name||"(unnamed)")+'</td><td>'+esc(supName(x.r.sup))+'</td><td class="n">'+
-        (x.rate>0?u3(x.rate,1):dash)+'</td><td class="n">'+(x.coverPar===null?dash:u3(x.coverPar,1)+"d")+
-        '</td><td><span class="chipd">'+lab+'</span> '+esc(x.note)+'</td></tr>');
-    });
-    o.push('</tbody></table>');
-  } else {
-    o.push('<div class="basis">No products are flagged this count.</div>');
-  }
-  o.push(docNote());
-  o.push(docFoot());
+  body.appendChild(list);
+}
 
-  /* ── one order sheet per supplier with something to order ── */
-  C.suppliers.forEach(function(g){
-    if(g.value<=0.004)return;
-    o.push('<div class="breakb">'+smpl);
-    o.push(letterhead("PURCHASE ORDER","Supplier: "+esc(g.sup.name||"(unnamed)")));
-    o.push('<div class="meta"><div><b>Supplier</b><span class="sm">'+esc(g.sup.name||"(unnamed)")+'</span></div>'+
-      '<div><b>Order date</b><span>'+dmy(S.order.date)+'</span></div>'+
-      '<div><b>Ordered by</b><span class="sm">'+esc(S.order.by||"—")+'</span></div>'+
-      '<div><b>Minimum order</b><span>'+mny(g.sup.minOrder)+'</span></div></div>');
-    o.push('<div class="hero"><div><b class="t">Order value for this supplier</b><div class="big">'+
-      mny(g.value)+'</div></div><div class="sm">'+g.lines+' line'+(g.lines===1?"":"s")+
-      (g.below?'<br><span class="chipd">BELOW MINIMUM</span> short by '+mny(g.sup.minOrder-g.value):'<br>Meets the minimum order value')+'</div></div>');
-    o.push('<h3 class="sec">Order lines</h3>');
-    o.push('<table><colgroup><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>'+
-      '<thead><tr><th>Product</th><th class="n">Pack size</th><th class="n">Par</th><th class="n">Current</th>'+
-      '<th class="n">Order packs</th><th class="n">Unit cost</th><th class="n">Line value</th></tr></thead><tbody>');
-    g.rows.forEach(function(x){
-      if(!x||x.orderUnits<=0)return;
-      o.push('<tr><td>'+esc(x.r.name||"(unnamed)")+'</td><td class="n">'+u3(x.pack,2)+'</td><td class="n">'+
-        u3(x.par,0)+'</td><td class="n">'+u3(x.count,0)+'</td><td class="n">'+u3(x.orderPacks,0)+' ('+u3(x.orderUnits,0)+' units)'+
-        '</td><td class="n">'+mny(x.cost)+'</td><td class="n">'+mny(x.orderValue)+'</td></tr>');
-    });
-    o.push('</tbody><tfoot><tr><td colspan="6">Order total</td><td class="n">'+mny(g.value)+'</td></tr></tfoot></table>');
-    o.push('<div class="basis">Quantities are rounded up to whole packs from this supplier. Confirm pricing and '+
-      'availability with the supplier before the order is placed.</div>');
-    o.push('<div class="sign"><div><u></u>Ordered by</div><div><u></u>Approved by</div><div><u></u>Date sent</div></div>');
-    o.push(docFoot());
-    o.push('</div>');
+function renderResults(c){
+  $("sTotal").textContent = fmtMoney(c.totalOrderValue, c.sym);
+  $("sTotalSub").textContent = c.itemsNeedingReorder + " item" + (c.itemsNeedingReorder===1?"":"s") + " to order across " + c.suppliersWithOrders + " supplier" + (c.suppliersWithOrders===1?"":"s");
+  $("sBelowMin").textContent = fmtQty(c.suppliersBelowMin);
+  $("sFlags").textContent = fmtQty(c.flagged.length);
+  $("mbarV").textContent = fmtMoney(c.totalOrderValue, c.sym);
+
+  $("phBiz").textContent = (S.biz.name && S.biz.name.trim()) || "Inventory Par Level Sheet";
+  $("phDate").textContent = S.biz.date || "—";
+  $("phPrep").textContent = (S.biz.prepared && S.biz.prepared.trim()) || "—";
+  $("phTotal").textContent = fmtMoney(c.totalOrderValue, c.sym);
+
+  renderPO(c);
+  renderFlags(c);
+}
+
+function syncFormFields(){
+  $("bizName").value = S.biz.name || "";
+  $("bizPrep").value = S.biz.prepared || "";
+  $("bizDate").value = S.biz.date || todayISO();
+  $("curSel").value = (S.currency === "$" || S.currency === "£" || S.currency === "€") ? S.currency : "custom";
+  $("curCustom").value = S.customSym || "";
+  $("curCustom").style.display = S.currency === "custom" ? "" : "none";
+  $("sampleBanner").hidden = !S.sample;
+}
+
+function update(){
+  var c = calc();
+  syncProductCells(c);
+  renderResults(c);
+  save();
+  return c;
+}
+
+/* ── wiring ────────────────────────────────────────────────────── */
+function wireStatic(){
+  $("bizName").addEventListener("input", function(){ S.biz.name = $("bizName").value; S.sample=false; update(); });
+  $("bizPrep").addEventListener("input", function(){ S.biz.prepared = $("bizPrep").value; S.sample=false; update(); });
+  $("bizDate").addEventListener("input", function(){ S.biz.date = $("bizDate").value; S.sample=false; update(); });
+
+  $("curSel").addEventListener("change", function(){
+    var v = $("curSel").value;
+    S.currency = v;
+    $("curCustom").style.display = v === "custom" ? "" : "none";
+    S.sample = false; update();
+  });
+  $("curCustom").addEventListener("input", function(){ S.customSym = $("curCustom").value || ""; S.sample=false; update(); });
+
+  $("btnAddSupplier").addEventListener("click", function(){
+    S.suppliers.push(supplier("", 0));
+    S.sample = false; renderSuppliers(); renderProducts(); update();
+  });
+  $("btnAddProduct").addEventListener("click", function(){
+    S.products.push(product("", S.suppliers[0] ? S.suppliers[0].id : null, 0, 0, 1, 0, 0, ""));
+    S.sample = false; renderProducts(); update();
   });
 
-  d.innerHTML=o.join("");
+  $("btnPrint").addEventListener("click", function(){ window.print(); });
+  $("btnCsv").addEventListener("click", exportCsv);
+  $("btnClear").addEventListener("click", function(){
+    if(!confirm("Delete every supplier and product on this sheet? This cannot be undone.")) return;
+    S = blankState();
+    boot();
+  });
+
+  window.addEventListener("resize", setAbh);
+}
+function setAbh(){
+  try { document.documentElement.style.setProperty("--abh", $("appbar").offsetHeight + "px"); } catch(e){}
 }
 
-/* ══ CSV ════════════════════════════════════════════════════════ */
-function q(v){var s=String(v===null||v===undefined?"":v);
-  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
-function n2(x,dp){return ok(x)?(Math.round(x*Math.pow(10,dp))/Math.pow(10,dp)).toFixed(dp):"";}
-function csv(){
-  var C=calc(),t=C.t,L=[];
-  L.push([q("Inventory Par Level Sheet"),q(S.biz.name)].join(","));
-  L.push([q("Order date"),q(S.order.date),q("Ordered by"),q(S.order.by),q("Ref "+(S.biz.ref||"")),
-    q("Count interval (days): "+n2(S.interval,0)),q("Currency: "+sym())].join(","));
-  L.push("");
-  L.push(["Product","Supplier","Pack size","Par level","Current count","Previous count","Received since",
-    "Lead time (days)","Unit cost","Usage per day","Days cover (current)","Days cover (at par)",
-    "Order packs","Order units","Order value","Flag"].map(q).join(","));
-  C.rows.forEach(function(x){
-    L.push([q(x.r.name),q(supName(x.r.sup)),n2(x.pack,2),n2(x.par,2),n2(x.count,2),n2(x.prev,2),n2(x.recv,2),
-      n2(x.lead,2),n2(x.cost,2),x.rate>0?n2(x.rate,2):"",x.coverCur===null?"":n2(x.coverCur,1),
-      x.coverPar===null?"":n2(x.coverPar,1),n2(x.orderPacks,0),n2(x.orderUnits,2),n2(x.orderValue,2),
-      q(FLAG_LABEL[x.flag])].join(","));
-  });
-  L.push(["TOTALS","","","",n2(t.count,2),n2(t.prev,2),n2(t.recv,2),"","","","","",n2(t.packs,0),n2(t.units,2),n2(t.value,2),""].map(q).join(","));
-  L.push("");
-  L.push(["Supplier","Lines to order","Order value","Minimum order value","Status"].map(q).join(","));
-  C.suppliers.forEach(function(g){
-    var status=g.value<=0.004?"No order needed":(g.below?"BELOW MINIMUM":"Meets minimum");
-    L.push([q(g.sup.name||"(unnamed)"),String(g.lines),n2(g.value,2),n2(g.sup.minOrder,2),q(status)].join(","));
-  });
-  L.push([q("TOTAL — all suppliers"),String(C.suppliers.reduce(function(a,g){return a+g.lines;},0)),n2(t.value,2),"",""].join(","));
-  return L.join("\r\n");
+/* ── CSV export ───────────────────────────────────────────────── */
+function csvCell(v){
+  var s = (v === null || v === undefined) ? "" : String(v);
+  if(/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
 }
-function slug(s){return String(s||"par-level").toLowerCase().replace(/[^a-z0-9]+/g,"-")
-  .replace(/^-+|-+$/g,"").slice(0,40)||"par-level";}
-function dl(text,name,mime){
-  try{
-    var b=new Blob([text],{type:mime});
-    var u=URL.createObjectURL(b), a=document.createElement("a");
-    a.href=u;a.download=name;document.body.appendChild(a);a.click();
-    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
-  }catch(e){}
+function csvRow(a){ return a.map(csvCell).join(","); }
+function dl(name, mime, text){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 800);
+  } catch(e){ /* download blocked */ }
+}
+function exportCsv(){
+  var c = calc();
+  var rows = [];
+  rows.push(["Solvix Inventory Par Level Sheet"]);
+  rows.push(["Business", S.biz.name || ""]);
+  rows.push(["Prepared by", S.biz.prepared || ""]);
+  rows.push(["Count / order date", S.biz.date || ""]);
+  rows.push([]);
+  rows.push(["Product","Supplier","Par level","On hand","Pack size","Unit cost","Needed","Order qty (packs rounded up)","Order value","Lead time (days)","Par check"]);
+  S.products.forEach(function(p){
+    var row = c.byId[p.id];
+    if(!row) return;
+    var supName = "Unassigned";
+    c.groups.forEach(function(g){ if(g.items.indexOf(row) !== -1) supName = g.name; });
+    rows.push([
+      row.name, supName, fmtQty(row.par), fmtQty(row.count), fmtQty(row.pack),
+      row.cost.toFixed(2), fmtQty(row.needed), fmtQty(row.orderQty), row.orderValue.toFixed(2),
+      fmtQty(row.lead), row.acc.status === "insufficient" ? "Add recent counts" : row.acc.label
+    ]);
+  });
+  rows.push([]);
+  rows.push(["Supplier summary"]);
+  rows.push(["Supplier","Items to order","Order subtotal","Minimum order value","Status"]);
+  c.groups.forEach(function(g){
+    var orderCount = g.items.filter(function(it){ return it.orderQty > 0; }).length;
+    rows.push([g.name, fmtQty(orderCount), g.subtotal.toFixed(2), g.mov.toFixed(2),
+      g.belowMin ? "Below minimum" : (g.hasOrder ? "Ready to send" : "No order needed")]);
+  });
+  rows.push([]);
+  rows.push(["Grand total, all suppliers", "", c.totalOrderValue.toFixed(2)]);
+  var text = "﻿" + rows.map(csvRow).join("\r\n") + "\r\n";
+  var d = (S.biz.date || todayISO());
+  dl("par-level-order-" + d + ".csv", "text/csv;charset=utf-8", text);
 }
 
-/* ══ wiring ═════════════════════════════════════════════════════ */
-function fillForm(){
-  $("#bizName").value=S.biz.name; $("#bizAddr").value=S.biz.addr; $("#ref").value=S.biz.ref;
-  $("#orderDate").value=S.order.date; $("#orderedBy").value=S.order.by;
-  $("#interval").value=S.interval;
-  $("#cur").value=S.cur; $("#curC").value=S.curC; $("#curCWrap").hidden=S.cur!=="custom";
-}
-function touch(){ if(S.sample){S.sample=false;} }
-function bindHead(){
-  var map=[["#bizName",function(v){S.biz.name=v;}],["#bizAddr",function(v){S.biz.addr=v;}],
-    ["#ref",function(v){S.biz.ref=v;}],["#orderDate",function(v){S.order.date=v;}],
-    ["#orderedBy",function(v){S.order.by=v;}]];
-  map.forEach(function(m){
-    var el=$(m[0]);
-    el.addEventListener("input",function(){m[1](el.value);touch();paint();save();});
-  });
-  $("#curC").addEventListener("input",function(){S.curC=$("#curC").value;paint();save();});
-  $("#cur").addEventListener("change",function(){S.cur=$("#cur").value;
-    $("#curCWrap").hidden=S.cur!=="custom";paint();save();});
-  var iv=$("#interval");
-  iv.addEventListener("input",function(){
-    var v=num(iv.value,NaN);
-    S.interval=ok(v)&&v>=1?v:S.interval; touch();paint();save();
-  });
-  iv.addEventListener("blur",function(){
-    var v=num(iv.value,NaN), bad=!ok(v)||v<1;
-    iv.classList.toggle("inv",bad);
-    var e=$("#eInterval");e.hidden=!bad;e.textContent=bad?"Enter 1 or more days":"";
-    if(bad){iv.value=S.interval;} else {S.interval=v;iv.value=v;paint();save();}
-  });
-}
-function validateCell(inp){
-  var f=inp.getAttribute("data-f"), v=num(inp.value,NaN), msg="";
-  if(f==="pack"&&(!ok(v)||v<=0))msg="Must be more than 0";
-  if(f==="cost"&&ok(v)&&v<0)msg="Cannot be negative";
-  var e=inp.parentNode.querySelector('.e[data-e="'+f+'"]');
-  inp.classList.toggle("inv",!!msg);
-  if(e){e.hidden=!msg;e.textContent=msg;}
-  if(f==="cost"&&!msg&&inp.value!==""&&ok(v))inp.value=v.toFixed(2);
-}
-function bindTable(){
-  var tb=$("#tb");
-  tb.addEventListener("input",function(ev){
-    var inp=ev.target;if(!inp.getAttribute)return;
-    var f=inp.getAttribute("data-f");if(!f)return;
-    var tr=inp.closest("tr");if(!tr)return;
-    var r=rowById(tr.getAttribute("data-id"));if(!r)return;
-    if(f==="name"){r.name=inp.value;}
-    else if(f==="sup"){r.sup=inp.value;}
-    else{r[f]=num(inp.value,0);}
-    touch();
-    if(inp.classList.contains("inv"))validateCell(inp);
-    paint();save();
-  });
-  tb.addEventListener("change",function(ev){
-    var inp=ev.target;
-    if(inp.getAttribute&&inp.getAttribute("data-f")==="sup"){
-      var tr=inp.closest("tr"),r=tr&&rowById(tr.getAttribute("data-id"));
-      if(r){r.sup=inp.value;touch();paint();save();}
-    }
-  });
-  tb.addEventListener("blur",function(ev){
-    var inp=ev.target;
-    if(inp.getAttribute&&inp.getAttribute("data-f"))validateCell(inp);
-  },true);
-  tb.addEventListener("click",function(ev){
-    var b=ev.target.closest?ev.target.closest(".bDel"):null;if(!b)return;
-    var tr=b.closest("tr"),id=tr.getAttribute("data-id");
-    S.rows=S.rows.filter(function(r){return r.id!==id;});
-    touch();buildTable();paint();save();
-  });
-}
-function bindSuppliers(){
-  var sb=$("#supB");
-  sb.addEventListener("input",function(ev){
-    var inp=ev.target;if(!inp.getAttribute)return;
-    var f=inp.getAttribute("data-sf");if(!f)return;
-    var tr=inp.closest("tr");if(!tr)return;
-    var id=tr.getAttribute("data-id");
-    var s=null;for(var i=0;i<S.suppliers.length;i++){if(S.suppliers[i].id===id){s=S.suppliers[i];break;}}
-    if(!s)return;
-    if(f==="name"){s.name=inp.value;fillSupplierSelects();}
-    else{s.minOrder=Math.max(0,num(inp.value,0));}
-    touch();paint();save();
-  });
-  sb.addEventListener("blur",function(ev){
-    var inp=ev.target;
-    if(inp.getAttribute&&inp.getAttribute("data-sf")==="minOrder"){
-      var v=num(inp.value,0);inp.value=Math.max(0,v).toFixed(2);
-    }
-  },true);
-  sb.addEventListener("click",function(ev){
-    var b=ev.target.closest?ev.target.closest(".bDelSup"):null;if(!b)return;
-    if(S.suppliers.length<=1){flash("Keep at least one supplier — edit it instead.",true);return;}
-    var tr=b.closest("tr"),id=tr.getAttribute("data-id");
-    S.suppliers=S.suppliers.filter(function(s){return s.id!==id;});
-    var fallback=S.suppliers[0].id;
-    S.rows.forEach(function(r){if(r.sup===id)r.sup=fallback;});
-    touch();buildSuppliers();buildTable();paint();save();
-  });
-}
-function addSupplier(){
-  var s={id:uid("s"),name:"",minOrder:0};
-  S.suppliers.push(s);
-  touch();buildSuppliers();paint();save();
-  var last=$("#supB").lastElementChild;
-  if(last){var inp=last.querySelector("input");if(inp)inp.focus();}
-}
-function addRows(n){
-  var supId=S.suppliers.length?S.suppliers[0].id:"";
-  for(var i=0;i<n;i++)S.rows.push(blankRow(supId));
-  touch();buildTable();paint();save();
-  var last=$("#tb").lastElementChild;
-  if(last){var inp=last.querySelector("input");if(inp)inp.focus();}
-}
+/* ── boot ─────────────────────────────────────────────────────── */
 function boot(){
-  var restored=load();
-  if(!restored)save();
-  fillForm();buildSuppliers();buildTable();paint();bindHead();bindTable();bindSuppliers();
-
-  $("#bAdd").addEventListener("click",function(){addRows(1);});
-  $("#bAdd5").addEventListener("click",function(){addRows(5);});
-  $("#bAddSup").addEventListener("click",addSupplier);
-  $("#bBlank").addEventListener("click",function(){
-    S=blankState();fillForm();buildSuppliers();buildTable();paint();save();
-    var i=$("#bizName");if(i)i.focus();
-  });
-  $("#bPrint").addEventListener("click",function(){window.print();});
-  $("#bCsv").addEventListener("click",function(){
-    dl("﻿"+csv(),slug(S.biz.name)+"-par-level-"+(S.order.date||todayISO())+".csv","text/csv;charset=utf-8");
-  });
-  $("#bJson").addEventListener("click",function(){
-    dl(JSON.stringify(S,null,2),slug(S.biz.name)+"-par-level-"+(S.order.date||todayISO())+".json","application/json");
-  });
-  $("#bImport").addEventListener("click",function(){$("#fImport").click();});
-  $("#fImport").addEventListener("change",function(ev){
-    var f=ev.target.files&&ev.target.files[0];if(!f)return;
-    var fr=new FileReader();
-    fr.onload=function(){
-      try{
-        var o=JSON.parse(String(fr.result));
-        if(!o||!Array.isArray(o.rows))throw new Error("bad");
-        S=normalise(o);fillForm();buildSuppliers();buildTable();paint();save();
-        flash("Imported "+S.rows.length+" products.",false);
-      }catch(e){flash("That file is not a par level export.",true);}
-      ev.target.value="";
-    };
-    fr.onerror=function(){flash("Could not read that file.",true);ev.target.value="";};
-    fr.readAsText(f);
-  });
-  $("#bClear").addEventListener("click",function(){
-    if(!window.confirm("Clear all par level data from this browser? This cannot be undone."))return;
-    try{localStorage.removeItem(KEY);}catch(e){}
-    S=blankState();
-    fillForm();buildSuppliers();buildTable();paint();save();
-  });
-  window.addEventListener("beforeprint",function(){paint();});
+  syncFormFields();
+  renderSuppliers();
+  renderProducts();
+  update();
+  setAbh();
 }
-function flash(msg,bad){
-  var n=$("#flash");
-  if(!n){n=document.createElement("div");n.id="flash";n.className="note";
-    n.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;box-shadow:var(--sh);max-width:min(92vw,460px)";
-    document.body.appendChild(n);}
-  n.className="note"+(bad?" bad":" ");n.textContent=msg;n.hidden=false;
-  clearTimeout(flash._t);flash._t=setTimeout(function(){n.hidden=true;},3200);
-}
-boot();
+(function init(){
+  load();
+  wireStatic();
+  boot();
+})();
 </script>
 </body>
 </html>
