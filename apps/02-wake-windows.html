@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wake Windows — the 24-hour sleep wheel for your family</title>
+<meta name="description" content="Work out when your baby should next sleep, what time bedtime therefore is, and print a day card the grandparent or nursery can follow. Measures your own child's wake tolerance from your logs.">
+<meta name="theme-color" content="#232819">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23232819'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='%233d452c' stroke-width='3'/%3E%3Cpath d='M16 5.5a10.5 10.5 0 0 1 9.1 5.25' fill='none' stroke='%23f0d98a' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='2.2' fill='%23d98a4a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cabin+Condensed:wght@400;500;600;700&family=Nunito:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap">
+<style>
+/* ============================================================
+   WAKE WINDOWS — the screen is a wheel.
+   Custom-property scheme is named after the parts of a dial:
+   --rim-*  (grounds & edges)   --script-* (type colour)
+   --arc-*  (the drawn arcs)    --tick-*   (marks & rules)
+   --turn-* (motion)            --hub-*    (centre readout)
+   ============================================================ */
+:root{
+  --rim-night:#232819;      /* dark olive ground */
+  --rim-deep:#1b1f13;
+  --rim-face:#2b3120;       /* the dial face */
+  --rim-raise:#333a26;
+  --rim-hair:#454e33;
+  --rim-edge:#5a6544;
+
+  --script-lit:#efeddc;     /* primary type */
+  --script-soft:#c3c6a8;    /* secondary type */
+  --script-dim:#9aa07f;     /* tertiary — still 4.5:1 on --rim-night */
+  --script-ink:#262b1a;     /* type on light grounds */
+
+  --arc-night:#6d8fa8;      /* night sleep */
+  --arc-nap:#d9c268;        /* naps */
+  --arc-window:#e09550;     /* the wake window band */
+  --arc-feed:#83b7a9;       /* feeds */
+  --arc-quiet:#a99ad0;      /* quiet time */
+  --arc-late:#e4735c;       /* past the window */
+  --hub-glow:#f3dd96;       /* the answer */
+
+  --tick-rule:#3d452c;
+  --paper:#f3f0e2;          /* the printed card */
+  --paper-line:#cdc9b2;
+
+  --turn-quick:150ms cubic-bezier(.2,.7,.3,1);
+  --turn-swing:520ms cubic-bezier(.22,.9,.24,1);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--rim-night); color:var(--script-lit);
+  font-family:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:16px; line-height:1.55; font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(120% 80% at 50% -10%, #2c3220 0%, #232819 46%, #1b1f13 100%);
+  background-attachment:fixed;
+  overflow-x:hidden;
+}
+h1,h2,h3,h4{margin:0; font-weight:700; line-height:1.2}
+p{margin:0 0 .7em}
+button{font:inherit; color:inherit; background:none; border:0; cursor:pointer}
+input,select,textarea{font:inherit; color:inherit}
+:focus-visible{outline:2.5px solid var(--hub-glow); outline-offset:2px; border-radius:3px}
+svg :focus-visible{outline:none}
+
+.legendkey,.dialscript,.sectorname,.leafname,.slotname,.markname,.cardhead b,.stampline{
+  font-family:'Cabin Condensed','Nunito',sans-serif;
+  text-transform:uppercase; letter-spacing:.16em; font-weight:600;
+}
+
+/* ---------- stage: wheel + reading matter ---------- */
+.dialstage{
+  display:block; max-width:1420px; margin:0 auto;
+  padding:clamp(14px,3vw,34px) clamp(12px,3vw,30px) 70px;
+}
+@media (min-width:1040px){
+  .dialstage{display:grid; grid-template-columns:minmax(420px,52fr) minmax(400px,48fr); gap:clamp(28px,3vw,56px); align-items:start}
+  .dialcolumn{position:sticky; top:clamp(14px,3vw,30px)}
+}
+
+/* ---------- the wheel ---------- */
+.dialfield{position:relative; width:100%; max-width:640px; margin:0 auto; aspect-ratio:1/1}
+.dialface{display:block; width:100%; height:100%; overflow:visible; touch-action:none}
+.dialface text{font-family:'Cabin Condensed','Nunito',sans-serif}
+
+.hub{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:47%; text-align:center; pointer-events:none; display:flex;
+  flex-direction:column; align-items:center; justify-content:center; gap:.15em;
+}
+.hub-cue{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.2em;
+  font-size:clamp(.56rem,1.5vw,.72rem); color:var(--arc-window); font-weight:700}
+.hub-clock{
+  font-size:clamp(2.15rem,7.6vw,3.5rem); font-weight:800; letter-spacing:-.03em;
+  color:var(--hub-glow); line-height:.98; font-variant-numeric:tabular-nums;
+  text-shadow:0 0 26px rgba(243,221,150,.18);
+}
+.hub-clock small{font-size:.42em; font-weight:700; letter-spacing:0; opacity:.8}
+.hub-edge{font-size:clamp(.72rem,1.9vw,.86rem); color:var(--script-soft); font-variant-numeric:tabular-nums}
+.hub-tick{width:38%; height:1px; background:var(--rim-hair); margin:.42em 0}
+.hub-bed{font-size:clamp(.72rem,1.9vw,.88rem); color:var(--script-lit)}
+.hub-bed b{color:var(--arc-night); font-weight:800; font-variant-numeric:tabular-nums; font-size:1.14em}
+.hub-count{font-size:clamp(.6rem,1.6vw,.72rem); color:var(--script-dim); font-variant-numeric:tabular-nums; margin-top:.25em}
+
+/* radial legend — sits around the circle, in the corners the circle leaves free */
+.rimlegend{position:absolute; inset:0; pointer-events:none}
+.markname{position:absolute; font-size:.6rem; color:var(--script-dim); line-height:1.35; pointer-events:auto; letter-spacing:.13em}
+.markname b{display:block; font-family:'Nunito',sans-serif; text-transform:none; letter-spacing:0;
+  font-size:.95rem; color:var(--script-lit); font-weight:700}
+.mk-nw{left:-2%; top:2%; text-align:left}
+.mk-ne{right:-2%; top:2%; text-align:right}
+.mk-sw{left:-2%; bottom:1%; text-align:left}
+.mk-se{right:-2%; bottom:1%; text-align:right}
+.keyline{display:flex; flex-wrap:wrap; gap:.1em .7em; justify-content:flex-start}
+.mk-se .keyline{justify-content:flex-end}
+.legendkey{display:inline-flex; align-items:center; gap:.34em; font-size:.58rem; color:var(--script-dim); letter-spacing:.13em}
+.legendkey i{width:12px; height:4px; border-radius:2px; background:currentColor; display:block}
+@media (max-width:719px){
+  .rimlegend{position:static; display:flex; flex-wrap:wrap; gap:.4em 1.1em; justify-content:center;
+    margin-top:.5rem; padding:0 4px}
+  .markname{position:static; text-align:center!important}
+  .mk-sw,.mk-se{width:100%}
+  .mk-se .keyline,.keyline{justify-content:center}
+}
+
+/* ---------- the disclaimer: always in view ---------- */
+.warnplate{
+  margin:clamp(16px,2.4vw,26px) auto 0; max-width:640px;
+  border:1px solid var(--arc-late); border-left-width:5px;
+  background:rgba(228,115,92,.09); padding:.75rem .95rem; border-radius:2px;
+  font-size:.83rem; line-height:1.5; color:var(--script-lit);
+}
+.warnplate b{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.14em;
+  color:var(--arc-late); display:block; font-size:.78rem; margin-bottom:.15rem}
+
+/* ---------- the reading matter beside the wheel ---------- */
+.sheaf{max-width:720px; margin:clamp(22px,3vw,34px) auto 0}
+@media (min-width:1040px){.sheaf{margin-top:0}}
+.sectorname{font-size:clamp(1.05rem,2.4vw,1.32rem); color:var(--hub-glow); letter-spacing:.2em; margin:0 0 .1rem}
+.sectorsub{color:var(--script-soft); font-size:.9rem; margin:0 0 1.35rem; max-width:56ch}
+
+.leaf{border-top:1px solid var(--tick-rule); padding:1.15rem 0 .3rem; margin:0 0 .55rem}
+.leaf:first-of-type{border-top:0; padding-top:.2rem}
+.leafname{font-size:.78rem; color:var(--script-dim); margin:0 0 .55rem; display:flex;
+  align-items:baseline; gap:.6rem; flex-wrap:wrap}
+.leafname em{font-family:'Nunito',sans-serif; font-style:normal; text-transform:none; letter-spacing:0;
+  font-size:.85rem; color:var(--script-soft)}
+
+.bignum{font-size:clamp(1.9rem,5vw,2.5rem); font-weight:800; color:var(--hub-glow);
+  letter-spacing:-.02em; line-height:1.05; font-variant-numeric:tabular-nums}
+.bignum span{font-size:.44em; font-weight:700; color:var(--script-soft); letter-spacing:.02em}
+.saidplain{font-size:1rem; line-height:1.55; color:var(--script-lit); max-width:60ch}
+.saidplain b{color:var(--hub-glow); font-weight:800}
+.notewee{font-size:.8rem; color:var(--script-dim); line-height:1.5; max-width:64ch}
+
+/* time list — the day, read down */
+.timeline-list{list-style:none; margin:.2rem 0 0; padding:0}
+.timeline-list li{display:grid; grid-template-columns:5.6em 12px 1fr auto; gap:.55rem; align-items:baseline;
+  padding:.42rem 0; border-bottom:1px dotted var(--tick-rule); font-size:.92rem}
+.timeline-list li:last-child{border-bottom:0}
+.tstamp{font-variant-numeric:tabular-nums; font-weight:700; color:var(--script-lit); letter-spacing:-.01em}
+.tpip{width:10px; height:10px; border-radius:50%; align-self:center}
+.tsay{color:var(--script-soft)}
+.tsay b{color:var(--script-lit); font-weight:700}
+.tflag{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.12em;
+  font-size:.66rem; color:var(--script-dim); white-space:nowrap}
+.is-plan .tstamp,.is-plan .tsay b{color:var(--script-soft); font-weight:600}
+.is-plan{opacity:.82}
+
+/* the measurement rule — a ruler, not a chart */
+.scalerule{position:relative; margin:1.1rem 0 .3rem; height:118px}
+.scalerule svg{display:block; width:100%; height:100%; overflow:visible}
+.confbar{display:flex; gap:.35rem; align-items:center; margin:.55rem 0 .2rem; flex-wrap:wrap}
+.confpip{width:9px; height:9px; border-radius:50%; background:var(--rim-hair)}
+.confpip.lit{background:var(--hub-glow)}
+.confword{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.16em;
+  font-size:.7rem; color:var(--script-soft); margin-left:.3rem}
+
+/* controls */
+.slotname{display:block; font-size:.66rem; color:var(--script-dim); margin:0 0 .22rem; letter-spacing:.14em}
+.slotset{display:flex; flex-wrap:wrap; gap:.7rem .9rem; margin:.2rem 0 .9rem}
+.slotset > div{flex:1 1 8.5rem; min-width:0}
+input[type=text],input[type=time],input[type=date],input[type=number],select,textarea{
+  width:100%; background:var(--rim-deep); border:1px solid var(--rim-hair); color:var(--script-lit);
+  padding:.42rem .55rem; border-radius:2px; font-size:.92rem; font-variant-numeric:tabular-nums;
+  transition:border-color var(--turn-quick), background var(--turn-quick); min-width:0;
+}
+input:hover,select:hover,textarea:hover{border-color:var(--rim-edge)}
+input:focus,select:focus,textarea:focus{border-color:var(--hub-glow); background:#20250f; outline:none}
+select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--script-dim) 50%),linear-gradient(135deg,var(--script-dim) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%; background-size:5px 5px,5px 5px;
+  background-repeat:no-repeat; padding-right:1.7rem}
+textarea{resize:vertical; min-height:5.2em; line-height:1.5; font-variant-numeric:normal}
+
+.press{
+  display:inline-flex; align-items:center; gap:.4rem; border:1px solid var(--rim-edge);
+  padding:.42rem .85rem; border-radius:999px; font-family:'Cabin Condensed',sans-serif;
+  text-transform:uppercase; letter-spacing:.13em; font-size:.74rem; font-weight:600;
+  color:var(--script-soft); background:rgba(255,255,255,.02);
+  transition:all var(--turn-quick); white-space:nowrap;
+}
+.press:hover{border-color:var(--hub-glow); color:var(--hub-glow); background:rgba(243,221,150,.08)}
+.press:active{transform:translateY(1px)}
+.press.lead{border-color:var(--hub-glow); color:var(--rim-deep); background:var(--hub-glow); font-weight:700}
+.press.lead:hover{background:#fff0b8}
+.press.risk:hover{border-color:var(--arc-late); color:var(--arc-late); background:rgba(228,115,92,.1)}
+.pressrow{display:flex; flex-wrap:wrap; gap:.5rem; margin:.85rem 0 .3rem}
+
+/* editable tables, hairline only */
+.gridtable{width:100%; border-collapse:collapse; font-size:.84rem; font-variant-numeric:tabular-nums}
+.gridtable caption{text-align:left; font-family:'Cabin Condensed',sans-serif; text-transform:uppercase;
+  letter-spacing:.14em; font-size:.7rem; color:var(--script-dim); padding-bottom:.4rem}
+.gridtable th{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.1em;
+  font-size:.64rem; color:var(--script-dim); font-weight:600; text-align:right; padding:.3rem .3rem;
+  border-bottom:1px solid var(--tick-rule); white-space:nowrap}
+.gridtable th:first-child{text-align:left}
+.gridtable td{padding:.16rem .3rem; border-bottom:1px dotted var(--tick-rule); text-align:right; color:var(--script-soft)}
+.gridtable td:first-child{text-align:left; color:var(--script-lit); white-space:nowrap}
+.gridtable tr.now td{background:rgba(243,221,150,.08); color:var(--script-lit)}
+.gridtable tr.now td:first-child{box-shadow:inset 3px 0 0 var(--hub-glow)}
+.gridtable input{padding:.2rem .3rem; text-align:right; font-size:.82rem; border-color:transparent;
+  background:transparent}
+.gridtable input:hover{border-color:var(--rim-hair); background:var(--rim-deep)}
+.tablescroll{overflow-x:auto; margin:0 -2px}
+
+/* entry rows for logs */
+.entryline{display:grid; gap:.4rem; align-items:end; padding:.5rem 0;
+  border-bottom:1px dotted var(--tick-rule);
+  grid-template-columns:1fr 1fr 1fr 1fr auto}
+@media (max-width:560px){.entryline{grid-template-columns:1fr 1fr auto}}
+.entryline .drop{grid-column:1/-2}
+@media (max-width:560px){.entryline .drop{grid-column:1/-1}}
+.xout{width:2rem; height:2rem; border:1px solid var(--rim-hair); border-radius:50%; display:grid;
+  place-items:center; color:var(--script-dim); font-size:1rem; line-height:1; transition:all var(--turn-quick)}
+.xout:hover{border-color:var(--arc-late); color:var(--arc-late)}
+
+/* the folk in the house */
+.folkstrip{display:flex; flex-wrap:wrap; gap:.5rem; margin:.2rem 0 1rem}
+.folktab{border:1px solid var(--rim-hair); border-radius:999px; padding:.34rem .85rem; display:flex;
+  gap:.45rem; align-items:baseline; transition:all var(--turn-quick); background:rgba(255,255,255,.015)}
+.folktab b{font-weight:700; font-size:.92rem}
+.folktab span{font-size:.72rem; color:var(--script-dim); font-variant-numeric:tabular-nums}
+.folktab:hover{border-color:var(--rim-edge)}
+.folktab[aria-pressed=true]{border-color:var(--hub-glow); background:rgba(243,221,150,.1)}
+.folktab[aria-pressed=true] b{color:var(--hub-glow)}
+
+.verdict{border-left:4px solid var(--arc-window); padding:.55rem 0 .55rem .8rem; margin:.7rem 0;
+  background:linear-gradient(90deg,rgba(224,149,80,.09),transparent 70%)}
+.verdict.calm{border-left-color:var(--arc-feed); background:linear-gradient(90deg,rgba(131,183,169,.09),transparent 70%)}
+.verdict.hot{border-left-color:var(--arc-late); background:linear-gradient(90deg,rgba(228,115,92,.1),transparent 70%)}
+.verdict h4{font-family:'Cabin Condensed',sans-serif; text-transform:uppercase; letter-spacing:.14em;
+  font-size:.72rem; color:var(--script-dim); margin-bottom:.2rem}
+
+.sampleflag{display:inline-flex; align-items:center; gap:.4rem; font-family:'Cabin Condensed',sans-serif;
+  text-transform:uppercase; letter-spacing:.15em; font-size:.66rem; color:var(--arc-nap);
+  border:1px dashed var(--arc-nap); padding:.2rem .55rem; border-radius:999px}
+
+/* ---------- the printable day card ---------- */
+.cardsheet{background:var(--paper); color:var(--script-ink); border-radius:2px; padding:clamp(16px,3vw,26px);
+  box-shadow:0 22px 48px rgba(0,0,0,.45); margin:.6rem 0 1rem; font-size:.9rem}
+.cardhead{display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;
+  border-bottom:2px solid var(--script-ink); padding-bottom:.5rem; margin-bottom:.8rem}
+.cardhead h3{font-size:1.5rem; letter-spacing:-.02em; line-height:1.1}
+.cardhead b{display:block; font-size:.66rem; color:#6a6b52; letter-spacing:.18em}
+.cardhead p{margin:0; font-size:.8rem; color:#5d5f47; text-align:right; font-variant-numeric:tabular-nums}
+.cardbody{display:grid; gap:1.1rem; grid-template-columns:1fr}
+@media (min-width:640px){.cardbody{grid-template-columns:190px 1fr}}
+.carddial{width:100%; max-width:190px; margin:0 auto}
+.carddial svg{width:100%; height:auto; display:block}
+.cardplan{list-style:none; margin:0; padding:0}
+.cardplan li{display:grid; grid-template-columns:7.6em 1fr; gap:.5rem; padding:.3rem 0;
+  border-bottom:1px solid var(--paper-line); font-size:.86rem}
+.cardplan .clockcol{font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.cardplan em{font-style:normal; color:#5d5f47; font-size:.8rem}
+.cardnote{margin-top:.9rem}
+.stampline{font-size:.62rem; color:#6a6b52; letter-spacing:.18em; border-bottom:1px solid var(--script-ink);
+  padding-bottom:.15rem; margin-bottom:.4rem; display:block}
+.ruled{border-bottom:1px solid var(--paper-line); height:1.55rem}
+.cardwarn{margin-top:1rem; border:1.5px solid var(--script-ink); padding:.5rem .7rem; font-size:.74rem; line-height:1.45}
+.cardwarn b{letter-spacing:.14em; font-family:'Cabin Condensed',sans-serif; text-transform:uppercase}
+.cardgrid2{display:grid; gap:.9rem; grid-template-columns:1fr 1fr; margin-top:.9rem}
+@media (max-width:520px){.cardgrid2{grid-template-columns:1fr}}
+
+.livespeak{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important; transition-duration:.001ms!important}
+}
+
+/* ---------- print: the card is the whole point ---------- */
+@media print{
+  @page{size:A4 portrait; margin:12mm}
+  html,body{background:#fff!important; color:#000!important}
+  body{font-size:10.5pt}
+  .dialstage,.dialcolumn,.sheaf,.warnplate,.rimlegend,.noprint{display:none!important}
+  #printbook{display:block!important}
+  .cardsheet{box-shadow:none; background:#fff; padding:0; margin:0 0 0 0; page-break-after:always;
+    border:0; font-size:10pt}
+  .cardsheet:last-child{page-break-after:auto}
+  .cardhead h3{font-size:19pt}
+  .cardbody{grid-template-columns:52mm 1fr; gap:8mm}
+  .carddial{max-width:52mm}
+  .cardsheet svg{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  .cardwarn{border-width:1.5pt}
+  .ruled{height:7mm}
+}
+#printbook{display:none}
+</style>
+</head>
+<body>
+<main class="dialstage">
+  <div class="dialcolumn">
+    <h1 class="livespeak">Wake Windows — the twenty-four hour sleep wheel</h1>
+    <section class="dialfield" aria-label="Twenty-four hour sleep wheel">
+      <svg class="dialface" id="dial" viewBox="0 0 400 400" role="img" aria-labelledby="dialtitle dialdesc">
+        <title id="dialtitle">Twenty-four hour wheel</title>
+        <desc id="dialdesc">Midnight at the top, running clockwise. Sleep arcs, feed marks, the next wake window and the current time are drawn on one circle.</desc>
+        <g id="dial-static"></g>
+        <g id="dial-bezel" tabindex="0" role="tablist" aria-label="Rotate the wheel to change section"></g>
+        <g id="dial-arcs"></g>
+        <g id="dial-hand"></g>
+      </svg>
+      <div class="hub" id="hub" aria-live="polite"></div>
+    </section>
+    <div class="rimlegend" id="rimlegend"></div>
+    <aside class="warnplate" role="note">
+      <b>Not medical advice</b>
+      Typical ranges from published sleep guidance; every baby differs. Follow your health visitor or paediatrician.
+    </aside>
+  </div>
+
+  <section class="sheaf" id="sheaf" aria-live="polite"></section>
+</main>
+
+<div id="printbook" aria-hidden="true"></div>
+<p class="livespeak" id="speak" role="status" aria-live="polite"></p>
+<script>
+"use strict";
+/* ============================================================================
+   WAKE WINDOWS
+   One file. No network. Everything below is arithmetic on the family's own
+   entries plus an editable table of published typical ranges.
+   ========================================================================== */
+var STORE_KEY = "wakewindows.v1";
+var DAY = 1440;
+
+/* ---------- small honest utilities ---------- */
+function pad2(n){ n = Math.floor(n); return (n<10?"0":"")+n; }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function num(v,fb){ var n = parseFloat(v); return isFinite(n) ? n : fb; }
+function intOr(v,fb){ var n = parseInt(v,10); return isFinite(n) ? n : fb; }
+
+/* minutes-of-day <-> "HH:MM" */
+function hm2min(s){
+  if(typeof s !== "string") return null;
+  var m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if(!m) return null;
+  var h = +m[1], mi = +m[2];
+  if(h>23 || mi>59) return null;
+  return h*60+mi;
+}
+function min2hm(m){
+  if(m===null || m===undefined || !isFinite(m)) return "—";
+  var v = ((Math.round(m)%DAY)+DAY)%DAY;
+  return pad2(v/60)+":"+pad2(v%60);
+}
+/* duration in minutes -> "3h 25m" */
+function dur(m){
+  if(m===null||m===undefined||!isFinite(m)) return "—";
+  var neg = m<0; m = Math.abs(Math.round(m));
+  var h = Math.floor(m/60), mi = m%60;
+  var s = h ? (h+"h"+(mi?" "+pad2(mi)+"m":"")) : (mi+"m");
+  return (neg?"−":"")+s;
+}
+function durTight(m){
+  if(m===null||m===undefined||!isFinite(m)) return "—";
+  var v = Math.abs(Math.round(m));
+  return Math.floor(v/60)+"h"+pad2(v%60);
+}
+/* hours to a fixed 2dp string, never a raw float */
+function hrs2(m){
+  if(m===null||m===undefined||!isFinite(m)) return "—";
+  return (Math.round((m/60)*100)/100).toFixed(2);
+}
+function hrs1(m){
+  if(m===null||m===undefined||!isFinite(m)) return "—";
+  return (Math.round((m/60)*10)/10).toFixed(1);
+}
+function safeDiv(a,b){ return (b && isFinite(a/b)) ? a/b : null; }
+function pct(a,b){ var r = safeDiv(a,b); return r===null ? "—" : Math.round(r*100)+"%"; }
+
+/* ---------- calendar arithmetic, leap years included ---------- */
+function isoOf(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function parseISO(s){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||""));
+  if(!m) return null;
+  var d = new Date(+m[1], +m[2]-1, +m[3]);
+  if(d.getFullYear()!==+m[1] || d.getMonth()!==+m[2]-1 || d.getDate()!==+m[3]) return null;
+  return d;
+}
+function addDaysISO(iso, n){
+  var d = parseISO(iso); if(!d) return iso;
+  d.setDate(d.getDate()+n); return isoOf(d);
+}
+function daysBetween(isoA, isoB){
+  var a = parseISO(isoA), b = parseISO(isoB);
+  if(!a||!b) return null;
+  return Math.round((b - a)/86400000);
+}
+function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }   /* handles February 2028 */
+/* exact age: whole months elapsed + the part-month as a fraction of that month */
+function ageMonths(dobISO, onISO){
+  var dob = parseISO(dobISO), on = parseISO(onISO);
+  if(!dob||!on) return null;
+  if(on < dob) return 0;
+  var months = (on.getFullYear()-dob.getFullYear())*12 + (on.getMonth()-dob.getMonth());
+  var anchor = new Date(dob.getFullYear(), dob.getMonth()+months, Math.min(dob.getDate(), daysInMonth(dob.getFullYear(), dob.getMonth()+months)));
+  if(anchor > on){ months -= 1; anchor = new Date(dob.getFullYear(), dob.getMonth()+months, Math.min(dob.getDate(), daysInMonth(dob.getFullYear(), dob.getMonth()+months))); }
+  var nextIdx = dob.getMonth()+months+1;
+  var next = new Date(dob.getFullYear(), nextIdx, Math.min(dob.getDate(), daysInMonth(dob.getFullYear(), nextIdx)));
+  var span = Math.round((next-anchor)/86400000);
+  var got = Math.round((on-anchor)/86400000);
+  var frac = span>0 ? got/span : 0;
+  return months + frac;
+}
+function ageWords(dobISO, onISO){
+  var dob = parseISO(dobISO), on = parseISO(onISO);
+  if(!dob||!on) return "—";
+  var months = Math.floor(ageMonths(dobISO,onISO));
+  var anchorIdx = dob.getMonth()+months;
+  var anchor = new Date(dob.getFullYear(), anchorIdx, Math.min(dob.getDate(), daysInMonth(dob.getFullYear(), anchorIdx)));
+  var days = Math.round((on-anchor)/86400000);
+  if(months >= 24){
+    var y = Math.floor(months/12), rm = months%12;
+    return y+"y "+rm+"m";
+  }
+  return months+" month"+(months===1?"":"s")+(days? " "+days+" day"+(days===1?"":"s") : "");
+}
+
+/* ---------- statistics kept deliberately plain ---------- */
+function median(a){
+  if(!a || !a.length) return null;
+  var s = a.slice().sort(function(x,y){return x-y;});
+  var h = Math.floor(s.length/2);
+  return s.length%2 ? s[h] : (s[h-1]+s[h])/2;
+}
+function mean(a){ if(!a||!a.length) return null; var t=0; for(var i=0;i<a.length;i++) t+=a[i]; return t/a.length; }
+
+/* ============================================================================
+   THE TABLE. Typical awake tolerance and sleep need by age.
+   Every number here is editable — the parent knows their baby, the table doesn't.
+   Wake windows in minutes; day and night sleep in hours.
+   ========================================================================== */
+function defaultBands(){
+  return [
+    {id:"b01", name:"0–1 month",    to:1,   wLo:45,  wHi:60,  naps:5, dayLo:6.0,  dayHi:8.0,  niLo:8.0,  niHi:10.0},
+    {id:"b02", name:"1–2 months",   to:2,   wLo:60,  wHi:90,  naps:4, dayLo:5.0,  dayHi:7.0,  niLo:8.5,  niHi:10.5},
+    {id:"b03", name:"2–3 months",   to:3,   wLo:75,  wHi:105, naps:4, dayLo:4.5,  dayHi:6.0,  niLo:9.0,  niHi:11.0},
+    {id:"b04", name:"3–4 months",   to:4,   wLo:90,  wHi:120, naps:4, dayLo:4.0,  dayHi:5.0,  niLo:9.5,  niHi:11.5},
+    {id:"b05", name:"4–6 months",   to:6,   wLo:105, wHi:150, naps:3, dayLo:3.0,  dayHi:4.5,  niLo:10.0, niHi:12.0},
+    {id:"b06", name:"6–9 months",   to:9,   wLo:135, wHi:180, naps:3, dayLo:2.5,  dayHi:3.5,  niLo:10.0, niHi:12.0},
+    {id:"b07", name:"9–12 months",  to:12,  wLo:165, wHi:210, naps:2, dayLo:2.0,  dayHi:3.0,  niLo:10.5, niHi:12.0},
+    {id:"b08", name:"12–15 months", to:15,  wLo:180, wHi:240, naps:2, dayLo:2.0,  dayHi:3.0,  niLo:10.5, niHi:12.0},
+    {id:"b09", name:"15–18 months", to:18,  wLo:210, wHi:270, naps:1, dayLo:1.75, dayHi:3.0,  niLo:10.5, niHi:12.0},
+    {id:"b10", name:"18–24 months", to:24,  wLo:240, wHi:300, naps:1, dayLo:1.5,  dayHi:2.5,  niLo:10.5, niHi:12.0},
+    {id:"b11", name:"2–3 years",    to:36,  wLo:300, wHi:360, naps:1, dayLo:1.0,  dayHi:2.0,  niLo:10.0, niHi:12.0},
+    {id:"b12", name:"3–5 years",    to:60,  wLo:690, wHi:780, naps:0, dayLo:0.0,  dayHi:1.0,  niLo:10.0, niHi:13.0},
+    {id:"b13", name:"5–9 years",    to:108, wLo:720, wHi:810, naps:0, dayLo:0.0,  dayHi:0.0,  niLo:9.0,  niHi:11.0},
+    {id:"b14", name:"9 years +",    to:999, wLo:750, wHi:840, naps:0, dayLo:0.0,  dayHi:0.0,  niLo:8.5,  niHi:10.5}
+  ];
+}
+function bandFor(bands, months){
+  if(months===null||months===undefined) return bands[bands.length-1];
+  for(var i=0;i<bands.length;i++){ if(months < bands[i].to) return bands[i]; }
+  return bands[bands.length-1];
+}
+function bandIdeal(b){ return Math.round((num(b.wLo,0)+num(b.wHi,0))/2); }
+function nightIdealMin(b){ return Math.round(((num(b.niLo,0)+num(b.niHi,0))/2)*60); }
+
+/* ============================================================================
+   SAMPLE FAMILY — generated relative to today so the wheel is alive on load.
+   Seeded, so it is the same family every time until you clear it.
+   ========================================================================== */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeSample(todayISO){
+  var rnd = mulberry32(915772331);
+  function gauss(m,s){ return m + s*((rnd()+rnd()+rnd()+rnd()+rnd()+rnd())-3); }
+  function G(m,s,lo,hi){ return Math.round(clamp(gauss(m,s), lo, hi)); }
+  var DAYS = 25, logsR = [], logsI = [], id = 0;
+  function nid(){ id++; return "s"+id; }
+  function dateAt(k){ return addDaysISO(todayISO, -(DAYS-1-k)); }
+
+  /* --- Rowan, two naps. True tolerance drifts 196 -> 214 minutes over the month. --- */
+  var wakeR = [], plan = [];
+  for(var k=0;k<DAYS;k++) wakeR.push(G(405, 11, 375, 435));           /* ~06:45 */
+  for(k=0;k<DAYS;k++){
+    var T = 196 + Math.round(18*k/(DAYS-1));                           /* the drift */
+    var w = wakeR[k], day = {naps:[], bed:0, T:T};
+    var cursor = w, refusedLast = false;
+    for(var n=0;n<2;n++){
+      var awake = G(n===0?178:206, n===0?20:26, 120, 300);
+      var over = awake > T;
+      if(rnd() < 0.10) over = !over;                                   /* real life is noisy */
+      var start = cursor + awake;
+      if(n===1 && rnd() < 0.12){                                       /* the odd refused second nap */
+        day.naps.push({s:start, e:start+0, settle:45, out:"refused", awake:awake});
+        cursor = start + 30; refusedLast = true; continue;
+      }
+      var len = n===0 ? (over ? G(44,10,20,60) : G(80,13,50,110)) : (over ? G(33,9,15,50) : G(58,13,35,85));
+      var settle = over ? G(24,7,12,45) : G(9,4,2,20);
+      day.naps.push({s:start, e:start+len, settle:settle, out:over?"short":"ok", awake:awake});
+      cursor = start + len;
+    }
+    var lastEnd = cursor;
+    day.bed = lastEnd + G(refusedLast?250:208, 24, 140, 330);
+    day.bed = clamp(day.bed, 1080, 1290);                              /* 18:00 – 21:30 */
+    plan.push(day);
+  }
+  for(k=0;k<DAYS;k++){
+    var d = dateAt(k), P = plan[k];
+    for(var j=0;j<P.naps.length;j++){
+      var np = P.naps[j];
+      logsR.push({i:nid(), d:d, t:"s", k:"nap", s:min2hm(np.s), e:np.out==="refused"?min2hm(np.s):min2hm(np.e),
+                  st:np.settle, w:0, o:np.out, n:""});
+    }
+    if(k < DAYS-1){
+      logsR.push({i:nid(), d:d, t:"s", k:"night", s:min2hm(P.bed), e:min2hm(wakeR[k+1]),
+                  st:G(12,6,3,35), w:G(1,1,0,4), o:"ok", n:""});
+    }
+  }
+
+  /* --- Isla, four years old, naps dropped. Measured on bedtime, not naps.
+         True limit: 745 minutes awake. Later than that and she fights it. --- */
+  var wakeI = [];
+  for(k=0;k<DAYS;k++) wakeI.push(G(410, 9, 385, 435));                 /* ~06:50 */
+  for(k=0;k<DAYS;k++){
+    var d2 = dateAt(k);
+    logsI.push({i:nid(), d:d2, t:"s", k:"quiet", s:min2hm(G(785,14,750,820)), e:min2hm(G(785,14,750,820)+G(42,9,25,60)),
+                st:0, w:0, o:"ok", n:"Quiet time"});
+    if(k < DAYS-1){
+      var bedI = clamp(wakeI[k] + G(748, 30, 640, 860), 1130, 1250);
+      var overI = (bedI - wakeI[k]) > 745;
+      if(rnd() < 0.10) overI = !overI;
+      logsI.push({i:nid(), d:d2, t:"s", k:"night", s:min2hm(bedI), e:min2hm(wakeI[k+1]),
+                  st: overI ? G(30,9,16,55) : G(11,5,3,22), w: overI ? G(2,1,1,4) : G(0,1,0,2), o:"ok", n:""});
+    }
+  }
+
+  /* --- feeds, last three days only: they are for the handover card --- */
+  var fR = [[420,"Milk"],[480,"Breakfast"],[720,"Lunch"],[900,"Milk"],[1035,"Tea"],[1120,"Milk before bed"]];
+  var fI = [[430,"Breakfast"],[735,"Lunch"],[930,"Snack"],[1050,"Dinner"]];
+  for(k=DAYS-3;k<DAYS;k++){
+    var dd = dateAt(k);
+    for(j=0;j<fR.length;j++) logsR.push({i:nid(), d:dd, t:"f", k:"feed", s:min2hm(fR[j][0]+G(0,7,-14,14)), e:null, st:0, w:0, o:"ok", n:fR[j][1]});
+    for(j=0;j<fI.length;j++) logsI.push({i:nid(), d:dd, t:"f", k:"feed", s:min2hm(fI[j][0]+G(0,7,-14,14)), e:null, st:0, w:0, o:"ok", n:fI[j][1]});
+  }
+
+  var dobR = addDaysISO(todayISO, -295);      /* ≈ 9 months and 3 weeks */
+  var dobI = addDaysISO(todayISO, -1524);     /* ≈ 4 years 2 months */
+  return {
+    v:1, sample:true, active:"c1", view:0, usePersonal:true, adults:1, gap:10,
+    bands: defaultBands(),
+    kids:[
+      {id:"c1", name:"Rowan", dob:dobR, wake:"06:45", flex:45, routine:22, napsOverride:"auto",
+       nightOverride:"", quiet:{on:false, s:"13:00", len:45},
+       ritual:"Nappy, sleeping bag, one book, lullaby, cot awake but drowsy. Comforter: grey rabbit. White noise on low.",
+       logs: logsR},
+      {id:"c2", name:"Isla", dob:dobI, wake:"06:50", flex:30, routine:30, napsOverride:"auto",
+       nightOverride:"", quiet:{on:true, s:"13:05", len:45},
+       ritual:"Bath, pyjamas, two books, lights out with the landing light on. Water cup on the shelf.",
+       logs: logsI}
+    ]
+  };
+}
+
+/* ============================================================================
+   THE ENGINE
+   ========================================================================== */
+function dayIndex(iso){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||""));
+  if(!m) return null;
+  return Math.round(Date.UTC(+m[1], +m[2]-1, +m[3]) / 86400000);
+}
+function absOf(iso, hm){
+  var di = dayIndex(iso), t = hm2min(hm);
+  if(di===null || t===null) return null;
+  return di*DAY + t;
+}
+function decorate(e){
+  var s = absOf(e.d, e.s);
+  if(s===null) return null;
+  var o = {ref:e, kind:e.k, isFeed:e.t==="f", a0:s, a1:null, len:0, refused:e.o==="refused"};
+  if(e.t==="f"){ o.a1 = s; return o; }
+  if(e.e===null || e.e===undefined || e.e===""){ o.a1 = null; o.len = null; return o; }   /* in progress */
+  var end = hm2min(e.e);
+  if(end===null){ o.a1 = null; o.len = null; return o; }
+  var span = ((end - (s%DAY)) + DAY) % DAY;
+  if(span===0 && !o.refused && e.k==="night") span = DAY;
+  o.a1 = s + span; o.len = span;
+  return o;
+}
+function allEvents(kid){
+  var out = [];
+  for(var i=0;i<kid.logs.length;i++){
+    var d = decorate(kid.logs[i]);
+    if(d) out.push(d);
+  }
+  out.sort(function(a,b){ return a.a0 - b.a0; });
+  return out;
+}
+
+/* --- the measurement. This is the part a population average cannot do. --- */
+function measureTolerance(kid, mode){
+  var ev = allEvents(kid), rows = [], i, j;
+  var goal = hm2min(kid.wake); if(goal===null) goal = 420;
+  var sleeps = ev.filter(function(e){ return !e.isFeed && e.kind!=="quiet"; });
+  for(i=0;i<sleeps.length;i++){
+    var S = sleeps[i];
+    if(S.kind !== mode) continue;
+    var P = null;
+    for(j=i-1;j>=0;j--){ if(sleeps[j].a1 !== null && sleeps[j].a1 <= S.a0){ P = sleeps[j]; break; } }
+    if(!P) continue;
+    var awake = S.a0 - P.a1;
+    if(awake < 20 || awake > (mode==="night" ? 1020 : 480)) continue;
+    var woke = (S.a1===null) ? null : (S.a1 % DAY);
+    var early = (mode==="night" && woke!==null) ? ((goal - woke) > 25 && (goal - woke) < 240) : false;
+    rows.push({
+      awake: awake, len: S.len===null?0:S.len, settle: intOr(S.ref.st,0), wakes: intOr(S.ref.w,0),
+      refused: S.refused, date: S.ref.d, at: min2hm(S.a0), early: early, a0: S.a0
+    });
+  }
+  var res = {mode:mode, n:rows.length, rows:rows, ok:0, bad:0, tol:null, raw:null, errors:null,
+             acc:null, conf:"thin", shortCut:null, settleCut:null, ceiling:null, drift:null};
+  if(!rows.length) return res;
+
+  var lens = rows.filter(function(r){ return !r.refused && r.len>0; }).map(function(r){ return r.len; });
+  var setts = rows.map(function(r){ return r.settle; });
+  var mLen = median(lens), mSet = median(setts);
+  res.shortCut = (mode==="nap" && mLen!==null) ? Math.max(40, Math.round(0.7*mLen)) : null;
+  res.settleCut = Math.max(mode==="nap"?20:18, Math.round((mSet===null?8:mSet)) + 10);
+
+  for(i=0;i<rows.length;i++){
+    var r = rows[i], bad;
+    if(mode==="nap"){
+      bad = r.refused || (res.shortCut!==null && r.len>0 && r.len < res.shortCut) || (r.settle > res.settleCut);
+    } else {
+      bad = (r.settle > res.settleCut) || (r.wakes >= 2) || r.early;
+    }
+    r.bad = !!bad;
+    if(bad) res.bad++; else res.ok++;
+  }
+
+  /* one-dimensional decision stump: the awake time above which it goes wrong */
+  var vals = rows.map(function(r){ return r.awake; }).sort(function(a,b){ return a-b; });
+  var cands = [];
+  for(i=1;i<vals.length;i++){ if(vals[i] !== vals[i-1]) cands.push((vals[i]+vals[i-1])/2); }
+  if(!cands.length) cands = [vals[0]];
+  var bestErr = Infinity, tied = [];
+  for(i=0;i<cands.length;i++){
+    var t = cands[i], err = 0;
+    for(j=0;j<rows.length;j++){
+      if(rows[j].bad && rows[j].awake <= t) err++;
+      else if(!rows[j].bad && rows[j].awake > t) err++;
+    }
+    if(err < bestErr){ bestErr = err; tied = [t]; }
+    else if(err === bestErr){ tied.push(t); }
+  }
+  var pick = tied[Math.floor((tied.length-1)/2)];
+  res.raw = pick;
+  res.tol = Math.floor(pick/5)*5;
+  res.errors = bestErr;
+  res.acc = safeDiv(rows.length - bestErr, rows.length);
+  res.ceiling = vals[vals.length-1];
+
+  if(res.n < 8) res.conf = "thin";
+  else if(res.bad < 3 || res.ok < 3) res.conf = "onesided";
+  else if(res.n >= 16 && res.acc >= 0.70) res.conf = "measured";
+  else if(res.acc >= 0.65) res.conf = "provisional";
+  else res.conf = "weak";
+
+  /* drift: the same stump on the older half and the newer half */
+  if(rows.length >= 12){
+    var half = Math.floor(rows.length/2);
+    var A = rows.slice(0, half), B = rows.slice(half);
+    var stump = function(set){
+      var v = set.map(function(r){ return r.awake; }).sort(function(a,b){ return a-b; });
+      var cs = [];
+      for(var q=1;q<v.length;q++){ if(v[q]!==v[q-1]) cs.push((v[q]+v[q-1])/2); }
+      if(!cs.length) return null;
+      var be = Infinity, ti = [];
+      for(q=0;q<cs.length;q++){
+        var e2 = 0;
+        for(var z=0;z<set.length;z++){
+          if(set[z].bad && set[z].awake <= cs[q]) e2++;
+          else if(!set[z].bad && set[z].awake > cs[q]) e2++;
+        }
+        if(e2<be){ be=e2; ti=[cs[q]]; } else if(e2===be){ ti.push(cs[q]); }
+      }
+      return { t: Math.floor(ti[Math.floor((ti.length-1)/2)]/5)*5, n:set.length,
+               from:set[0].date, to:set[set.length-1].date };
+    };
+    var a = stump(A), b = stump(B);
+    if(a && b) res.drift = {early:a, late:b, delta:b.t - a.t};
+  }
+  return res;
+}
+
+function napMode(kid, band){
+  var ov = kid.napsOverride;
+  if(ov === "auto" || ov === undefined || ov === null || ov === "") return intOr(band.naps, 0);
+  return Math.max(0, intOr(ov, band.naps));
+}
+
+/* --- the whole day, forwards to the next window and backwards to bedtime --- */
+function buildDay(state, kid, todayISO, nowAbs){
+  var months = ageMonths(kid.dob, todayISO);
+  var band = bandFor(state.bands, months);
+  var naps = napMode(kid, band);
+  var mode = naps > 0 ? "nap" : "night";
+  var per = measureTolerance(kid, mode);
+  var usePer = !!state.usePersonal && (per.conf === "measured" || per.conf === "provisional") && per.tol !== null;
+
+  var bIdeal = bandIdeal(band);
+  var tol, wLo, wHi, source;
+  if(usePer){
+    tol = per.tol;
+    wLo = Math.max(20, tol - Math.max(0, bIdeal - num(band.wLo,0)));
+    wHi = tol + Math.max(0, num(band.wHi,0) - bIdeal);
+    source = "measured";
+  } else {
+    tol = bIdeal; wLo = num(band.wLo,0); wHi = num(band.wHi,0); source = "band";
+  }
+
+  var ev = allEvents(kid);
+  var sleeps = ev.filter(function(e){ return !e.isFeed; });
+  var todayIdx = dayIndex(todayISO);
+  var feedsToday = ev.filter(function(e){ return e.isFeed && e.ref.d === todayISO; });
+
+  /* where are we now? */
+  var asleep = null, lastWake = null;
+  for(var i=0;i<sleeps.length;i++){
+    var s = sleeps[i];
+    if(s.kind === "quiet") continue;
+    if(s.refused) continue;
+    if(s.a0 <= nowAbs && (s.a1 === null || s.a1 > nowAbs)) asleep = s;
+    if(s.a1 !== null && s.a1 <= nowAbs && (lastWake === null || s.a1 > lastWake)){ lastWake = s.a1; }
+  }
+
+  var napLens = sleeps.filter(function(e){ return e.kind==="nap" && !e.refused && e.len>0 && e.a0 > nowAbs-15*DAY; })
+                      .map(function(e){ return e.len; });
+  var napLen = median(napLens);
+  if(napLen === null){
+    var mid = (num(band.dayLo,0)+num(band.dayHi,0))/2*60;
+    napLen = naps > 0 ? Math.round(mid/naps) : 0;
+  }
+  napLen = Math.round(napLen);
+
+  var napsStarted = sleeps.filter(function(e){ return e.kind==="nap" && e.ref.d===todayISO && !e.refused && e.a0 <= nowAbs; }).length;
+  var wakeGoal = hm2min(kid.wake); if(wakeGoal===null) wakeGoal = 420;
+  var bedTargetAbs = (todayIdx+1)*DAY + wakeGoal - (kid.nightOverride ? Math.round(num(kid.nightOverride,0)*60) : nightIdealMin(band));
+  var morningWakeAbs = null;
+  for(i=0;i<sleeps.length;i++){
+    var q = sleeps[i];
+    if(q.kind==="night" && q.a1!==null && q.a1 >= todayIdx*DAY && q.a1 < (todayIdx+1)*DAY){ morningWakeAbs = q.a1; }
+  }
+
+  /* project the rest of the day */
+  var cursor, projWake = null;
+  if(asleep){
+    projWake = (asleep.kind==="night") ? (todayIdx*DAY + wakeGoal) : (asleep.a0 + napLen);
+    if(projWake <= nowAbs) projWake = nowAbs + 10;
+    cursor = projWake;
+  } else {
+    cursor = (lastWake === null) ? nowAbs : lastWake;
+  }
+  var plan = [], remaining = Math.max(0, naps - napsStarted), dropped = 0;
+  for(i=0;i<remaining;i++){
+    var open = cursor + wLo, ideal = cursor + tol, close = cursor + wHi;
+    if(ideal > bedTargetAbs - 75){ dropped = remaining - i; break; }
+    plan.push({kind:"nap", plan:true, a0:ideal, a1:ideal+napLen, open:open, ideal:ideal, close:close});
+    cursor = ideal + napLen;
+  }
+
+  /* the next window, whatever it is for */
+  var nextWin = null;
+  if(!asleep){
+    var base = (lastWake === null) ? nowAbs : lastWake;
+    nextWin = {open: base + wLo, ideal: base + tol, close: base + wHi,
+               forKind: (remaining > 0 ? "nap" : "night"), base: base};
+  }
+
+  /* bedtime, backwards from the morning */
+  var lastNapEnd = null;
+  if(plan.length) lastNapEnd = plan[plan.length-1].a1;
+  else {
+    for(i=0;i<sleeps.length;i++){
+      var t2 = sleeps[i];
+      if(t2.kind==="nap" && !t2.refused && t2.ref.d===todayISO && t2.a1!==null) lastNapEnd = t2.a1;
+    }
+    if(lastNapEnd === null && asleep && asleep.kind==="nap") lastNapEnd = projWake;
+  }
+  var flex = Math.max(0, intOr(kid.flex, 45));
+  var readyAbs = null;
+  if(naps > 0 && lastNapEnd !== null) readyAbs = lastNapEnd + tol;
+  else if(naps === 0 && usePer && morningWakeAbs !== null) readyAbs = morningWakeAbs + tol;
+  else if(naps === 0 && morningWakeAbs !== null && num(band.wLo,0) > 0) readyAbs = morningWakeAbs + tol;
+
+  var bedAbs = (readyAbs === null) ? bedTargetAbs : clamp(readyAbs, bedTargetAbs - flex, bedTargetAbs + flex);
+  var shift = bedAbs - bedTargetAbs;
+  var projNight = (todayIdx+1)*DAY + wakeGoal - bedAbs;
+  var niLo = Math.round(num(band.niLo,0)*60), niHi = Math.round(num(band.niHi,0)*60);
+  var nightOK = projNight >= niLo && projNight <= niHi;
+
+  return {
+    kid:kid, months:months, band:band, naps:naps, mode:mode, per:per, usePer:usePer,
+    tol:tol, wLo:wLo, wHi:wHi, source:source, bandIdeal:bIdeal,
+    events:ev, sleeps:sleeps, feedsToday:feedsToday, asleep:asleep, lastWake:lastWake,
+    morningWakeAbs:morningWakeAbs, napLen:napLen, napsStarted:napsStarted,
+    plan:plan, dropped:dropped, nextWin:nextWin, projWake:projWake,
+    bed:{targetAbs:bedTargetAbs, readyAbs:readyAbs, bedAbs:bedAbs, shift:shift,
+         projNight:projNight, niLo:niLo, niHi:niHi, ok:nightOK, flex:flex},
+    todayIdx:todayIdx, todayISO:todayISO, nowAbs:nowAbs
+  };
+}
+
+/* --- day / night totals and the rolling seven --- */
+function totalsFor(kid, dISO){
+  var ev = allEvents(kid), di = dayIndex(dISO);
+  var night = 0, day = 0, hasNight = false, hasDay = false;
+  for(var i=0;i<ev.length;i++){
+    var e = ev[i];
+    if(e.isFeed || e.len === null || e.kind === "quiet") continue;
+    if(e.kind === "night"){
+      if(e.a1 !== null && e.a1 >= di*DAY && e.a1 < (di+1)*DAY){ night += e.len; hasNight = true; }
+    } else if(e.kind === "nap"){
+      if(e.ref.d === dISO){ day += e.len; if(e.len>0) hasDay = true; }
+    }
+  }
+  return {night:night, day:day, total:night+day, hasNight:hasNight, hasDay:hasDay,
+          has:hasNight||hasDay, date:dISO};
+}
+function rollingSeven(kid, todayISO){
+  var rows = [], i;
+  for(i=7;i>=1;i--) rows.push(totalsFor(kid, addDaysISO(todayISO, -i)));
+  var used = rows.filter(function(r){ return r.hasNight; });
+  return {rows:rows, n:used.length,
+          avgTotal: used.length ? mean(used.map(function(r){return r.total;})) : null,
+          avgDay:   used.length ? mean(used.map(function(r){return r.day;}))   : null,
+          avgNight: used.length ? mean(used.map(function(r){return r.night;})) : null};
+}
+
+/* --- nap transitions --- */
+function transition(state, D){
+  var kid = D.kid, band = D.band, naps = D.naps;
+  var out = {naps:naps, refusals:0, attempts:0, lengthening:false, ready:false, why:[], next:null};
+  if(naps <= 0){
+    out.why.push("Naps have already gone. The day now runs on quiet time and a bedtime measured backwards from the morning.");
+    out.next = shapeOfDay(state, D, 0);
+    return out;
+  }
+  var since = addDaysISO(D.todayISO, -7);
+  for(var i=0;i<kid.logs.length;i++){
+    var L = kid.logs[i];
+    if(L.t!=="s" || L.k!=="nap") continue;
+    if(L.d < since || L.d > D.todayISO) continue;
+    out.attempts++;
+    if(L.o === "refused") out.refusals++;
+  }
+  var per = D.per;
+  if(per.tol !== null && (per.conf==="measured"||per.conf==="provisional") && per.tol >= num(band.wHi,0)){
+    out.lengthening = true;
+    out.why.push("Measured tolerance "+durTight(per.tol)+" has reached the top of the "+band.name+" band ("+durTight(num(band.wHi,0))+").");
+  }
+  if(out.refusals >= 3) out.why.push("The last nap was refused on "+out.refusals+" of the last 7 days.");
+  out.ready = out.lengthening && out.refusals >= 3;
+  if(!out.why.length){
+    var gapTop = num(band.wHi,0) - (per.tol===null? D.tol : per.tol);
+    out.why.push("No transition indicated. "+(gapTop>0
+      ? "Measured tolerance is "+dur(gapTop)+" below the "+band.name+" ceiling, and the last nap was refused on "+out.refusals+" of the last 7 days (a transition usually shows at 3)."
+      : "Refusals are at "+out.refusals+" of 7; a transition usually shows at 3."));
+  }
+  out.next = shapeOfDay(state, D, Math.max(0, naps-1));
+  return out;
+}
+/* what the day would look like on n naps: windows spread evenly wake -> bedtime */
+function shapeOfDay(state, D, n){
+  var wake = hm2min(D.kid.wake); if(wake===null) wake = 420;
+  var bedTarget = (D.bed.targetAbs % DAY + DAY) % DAY;
+  var span = ((bedTarget - wake) + DAY) % DAY;
+  var L = n > 0 ? Math.max(30, D.napLen) : 0;
+  var w = safeDiv(span - n*L, n+1);
+  if(w === null || w < 0) return {naps:n, ok:false, window:null, blocks:[], span:span};
+  var blocks = [], cur = wake;
+  for(var i=0;i<n;i++){
+    var s = cur + w;
+    blocks.push({s:s, e:s+L});
+    cur = s + L;
+  }
+  return {naps:n, ok:true, window:Math.round(w), blocks:blocks, bed:bedTarget, wake:wake, span:span, napLen:L};
+}
+
+/* --- the actual evening conflict in a two-child house --- */
+function eveningPlan(state, days){
+  var seq = days.map(function(D){
+    return {D:D, name:D.kid.name, bed:D.bed.bedAbs, routine:Math.max(0,intOr(D.kid.routine,20))};
+  }).sort(function(a,b){ return a.bed - b.bed; });
+  var gap = Math.max(0, intOr(state.gap,10));
+  var adults = Math.max(1, intOr(state.adults,1));
+  var clashes = [], plan = [];
+  for(var i=0;i<seq.length;i++){
+    var it = seq[i];
+    var start = it.bed - it.routine, shift = 0, note = "";
+    if(i>0 && adults < seq.length){
+      var earliest = plan[i-1].bed + gap;
+      if(start < earliest){
+        shift = earliest - start;
+        var D = it.D, newBed = it.bed + shift;
+        var newNight = (D.todayIdx+1)*DAY + (hm2min(D.kid.wake)||420) - newBed;
+        var fits = newNight >= D.bed.niLo && newNight <= D.bed.niHi;
+        clashes.push({name:it.name, other:plan[i-1].name, overlap:shift,
+                      from:it.bed, to:newBed, night:newNight, fits:fits,
+                      niLo:D.bed.niLo, niHi:D.bed.niHi});
+        it.bed = newBed; start = it.bed - it.routine; note = "moved "+shift+" min later";
+      }
+    }
+    plan.push({name:it.name, bed:it.bed, start:start, routine:it.routine, note:note, D:it.D});
+  }
+  return {plan:plan, clashes:clashes, adults:adults, gap:gap};
+}
