@@ -221,51 +221,85 @@ function asDate(f: unknown): string | null {
 }
 
 /**
- * Server-side QC score, mirroring the legacy Pipeline.confidenceReport():
- * walk every Field leaf, keep the ones with a populated value, round each
- * confidence to 2dp, take the mean, round to 3dp. The same keys the legacy
- * walker skipped are skipped here so the numbers stay comparable.
+ * Server-side QC score.
+ *
+ * Coverage-weighted, and deliberately NOT the engine's mean-of-populated-
+ * fields. That mean answers "how sure are we about what we read"; the board
+ * uses this number to answer "did we understand this document", and the two
+ * diverge badly on a bad read. A tender the parser got nothing from still
+ * scored 78% under the mean, because four of the eight fields it populated are
+ * constants emitted for every document (purpose 00, method of payment PP,
+ * weight UOM L, currency USD). Yellow on the board reads "glance at it"; the
+ * whole point of red is to say what is missing.
+ *
+ * So a missing answer scores zero instead of sitting out of the average, and
+ * the constants are excluded because they carry no evidence about this
+ * document. Kept in step with src/lib/qc-score.ts — if the expectations change
+ * in one, they must change in the other, or the connector and the board will
+ * show different numbers for the same load.
  *
  * A client-supplied score is ignored entirely - it decides what lands in a
  * dispatcher's QC queue, so it is not the connector's to assert.
  */
-const QC_SKIP_KEYS = new Set([
-  "source_file",
-  "source_kind",
-  "extracted_at",
-  "warnings",
-  "pages",
-  "id",
-]);
+function fieldConfidence(f: unknown): number | null {
+  if (!isField(f)) return null;
+  const v = f.v;
+  if (v === null || v === undefined || v === "") return null;
+  return typeof f.c === "number" && Number.isFinite(f.c) ? f.c : 0;
+}
+
+function firstConfidence(...fields: unknown[]): number | null {
+  for (const f of fields) {
+    const c = fieldConfidence(f);
+    if (c !== null) return c;
+  }
+  return null;
+}
+
+function stopOfType(tender: any, type: string): any {
+  const stops = Array.isArray(tender?.stops) ? tender.stops : [];
+  return stops.find((s: any) =>
+    String(s?.stop_type?.v ?? "").toLowerCase() === type
+  );
+}
+
+/** A stop counts as located only if we know the town it is in. */
+function stopLocated(stop: any): number | null {
+  if (!stop) return null;
+  const city = fieldConfidence(stop?.party?.city);
+  const state = fieldConfidence(stop?.party?.state);
+  if (city === null || state === null) return null;
+  return (city + state) / 2;
+}
+
+/** A stop counts as scheduled if it has any time to work against. */
+function stopScheduled(stop: any): number | null {
+  if (!stop) return null;
+  return firstConfidence(stop?.appointment, stop?.earliest, stop?.latest);
+}
 
 function computeQcScore(tender: unknown): number {
-  const confidences: number[] = [];
+  const t = tender as any;
+  if (!t || typeof t !== "object") return 0;
 
-  const walk = (node: unknown): void => {
-    if (isField(node)) {
-      const v = node.v;
-      if (v !== null && v !== undefined && v !== "") {
-        const c = typeof node.c === "number" && Number.isFinite(node.c) ? node.c : 0;
-        confidences.push(Math.round(c * 100) / 100);
-      }
-      return;
-    }
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    if (typeof node === "object" && node !== null) {
-      for (const [k, val] of Object.entries(node)) {
-        if (QC_SKIP_KEYS.has(k)) continue;
-        walk(val);
-      }
-    }
-  };
+  const pickup = stopOfType(t, "pickup");
+  const delivery = stopOfType(t, "delivery");
 
-  walk(tender);
-  if (confidences.length === 0) return 0;
-  const mean = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-  return Math.round(mean * 1000) / 1000;
+  const expectations: Array<number | null> = [
+    fieldConfidence(t.shipment_id),
+    fieldConfidence(t.tender_date),
+    firstConfidence(t.equipment?.type_code, t.equipment?.type_text),
+    fieldConfidence(t.total_weight),
+    fieldConfidence(t.commodity),
+    fieldConfidence(t.total_charge),
+    stopLocated(pickup),
+    stopScheduled(pickup),
+    stopLocated(delivery),
+    stopScheduled(delivery),
+  ];
+
+  const total = expectations.reduce<number>((sum, c) => sum + (c ?? 0), 0);
+  return Math.round((total / expectations.length) * 1000) / 1000;
 }
 
 /** Flatten a tender Party into the shared party column set. */
