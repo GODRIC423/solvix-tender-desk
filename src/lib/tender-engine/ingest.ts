@@ -312,6 +312,81 @@ const readAsDataUrl = (f: any): Promise<any> => new Promise((res, rej) => {
   r.readAsDataURL(f);
 });
 
+
+/* -------------------------------------------------------------- plain text */
+/* A .txt or .eml tender used to be handed to the extractor with no word boxes
+   at all, which meant the geometry-driven field matching had nothing to work
+   on and the load came out essentially empty. (Legacy did the same; this is a
+   deliberate divergence from it, not a port fidelity fix.)
+
+   Plain-text tenders are still laid out visually — labels and values line up
+   in columns held apart by runs of spaces. So we treat the text as monospace
+   and synthesise a word box per word from its row and column offset. The grid
+   builder then reconstructs lines and columns exactly as it does for a PDF.
+
+   CHAR_W and LINE_H only matter relative to each other and to splitCells'
+   gap threshold (max(median*2.2, median+6)): at 8px per character a single
+   space between words is a 8px gap and three spaces is 24px, so three or more
+   spaces start a new column, which is how these documents are written. */
+const TEXT_CHAR_W = 8;
+const TEXT_LINE_H = 16;
+const TEXT_GLYPH_H = 12;
+
+export function wordsFromPlainText(text: string): any[] {
+  const out: any[] = [];
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+
+  lines.forEach((line, row) => {
+    const top = row * TEXT_LINE_H;
+    const bottom = top + TEXT_GLYPH_H;
+    // \S+ with indices keeps each word's true column, so alignment survives.
+    const re = /\S+/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      out.push({
+        text: m[0],
+        x0: m.index * TEXT_CHAR_W,
+        x1: (m.index + m[0].length) * TEXT_CHAR_W,
+        top,
+        bottom,
+        conf: 0.99,
+      });
+    }
+  });
+
+  return out;
+}
+
+/* An .eml is a MIME message, not a tender. Pull out the text/plain part and
+   undo quoted-printable so the body reads as it did when it was sent; without
+   this the extractor sees mail headers and =20 escapes. Multipart alternatives
+   keep the plain part, since the HTML one carries no extra freight for us. */
+export function textFromEml(raw: string): string {
+  const src = String(raw || '').replace(/\r\n?/g, '\n');
+  if (!/^[A-Za-z-]+:\s/m.test(src.slice(0, 2000))) return src; // not a mail file
+
+  const boundaryMatch = /boundary="?([^"\s;]+)"?/i.exec(src);
+  let body = src;
+
+  if (boundaryMatch) {
+    const parts = src.split(new RegExp('--' + boundaryMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const plain = parts.find((p) => /content-type:\s*text\/plain/i.test(p));
+    body = plain ?? parts[1] ?? src;
+  }
+
+  // Drop the header block: everything up to the first blank line.
+  const blank = body.indexOf('\n\n');
+  if (blank !== -1) body = body.slice(blank + 2);
+
+  if (/content-transfer-encoding:\s*quoted-printable/i.test(src)) {
+    body = body
+      .replace(/=\n/g, '')
+      .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+
+  return body.trim();
+}
+
 export async function load(file: any, onProgress?: ProgressFn): Promise<IngestResult> {
   const name = (file.name || '').toLowerCase();
   if (name.endsWith('.pdf') || file.type === 'application/pdf')
@@ -319,8 +394,12 @@ export async function load(file: any, onProgress?: ProgressFn): Promise<IngestRe
   if (/\.(png|jpe?g|tiff?|bmp|webp|gif)$/.test(name) || (file.type || '').startsWith('image/'))
     return loadImage(await readAsDataUrl(file), onProgress);
   if (/\.(txt|eml)$/.test(name)) {
-    const text = await file.text();
-    return { kind: 'text', pages: [{ number: 1, words: [], text, width: 0, height: 0,
+    const raw = await file.text();
+    const text = name.endsWith('.eml') ? textFromEml(raw) : raw;
+    const words = wordsFromPlainText(text);
+    const width = words.reduce((max: number, w: any) => Math.max(max, w.x1), 0);
+    const height = words.reduce((max: number, w: any) => Math.max(max, w.bottom), 0);
+    return { kind: 'text', pages: [{ number: 1, words, text, width, height,
                                      source: 'textlayer', meanConf: 0.99, image: null }] };
   }
   throw new Error('Unsupported file type: ' + (name || file.type));
