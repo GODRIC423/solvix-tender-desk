@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useCarriers'
 import { useInteractionTypes } from '@/hooks/useSettings'
 import { relativeTime } from '@/lib/urgency'
+import CarrierScorecard from '@/components/CarrierScorecard'
 import { StatusPill } from './Carriers'
 import type { CarrierInteractionView, LoadBoardRow } from '@/types/db'
 
@@ -87,7 +88,7 @@ export default function CarrierDetail() {
         </TabButton>
       </div>
 
-      {tab === 'overview' && <CarrierOverview carrier={carrier} loads={(loads ?? []) as LoadBoardRow[]} />}
+      {tab === 'overview' && <CarrierOverview carrier={carrier} />}
       {tab === 'interactions' && (
         <InteractionsTab carrierId={carrier.id} interactions={interactions ?? []} />
       )}
@@ -133,20 +134,9 @@ function InteractionLine({ interaction }: { interaction: CarrierInteractionView 
   )
 }
 
-function CarrierOverview({ carrier, loads }: { carrier: any; loads: LoadBoardRow[] }) {
+function CarrierOverview({ carrier }: { carrier: any }) {
   const save = useSaveCarrier()
   const [draft, setDraft] = useState(carrier)
-
-  // Phase 1 shows the raw inputs to the performance numbers; the computed
-  // on-time % and rate-per-mile-by-direction rollups land in Phase 2.
-  const stats = useMemo(() => {
-    const withRate = loads.filter((l) => l.carrier_rate && l.distance_miles)
-    const rpm = withRate.length
-      ? withRate.reduce((sum, l) => sum + Number(l.carrier_rate) / Number(l.distance_miles), 0) /
-        withRate.length
-      : null
-    return { loadCount: loads.length, rpm }
-  }, [loads])
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -197,23 +187,7 @@ function CarrierOverview({ carrier, loads }: { carrier: any; loads: LoadBoardRow
         </button>
       </div>
 
-      <div className="card p-3">
-        <h2 className="mb-2 text-sm font-semibold text-slate-200">Performance</h2>
-        <dl className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-slate-400">Loads hauled</dt>
-            <dd>{stats.loadCount}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-slate-400">Avg rate / mile</dt>
-            <dd>{stats.rpm ? `$${stats.rpm.toFixed(2)}` : '—'}</dd>
-          </div>
-        </dl>
-        <p className="mt-3 text-[11px] text-slate-500">
-          On-time percentage and east/west rate-per-mile split arrive in Phase 2, once actual
-          arrival times are being captured. The columns they read from already exist.
-        </p>
-      </div>
+      <CarrierScorecard carrierId={carrier.id} />
     </div>
   )
 }

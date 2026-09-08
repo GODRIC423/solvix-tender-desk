@@ -16,6 +16,8 @@ import { bandFor, BAND_SEVERITY } from '@/lib/qc-bands'
 import { urgencyFor, relativeTime } from '@/lib/urgency'
 import { BandDot, BandPill, QcScoreBadge } from '@/components/BandPill'
 import AssignParties from '@/components/AssignParties'
+import StopArrival from '@/components/StopArrival'
+import LaneCarrierPicker from '@/components/LaneCarrierPicker'
 import type { LoadStop } from '@/types/db'
 
 export default function LoadDetail() {
@@ -284,6 +286,25 @@ export default function LoadDetail() {
             }
           />
 
+          {/*
+            Who has run this lane before. Routed through the same update path as
+            AssignParties so there is one way a carrier gets onto a load, not two.
+          */}
+          <LaneCarrierPicker
+            originMetroId={load.origin_metro_id}
+            destMetroId={load.dest_metro_id}
+            selectedCarrierId={load.carrier_id}
+            saving={updateLoad.isPending}
+            originMetroName={load.origin_city}
+            destMetroName={load.dest_city}
+            onSelect={(carrierId) =>
+              updateLoad.mutate({
+                patch: { carrier_id: carrierId },
+                previous: { carrier_id: load.carrier_id },
+              })
+            }
+          />
+
           <section className="card p-3" data-search-exclude>
             <h2 className="mb-2 text-sm font-semibold text-slate-200">Tracking</h2>
             <TrackingComposer onAdd={(note) => addTracking.mutate({ type: 'check_call', note })} />
@@ -539,6 +560,10 @@ function StopsPanel({
                     {stop.instructions}
                   </div>
                 )}
+              </div>
+
+              <div className="mt-2" data-search-exclude>
+                <StopArrival stop={stop} loadId={loadId} />
               </div>
 
               {suggestions.length > 0 && (
