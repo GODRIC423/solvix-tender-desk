@@ -125,17 +125,15 @@ export interface LoadTender {
   warnings: string[]
 }
 
-/** Output of `Pipeline.confidenceReport()`. */
-export interface ConfidenceReport {
-  fields: Array<{ key: string; label?: string; c: number; v: unknown }>
-  needsReview: Array<{ key: string; label?: string; c: number; v: unknown }>
-  score: number
-}
-
-/** A page of the source document, with its OCR provenance. */
-export interface SourcePage {
-  index: number
-  thumbnail?: string
-  source: 'text' | 'ocr'
-  meanConf?: number
-}
+/*
+ * Note: the confidence-report and source-page shapes are NOT declared here.
+ *
+ * Earlier drafts of this file guessed at them, and the guesses were wrong —
+ * the engine emits `{path, value, confidence, source}` for report entries and
+ * `{number, words, text, width, height, source, meanConf, image}` for pages.
+ * Rather than keep a type that lies about the runtime, the accurate ones live
+ * next to the code that produces them:
+ *
+ *   EngineConfidenceReport, ConfidenceField  -> lib/tender-engine/pipeline.ts
+ *   IngestPage, IngestResult                 -> lib/tender-engine/ingest.ts
+ */
