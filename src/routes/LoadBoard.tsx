@@ -2,9 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLoadBoard } from '@/hooks/useLoads'
 import { usePipelineStages, useSettings } from '@/hooks/useSettings'
+import { useAuth } from '@/hooks/useAuth'
+import { useSaveMyPreferences } from '@/hooks/useProfiles'
 import { urgencyFor, relativeTime, type UrgencyResult } from '@/lib/urgency'
 import { BAND_DOT_CLASS, BAND_SEVERITY, bandFor } from '@/lib/qc-bands'
 import { BandDot, BandPill } from '@/components/BandPill'
+import Toggle from '@/components/Toggle'
 import type { LoadBoardRow } from '@/types/db'
 
 type SortKey = 'urgency' | 'pickup' | 'qc' | 'load_number'
@@ -17,13 +20,19 @@ export default function LoadBoard() {
 
   const { data: settings } = useSettings()
   const { data: stages } = usePipelineStages()
+  const { view, flagRules, can, profile } = useAuth()
+  const savePrefs = useSaveMyPreferences()
   const { data: rows, isLoading, error } = useLoadBoard({ search, stageKeys, includeTerminal })
 
-  // Urgency is computed client-side against "now" so colors stay correct as
-  // time passes without needing the server to re-evaluate every row.
+  // Flags are computed client-side against "now" so colours stay correct as
+  // time passes without needing the server to re-evaluate every row. The
+  // rules used are the org's, narrowed by this viewer's team and own switches.
   const decorated = useMemo(() => {
     const now = new Date()
-    const list = (rows ?? []).map((row) => ({
+    const visible = (rows ?? []).filter((row) =>
+      row.stage_is_booked ? view.show_booked : view.show_unbooked,
+    )
+    const list = visible.map((row) => ({
       row,
       urgency: urgencyFor(
         {
@@ -32,8 +41,9 @@ export default function LoadBoard() {
           hasTrackingEvent: row.has_tracking_event,
           lastTouchedAt: row.last_touched_at,
           isTerminal: row.stage_is_terminal,
+          phase: row.stage_phase,
         },
-        settings?.urgencyRules,
+        flagRules,
         now,
       ),
     }))
@@ -53,7 +63,9 @@ export default function LoadBoard() {
       sorted.sort((a, b) => a.row.load_number.localeCompare(b.row.load_number))
     }
     return sorted
-  }, [rows, settings?.urgencyRules, sort])
+  }, [rows, flagRules, view.show_booked, view.show_unbooked, sort])
+
+  const hiddenCount = (rows?.length ?? 0) - decorated.length
 
   const counts = useMemo(() => {
     const c = { red: 0, orange: 0, yellow: 0, green: 0, none: 0 }
@@ -65,6 +77,23 @@ export default function LoadBoard() {
 
   function toggleStage(key: string) {
     setStageKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
+
+  function setView(patch: { show_unbooked?: boolean; show_booked?: boolean }) {
+    const own = profile?.preferences ?? {}
+    const next = { ...own, ...patch }
+    // Keep the flag master switch in step with the visibility switch — hiding
+    // a board and still flagging it would be a colour count for nothing.
+    next.flags = {
+      ...own.flags,
+      ...(patch.show_unbooked !== undefined
+        ? { unbooked: { ...own.flags?.unbooked, enabled: patch.show_unbooked } }
+        : {}),
+      ...(patch.show_booked !== undefined
+        ? { booked: { ...own.flags?.booked, enabled: patch.show_booked } }
+        : {}),
+    }
+    savePrefs.mutate(next)
   }
 
   return (
@@ -93,11 +122,16 @@ export default function LoadBoard() {
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
           >
-            <option value="urgency">Sort: urgency</option>
+            <option value="urgency">Sort: flags</option>
             <option value="pickup">Sort: pickup</option>
             <option value="qc">Sort: QC score</option>
             <option value="load_number">Sort: load #</option>
           </select>
+          {can('create_loads') && (
+            <Link to="/loads/new" className="btn btn-primary">
+              + New load
+            </Link>
+          )}
         </div>
       </div>
 
@@ -118,14 +152,6 @@ export default function LoadBoard() {
             </button>
           )
         })}
-        <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-400">
-          <input
-            type="checkbox"
-            checked={includeTerminal}
-            onChange={(e) => setIncludeTerminal(e.target.checked)}
-          />
-          Show closed
-        </label>
         {(stageKeys.length > 0 || search) && (
           <button
             className="ml-1 text-xs text-slate-400 underline hover:text-slate-200"
@@ -137,7 +163,37 @@ export default function LoadBoard() {
             Clear filters
           </button>
         )}
+
+        {/* --------------------------------------------- my view switches */}
+        <div className="ml-auto flex flex-wrap items-center gap-4 text-xs text-slate-400">
+          <span className="font-medium uppercase tracking-wide text-slate-500">View</span>
+          <Toggle
+            size="sm"
+            checked={view.show_unbooked}
+            onChange={(v) => setView({ show_unbooked: v })}
+            label={<span className="text-xs font-normal text-slate-300">Unbooked</span>}
+          />
+          <Toggle
+            size="sm"
+            checked={view.show_booked}
+            onChange={(v) => setView({ show_booked: v })}
+            label={<span className="text-xs font-normal text-slate-300">Booked</span>}
+          />
+          <Toggle
+            size="sm"
+            tone="accent"
+            checked={includeTerminal}
+            onChange={setIncludeTerminal}
+            label={<span className="text-xs font-normal text-slate-300">Closed</span>}
+          />
+        </div>
       </div>
+
+      {hiddenCount > 0 && (
+        <div className="mb-2 text-xs text-slate-500">
+          {hiddenCount} load{hiddenCount === 1 ? '' : 's'} hidden by your view switches.
+        </div>
+      )}
 
       {error && (
         <div className="card border-band-red/40 bg-band-red/10 p-3 text-sm text-red-300">
@@ -156,22 +212,27 @@ export default function LoadBoard() {
               <th className="th">Lane</th>
               <th className="th">Pickup</th>
               <th className="th">Carrier</th>
+              <th className="th">Rate</th>
               <th className="th">QC</th>
-              <th className="th">Flags</th>
+              <th className="th">Waiting</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td className="td text-slate-400" colSpan={9}>
+                <td className="td text-slate-400" colSpan={10}>
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && decorated.length === 0 && (
               <tr>
-                <td className="td text-slate-400" colSpan={9}>
-                  No loads match. Drop a tender into the connector to create one.
+                <td className="td text-slate-400" colSpan={10}>
+                  {hiddenCount > 0
+                    ? 'Every load is hidden by your view switches.'
+                    : can('create_loads')
+                      ? 'No loads yet. Add one with New load, or drop a tender into the connector.'
+                      : 'No loads match.'}
                 </td>
               </tr>
             )}
@@ -183,6 +244,11 @@ export default function LoadBoard() {
       </div>
     </div>
   )
+}
+
+function money(n: number | null): string {
+  if (n === null || n === undefined) return '—'
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
 function BoardRow({
@@ -204,6 +270,14 @@ function BoardRow({
         <Link to={`/loads/${row.id}`} className="font-medium text-accent hover:underline">
           {row.load_number}
         </Link>
+        {row.is_test && (
+          <span
+            className="ml-1.5 rounded bg-fuchsia-500/15 px-1 text-[10px] font-semibold uppercase text-fuchsia-300"
+            title="A test load — left out of reports"
+          >
+            test
+          </span>
+        )}
         {row.shipment_id && <div className="text-xs text-slate-500">{row.shipment_id}</div>}
       </td>
       <td className="td">
@@ -238,8 +312,24 @@ function BoardRow({
         )}
       </td>
       <td className="td">
-        <BandPill confidence={row.qc_score} thresholds={qcBands} />
-        {qcBand === 'red' && <div className="text-[10px] text-red-300">needs review</div>}
+        <div className="text-sm">{money(row.customer_rate)}</div>
+        {row.carrier_rate !== null && (
+          <div className="text-xs text-slate-500">
+            {money(row.carrier_rate)} · {money(row.margin)}
+          </div>
+        )}
+      </td>
+      <td className="td">
+        {row.source === 'manual' ? (
+          <span className="text-xs text-slate-500" title="Typed in by hand — nothing to QC">
+            manual
+          </span>
+        ) : (
+          <>
+            <BandPill confidence={row.qc_score} thresholds={qcBands} />
+            {qcBand === 'red' && <div className="text-[10px] text-red-300">needs review</div>}
+          </>
+        )}
       </td>
       <td className="td">
         {row.open_flag_count > 0 ? (

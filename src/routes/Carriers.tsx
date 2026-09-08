@@ -1,11 +1,75 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCarrierSearch, useSaveCarrier } from '@/hooks/useCarriers'
+import { fetchAllCarriers, useCarrierSearch, useImportCarriers, useSaveCarrier } from '@/hooks/useCarriers'
+import { useAuth } from '@/hooks/useAuth'
+import CsvImport, { exportRows, type CsvColumn } from '@/components/CsvImport'
+import { todayStamp } from '@/lib/csv'
+
+/**
+ * The template's columns. This list IS the template: the download, the
+ * validation and the column guide all read from it, and the `import_carriers`
+ * RPC accepts exactly these keys.
+ */
+export const CARRIER_COLUMNS: CsvColumn[] = [
+  { key: 'name', label: 'Carrier name', required: true, example: 'Fast Freight LLC' },
+  {
+    key: 'dot_number',
+    label: 'DOT number',
+    example: '2345678',
+    help: 'Digits only. Used to match an existing carrier so re-importing updates instead of duplicating.',
+  },
+  { key: 'mc_number', label: 'MC number', example: '876543' },
+  { key: 'scac', label: 'SCAC', example: 'FFLL' },
+  { key: 'address1', label: 'Address', example: '100 Terminal Rd' },
+  { key: 'address2', label: 'Address 2', example: 'Suite B' },
+  { key: 'city', label: 'City', example: 'Marietta' },
+  { key: 'state', label: 'State', example: 'GA', help: 'Two letters.' },
+  { key: 'postal', label: 'Zip', example: '30062' },
+  { key: 'dispatch_contact_name', label: 'Dispatch contact', example: 'Dana Ruiz' },
+  { key: 'dispatch_contact_phone', label: 'Dispatch phone', example: '(770) 555-0142' },
+  { key: 'dispatch_contact_email', label: 'Dispatch email', example: 'dispatch@fastfreight.com' },
+  {
+    key: 'equipment_types',
+    label: 'Equipment types',
+    example: 'van; reefer',
+    help: 'Separate several with a semicolon.',
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    example: 'active',
+    values: ['active', 'inactive', 'do_not_use'],
+    help: 'Blank means active.',
+  },
+  { key: 'notes', label: 'Notes', example: 'Prefers Southeast lanes' },
+]
 
 export default function Carriers() {
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const { data: carriers, isLoading } = useCarrierSearch(search)
+  const { can } = useAuth()
+  const importCarriers = useImportCarriers()
+
+  async function onExport() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const all = await fetchAllCarriers()
+      exportRows(
+        `carriers-${todayStamp()}.csv`,
+        CARRIER_COLUMNS.map((c) => ({ key: c.key as keyof (typeof all)[number] & string, label: c.label })),
+        all as unknown as Record<string, unknown>[],
+      )
+    } catch (e) {
+      setExportError((e as Error).message)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="p-4">
@@ -18,10 +82,35 @@ export default function Carriers() {
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
         />
+        {can('import_carriers') && (
+          <button className="btn" onClick={() => setShowImport((v) => !v)}>
+            {showImport ? 'Close import' : 'Import'}
+          </button>
+        )}
+        {can('export_carriers') && (
+          <button className="btn" onClick={onExport} disabled={exporting} title="Download every carrier as a CSV">
+            {exporting ? 'Exporting…' : 'Export'}
+          </button>
+        )}
         <button className="btn btn-primary" onClick={() => setShowNew((v) => !v)}>
           {showNew ? 'Cancel' : 'Add carrier'}
         </button>
       </div>
+
+      {exportError && <div className="mb-3 text-xs text-red-300">{exportError}</div>}
+
+      {showImport && (
+        <div className="mb-3">
+          <CsvImport
+            title="Import carriers"
+            entity="carriers"
+            columns={CARRIER_COLUMNS}
+            templateFilename="carriers-template.csv"
+            onImport={(rows) => importCarriers.mutateAsync(rows)}
+            onDone={() => setShowImport(false)}
+          />
+        </div>
+      )}
 
       {showNew && <NewCarrierForm onDone={() => setShowNew(false)} />}
 
@@ -48,7 +137,7 @@ export default function Carriers() {
             {!isLoading && (carriers ?? []).length === 0 && (
               <tr>
                 <td className="td text-slate-400" colSpan={6}>
-                  No carriers yet.
+                  No carriers yet.{can('import_carriers') ? ' Import a spreadsheet or add one.' : ''}
                 </td>
               </tr>
             )}
@@ -64,7 +153,7 @@ export default function Carriers() {
                 <td className="td text-sm">
                   {c.city ? `${c.city}, ${c.state ?? ''}` : <span className="text-slate-500">—</span>}
                 </td>
-                <td className="td text-sm">{c.equipment_types?.join(', ') ?? '—'}</td>
+                <td className="td text-sm">{c.equipment_types?.join(', ') || '—'}</td>
                 <td className="td">
                   <StatusPill status={c.status} />
                 </td>

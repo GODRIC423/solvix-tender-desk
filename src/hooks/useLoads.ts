@@ -275,3 +275,161 @@ export function useUpdateStop(loadId: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Manual load creation
+// ---------------------------------------------------------------------------
+// The shapes the `create_manual_load` / `add_load_stop` RPCs accept. Times are
+// wall-clock strings in the stop's own zone ("08:00 at the dock"); the
+// database resolves the metro, finds its zone, and does the conversion — the
+// same path ingest takes, so a hand-typed load and a dropped tender can't
+// disagree about what 8am means.
+
+export interface ManualStopInput {
+  stop_type: 'pickup' | 'delivery' | 'other'
+  name?: string | null
+  address1?: string | null
+  address2?: string | null
+  city?: string | null
+  state?: string | null
+  postal?: string | null
+  contact_name?: string | null
+  phone?: string | null
+  email?: string | null
+  /** `YYYY-MM-DDTHH:mm`, read in the stop's zone. */
+  appointment_local?: string | null
+  earliest_local?: string | null
+  latest_local?: string | null
+  appointment_number?: string | null
+  weight?: number | null
+  quantity?: number | null
+  instructions?: string | null
+}
+
+export interface ManualLoadInput {
+  stage_key?: string
+  is_test?: boolean
+  customer_id?: string | null
+  carrier_id?: string | null
+  shipment_id?: string | null
+  equipment_type_text?: string | null
+  equipment_length_ft?: number | null
+  temp_min?: number | null
+  temp_max?: number | null
+  commodity?: string | null
+  total_weight?: number | null
+  weight_uom?: string | null
+  total_quantity?: number | null
+  distance_miles?: number | null
+  hazmat?: boolean
+  notes?: string | null
+  customer_rate?: number | null
+  carrier_rate?: number | null
+  currency?: string | null
+  driver_name?: string | null
+  driver_phone?: string | null
+}
+
+export function useCreateLoad() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ load, stops }: { load: ManualLoadInput; stops: ManualStopInput[] }) => {
+      const { data, error } = await supabase.rpc('create_manual_load', {
+        p_load: load,
+        p_stops: stops,
+      })
+      if (error) throw error
+      return data as { load_id: string; load_number: string }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load_board'] })
+    },
+  })
+}
+
+export function useAddStop(loadId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (stop: ManualStopInput) => {
+      const { data, error } = await supabase.rpc('add_load_stop', {
+        p_load_id: loadId,
+        p_stop: stop,
+      })
+      if (error) throw error
+      return data as string
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load', loadId] })
+      qc.invalidateQueries({ queryKey: ['load_board'] })
+    },
+  })
+}
+
+/**
+ * Full edit of a stop through the RPC, so a changed city re-resolves the
+ * metro and zone and the times are read in the right one.
+ */
+export function useSaveStop(loadId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ stopId, stop }: { stopId: string; stop: ManualStopInput }) => {
+      const { error } = await supabase.rpc('update_load_stop', { p_stop_id: stopId, p_stop: stop })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load', loadId] })
+      qc.invalidateQueries({ queryKey: ['load_board'] })
+    },
+  })
+}
+
+export function useDeleteStop(loadId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (stopId: string) => {
+      const { error } = await supabase.from('load_stops').delete().eq('id', stopId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load', loadId] })
+      qc.invalidateQueries({ queryKey: ['load_board'] })
+    },
+  })
+}
+
+/** Hard delete. RLS allows it for admins, and for the creator of a test load. */
+export function useDeleteLoad() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (loadId: string) => {
+      const { error } = await supabase.from('loads').delete().eq('id', loadId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load_board'] })
+    },
+  })
+}
+
+/** Add/remove header-level reference numbers (PO, BOL, PRO…). */
+export function useLoadReferences(loadId: string) {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['load', loadId] })
+  const add = useMutation({
+    mutationFn: async ({ label, value }: { label: string; value: string }) => {
+      const { error } = await supabase
+        .from('load_references')
+        .insert({ load_id: loadId, label, qualifier: label.toUpperCase().slice(0, 3), value })
+      if (error) throw error
+    },
+    onSuccess: invalidate,
+  })
+  const remove = useMutation({
+    mutationFn: async (refId: string) => {
+      const { error } = await supabase.from('load_references').delete().eq('id', refId)
+      if (error) throw error
+    },
+    onSuccess: invalidate,
+  })
+  return { add, remove }
+}

@@ -40,16 +40,45 @@ Two pieces:
 ### Creating users
 
 Signup is deliberately admin-only; there is no self-serve registration. Add
-dispatchers in the Supabase dashboard (Authentication → Users → Add user), then
-set their role:
+dispatchers in the Supabase dashboard (Authentication → Users → Add user). The
+first admin has to be promoted by hand:
 
 ```sql
 update profiles set role = 'admin', full_name = 'Your Name'
 where email = 'you@example.com';
 ```
 
-Roles are `admin`, `dispatcher`, `viewer`. Only `admin` can edit org settings or
-delete loads.
+After that, everything about a user is managed on the app's **Users** page:
+role, team, active, and per-person permission switches.
+
+### Roles, permissions and teams
+
+Roles are `admin`, `dispatcher`, `viewer`. Admins can do everything and cannot
+be restricted. Dispatchers and viewers get a default permission set per role
+(**Users → Role defaults**) which an admin can override per person — for
+instance granting one dispatcher `export_carriers`.
+
+The switches are real gates, not hidden buttons: bulk import, manual load
+creation and stop editing go through database functions that check
+`has_permission()` themselves, and a database trigger refuses any change to
+`role`, `active`, `team` or `permissions` that does not come from an admin.
+
+One honest limit: **export** is a UI-only gate. Any active member can already
+read every carrier and customer row through the API (that is what the list
+pages do), so hiding the Export button is a speed bump, not a wall. Making it
+a wall would mean row-limiting reads for non-admins, which would break the
+list pages. Worth knowing before you rely on it.
+
+Teams (`dispatch`, `check_call`, `sales`, `billing`, or anything you type) pick
+a default board view from **Settings → Who sees which loads**. The check-call
+team, for example, sees only booked loads. Each person can narrow their own
+view further from the switches on the load board.
+
+### Applying later migrations
+
+Anything added after the first setup — migration `20260101000007` onward —
+applies the same way: `supabase db push` if the project is linked, or paste
+the file into the SQL Editor. Migrations are numbered and must run in order.
 
 ### Doing all of that without the CLI
 

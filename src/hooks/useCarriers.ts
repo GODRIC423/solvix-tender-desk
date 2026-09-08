@@ -129,6 +129,42 @@ export function useSaveCarrier() {
   })
 }
 
+/**
+ * Bulk import through the `import_carriers` RPC, which checks the
+ * import_carriers permission server-side — the button in the UI is a
+ * convenience, the RPC is the gate.
+ */
+export function useImportCarriers() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: Record<string, string>[]) => {
+      const { data, error } = await supabase.rpc('import_carriers', { p_rows: rows })
+      if (error) throw error
+      return data as { inserted: number; updated: number; skipped: number; errors: Array<{ row: number; error: string }> }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['carriers'] })
+    },
+  })
+}
+
+/** Every carrier, for export. Paged past PostgREST's default 1000-row cap. */
+export async function fetchAllCarriers(): Promise<Carrier[]> {
+  const out: Carrier[] = []
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from('carriers')
+      .select('*')
+      .order('name')
+      .range(from, from + page - 1)
+    if (error) throw error
+    out.push(...((data ?? []) as Carrier[]))
+    if (!data || data.length < page) break
+  }
+  return out
+}
+
 /** Loads this carrier has hauled — the beginnings of their performance record. */
 export function useCarrierLoads(carrierId: string | undefined) {
   return useQuery({
