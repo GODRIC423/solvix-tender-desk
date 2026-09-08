@@ -70,12 +70,35 @@ npm run preview           # serve the build locally
 
 ### Cloudflare Pages
 
-1. Connect the GitHub repo.
-2. Build command `npm run build`, output directory `dist`.
-3. Add the three `VITE_*` variables from `.env` as environment variables.
-4. Add an SPA fallback so deep links survive a refresh — Cloudflare Pages does
-   this automatically for `dist/index.html`; on Netlify add `_redirects` with
-   `/*  /index.html  200`.
+Deploys run from **GitHub Actions**, not from Cloudflare's own build. The
+workflow typechecks, tests, builds, and then pushes the finished `dist/` with
+`wrangler pages deploy`. Cloudflare never builds anything, which is why the
+config below lives in GitHub rather than in the Cloudflare dashboard.
+
+Set these as **GitHub repository secrets** (Settings -> Secrets and variables
+-> Actions):
+
+| Secret | Used by |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | the deploy step (needs Pages edit permission) |
+| `CLOUDFLARE_ACCOUNT_ID` | the deploy step |
+| `VITE_SUPABASE_URL` | the build step |
+| `VITE_SUPABASE_ANON_KEY` | the build step |
+| `VITE_INGEST_ENDPOINT` | the build step |
+
+> **The `VITE_*` ones are read at BUILD time.** Vite inlines them into the
+> bundle, so they must be present when Actions runs `vite build`. Setting them
+> in the Cloudflare dashboard does nothing — Cloudflare only receives the
+> already-built output. Get this wrong and the site deploys perfectly and shows
+> "Finish connecting the desk" forever, which reads as a broken deploy rather
+> than missing config.
+>
+> Changing any of them needs a **new build** to take effect. Re-run the latest
+> workflow, or push a commit.
+
+Deep links survive a refresh already: Cloudflare Pages serves `index.html` for
+unmatched paths. (On Netlify you would add `_redirects` with
+`/*  /index.html  200`.)
 
 The connector is built alongside the app and served at `/connector/`.
 

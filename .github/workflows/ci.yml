@@ -28,8 +28,20 @@ jobs:
       - name: Test
         run: npm test
 
+      # The VITE_* values are read at BUILD time, not runtime — Vite inlines them
+      # into the bundle. Since the build happens here and Cloudflare only
+      # receives the finished dist/, setting these in the Cloudflare dashboard
+      # has no effect: they have to be GitHub secrets, on this step.
+      # Without them the app deploys fine and shows "Finish connecting the desk"
+      # forever, which looks like a broken deploy rather than missing config.
+      # The anon key is safe to inline in a browser bundle — Row Level Security
+      # is what protects the data — but it lives in secrets to stay out of git.
       - name: Build
         run: npx vite build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_INGEST_ENDPOINT: ${{ secrets.VITE_INGEST_ENDPOINT }}
 
       - name: Deploy to Cloudflare Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
