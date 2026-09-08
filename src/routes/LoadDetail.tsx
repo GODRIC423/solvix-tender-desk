@@ -15,6 +15,7 @@ import { LOAD_FIELD_GROUPS, confidenceAt, fieldAt } from '@/lib/load-fields'
 import { bandFor, BAND_SEVERITY } from '@/lib/qc-bands'
 import { urgencyFor, relativeTime } from '@/lib/urgency'
 import { BandDot, BandPill, QcScoreBadge } from '@/components/BandPill'
+import AssignParties from '@/components/AssignParties'
 import type { LoadStop } from '@/types/db'
 
 export default function LoadDetail() {
@@ -269,6 +270,20 @@ export default function LoadDetail() {
 
         {/* ----------------------------------------------------- side rail */}
         <div className="space-y-4">
+          <AssignParties
+            load={load}
+            saving={updateLoad.isPending}
+            onAssign={(patch) =>
+              updateLoad.mutate({
+                patch,
+                previous: {
+                  customer_id: load.customer_id,
+                  carrier_id: load.carrier_id,
+                },
+              })
+            }
+          />
+
           <section className="card p-3" data-search-exclude>
             <h2 className="mb-2 text-sm font-semibold text-slate-200">Tracking</h2>
             <TrackingComposer onAdd={(note) => addTracking.mutate({ type: 'check_call', note })} />
