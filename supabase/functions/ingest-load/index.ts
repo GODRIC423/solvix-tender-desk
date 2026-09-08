@@ -145,14 +145,73 @@ function asBool(f: unknown): boolean | null {
   return null;
 }
 
-/** ISO timestamp string, or null when the value is not a parseable date. */
-function asTimestamp(f: unknown): string | null {
+/** True when a datetime string already pins its own offset. */
+const HAS_EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})\s*$/i;
+
+/**
+ * How far `tz` is from UTC at a given instant, in ms. Uses Intl rather than a
+ * table so DST is handled by the runtime's tz database.
+ */
+function zoneOffsetMs(utcMs: number, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? "0");
+  // `hour` comes back as 24 at midnight under hour12:false in some runtimes.
+  const asIfUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour") % 24,
+    get("minute"),
+    get("second"),
+  );
+  return asIfUtc - utcMs;
+}
+
+/**
+ * ISO timestamp, or null when the value is not a parseable date.
+ *
+ * A tender that says "08:00" means 08:00 at the dock. Reading that as UTC put
+ * a Los Angeles pickup eight hours early, which is the number the load board
+ * colours by — so a naive datetime is interpreted in the stop's own zone.
+ * A string that already carries an offset is trusted as-is.
+ */
+function asTimestamp(f: unknown, tz?: string | null): string | null {
   const v = fv(f);
   if (v === null) return null;
   if (typeof v === "number") return null; // ambiguous: epoch seconds vs ms
-  const parsed = Date.parse(String(v));
-  if (Number.isNaN(parsed)) return null;
-  return new Date(parsed).toISOString();
+
+  const raw = String(v).trim();
+  if (raw === "") return null;
+
+  if (!tz || HAS_EXPLICIT_OFFSET.test(raw)) {
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+
+  // Read the wall-clock fields as though they were UTC, then shift by the
+  // zone's offset. Re-check the offset at the shifted instant so a time
+  // falling near a DST change lands on the right side of it.
+  const asUtc = Date.parse(raw.replace(" ", "T") + "Z");
+  if (Number.isNaN(asUtc)) {
+    const fallback = Date.parse(raw);
+    return Number.isNaN(fallback) ? null : new Date(fallback).toISOString();
+  }
+
+  let instant = asUtc - zoneOffsetMs(asUtc, tz);
+  const refined = zoneOffsetMs(instant, tz);
+  if (refined !== zoneOffsetMs(asUtc, tz)) instant = asUtc - refined;
+
+  return new Date(instant).toISOString();
 }
 
 /** YYYY-MM-DD, or null. */
@@ -561,6 +620,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
         console.warn("ingest-load: resolve_metro failed", metroErr);
       }
 
+      // The zone this stop's wall-clock times are quoted in. Falls back to the
+      // org's own zone when the metro is unknown, never to UTC — a silently
+      // shifted appointment is the failure this exists to prevent.
+      let stopTz: string | null = null;
+      try {
+        const { data: tz, error: tzError } = await admin.rpc("stop_timezone", {
+          p_metro_id: metroId,
+        });
+        if (!tzError && typeof tz === "string") stopTz = tz;
+      } catch (tzErr) {
+        console.warn("ingest-load: stop_timezone failed", tzErr);
+      }
+
       const seq = asNumber(stop.sequence);
       const stopRow = {
         load_id: loadId,
@@ -569,9 +641,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         reason_code: asString(stop.reason_code),
         ...cols,
         metro_id: metroId,
-        earliest: asTimestamp(stop.earliest),
-        latest: asTimestamp(stop.latest),
-        appointment: asTimestamp(stop.appointment),
+        timezone: stopTz,
+        earliest: asTimestamp(stop.earliest, stopTz),
+        latest: asTimestamp(stop.latest, stopTz),
+        appointment: asTimestamp(stop.appointment, stopTz),
         appointment_number: asString(stop.appointment_number),
         weight: asNumber(stop.weight),
         weight_uom: asString(stop.weight_uom),
