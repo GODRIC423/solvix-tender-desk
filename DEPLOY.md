@@ -51,6 +51,51 @@ where email = 'you@example.com';
 Roles are `admin`, `dispatcher`, `viewer`. Only `admin` can edit org settings or
 delete loads.
 
+### Doing all of that without the CLI
+
+Everything above can be done from the Supabase dashboard instead, which is worth
+knowing if the person standing the project up does not have a terminal — or is
+handing the job to a browser agent.
+
+1. **Tables.** SQL Editor → run each file in `supabase/migrations/` **in filename
+   order**, one at a time, waiting for success before the next. The order is not
+   cosmetic: later files reference tables the earlier ones create.
+
+   Then confirm the seed data actually landed, rather than trusting seven
+   "Success" messages:
+
+   ```sql
+   select (select count(*) from metros)        as metros,   -- expect 154
+          (select count(*) from metro_zip_map) as zips;     -- expect 491
+   ```
+
+   A short count means a migration partly failed, which is easy to miss because
+   the editor reports success per statement batch, not per table.
+
+2. **Token.** Edge Functions → Secrets → add `INGEST_TOKEN` with a random hex
+   value. **Copy it now** — afterwards only a hash is shown, and recovering it
+   means rotating and re-pasting into every browser that uses the connector.
+
+3. **Function.** Edge Functions → Deploy a new function → via Editor. Name it
+   exactly `ingest-load` and paste `supabase/functions/ingest-load/index.ts`.
+   Its `jsr:` import is a full specifier, so `deno.json` is not needed here.
+
+   > **Turn "Verify JWT" off.** It defaults on, and if it stays on the platform
+   > rejects every request with a 401 *before the function runs* — including
+   > valid ones. This function authenticates with its own `x-ingest-token`
+   > header, not a Supabase JWT, which is why `config.toml` sets
+   > `verify_jwt = false` for the CLI path. The failure reads as a bad token
+   > rather than a wrong switch, so it is worth confirming rather than assuming.
+
+   Do not set a service-role key: Supabase injects `SUPABASE_SERVICE_ROLE_KEY`
+   into deployed functions on its own.
+
+4. **User.** Authentication → Users → Add user. Tick **Auto Confirm User** — an
+   unconfirmed account cannot sign in, and the app has no self-serve signup to
+   fall back on. Then run the `update profiles` above and check it reports **1
+   row**; 0 rows means the profile-creation trigger did not fire, and the account
+   would sign in but stay read-only.
+
 ---
 
 ## 2. The web app
