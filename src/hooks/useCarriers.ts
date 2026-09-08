@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Carrier, CarrierInteractionView } from '@/types/db'
+import { DEFAULT_INTERACTION_AGING, useSettings } from './useSettings'
+import type { Carrier, CarrierInteractionView, InteractionAgeBucket } from '@/types/db'
 
 /**
  * Carrier search. DOT number is the primary lookup key — every carrier has one
@@ -48,16 +49,24 @@ export function useCarrier(carrierId: string | undefined) {
 }
 
 /**
- * Interactions for a carrier, already age-bucketed by the database view:
- *   recent  (< 30 days)  — surfaced automatically when the carrier is opened
- *   caution (30d - 1yr)  — a caution icon on the tab
- *   archive (> 1yr)
+ * Interactions for a carrier, bucketed by age:
+ *   recent  — surfaced automatically when the carrier is opened
+ *   caution — a caution badge on the interactions tab
+ *   archive — everything older
  * This is what stops a dispatcher re-booking the truck whose turbo blew
  * on Tuesday.
+ *
+ * The view ships its own `age_bucket`, but with the 30-day / 1-year windows
+ * hardcoded so it stays indexable. That would silently ignore the admin's
+ * setting, so we re-bucket here against `org_settings.interaction_aging` —
+ * otherwise the control in Settings would do nothing.
  */
 export function useCarrierInteractions(carrierId: string | undefined) {
+  const { data: settings } = useSettings()
+  const aging = settings?.interactionAging ?? DEFAULT_INTERACTION_AGING
+
   return useQuery<CarrierInteractionView[]>({
-    queryKey: ['carrier_interactions', carrierId],
+    queryKey: ['carrier_interactions', carrierId, aging.recent_days, aging.caution_days],
     enabled: Boolean(carrierId),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -67,7 +76,17 @@ export function useCarrierInteractions(carrierId: string | undefined) {
         .order('created_at', { ascending: false })
         .limit(200)
       if (error) throw error
-      return (data ?? []) as CarrierInteractionView[]
+
+      const now = Date.now()
+      const recentMs = aging.recent_days * 86_400_000
+      const cautionMs = aging.caution_days * 86_400_000
+
+      return ((data ?? []) as CarrierInteractionView[]).map((row) => {
+        const age = now - new Date(row.created_at).getTime()
+        const age_bucket: InteractionAgeBucket =
+          age <= recentMs ? 'recent' : age <= cautionMs ? 'caution' : 'archive'
+        return { ...row, age_bucket }
+      })
     },
   })
 }

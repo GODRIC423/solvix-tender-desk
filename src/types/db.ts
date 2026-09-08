@@ -303,11 +303,14 @@ export interface CarrierInteraction {
   created_at: string
 }
 
+/** Row shape of `v_carrier_recent_interactions`. */
 export interface CarrierInteractionView extends CarrierInteraction {
   age_bucket: InteractionAgeBucket
-  type_key: string
-  type_label: string
+  interaction_type_key: string
+  interaction_type_label: string
   severity: 'info' | 'warn' | 'critical'
+  load_number: string | null
+  created_by_name: string | null
 }
 
 export interface OrgSettings {

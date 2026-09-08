@@ -126,7 +126,7 @@ function InteractionLine({ interaction }: { interaction: CarrierInteractionView 
         : 'text-slate-300'
   return (
     <li className="text-sm">
-      <span className={`font-medium ${severityClass}`}>{interaction.type_label}</span>
+      <span className={`font-medium ${severityClass}`}>{interaction.interaction_type_label}</span>
       <span className="text-slate-300"> — {interaction.body}</span>
       <span className="ml-1 text-xs text-slate-500">{relativeTime(interaction.created_at)}</span>
     </li>
