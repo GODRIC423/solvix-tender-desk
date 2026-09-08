@@ -11,6 +11,7 @@
 import * as Ingest from './tender-engine/ingest'
 import * as Layout from './tender-engine/layout'
 import * as Pipeline from './tender-engine/pipeline'
+import { qcScore } from './qc-score'
 import type { LoadTender } from '@/types/tender'
 
 export interface ExtractionResult {
@@ -48,7 +49,9 @@ function finish(doc: Ingest.IngestResult, filename: string): ExtractionResult {
 
   return {
     tender,
-    score: Pipeline.confidenceReport(tender).score,
+    // Coverage-weighted, not the engine's mean-of-populated-fields: a document
+    // we understood nothing from must not score on its hardcoded defaults.
+    score: qcScore(tender),
     pages: doc.pages,
     kind: doc.kind,
   }
