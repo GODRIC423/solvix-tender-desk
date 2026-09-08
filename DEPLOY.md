@@ -120,3 +120,51 @@ runtime:
 
 These defaults are a starting point, not a recommendation — expect to tune the
 hour cutoffs after a couple of weeks of real dispatching.
+
+---
+
+## 5. Confirming a deploy actually landed
+
+A deploy can look fine and not be live. Two traps, both hit during this build:
+
+**Status code proves nothing.** The SPA fallback answers `200` for files that do
+not exist, so a missing bundle looks deployed:
+
+```bash
+curl -sI https://<project>.pages.dev/assets/<bundle>.js | grep -i content-type
+#   application/javascript  -> the file is really there
+#   text/html               -> it does NOT exist; the SPA fallback answered
+```
+
+**An unchanged hash is not always a stale deploy.** The app and connector are
+separate bundles. A change to the tender engine moves only `connector-*.js`,
+because the main app does not import it; a change to a route moves only
+`app-*.js`. Checking the wrong one gives the wrong answer in both directions.
+
+To find out exactly which commit is live, build it and compare:
+
+```bash
+git checkout <commit> && npm run build
+ls dist/assets/ | grep -E '^(app|connector)-'
+curl -s https://<project>.pages.dev/connector/ | grep -oE 'connector-[A-Za-z0-9_-]+\.js'
+```
+
+If the live hash matches an older commit's build, the deploy never published —
+it is not a cache. Confirm with `cache-control` on the page (`max-age=0,
+must-revalidate` means every request revalidates, so caching is not the cause).
+
+### When the site is stale but CI is green
+
+GitHub Actions passing only proves the code builds. It says nothing about
+whether Cloudflare received the push. If `main` is ahead of what is live:
+
+1. **Workers & Pages -> the project -> Deployments.** Is there an attempt for
+   the merge commit at all?
+2. **No attempt listed** -> the GitHub integration is not firing. Re-check the
+   production branch setting and whether Cloudflare's GitHub App still has
+   access to the repo; that authorization can lapse silently.
+3. **Attempt listed as failed** -> read the build log. The same `npm run build`
+   passing locally and in Actions points at the build environment (Node
+   version, build command, output directory), not at the code.
+4. **Retry deployment** from the dashboard republishes the current branch head
+   without needing a new commit.
