@@ -92,11 +92,11 @@ That needs two more repository secrets (Settings -> Secrets and variables
 Treat the access token like a root password: it can do anything to every
 project on the account. It lives only in GitHub secrets.
 
-> **Baseline note.** Migrations `0000`–`0006` were applied by hand in the SQL
+> **Baseline note.** Migrations `0000`–`0007` were applied by hand in the SQL
 > editor before this step existed, so the hosted project has no record of
-> running them. The workflow marks exactly those seven as applied
+> running them. The workflow marks exactly those eight as applied
 > (`supabase migration repair`) before pushing; that call is idempotent.
-> Anything numbered after `0006` is applied for real. If you ever recreate the
+> Anything numbered after `0007` is applied for real. If you ever recreate the
 > project from scratch, delete that `repair` line and `db push` will run all
 > of them.
 
