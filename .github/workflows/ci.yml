@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets the deploy pipeline be re-run by hand (Actions -> CI -> Run
+  # workflow) without an empty commit — e.g. after fixing a secret.
+  workflow_dispatch:
 
 # One job, in this order, so nothing can outrun the thing it depends on:
 #   typecheck -> test -> build -> MIGRATE DATABASE -> deploy function -> deploy site
@@ -59,23 +62,46 @@ jobs:
       #                          (Project Settings -> Database)
       # ------------------------------------------------------------------
       - name: Set up Supabase CLI
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: supabase/setup-cli@v1
         with:
           version: 2.117.0
 
+      # Before touching anything, print what the token can see. This is
+      # what turns "Your account does not have the necessary privileges"
+      # into an answer: if the project is not in this list, the token was
+      # made in a different Supabase account (or organization) than the one
+      # that owns the project.
+      - name: Check the Supabase access token
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: afwwwprqpnkbmtwmasmm
+        run: |
+          set -uo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ] || [ -z "${SUPABASE_DB_PASSWORD}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD must be set as repository secrets (Settings -> Secrets and variables -> Actions). See DEPLOY.md."
+            exit 1
+          fi
+          echo "--- organizations this token can see ---"
+          supabase orgs list || true
+          echo "--- projects this token can see ---"
+          PROJECTS=$(supabase projects list 2>&1 || true)
+          echo "$PROJECTS"
+          if ! echo "$PROJECTS" | grep -q "$SUPABASE_PROJECT_REF"; then
+            echo "::error::The access token cannot see project $SUPABASE_PROJECT_REF. It was generated while signed in to a Supabase account that does not own this project. Sign in to the account whose project list shows $SUPABASE_PROJECT_REF (https://supabase.com/dashboard/projects), generate a new token there, and replace the SUPABASE_ACCESS_TOKEN secret. See DEPLOY.md, 'Troubleshooting'."
+            exit 1
+          fi
+
       - name: Apply database migrations
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: afwwwprqpnkbmtwmasmm
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_ACCESS_TOKEN}" ] || [ -z "${SUPABASE_DB_PASSWORD}" ]; then
-            echo "::error::SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD must be set as repository secrets (Settings -> Secrets and variables -> Actions). See DEPLOY.md."
-            exit 1
-          fi
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
           # Migrations 0000-0007 were applied by hand in the SQL editor before
@@ -96,13 +122,13 @@ jobs:
       # read from supabase/config.toml (false: the function checks its own
       # x-ingest-token).
       - name: Deploy the ingest function
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy ingest-load --project-ref afwwwprqpnkbmtwmasmm --use-api
 
       - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: npx wrangler pages deploy dist --project-name=solvix-tender-desk
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

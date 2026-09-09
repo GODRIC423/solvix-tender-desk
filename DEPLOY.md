@@ -106,6 +106,29 @@ To see what the hosted project has applied:
 supabase migration list --linked
 ```
 
+#### Troubleshooting: "Your account does not have the necessary privileges to access this endpoint"
+
+This is what the Supabase Management API says when the access token's
+account **cannot see the project at all** — not a role problem, an account
+problem. It happens when the token was generated while signed in to a
+different Supabase account than the one that owns the project (easy to do:
+signing in with GitHub and signing in with an email address are two separate
+Supabase accounts).
+
+The workflow's "Check the Supabase access token" step prints the
+organizations and projects the token can see. If `afwwwprqpnkbmtwmasmm` is
+not in that list, the fix is:
+
+1. Go to <https://supabase.com/dashboard/projects> and confirm this account's
+   list shows the project. If it doesn't, sign out and sign in the other way.
+2. Generate a new token at <https://supabase.com/dashboard/account/tokens>
+   **from that account**.
+3. Replace the `SUPABASE_ACCESS_TOKEN` repository secret.
+4. Re-run the workflow (Actions -> CI -> Run workflow, on `main`).
+
+If the project *is* listed and it still fails, the account's role in the
+organization is below Administrator. Have an Owner raise it.
+
 ### Doing all of that without the CLI
 
 Everything above can be done from the Supabase dashboard instead, which is worth
