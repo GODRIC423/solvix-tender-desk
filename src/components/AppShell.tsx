@@ -1,15 +1,18 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-
-const NAV = [
-  { to: '/loads', label: 'Loads' },
-  { to: '/carriers', label: 'Carriers' },
-  { to: '/customers', label: 'Customers' },
-  { to: '/settings', label: 'Settings' },
-]
+import { teamLabel } from '@/lib/permissions'
 
 export default function AppShell() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, can } = useAuth()
+
+  const nav = [
+    { to: '/loads', label: 'Loads' },
+    { to: '/carriers', label: 'Carriers' },
+    { to: '/customers', label: 'Customers' },
+    ...(can('view_reports') ? [{ to: '/reports', label: 'Reports' }] : []),
+    ...(can('manage_users') ? [{ to: '/users', label: 'Users' }] : []),
+    { to: '/settings', label: 'Settings' },
+  ]
 
   return (
     <div className="flex min-h-full flex-col">
@@ -22,10 +25,11 @@ export default function AppShell() {
           </div>
 
           <nav className="flex items-center gap-1">
-            {NAV.map((item) => (
+            {nav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
+                end={item.to === '/loads'}
                 className={({ isActive }) =>
                   `rounded-md px-3 py-1.5 text-sm font-medium transition ${
                     isActive
@@ -49,9 +53,10 @@ export default function AppShell() {
             >
               Drop a tender ↗
             </a>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-400" title={profile?.team ? teamLabel(profile.team) : undefined}>
               {profile?.full_name ?? profile?.email ?? 'Signed in'}
               {profile?.role ? ` · ${profile.role}` : ''}
+              {profile?.team ? ` · ${teamLabel(profile.team)}` : ''}
             </span>
             <button className="btn text-xs" onClick={() => void signOut()}>
               Sign out

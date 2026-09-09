@@ -40,16 +40,90 @@ Two pieces:
 ### Creating users
 
 Signup is deliberately admin-only; there is no self-serve registration. Add
-dispatchers in the Supabase dashboard (Authentication → Users → Add user), then
-set their role:
+dispatchers in the Supabase dashboard (Authentication → Users → Add user). The
+first admin has to be promoted by hand:
 
 ```sql
 update profiles set role = 'admin', full_name = 'Your Name'
 where email = 'you@example.com';
 ```
 
-Roles are `admin`, `dispatcher`, `viewer`. Only `admin` can edit org settings or
-delete loads.
+After that, everything about a user is managed on the app's **Users** page:
+role, team, active, and per-person permission switches.
+
+### Roles, permissions and teams
+
+Roles are `admin`, `dispatcher`, `viewer`. Admins can do everything and cannot
+be restricted. Dispatchers and viewers get a default permission set per role
+(**Users → Role defaults**) which an admin can override per person — for
+instance granting one dispatcher `export_carriers`.
+
+The switches are real gates, not hidden buttons: bulk import, manual load
+creation and stop editing go through database functions that check
+`has_permission()` themselves, and a database trigger refuses any change to
+`role`, `active`, `team` or `permissions` that does not come from an admin.
+
+One honest limit: **export** is a UI-only gate. Any active member can already
+read every carrier and customer row through the API (that is what the list
+pages do), so hiding the Export button is a speed bump, not a wall. Making it
+a wall would mean row-limiting reads for non-admins, which would break the
+list pages. Worth knowing before you rely on it.
+
+Teams (`dispatch`, `check_call`, `sales`, `billing`, or anything you type) pick
+a default board view from **Settings → Who sees which loads**. The check-call
+team, for example, sees only booked loads. Each person can narrow their own
+view further from the switches on the load board.
+
+### Applying later migrations
+
+Anything added after the first setup — migration `20260101000007` onward —
+applies the same way: `supabase db push` if the project is linked, or paste
+the file into the SQL Editor. Migrations are numbered and must run in order.
+
+### Doing all of that without the CLI
+
+Everything above can be done from the Supabase dashboard instead, which is worth
+knowing if the person standing the project up does not have a terminal — or is
+handing the job to a browser agent.
+
+1. **Tables.** SQL Editor → run each file in `supabase/migrations/` **in filename
+   order**, one at a time, waiting for success before the next. The order is not
+   cosmetic: later files reference tables the earlier ones create.
+
+   Then confirm the seed data actually landed, rather than trusting seven
+   "Success" messages:
+
+   ```sql
+   select (select count(*) from metros)        as metros,   -- expect 154
+          (select count(*) from metro_zip_map) as zips;     -- expect 491
+   ```
+
+   A short count means a migration partly failed, which is easy to miss because
+   the editor reports success per statement batch, not per table.
+
+2. **Token.** Edge Functions → Secrets → add `INGEST_TOKEN` with a random hex
+   value. **Copy it now** — afterwards only a hash is shown, and recovering it
+   means rotating and re-pasting into every browser that uses the connector.
+
+3. **Function.** Edge Functions → Deploy a new function → via Editor. Name it
+   exactly `ingest-load` and paste `supabase/functions/ingest-load/index.ts`.
+   Its `jsr:` import is a full specifier, so `deno.json` is not needed here.
+
+   > **Turn "Verify JWT" off.** It defaults on, and if it stays on the platform
+   > rejects every request with a 401 *before the function runs* — including
+   > valid ones. This function authenticates with its own `x-ingest-token`
+   > header, not a Supabase JWT, which is why `config.toml` sets
+   > `verify_jwt = false` for the CLI path. The failure reads as a bad token
+   > rather than a wrong switch, so it is worth confirming rather than assuming.
+
+   Do not set a service-role key: Supabase injects `SUPABASE_SERVICE_ROLE_KEY`
+   into deployed functions on its own.
+
+4. **User.** Authentication → Users → Add user. Tick **Auto Confirm User** — an
+   unconfirmed account cannot sign in, and the app has no self-serve signup to
+   fall back on. Then run the `update profiles` above and check it reports **1
+   row**; 0 rows means the profile-creation trigger did not fire, and the account
+   would sign in but stay read-only.
 
 ---
 

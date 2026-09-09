@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Customer } from '@/types/db'
+import type { Customer, CustomerInteractionView } from '@/types/db'
 
 export function useCustomerSearch(search: string) {
   return useQuery<Customer[]>({
@@ -55,6 +55,99 @@ export function useSaveCustomer() {
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ['customers'] })
       qc.invalidateQueries({ queryKey: ['customer', id] })
+    },
+  })
+}
+
+export function useImportCustomers() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: Record<string, string>[]) => {
+      const { data, error } = await supabase.rpc('import_customers', { p_rows: rows })
+      if (error) throw error
+      return data as { inserted: number; updated: number; skipped: number; errors: Array<{ row: number; error: string }> }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+}
+
+export async function fetchAllCustomers(): Promise<Customer[]> {
+  const out: Customer[] = []
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('name')
+      .range(from, from + page - 1)
+    if (error) throw error
+    out.push(...((data ?? []) as Customer[]))
+    if (!data || data.length < page) break
+  }
+  return out
+}
+
+/** The activity log for one customer, newest first. */
+export function useCustomerInteractions(customerId: string | undefined) {
+  return useQuery<CustomerInteractionView[]>({
+    queryKey: ['customer_interactions', customerId],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_customer_interactions')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (error) throw error
+      return (data ?? []) as CustomerInteractionView[]
+    },
+  })
+}
+
+export function useAddCustomerInteraction(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      interactionTypeId: string
+      body: string
+      loadId?: string | null
+      followUpAt?: string | null
+    }) => {
+      const { error } = await supabase.from('customer_interactions').insert({
+        customer_id: customerId,
+        interaction_type_id: input.interactionTypeId,
+        body: input.body,
+        load_id: input.loadId ?? null,
+        follow_up_at: input.followUpAt ?? null,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer_interactions', customerId] })
+      qc.invalidateQueries({ queryKey: ['customer', customerId] })
+      qc.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+}
+
+/** Follow-ups that are due, across every customer — for the list's reminder strip. */
+export function useDueFollowUps() {
+  return useQuery<CustomerInteractionView[]>({
+    queryKey: ['customer_followups_due'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_customer_interactions')
+        .select('*')
+        .not('follow_up_at', 'is', null)
+        .lte('follow_up_at', new Date(Date.now() + 86_400_000).toISOString())
+        .order('follow_up_at', { ascending: true })
+        .limit(50)
+      if (error) throw error
+      return (data ?? []) as CustomerInteractionView[]
     },
   })
 }

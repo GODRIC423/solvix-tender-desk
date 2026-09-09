@@ -8,15 +8,44 @@ import type { LoadTender } from './tender'
 
 export type Role = 'admin' | 'dispatcher' | 'viewer'
 
+/**
+ * Per-user board preferences. Every key is optional: absent means "inherit
+ * from the team default, then the org default". See src/lib/view-prefs.ts.
+ */
+export interface ViewPrefs {
+  show_unbooked?: boolean
+  show_booked?: boolean
+  flags?: {
+    unbooked?: { enabled?: boolean; yellow?: boolean; orange?: boolean; red?: boolean }
+    booked?: {
+      enabled?: boolean
+      red_no_checkcall?: boolean
+      orange_no_checkcall?: boolean
+      stale?: boolean
+    }
+  }
+}
+
 export interface Profile {
   id: string
   full_name: string | null
   email: string | null
   role: Role
   active: boolean
+  /** Free-form team key: dispatch, check_call, sales, billing. */
+  team: string | null
+  /** Per-user permission overrides; see src/lib/permissions.ts. */
+  permissions: Record<string, boolean>
+  preferences: ViewPrefs
   created_at: string
   updated_at: string
 }
+
+/**
+ * Where in its life a load is. Drives which flag rules apply: a load that has
+ * delivered is not "booked with no check call before pickup", it's done.
+ */
+export type StagePhase = 'pre_booking' | 'pre_pickup' | 'in_transit' | 'post_delivery' | 'closed'
 
 export interface PipelineStage {
   id: string
@@ -25,6 +54,7 @@ export interface PipelineStage {
   sort_order: number
   is_terminal: boolean
   is_booked: boolean
+  phase: StagePhase
   active: boolean
 }
 
@@ -70,9 +100,50 @@ export interface Customer {
   main_contact_email: string | null
   notes: string | null
   active: boolean
+  website: string | null
+  linkedin_url: string | null
+  facebook_url: string | null
+  instagram_url: string | null
+  x_url: string | null
+  quick_links: QuickLink[]
+  industry: string | null
+  account_owner_id: string | null
+  last_activity_at: string | null
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+export interface QuickLink {
+  label: string
+  url: string
+}
+
+export interface CustomerInteractionType {
+  id: string
+  key: string
+  label: string
+  sort_order: number
+  active: boolean
+}
+
+export interface CustomerInteraction {
+  id: string
+  customer_id: string
+  load_id: string | null
+  interaction_type_id: string
+  body: string
+  follow_up_at: string | null
+  created_by: string | null
+  created_at: string
+}
+
+/** Row shape of `v_customer_interactions`. */
+export interface CustomerInteractionView extends CustomerInteraction {
+  interaction_type_key: string
+  interaction_type_label: string
+  load_number: string | null
+  created_by_name: string | null
 }
 
 export interface Carrier {
@@ -108,6 +179,8 @@ export interface Load {
   qc_score: number | null
   raw_extraction: LoadTender | null
   warnings: string[] | null
+  /** Made from the "create a test load" button; badged and left out of reports. */
+  is_test: boolean
 
   customer_id: string | null
   carrier_id: string | null
@@ -172,6 +245,7 @@ export interface LoadBoardRow extends Load {
   stage_label: string
   stage_is_booked: boolean
   stage_is_terminal: boolean
+  stage_phase: StagePhase
   stage_sort_order: number
   customer_name: string | null
   carrier_name: string | null
@@ -198,6 +272,8 @@ export interface LoadStop {
   phone: string | null
   email: string | null
   metro_id: string | null
+  /** IANA zone the wall-clock times on this stop were read in (may be null on old rows). */
+  timezone: string | null
   earliest: string | null
   latest: string | null
   appointment: string | null
@@ -315,9 +391,53 @@ export interface CarrierInteractionView extends CarrierInteraction {
 
 export interface OrgSettings {
   id: number
+  /** Superseded by flag_rules; kept so old rows still read. */
   urgency_rules: unknown
+  flag_rules: unknown
   qc_bands: unknown
   interaction_aging: unknown
+  team_defaults: Record<string, ViewPrefs>
+  role_permissions: Record<string, Record<string, boolean>>
+  cash_on_hand: number | null
+  monthly_overhead: number | null
+  on_time_grace_minutes: number
+  direction_min_lon_delta: number
+  default_timezone: string
   created_at: string
   updated_at: string
+}
+
+/** Row shape of `v_report_loads` — one flat row per non-test load. */
+export interface ReportLoad {
+  id: string
+  load_number: string
+  created_at: string
+  first_pickup_at: string | null
+  last_delivery_at: string | null
+  delivered_at: string | null
+  invoiced_at: string | null
+  paid_at: string | null
+  cancelled_at: string | null
+  stage_key: string
+  stage_label: string
+  stage_is_booked: boolean
+  stage_is_terminal: boolean
+  customer_id: string | null
+  customer_name: string | null
+  carrier_id: string | null
+  carrier_name: string | null
+  customer_rate: number | null
+  carrier_rate: number | null
+  margin: number | null
+  margin_pct: number | null
+  distance_miles: number | null
+  revenue_per_mile: number | null
+  origin_city: string | null
+  origin_state: string | null
+  origin_metro_name: string | null
+  dest_city: string | null
+  dest_state: string | null
+  dest_metro_name: string | null
+  equipment_type_text: string | null
+  source: string
 }
