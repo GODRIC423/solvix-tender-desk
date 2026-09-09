@@ -1,0 +1,61 @@
+name: Seed demo data
+
+# Manual only. Loads (or wipes) the demo dataset in supabase/seed/demo_data.sql
+# against the hosted project — customers with real shipping locations, carriers,
+# and ~24 loads across every stage — so the board, reports and the per-customer
+# location dropdowns have something to show while testing.
+#
+# The demo loads all carry DEMO- shipment ids. Seeding is idempotent (it deletes
+# and recreates them); wiping removes them and leaves the demo customers/carriers.
+#
+# Uses the same SUPABASE_DB_PASSWORD secret the deploy pipeline already relies on.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'seed (load demo data) or wipe (remove demo loads)'
+        type: choice
+        options: [seed, wipe]
+        default: seed
+      confirm:
+        description: 'Type RUN to confirm — this writes to the production database'
+        type: string
+        required: true
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # Session-mode pooler for this project (IPv4, reachable from Actions).
+      PGHOST: aws-0-us-west-2.pooler.supabase.com
+      PGPORT: '5432'
+      PGUSER: postgres.afwwwprqpnkbmtwmasmm
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "RUN" ]; then
+            echo "::error::Not confirmed. Re-run and type RUN in the confirm box."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_DB_PASSWORD}" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD secret is not set. See DEPLOY.md."
+            exit 1
+          fi
+
+      - name: ${{ inputs.mode == 'wipe' && 'Wipe demo loads' || 'Seed demo data' }}
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGSSLMODE: require
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.mode }}" = "wipe" ]; then
+            psql -v ON_ERROR_STOP=1 -c "delete from public.loads where shipment_id like 'DEMO-%';" \
+                 -c "select count(*) as remaining_demo_loads from public.loads where shipment_id like 'DEMO-%';"
+          else
+            psql -v ON_ERROR_STOP=1 -f supabase/seed/demo_data.sql
+          fi
