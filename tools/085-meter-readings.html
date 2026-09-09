@@ -1,0 +1,1630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meter Reading Log — consumption, cost and leak detection</title>
+<meta name="description" content="Log electricity, gas, water and heat meter readings across several properties and meters. Works out consumption between readings, converts gas volume to kWh with the standard 1.02264 correction factor and calorific value, applies your unit rate and daily standing charge, tracks daily average use and flags any period that runs above its trailing average — the signature of a leak or a faulty appliance. Charts consumption over time, saves in your browser and prints a utility statement. Exports CSV and JSON.">
+<meta name="theme-color" content="#7A5C1E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237A5C1E'/%3E%3Ccircle cx='16' cy='16' r='9.4' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Cpath d='M16 16l4.6-3.4' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='1.9' fill='%23fff'/%3E%3Cpath d='M8.2 24.6h15.6' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ 085 Meter Reading Log — Property & Field Service ═══════════════ */
+:root{--accent:#7A5C1E;--accent-ink:#5E4717;--accent-wash:#F6F0DF;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#D1A347;--accent-ink:#DCBA74;--accent-wash:#2C2214;--on-accent:#17120A}}
+:root[data-theme="dark"]{--accent:#D1A347;--accent-ink:#DCBA74;--accent-wash:#2C2214;--on-accent:#17120A}
+
+.stack-lg{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mini{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.stat.hero .v{font-size:31px}
+.stat .sub2{font:11.5px/1.4 var(--sans);color:var(--muted);margin-top:4px}
+.stat.hero .sub2{color:var(--accent-ink)}
+.grid.cols-4{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+
+/* meter chips */
+.mtabs{display:flex;flex-wrap:wrap;gap:7px}
+.mtab{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-hard);background:var(--raise);
+  color:var(--ink);border-radius:4px;padding:7px 10px;cursor:pointer;font:600 13px/1.15 var(--sans);text-align:left}
+.mtab:hover{border-color:var(--accent)}
+.mtab[aria-pressed="true"]{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink)}
+.mtab .mt-s{font:400 11px/1.15 var(--mono);color:var(--muted);display:block;margin-top:3px}
+.mtab[aria-pressed="true"] .mt-s{color:var(--accent-ink)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line-hard);flex:none}
+.dot.el{background:#C88A12}.dot.ga{background:#B3261E}.dot.wa{background:#1F5FA8}.dot.he{background:#1B7A4B}
+.dot.alarm{box-shadow:0 0 0 3px var(--bad-wash);background:var(--bad)}
+
+/* alerts */
+.alist{display:flex;flex-direction:column;gap:8px}
+.alert{border:1px solid var(--line);border-left:3px solid var(--line-hard);border-radius:0 4px 4px 0;
+  padding:9px 11px;background:var(--sunk);font-size:13px}
+.alert.bad{border-left-color:var(--bad);background:var(--bad-wash)}
+.alert.warn{border-left-color:var(--warn);background:var(--warn-wash)}
+.alert.ok{border-left-color:var(--ok);background:var(--ok-wash)}
+.alert b{display:block;font-weight:650;margin-bottom:2px}
+
+/* table extras */
+/* keep visually-hidden absolutes inside the scroller, not the page */
+.tw{position:relative}
+.tw table{min-width:880px}
+td.flagcell{white-space:nowrap}
+table input[type=date]{min-width:126px}
+table .rdg{min-width:96px}
+table .nte{min-width:130px;text-align:left;font-family:var(--sans)}
+tr.bad td{background:var(--bad-wash)}
+tr.bad:hover td{background:var(--bad-wash)}
+th.rowh{text-align:left;text-transform:none;white-space:normal;background:transparent;
+  font:600 13.5px/1.35 var(--sans);color:var(--ink);letter-spacing:0}
+.delbtn{color:var(--bad);border:1px solid transparent;background:transparent;border-radius:3px;
+  cursor:pointer;font:600 14px/1 var(--mono);padding:4px 7px}
+.delbtn:hover{border-color:var(--bad);background:var(--bad-wash)}
+
+/* chart */
+.chartwrap{width:100%;overflow:hidden}
+.chartwrap svg{display:block;width:100%;height:auto;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.bar{fill:var(--accent)}
+.bar.an{fill:var(--bad)}
+.bar.est{fill:var(--accent);opacity:.55}
+.gl{stroke:var(--line);stroke-width:1}
+.ax{stroke:var(--line-hard);stroke-width:1}
+.tx{fill:var(--muted);font:10.5px var(--sans)}
+.tx.b{fill:var(--ink-2);font-weight:600}
+.tline{stroke:var(--ink-2);stroke-width:1.4;fill:none;stroke-dasharray:5 3}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font:11.5px/1.4 var(--sans);color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* print document */
+.prdoc{display:none}
+.prhead{display:none}
+.pr-title{font:700 19px/1.2 var(--sans);letter-spacing:-.01em}
+.pr-meta{width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5pt}
+.pr-meta td{border:0;padding:2px 12px 2px 0;vertical-align:top}
+.pr-meta td.k{color:#555;width:134px;font-size:9.5pt;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.pr-sec{margin-top:7mm}
+.pr-sec h3{font-size:12.5pt;margin-bottom:4px}
+.pr-sub{font-size:9.5pt;color:#555;margin-bottom:5px}
+.sigrow{display:flex;gap:16mm;margin-top:9mm}
+.sigrow div{flex:1;border-top:1px solid #888;padding-top:3px;font-size:9pt;color:#555}
+@media print{
+  .screenonly{display:none!important}
+  .prdoc td,.prdoc th{padding:5px 6px}
+  .prdoc td.n,.prdoc th.n{white-space:nowrap}
+  .prdoc tbody th,.prdoc tbody td:first-child{white-space:normal}
+  .prdoc{display:block!important}
+  .prhead{display:block!important;margin-bottom:2mm}
+  .prdoc .tw{overflow:visible}
+  .prdoc table{min-width:0}
+  .card{break-inside:auto}
+  .chartwrap svg{max-height:58mm}
+  .bar{fill:#5E4717}
+  .bar.an{fill:#B3261E}
+  .tx{fill:#444}
+  .gl{stroke:#ddd}
+}
+</style>
+</head>
+<body>
+
+<main class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">MR</div>
+    <div style="min-width:0">
+      <h1>Meter Reading Log</h1>
+      <div class="sub">CONSUMPTION · COST · LEAK DETECTION</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImp">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fileImp" accept="application/json,.json" class="sr" aria-label="Import meter log JSON file">
+  </div>
+</div>
+
+<header class="prhead" id="prHead"></header>
+
+<div class="stack-lg screenonly" style="margin-top:14px">
+
+  <!-- ═ primary answer ═ -->
+  <section class="card" aria-labelledby="hdTitle">
+    <div class="hd">
+      <h2 id="hdTitle">Latest period</h2>
+      <span class="mini" id="hdWhich">—</span>
+    </div>
+    <div class="bd">
+      <div class="grid cols-4" id="statGrid"></div>
+    </div>
+    <div class="ft"><span class="mini" id="hdFoot">—</span></div>
+  </section>
+
+  <div class="note warn">
+    <strong>A reading log and a cost estimate — not a bill.</strong>
+    It prices the readings you enter at the rates you type in. It does not know your supplier's tariff, VAT treatment
+    or billing periods, so check every figure against the actual bill. Gas volume becomes kWh using the calorific value
+    you enter — the real figure varies daily by region and is printed on your gas bill. A flag means only that
+    <em>this period used more per day than recent periods</em>; the cause has to be found by inspection.
+    <strong>If you smell gas or suspect a gas escape, leave the building and call your national gas emergency
+    number.</strong> Faulty meters and disputed readings are for your supplier or a qualified engineer.
+  </div>
+
+  <div class="note noprint" id="sampleNote" hidden>
+    <strong>Sample data loaded.</strong> Six months of electricity, gas and water readings for a let flat — including
+    a water leak in the final month, so you can see the anomaly flag working. Edit it, or clear it and start your own.
+    <button type="button" class="btn sm" id="bBlank" style="margin-left:6px">Start a blank log</button>
+  </div>
+
+  <div class="split">
+
+    <!-- ═ property ═ -->
+    <section class="card" aria-labelledby="pTitle">
+      <div class="hd">
+        <h2 id="pTitle">Property &amp; statement details</h2>
+        <span class="mini">Printed at the head of the statement</span>
+      </div>
+      <div class="bd">
+        <div class="row" style="margin-bottom:12px">
+          <div class="f" style="flex:1 1 210px">
+            <label for="propSel">Property</label>
+            <select id="propSel"></select>
+          </div>
+          <button type="button" class="btn sm" id="bNewProp" style="align-self:flex-end">+ New</button>
+          <button type="button" class="btn sm" id="bDupProp" style="align-self:flex-end">Duplicate</button>
+          <button type="button" class="btn sm dgr" id="bDelProp" style="align-self:flex-end">Delete</button>
+        </div>
+        <div class="grid cols-2">
+          <div class="f"><label for="p_name">Property name / reference</label><input id="p_name" data-p="name" autocomplete="off"></div>
+          <div class="f"><label for="p_ref">Statement reference</label><input id="p_ref" data-p="ref" autocomplete="off"></div>
+          <div class="f" style="grid-column:1/-1"><label for="p_addr">Address</label><input id="p_addr" data-p="addr" autocomplete="street-address"></div>
+          <div class="f"><label for="p_by">Prepared by</label><input id="p_by" data-p="by" autocomplete="organization"></div>
+          <div class="f"><label for="p_for">Prepared for / occupier</label><input id="p_for" data-p="forWhom" autocomplete="name"></div>
+          <div class="f"><label for="p_from">Statement period from</label><input type="date" id="p_from" data-p="from"><div class="hint">Leave blank for all readings</div></div>
+          <div class="f"><label for="p_to">Statement period to</label><input type="date" id="p_to" data-p="to"><div class="err" id="e_period" hidden></div></div>
+          <div class="f"><label for="p_cur">Currency</label>
+            <select id="p_cur" data-p="cur">
+              <option value="£">£ — pound</option>
+              <option value="$">$ — dollar</option>
+              <option value="€">€ — euro</option>
+              <option value="custom">Custom symbol…</option>
+            </select></div>
+          <div class="f" id="curWrap" hidden><label for="p_curSym">Custom symbol</label><input id="p_curSym" data-p="curSym" maxlength="4"></div>
+          <div class="f"><label for="p_tax">Tax / VAT on energy (%)</label><input type="number" id="p_tax" data-p="tax" min="0" max="100" step="0.1" inputmode="decimal"><div class="hint">Applied to unit cost + standing charge</div><div class="err" id="e_tax" hidden></div></div>
+          <div class="f"><label for="p_pmode">Printed statement contains</label>
+            <select id="p_pmode" data-p="pmode">
+              <option value="full">Full statement — every meter</option>
+              <option value="one">Selected meter only</option>
+              <option value="summary">Summary page only</option>
+            </select></div>
+          <div class="f" style="grid-column:1/-1"><label for="p_notes">Notes printed on the statement</label>
+            <textarea id="p_notes" data-p="notes" rows="2" style="min-height:52px"></textarea></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <label class="check" for="p_charts"><input type="checkbox" id="p_charts" data-p="charts"><span>Print consumption charts</span></label>
+          <label class="check" for="p_sign"><input type="checkbox" id="p_sign" data-p="sign"><span>Print signature block</span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═ sticky right ═ -->
+    <div class="stack-lg sticky">
+      <section class="card" aria-labelledby="alTitle">
+        <div class="hd"><h2 id="alTitle">Checks &amp; alerts</h2><span class="chip" id="alCount">0</span></div>
+        <div class="bd"><div class="alist" id="alList"></div></div>
+        <div class="ft"><span class="mini">Every meter at this property is checked, not just the one open below.</span></div>
+      </section>
+
+      <section class="card" aria-labelledby="aTitle">
+        <div class="hd"><h2 id="aTitle">Anomaly detection</h2></div>
+        <div class="bd">
+          <div class="grid cols-3">
+            <div class="f"><label for="p_thresh">Flag above trailing average by (%)</label>
+              <input type="number" id="p_thresh" data-p="thresh" min="1" max="1000" step="1" inputmode="numeric">
+              <div class="err" id="e_thresh" hidden></div></div>
+            <div class="f"><label for="p_window">Trailing window (periods)</label>
+              <input type="number" id="p_window" data-p="window" min="0" max="60" step="1" inputmode="numeric">
+              <div class="hint">0 = every earlier period</div>
+              <div class="err" id="e_window" hidden></div></div>
+            <div class="f"><label for="p_minp">Earlier periods needed</label>
+              <input type="number" id="p_minp" data-p="minPrior" min="1" max="12" step="1" inputmode="numeric">
+              <div class="hint">Below this, no flag</div>
+              <div class="err" id="e_minp" hidden></div></div>
+          </div>
+          <p class="mini" style="margin-top:10px">A period is flagged when its <b>daily average</b> (billing units per
+          day) exceeds the mean daily average of the trailing periods by more than the threshold. Comparing per-day
+          figures means unequal gaps between readings do not create false alarms. Seasonal swings can: heating through
+          a cold month genuinely doubles gas use, so widen the threshold or the window on heating meters rather than
+          treating every rise as a fault.</p>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+  <!-- ═ meters ═ -->
+  <section class="card" aria-labelledby="mTitle">
+    <div class="hd">
+      <h2 id="mTitle">Meters at this property</h2>
+      <button type="button" class="btn sm" id="bNewMeter">+ Add meter</button>
+      <button type="button" class="btn sm" id="bDupMeter">Duplicate</button>
+      <button type="button" class="btn sm dgr" id="bDelMeter">Delete meter</button>
+    </div>
+    <div class="bd">
+      <div class="mtabs" id="mtabs" role="group" aria-label="Select meter"></div>
+      <div id="meterEd" style="margin-top:14px">
+        <div class="grid cols-3">
+          <div class="f"><label for="m_label">Meter name</label><input id="m_label" data-m="label" autocomplete="off"></div>
+          <div class="f"><label for="m_serial">Serial / MPAN / MPRN</label><input id="m_serial" data-m="serial" autocomplete="off"></div>
+          <div class="f"><label for="m_type">Utility</label>
+            <select id="m_type" data-m="type">
+              <option value="electric">Electricity</option>
+              <option value="gas">Gas</option>
+              <option value="water">Water</option>
+              <option value="heat">Heat (heat network)</option>
+            </select></div>
+          <div class="f"><label for="m_unit">Dial reads in</label><select id="m_unit" data-m="unit"></select>
+            <div class="hint" id="unitHint">&nbsp;</div></div>
+          <div class="f"><label for="m_mult">Dial multiplier</label><input type="number" id="m_mult" data-m="mult" min="0.0001" step="0.0001" inputmode="decimal">
+            <div class="hint">1 unless the meter plate says otherwise</div>
+            <div class="err" id="e_mult" hidden></div></div>
+          <div class="f"><label for="m_digits">Dial digits (rollover)</label><input type="number" id="m_digits" data-m="digits" min="0" max="10" step="1" inputmode="numeric">
+            <div class="hint">0 = off. Set 5 so 99 998 → 00 120 reads correctly</div>
+            <div class="err" id="e_digits" hidden></div></div>
+          <div class="f" id="cvWrap"><label for="m_cv">Calorific value (MJ/m³)</label><input type="number" id="m_cv" data-m="cv" min="1" max="100" step="0.1" inputmode="decimal">
+            <div class="hint">From your gas bill. Typically 37.5–43.0</div>
+            <div class="err" id="e_cv" hidden></div></div>
+          <div class="f" id="corrWrap"><label for="m_corr">Volume correction factor</label><input type="number" id="m_corr" data-m="corr" min="0.5" max="1.5" step="0.00001" inputmode="decimal">
+            <div class="hint">Industry standard 1.02264</div>
+            <div class="err" id="e_corr" hidden></div></div>
+          <div class="f"><label for="m_rate">Unit rate <span id="rateUnit" class="mono"></span></label><input type="number" id="m_rate" data-m="rate" min="0" step="0.0001" inputmode="decimal"><div class="err" id="e_rate" hidden></div></div>
+          <div class="f"><label for="m_stand">Standing charge per day</label><input type="number" id="m_stand" data-m="stand" min="0" step="0.0001" inputmode="decimal"><div class="err" id="e_stand" hidden></div></div>
+        </div>
+        <div class="note" id="convNote" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═ readings ═ -->
+  <section class="card" aria-labelledby="rTitle">
+    <div class="hd">
+      <h2 id="rTitle">Readings</h2>
+      <span class="mini" id="rSub">—</span>
+      <button type="button" class="btn sm pri" id="bAddRead">+ Add reading</button>
+      <button type="button" class="btn sm" id="bSortRead">Sort by date</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw"><table id="rTable">
+        <caption class="sr">Meter readings with consumption, daily average and cost for each period</caption>
+        <thead><tr>
+          <th scope="col">Date</th>
+          <th scope="col" class="n">Reading</th>
+          <th scope="col">Est</th>
+          <th scope="col" class="n">Use (dial)</th>
+          <th scope="col" class="n">Billable</th>
+          <th scope="col" class="n">Days</th>
+          <th scope="col" class="n">Per day</th>
+          <th scope="col">Check</th>
+          <th scope="col" class="n">Cost</th>
+          <th scope="col">Note</th>
+          <th scope="col"><span class="sr">Remove</span></th>
+        </tr></thead>
+        <tbody id="rBody"></tbody>
+        <tfoot id="rFoot"></tfoot>
+      </table></div>
+    </div>
+    <div class="ft"><span class="mini" id="rFootNote">—</span></div>
+  </section>
+
+  <!-- ═ chart ═ -->
+  <section class="card" aria-labelledby="cTitle">
+    <div class="hd">
+      <h2 id="cTitle">Consumption over time</h2>
+      <span class="mini" id="cSub">—</span>
+      <div class="f" style="flex:0 0 auto;min-width:180px">
+        <label for="chartMode" class="sr">Chart shows</label>
+        <select id="chartMode">
+          <option value="total">Consumption per period</option>
+          <option value="daily">Daily average per period</option>
+          <option value="cost">Cost per period</option>
+        </select>
+      </div>
+    </div>
+    <div class="bd">
+      <div class="chartwrap" id="chartHost"></div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>Normal period</span>
+        <span><i style="background:var(--bad)"></i>Flagged — above trailing average</span>
+        <span><i style="background:var(--accent);opacity:.55"></i>Contains an estimated reading</span>
+        <span id="lgTrail" hidden><i style="background:var(--ink-2);height:2px;border-radius:0"></i>Trailing average</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═ summary ═ -->
+  <section class="card" aria-labelledby="sTitle">
+    <div class="hd"><h2 id="sTitle">Statement summary — all meters</h2><span class="mini" id="sSub">—</span></div>
+    <div class="bd" style="padding:0">
+      <div class="tw"><table id="sTable">
+        <caption class="sr">Consumption and cost for every meter over the statement period</caption>
+        <thead><tr>
+          <th scope="col">Meter</th><th scope="col">Utility</th>
+          <th scope="col" class="n">Opening</th><th scope="col" class="n">Closing</th>
+          <th scope="col" class="n">Use</th><th scope="col" class="n">Billable</th>
+          <th scope="col" class="n">Days</th><th scope="col" class="n">Per day</th>
+          <th scope="col" class="n">Cost ex tax</th><th scope="col" class="n">Cost inc tax</th>
+        </tr></thead>
+        <tbody id="sBody"></tbody>
+        <tfoot id="sFoot"></tfoot>
+      </table></div>
+    </div>
+    <div class="ft"><span class="mini" id="sFootNote">—</span></div>
+  </section>
+
+</div><!-- /screenonly -->
+
+<div class="prdoc" id="prDoc"></div>
+
+<footer class="mini screenonly" style="margin-top:22px;padding-top:12px;border-top:1px solid var(--line)">
+  Consumption = current reading − previous reading, times the dial multiplier. Gas volume is converted to energy with the
+  standard industry formula kWh = m³ × volume correction factor (1.02264) × calorific value (MJ/m³) ÷ 3.6; imperial gas
+  dials are converted at 1 unit of 100 ft³ = 2.83 m³ and 1 ft³ = 0.0283168466 m³. Period cost = billable quantity × unit
+  rate + days × standing charge, plus the tax percentage you set. Days are counted between reading dates. An anomaly is
+  raised when a period's daily average exceeds the trailing mean by your chosen percentage. All figures are your own
+  estimate from your own inputs — the supplier's bill is the authoritative document.
+</footer>
+
+</main>
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════════
+   085 — Meter Reading Log
+   Consumption, cost and anomaly detection across properties & meters
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── constants ───────────────────────────────────────────────────── */
+const KEY = 'solvix.meter-readings.v1';
+const CORR_DEFAULT = 1.02264;      /* industry standard volume correction factor */
+const CV_DEFAULT   = 39.5;         /* MJ/m3, typical UK calorific value          */
+const M3_PER_FT3   = 0.0283168466;
+const M3_PER_100FT3= 2.83;         /* UK imperial gas dial: 1 unit = 100 ft3     */
+
+/* dial unit -> [m3 for gas/water | kWh for electric/heat] */
+const UNITS = {
+  electric: [['kWh', 1]],
+  gas:      [['m³', 1], ['100 ft³', M3_PER_100FT3], ['ft³', M3_PER_FT3]],
+  water:    [['m³', 1], ['litres', 0.001], ['ft³', M3_PER_FT3],
+             ['gal (imp)', 0.00454609], ['gal (US)', 0.003785411784]],
+  heat:     [['kWh', 1], ['MWh', 1000], ['GJ', 1000 / 3.6]]
+};
+const BILL  = { electric: 'kWh', gas: 'kWh', water: 'm³', heat: 'kWh' };
+const TYPEN = { electric: 'Electricity', gas: 'Gas', water: 'Water', heat: 'Heat' };
+const TYPEC = { electric: 'el', gas: 'ga', water: 'wa', heat: 'he' };
+const MON   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ── helpers ─────────────────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(){ return 'x' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4); }
+function num(v, d){ if (v === '' || v == null) return d; const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, '')); return isFinite(n) ? n : d; }
+function group(s){ const p = String(s).split('.'); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ','); return p.join('.'); }
+function fmt(v, dp){
+  if (v == null || typeof v !== 'number' || !isFinite(v)) return '—';
+  const s = Math.abs(v).toFixed(dp);
+  return (v < 0 && parseFloat(s) !== 0 ? '-' : '') + group(s);
+}
+function fmtQ(v, dp){
+  if (v == null || typeof v !== 'number' || !isFinite(v)) return '—';
+  let s = Math.abs(v).toFixed(dp);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return (v < 0 && parseFloat(s) !== 0 ? '-' : '') + group(s);
+}
+function billDp(u){ return u === 'kWh' ? 1 : 3; }
+function tms(iso){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return NaN;
+  const p = String(iso).split('-').map(Number), t = Date.UTC(p[0], p[1] - 1, p[2]), d = new Date(t);
+  return (d.getUTCFullYear() === p[0] && d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2]) ? t : NaN;
+}
+function dstr(iso){ const t = tms(iso); if (!isFinite(t)) return '—'; const d = new Date(t);
+  return String(d.getUTCDate()).padStart(2, '0') + ' ' + MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+function dshort(iso){ const t = tms(iso); if (!isFinite(t)) return '—'; const d = new Date(t);
+  return String(d.getUTCDate()).padStart(2, '0') + ' ' + MON[d.getUTCMonth()]; }
+function todayISO(){ const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().slice(0, 10); }
+function addDays(iso, n){ const t = tms(iso); return new Date((isFinite(t) ? t : tms(todayISO())) + n * 864e5).toISOString().slice(0, 10); }
+function slug(s){ return String(s || 'log').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42) || 'log'; }
+
+/* ── model defaults ──────────────────────────────────────────────── */
+function newReading(o){ o = o || {}; return { id: o.id || uid(), date: o.date || todayISO(), val: o.val == null ? '' : o.val, est: !!o.est, note: o.note || '' }; }
+function newMeter(o){
+  o = o || {};
+  const type = UNITS[o.type] ? o.type : 'electric';
+  const units = UNITS[type].map(u => u[0]);
+  return {
+    id: o.id || uid(), label: o.label || 'New meter', serial: o.serial || '', type: type,
+    unit: units.indexOf(o.unit) >= 0 ? o.unit : units[0],
+    mult: o.mult == null ? 1 : o.mult,
+    digits: o.digits == null ? 0 : o.digits,
+    cv: o.cv == null ? CV_DEFAULT : o.cv,
+    corr: o.corr == null ? CORR_DEFAULT : o.corr,
+    rate: o.rate == null ? 0 : o.rate,
+    stand: o.stand == null ? 0 : o.stand,
+    readings: Array.isArray(o.readings) && o.readings.length ? o.readings.map(newReading) : [newReading({ val: '' })]
+  };
+}
+function newProp(o){
+  o = o || {};
+  return {
+    id: o.id || uid(), name: o.name || 'New property', addr: o.addr || '', ref: o.ref || '',
+    by: o.by || '', forWhom: o.forWhom || '', from: o.from || '', to: o.to || '',
+    cur: o.cur || '£', curSym: o.curSym || '',
+    tax: o.tax == null ? 0 : o.tax,
+    thresh: o.thresh == null ? 40 : o.thresh,
+    window: o.window == null ? 6 : o.window,
+    minPrior: o.minPrior == null ? 3 : o.minPrior,
+    notes: o.notes || '', pmode: o.pmode || 'full',
+    charts: o.charts == null ? true : !!o.charts,
+    sign: o.sign == null ? true : !!o.sign,
+    meters: Array.isArray(o.meters) && o.meters.length ? o.meters.map(newMeter) : [newMeter({ label: 'Electricity — main', type: 'electric' })]
+  };
+}
+
+/* ── sample data ─────────────────────────────────────────────────── */
+function sampleState(){
+  const D = ['2025-10-01','2025-11-01','2025-12-01','2026-01-01','2026-02-01','2026-03-01','2026-04-01'];
+  const mk = (vals, estIdx) => vals.map((v, i) => newReading({ date: D[i], val: v, est: estIdx === i,
+    note: estIdx === i ? 'Supplier estimate' : '' }));
+  const p = newProp({
+    name: 'Flat 3B, Alder Court',
+    addr: '3B Alder Court, 14 Mill Lane, Bristol BS3 4QP',
+    ref: 'MRS-2026-04-3B',
+    by: 'Kestrel Property Management',
+    forWhom: 'A. Whitfield (tenant)',
+    from: '2025-10-01', to: '2026-04-01',
+    cur: '£', tax: 5, thresh: 40, window: 6, minPrior: 3,
+    notes: 'Water anomaly reported to the water company on 04 Apr 2026 — stopcock and cistern to be checked.',
+    meters: [
+      newMeter({ label: 'Electricity — main', serial: 'MPAN 1600 0123 4567', type: 'electric', unit: 'kWh',
+        rate: 0.245, stand: 0.6099, readings: mk([14230, 14512, 14838, 15231, 15640, 16002, 16305], 3) }),
+      newMeter({ label: 'Gas — metric dial', serial: 'MPRN 8842 1076', type: 'gas', unit: 'm³',
+        cv: 39.5, corr: CORR_DEFAULT, rate: 0.061, stand: 0.3175,
+        readings: mk([3120, 3198, 3320, 3470, 3628, 3762, 3851], -1) }),
+      newMeter({ label: 'Cold water', serial: 'W 44 771 902', type: 'water', unit: 'm³',
+        rate: 1.888, stand: 0.0904, readings: mk([842.1, 846.3, 850.9, 855.2, 859.8, 864.1, 878.6], -1) })
+    ]
+  });
+  return { v: 1, sample: true, chartMode: 'total', activeProp: p.id, activeMeter: p.meters[0].id, props: [p] };
+}
+function blankState(){
+  const p = newProp({ name: 'My property', from: '', to: '',
+    meters: [newMeter({ label: 'Electricity — main', type: 'electric' })] });
+  p.meters[0].readings = [newReading({ date: addDays(todayISO(), -30), val: '' }), newReading({ date: todayISO(), val: '' })];
+  return { v: 1, sample: false, chartMode: 'total', activeProp: p.id, activeMeter: p.meters[0].id, props: [p] };
+}
+function normalize(s){
+  const out = { v: 1, sample: !!(s && s.sample), chartMode: (s && ['total','daily','cost'].indexOf(s.chartMode) >= 0) ? s.chartMode : 'total', props: [] };
+  const props = (s && Array.isArray(s.props) && s.props.length) ? s.props : [null];
+  out.props = props.map(newProp);
+  const ap = out.props.some(p => p.id === (s && s.activeProp));
+  out.activeProp = ap ? s.activeProp : out.props[0].id;
+  const P = out.props.find(p => p.id === out.activeProp);
+  const am = P.meters.some(m => m.id === (s && s.activeMeter));
+  out.activeMeter = am ? s.activeMeter : P.meters[0].id;
+  return out;
+}
+
+/* ── state ───────────────────────────────────────────────────────── */
+let ST = sampleState();
+function P(){ return ST.props.find(p => p.id === ST.activeProp) || ST.props[0]; }
+function M(){ const p = P(); return p.meters.find(m => m.id === ST.activeMeter) || p.meters[0]; }
+function sym(){ const p = P(); return p.cur === 'custom' ? (p.curSym || '¤') : (p.cur || '£'); }
+function money(v){ if (v == null || typeof v !== 'number' || !isFinite(v)) return '—';
+  const s = Math.abs(v).toFixed(2); const neg = v < 0 && parseFloat(s) !== 0;
+  return (neg ? '-' : '') + sym() + group(s); }
+
+/* ── computation ─────────────────────────────────────────────────── */
+function unitFactor(m){
+  const list = UNITS[m.type] || UNITS.electric;
+  const hit = list.find(u => u[0] === m.unit);
+  return hit ? hit[1] : list[0][1];
+}
+/* kWh = m3 × correction factor × calorific value (MJ/m3) ÷ 3.6 */
+function gasKWh(m3, corr, cv){ return m3 * corr * cv / 3.6; }
+
+function computeMeter(m, p){
+  const factor = unitFactor(m), mult = num(m.mult, 1), digits = Math.round(num(m.digits, 0));
+  const corr = num(m.corr, CORR_DEFAULT), cv = num(m.cv, CV_DEFAULT);
+  const rate = num(m.rate, 0), stand = num(m.stand, 0), taxPc = num(p.tax, 0);
+  const bunit = BILL[m.type] || 'kWh';
+
+  const rows = m.readings.map((r, i) => ({ r: r, i: i, t: tms(r.date), v: num(r.val, NaN) }));
+  const valid = rows.filter(x => isFinite(x.t) && isFinite(x.v) && x.v >= 0)
+                    .sort((a, b) => (a.t - b.t) || (a.i - b.i));
+
+  const per = [];
+  for (let k = 1; k < valid.length; k++){
+    const a = valid[k - 1], b = valid[k];
+    let raw = b.v - a.v, rollover = false;
+    if (raw < 0 && digits > 0){
+      const cap = Math.pow(10, digits), alt = cap - a.v + b.v;
+      if (alt >= 0 && alt < cap){ raw = alt; rollover = true; }
+    }
+    const neg = raw < 0;
+    const dial = raw * mult;
+    const base = dial * factor;                       /* m3 for gas/water, kWh for electric/heat */
+    const billable = m.type === 'gas' ? gasKWh(base, corr, cv) : base;
+    const days = Math.round((b.t - a.t) / 864e5);
+    const ok = !neg && days >= 0;
+    const dailyAvg = (ok && days > 0) ? billable / days : null;
+    const costEx = ok ? billable * rate + days * stand : null;
+    const tax = costEx == null ? null : costEx * taxPc / 100;
+    const costInc = costEx == null ? null : costEx + tax;
+    per.push({
+      id: b.r.id, from: a.r.date, to: b.r.date, fromVal: a.v, toVal: b.v,
+      dial: ok ? dial : null, m3: (m.type === 'gas' || m.type === 'water') ? (ok ? base : null) : null,
+      billable: ok ? billable : null, days: days, dailyAvg: dailyAvg,
+      costEx: costEx, tax: tax, costInc: costInc,
+      neg: neg, rollover: rollover, sameDay: days === 0,
+      zero: ok && days > 0 && billable === 0,
+      est: !!(a.r.est || b.r.est), fromEst: !!a.r.est, toEst: !!b.r.est,
+      trail: null, variance: null, anomaly: false
+    });
+  }
+
+  /* anomaly: daily average vs trailing mean of earlier periods */
+  const thresh = num(p.thresh, 40), win = Math.round(num(p.window, 6)), minPrior = Math.max(1, Math.round(num(p.minPrior, 3)));
+  for (let k = 0; k < per.length; k++){
+    const cur = per[k];
+    if (cur.dailyAvg == null) continue;
+    let prior = [];
+    for (let j = 0; j < k; j++) if (per[j].dailyAvg != null) prior.push(per[j].dailyAvg);
+    if (win > 0) prior = prior.slice(-win);
+    if (prior.length < minPrior) continue;
+    const trail = prior.reduce((s, x) => s + x, 0) / prior.length;
+    cur.trail = trail;
+    if (trail > 0){
+      cur.variance = (cur.dailyAvg / trail - 1) * 100;
+      cur.anomaly = cur.dailyAvg > trail * (1 + thresh / 100);
+    }
+  }
+  return { meter: m, periods: per, valid: valid, bunit: bunit, factor: factor, mult: mult,
+           rate: rate, stand: stand, corr: corr, cv: cv, digits: digits };
+}
+
+function inRange(p, iso){
+  const t = tms(iso); if (!isFinite(t)) return false;
+  const a = tms(p.from), b = tms(p.to);
+  if (isFinite(a) && t < a) return false;
+  if (isFinite(b) && t > b) return false;
+  return true;
+}
+function summarise(p){
+  const rowsOut = [];
+  let exTot = 0, taxTot = 0, incTot = 0, anyCost = false;
+  p.meters.forEach(m => {
+    const c = computeMeter(m, p);
+    const inc = c.periods.filter(x => inRange(p, x.to));
+    let use = 0, bill = 0, days = 0, ex = 0, tx = 0, n = 0, flagged = 0, est = 0;
+    inc.forEach(x => {
+      if (x.dial == null) return;
+      use += x.dial; bill += x.billable; days += x.days;
+      if (x.costEx != null){ ex += x.costEx; tx += x.tax; anyCost = true; }
+      n++; if (x.anomaly) flagged++; if (x.est) est++;
+    });
+    rowsOut.push({
+      meter: m, calc: c, periods: inc, n: n,
+      opening: inc.length ? inc[0].fromVal : null,
+      closing: inc.length ? inc[inc.length - 1].toVal : null,
+      openDate: inc.length ? inc[0].from : null,
+      closeDate: inc.length ? inc[inc.length - 1].to : null,
+      use: n ? use : null, bill: n ? bill : null, days: days,
+      dailyAvg: days > 0 ? bill / days : null,
+      ex: n ? ex : null, tax: n ? tx : null, inc: n ? ex + tx : null,
+      flagged: flagged, est: est, bunit: c.bunit
+    });
+    exTot += ex; taxTot += tx; incTot += ex + tx;
+  });
+  return { rows: rowsOut, ex: anyCost ? exTot : null, tax: anyCost ? taxTot : null,
+           inc: anyCost ? incTot : null };
+}
+
+/* ── painting: hero stats ────────────────────────────────────────── */
+function statCard(k, v, u, sub, hero){
+  const d = el('div', 'stat' + (hero ? ' hero' : ''));
+  d.appendChild(el('div', 'k', k));
+  const vv = el('div', 'v'); vv.textContent = v;
+  if (u){ const s = el('span', 'u', ' ' + u); vv.appendChild(s); }
+  d.appendChild(vv);
+  if (sub) d.appendChild(el('div', 'sub2', sub));
+  return d;
+}
+function paintStats(){
+  const p = P(), m = M(), c = computeMeter(m, p), g = $('statGrid');
+  g.textContent = '';
+  const last = c.periods.length ? c.periods[c.periods.length - 1] : null;
+  const sm = summarise(p);
+  const taxPc = num(p.tax, 0);
+
+  $('hdWhich').textContent = m.label + (m.serial ? ' · ' + m.serial : '');
+
+  if (!last){
+    g.appendChild(statCard('Cost this period', '—', '', 'Enter two readings on this meter', true));
+    g.appendChild(statCard('Consumption', '—', c.bunit, 'Nothing to compare yet'));
+    g.appendChild(statCard('Daily average', '—', c.bunit + '/day', ''));
+  } else {
+    const sub = dshort(last.from) + ' – ' + dstr(last.to) + ' · ' + fmt(last.days, 0) + ' day' + (last.days === 1 ? '' : 's') +
+      (taxPc > 0 ? ' · incl. ' + fmtQ(taxPc, 2) + '% tax' : ' · no tax applied');
+    g.appendChild(statCard('Cost this period', money(last.costInc), '', sub, true));
+
+    const useTxt = last.billable == null ? '—' : fmtQ(last.billable, billDp(c.bunit));
+    let sub2 = 'Dial moved ' + (last.dial == null ? '—' : fmtQ(last.dial, 3) + ' ' + m.unit);
+    if (m.type === 'gas' && last.m3 != null) sub2 = fmtQ(last.m3, 3) + ' m³ × ' + fmtQ(c.corr, 5) + ' × ' + fmtQ(c.cv, 2) + ' ÷ 3.6';
+    g.appendChild(statCard('Consumption', useTxt, c.bunit, sub2));
+
+    let vsub = 'No trailing average yet';
+    if (last.trail != null && last.variance != null){
+      const sgn = last.variance >= 0 ? '+' : '';
+      vsub = 'Trailing ' + fmtQ(last.trail, 3) + ' · ' + sgn + fmt(last.variance, 1) + '%';
+    }
+    g.appendChild(statCard('Daily average', last.dailyAvg == null ? '—' : fmtQ(last.dailyAvg, 3),
+      c.bunit + '/day', vsub));
+  }
+
+  const nMet = p.meters.length;
+  g.appendChild(statCard('Statement total — all meters', money(sm.inc), '',
+    nMet + ' meter' + (nMet === 1 ? '' : 's') + ' · ' + (p.from || p.to ? (dshort(p.from) || 'start') + ' – ' + (dstr(p.to) || 'latest') : 'all readings') +
+    (sm.ex != null ? ' · ' + money(sm.ex) + ' ex tax' : '')));
+
+  const flagged = sm.rows.reduce((s, r) => s + r.flagged, 0);
+  $('hdFoot').textContent = last
+    ? ('Cost = ' + fmtQ(last.billable, billDp(c.bunit)) + ' ' + c.bunit + ' × ' + sym() + fmtQ(c.rate, 4) + ' + ' +
+       fmt(last.days, 0) + ' days × ' + sym() + fmtQ(c.stand, 4) + ' standing = ' + money(last.costEx) +
+       (taxPc > 0 ? ' + ' + money(last.tax) + ' tax' : '') + ' = ' + money(last.costInc) +
+       '   ·   ' + (flagged ? flagged + ' flagged period' + (flagged === 1 ? '' : 's') + ' at this property' : 'No flagged periods at this property'))
+    : 'Add a second reading to this meter to see consumption and cost.';
+}
+
+/* ── painting: meter chips + editor ──────────────────────────────── */
+function paintMeters(){
+  const p = P(), host = $('mtabs');
+  host.textContent = '';
+  p.meters.forEach(m => {
+    const c = computeMeter(m, p);
+    const alarm = c.periods.some(x => x.anomaly || x.neg);
+    const b = el('button', 'mtab');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(m.id === ST.activeMeter));
+    const dot = el('span', 'dot ' + (TYPEC[m.type] || '') + (alarm ? ' alarm' : ''));
+    b.appendChild(dot);
+    const wrap = el('span');
+    wrap.appendChild(document.createTextNode(m.label || 'Meter'));
+    const lastP = c.periods.length ? c.periods[c.periods.length - 1] : null;
+    wrap.appendChild(el('span', 'mt-s', TYPEN[m.type] + ' · ' + (lastP ? money(lastP.costInc) + ' last period' : 'no periods yet')));
+    b.appendChild(wrap);
+    b.addEventListener('click', () => { ST.activeMeter = m.id; save(); renderAll(); });
+    host.appendChild(b);
+  });
+}
+function paintMeterEditor(){
+  const m = M();
+  $('m_label').value = m.label || '';
+  $('m_serial').value = m.serial || '';
+  $('m_type').value = m.type;
+  const us = $('m_unit'); us.textContent = '';
+  (UNITS[m.type] || UNITS.electric).forEach(u => {
+    const o = document.createElement('option'); o.value = u[0]; o.textContent = u[0]; us.appendChild(o);
+  });
+  us.value = m.unit;
+  $('m_mult').value = m.mult;
+  $('m_digits').value = m.digits;
+  $('m_cv').value = m.cv;
+  $('m_corr').value = m.corr;
+  $('m_rate').value = m.rate;
+  $('m_stand').value = m.stand;
+  const isGas = m.type === 'gas';
+  $('cvWrap').hidden = !isGas;
+  $('corrWrap').hidden = !isGas;
+  $('rateUnit').textContent = '(' + sym() + ' per ' + (BILL[m.type] || 'kWh') + ')';
+  const hints = {
+    electric: 'Electricity meters read directly in kWh.',
+    gas: 'Metric dials read m³. Imperial dials read hundreds of cubic feet — pick “100 ft³”.',
+    water: 'Most water meters read m³ (the black digits) with red digits as litres.',
+    heat: 'Heat network meters read kWh, MWh or GJ.'
+  };
+  $('unitHint').textContent = hints[m.type] || '';
+  paintConvNote();
+}
+function paintConvNote(){
+  const m = M(), c = computeMeter(m, P()), n = $('convNote');
+  const f = c.factor, bu = c.bunit;
+  let html = '';
+  if (m.type === 'gas'){
+    const perUnitM3 = f * c.mult;
+    const kwh = gasKWh(perUnitM3, c.corr, c.cv);
+    html = '<strong>Gas conversion.</strong> 1 ' + esc(m.unit) + ' on the dial = ' + fmtQ(perUnitM3, 5) + ' m³' +
+      (c.mult !== 1 ? ' (multiplier ' + fmtQ(c.mult, 4) + ')' : '') +
+      ', and kWh = m³ × ' + fmtQ(c.corr, 5) + ' (correction factor) × ' + fmtQ(c.cv, 2) + ' MJ/m³ (calorific value) ÷ 3.6, ' +
+      'so 1 ' + esc(m.unit) + ' = <b>' + fmtQ(kwh, 4) + ' kWh</b>. Billed at ' + esc(sym()) + fmtQ(c.rate, 4) + ' per kWh.';
+  } else if (m.type === 'water'){
+    html = '<strong>Water.</strong> 1 ' + esc(m.unit) + ' = ' + fmtQ(f * c.mult, 6) + ' m³. Billed at ' +
+      esc(sym()) + fmtQ(c.rate, 4) + ' per m³ — set this to your combined water and wastewater rate if they are charged together.';
+  } else if (m.type === 'heat'){
+    html = '<strong>Heat.</strong> 1 ' + esc(m.unit) + ' = ' + fmtQ(f * c.mult, 4) + ' kWh. Billed at ' +
+      esc(sym()) + fmtQ(c.rate, 4) + ' per kWh.';
+  } else {
+    html = '<strong>Electricity.</strong> Dial units are kWh' + (c.mult !== 1 ? ', multiplied by ' + fmtQ(c.mult, 4) + ' from the meter plate' : '') +
+      '. Billed at ' + esc(sym()) + fmtQ(c.rate, 4) + ' per kWh.';
+  }
+  html += ' Standing charge ' + esc(sym()) + fmtQ(c.stand, 4) + ' per day' +
+    (c.digits > 0 ? '. Rollover handled on a ' + c.digits + '-digit dial.' : '.');
+  n.innerHTML = html;
+}
+
+/* ── painting: readings table ────────────────────────────────────── */
+function renderRows(){
+  const m = M(), body = $('rBody');
+  body.textContent = '';
+  if (!m.readings.length){
+    const tr = el('tr'); const td = el('td', 'empty', 'No readings yet.'); td.colSpan = 11; tr.appendChild(td); body.appendChild(tr);
+    return;
+  }
+  m.readings.forEach(r => {
+    const tr = el('tr'); tr.dataset.rid = r.id;
+
+    const tdD = el('td');
+    const inD = document.createElement('input'); inD.type = 'date'; inD.value = r.date || '';
+    inD.setAttribute('aria-label', 'Reading date');
+    inD.addEventListener('input', () => { r.date = inD.value; save(); paint(); });
+    tdD.appendChild(inD); tr.appendChild(tdD);
+
+    const tdV = el('td', 'n');
+    const inV = document.createElement('input'); inV.type = 'number'; inV.step = 'any'; inV.min = '0';
+    inV.className = 'rdg'; inV.inputMode = 'decimal'; inV.value = r.val;
+    inV.setAttribute('aria-label', 'Meter reading');
+    inV.addEventListener('input', () => { r.val = inV.value; save(); paint(); });
+    inV.addEventListener('blur', () => {
+      const bad = inV.value !== '' && !(num(inV.value, NaN) >= 0);
+      inV.classList.toggle('inv', bad);
+    });
+    tdV.appendChild(inV); tr.appendChild(tdV);
+
+    const tdE = el('td');
+    const inE = document.createElement('input'); inE.type = 'checkbox'; inE.checked = !!r.est;
+    inE.style.width = '16px'; inE.style.accentColor = 'var(--accent)';
+    inE.setAttribute('aria-label', 'Estimated reading');
+    inE.title = 'Estimated reading (not an actual read)';
+    inE.addEventListener('change', () => { r.est = inE.checked; save(); paint(); });
+    tdE.appendChild(inE); tr.appendChild(tdE);
+
+    ['c-use', 'c-bill', 'c-days', 'c-avg'].forEach(cls => tr.appendChild(el('td', 'n ' + cls, '—')));
+    tr.appendChild(el('td', 'flagcell c-flag'));
+    tr.appendChild(el('td', 'n c-cost', '—'));
+
+    const tdN = el('td');
+    const inN = document.createElement('input'); inN.type = 'text'; inN.className = 'nte'; inN.value = r.note || '';
+    inN.setAttribute('aria-label', 'Note');
+    inN.addEventListener('input', () => { r.note = inN.value; save(); });
+    tdN.appendChild(inN); tr.appendChild(tdN);
+
+    const tdX = el('td');
+    const bx = el('button', 'delbtn', '✕'); bx.type = 'button';
+    bx.setAttribute('aria-label', 'Remove reading dated ' + (r.date || 'unknown'));
+    bx.title = 'Remove this reading';
+    bx.addEventListener('click', () => {
+      const i = m.readings.indexOf(r);
+      if (i >= 0) m.readings.splice(i, 1);
+      if (!m.readings.length) m.readings.push(newReading({ val: '' }));
+      ST.sample = false; save(); renderAll();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    body.appendChild(tr);
+  });
+}
+function chip(cls, txt, title){ const s = el('span', 'chip' + (cls ? ' ' + cls : ''), txt); if (title) s.title = title; return s; }
+function paintRows(){
+  const p = P(), m = M(), c = computeMeter(m, p);
+  const byId = {}; c.periods.forEach(x => byId[x.id] = x);
+  const dp = billDp(c.bunit), thresh = num(p.thresh, 40);
+  let totBill = 0, totDays = 0, totEx = 0, totTax = 0, totInc = 0, any = false;
+
+  Array.prototype.forEach.call($('rBody').querySelectorAll('tr[data-rid]'), tr => {
+    const per = byId[tr.dataset.rid];
+    const set = (cls, txt) => { const c2 = tr.querySelector('.' + cls); if (c2) c2.textContent = txt; };
+    const fc = tr.querySelector('.c-flag'); if (fc) fc.textContent = '';
+    tr.classList.remove('bad');
+    const r = m.readings.find(x => x.id === tr.dataset.rid);
+    if (!per){
+      set('c-use', '—'); set('c-bill', '—'); set('c-days', '—'); set('c-avg', '—'); set('c-cost', '—');
+      if (fc){
+        if (r && (r.val === '' || !(num(r.val, NaN) >= 0))) fc.appendChild(chip('warn', 'No reading'));
+        else if (r && !isFinite(tms(r.date))) fc.appendChild(chip('warn', 'No date'));
+        else fc.appendChild(chip('', 'Opening'));
+      }
+      return;
+    }
+    set('c-use', per.dial == null ? '—' : fmtQ(per.dial, 3));
+    set('c-bill', per.billable == null ? '—' : fmtQ(per.billable, dp));
+    set('c-days', fmt(per.days, 0));
+    set('c-avg', per.dailyAvg == null ? '—' : fmtQ(per.dailyAvg, 3));
+    set('c-cost', per.costInc == null ? '—' : money(per.costInc));
+    if (fc){
+      if (per.neg){ fc.appendChild(chip('bad', 'Reads back')); tr.classList.add('bad'); }
+      else if (per.anomaly){
+        fc.appendChild(chip('bad', (per.variance >= 0 ? '+' : '') + fmt(per.variance, 0) + '% high',
+          'Daily average ' + fmtQ(per.dailyAvg, 3) + ' vs trailing ' + fmtQ(per.trail, 3)));
+        tr.classList.add('bad');
+      }
+      else if (per.sameDay) fc.appendChild(chip('warn', 'Same day'));
+      else if (per.zero) fc.appendChild(chip('warn', 'No use'));
+      else if (per.variance != null) fc.appendChild(chip(per.variance > thresh * 0.6 ? 'warn' : 'ok',
+        (per.variance >= 0 ? '+' : '') + fmt(per.variance, 0) + '%',
+        'Daily average ' + fmtQ(per.dailyAvg, 3) + ' vs trailing ' + fmtQ(per.trail, 3) +
+        (per.variance > thresh * 0.6 ? ' — climbing, but under the ' + fmtQ(thresh, 0) + '% flag threshold' : '')));
+      else fc.appendChild(chip('', 'Baseline'));
+      if (per.rollover) fc.appendChild(chip('warn', 'Rollover'));
+      if (per.est) fc.appendChild(chip('', 'Est'));
+    }
+    if (per.billable != null){ totBill += per.billable; totDays += per.days; any = true; }
+    if (per.costEx != null){ totEx += per.costEx; totTax += per.tax; totInc += per.costInc; }
+  });
+
+  const foot = $('rFoot'); foot.textContent = '';
+  const tr = el('tr');
+  const t1 = el('td', '', 'Totals — this meter'); t1.colSpan = 4; tr.appendChild(t1);
+  tr.appendChild(el('td', 'n', any ? fmtQ(totBill, dp) + ' ' + c.bunit : '—'));
+  tr.appendChild(el('td', 'n', any ? fmt(totDays, 0) : '—'));
+  tr.appendChild(el('td', 'n', (any && totDays > 0) ? fmtQ(totBill / totDays, 3) : '—'));
+  tr.appendChild(el('td', '', ''));
+  tr.appendChild(el('td', 'n', any ? money(totInc) : '—'));
+  const t2 = el('td'); t2.colSpan = 2; tr.appendChild(t2);
+  foot.appendChild(tr);
+
+  const nP = c.periods.length;
+  $('rSub').textContent = m.readings.length + ' reading' + (m.readings.length === 1 ? '' : 's') + ' · ' +
+    nP + ' period' + (nP === 1 ? '' : 's') + ' · billed in ' + c.bunit;
+  $('rFootNote').textContent = any
+    ? ('Every period across the whole log: ' + fmtQ(totBill, dp) + ' ' + c.bunit + ' over ' + fmt(totDays, 0) +
+       ' days, ' + money(totEx) + ' ex tax + ' + money(totTax) + ' tax = ' + money(totInc) + '. Rounded to the nearest penny for display; totals are summed from unrounded figures.')
+    : 'Enter at least two dated readings to produce a period.';
+}
+
+/* ── painting: alerts ────────────────────────────────────────────── */
+function paintAlerts(){
+  const p = P(), host = $('alList');
+  host.textContent = '';
+  const items = [];
+  p.meters.forEach(m => {
+    const c = computeMeter(m, p);
+    const nm = m.label || 'Meter';
+    if (c.valid.length < 2) items.push(['warn', nm + ' — not enough readings', 'Add at least two dated readings to work out consumption.']);
+    if (num(m.rate, 0) <= 0 && c.valid.length >= 2) items.push(['warn', nm + ' — no unit rate set', 'Cost is standing charge only until you enter the rate from your bill.']);
+    c.periods.forEach(x => {
+      if (x.neg) items.push(['bad', nm + ' — reading goes backwards',
+        dstr(x.from) + ' → ' + dstr(x.to) + ': ' + fmtQ(x.toVal, 3) + ' is below ' + fmtQ(x.fromVal, 3) + '. Check the reading, or set the dial digits if the meter rolled over.']);
+      else if (x.anomaly) items.push(['bad', nm + ' — ' + (x.variance >= 0 ? '+' : '') + fmt(x.variance, 0) + '% above trailing average',
+        dstr(x.from) + ' → ' + dstr(x.to) + ': ' + fmtQ(x.dailyAvg, 3) + ' ' + c.bunit + '/day against a trailing average of ' +
+        fmtQ(x.trail, 3) + '. ' + (m.type === 'water' ? 'Check for a leak, a running overflow or a passing valve.' :
+        m.type === 'gas' ? 'Check heating controls, thermostat settings and the boiler.' :
+        'Check for an appliance left running, immersion heater or faulty thermostat.')]);
+      else if (x.sameDay) items.push(['warn', nm + ' — two readings on the same date',
+        dstr(x.to) + ': no days between readings, so no daily average or standing charge can be worked out.']);
+      else if (x.zero) items.push(['warn', nm + ' — no consumption recorded',
+        dstr(x.from) + ' → ' + dstr(x.to) + ': the dial did not move over ' + fmt(x.days, 0) + ' days. Void property, or a stopped meter.']);
+      if (x.rollover) items.push(['warn', nm + ' — dial rollover applied',
+        dstr(x.to) + ': treated as passing ' + Math.pow(10, c.digits).toLocaleString('en-GB') + ' on a ' + c.digits + '-digit dial.']);
+    });
+    const est = m.readings.filter(r => r.est).length;
+    if (est) items.push(['', nm + ' — ' + est + ' estimated reading' + (est === 1 ? '' : 's'),
+      'Estimated readings are marked E on the statement and can move the figures once an actual read arrives.']);
+  });
+
+  const bad = items.filter(i => i[0] === 'bad').length;
+  const cc = $('alCount');
+  cc.textContent = String(items.length);
+  cc.className = 'chip' + (bad ? ' bad' : items.length ? ' warn' : ' ok');
+
+  if (!items.length){
+    const a = el('div', 'alert ok');
+    a.appendChild(el('b', '', 'Nothing looks wrong'));
+    a.appendChild(document.createTextNode('Every meter has consistent readings and no period is above its trailing average by more than ' + fmtQ(num(p.thresh, 40), 0) + '%.'));
+    host.appendChild(a);
+    return;
+  }
+  const order = { bad: 0, warn: 1, '': 2 };
+  items.sort((a, b) => order[a[0]] - order[b[0]]);
+  items.slice(0, 14).forEach(i => {
+    const a = el('div', 'alert' + (i[0] ? ' ' + i[0] : ''));
+    a.appendChild(el('b', '', i[1]));
+    a.appendChild(document.createTextNode(i[2]));
+    host.appendChild(a);
+  });
+  if (items.length > 14) host.appendChild(el('div', 'mini', '+ ' + (items.length - 14) + ' more — see the printed statement.'));
+}
+
+/* ── chart ───────────────────────────────────────────────────────── */
+function niceMax(v){
+  if (!(v > 0)) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  const n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  return n * e;
+}
+function chartSVG(per, mode, c, W, H){
+  const vals = per.map(x => mode === 'cost' ? x.costInc : mode === 'daily' ? x.dailyAvg : x.billable);
+  const shown = vals.map(v => (v == null || !isFinite(v) || v < 0) ? 0 : v);
+  if (!per.length) return '<p class="empty">No completed periods yet — add a second reading.</p>';
+  const unitTxt = mode === 'cost' ? sym() : mode === 'daily' ? c.bunit + '/day' : c.bunit;
+  const top = niceMax(Math.max.apply(null, shown.concat([0])) * 1.08);
+  const dp = mode === 'cost' ? 2 : billDp(c.bunit);
+  const labs = [0, 0.25, 0.5, 0.75, 1].map(f => (mode === 'cost' ? sym() : '') + fmtQ(top * f, dp));
+  const padL = 16 + Math.max.apply(null, labs.map(s => s.length)) * 6.6;
+  const padR = 10, padT = 16, padB = 44;
+  const pw = Math.max(40, W - padL - padR), ph = Math.max(60, H - padT - padB);
+  const n = per.length, slot = pw / n, bw = Math.max(4, Math.min(46, slot * 0.62));
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Consumption per period chart">';
+  s += '<title>' + esc(unitTxt) + ' per period</title>';
+  for (let i = 0; i <= 4; i++){
+    const y = padT + ph - (ph * i / 4);
+    s += '<line class="gl" x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (padL + pw) + '" y2="' + y.toFixed(1) + '"/>';
+    s += '<text class="tx" x="' + (padL - 6) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + esc(labs[i]) + '</text>';
+  }
+  s += '<line class="ax" x1="' + padL + '" y1="' + (padT + ph) + '" x2="' + (padL + pw) + '" y2="' + (padT + ph) + '"/>';
+  const step = Math.ceil(n / Math.max(1, Math.floor(pw / 58)));
+  per.forEach((x, i) => {
+    const v = shown[i];
+    const h = top > 0 ? (v / top) * ph : 0;
+    const cx = padL + slot * i + slot / 2;
+    const bx = cx - bw / 2, by = padT + ph - h;
+    const cls = 'bar' + (x.anomaly || x.neg ? ' an' : x.est ? ' est' : '');
+    s += '<rect class="' + cls + '" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) +
+         '" height="' + Math.max(0, h).toFixed(1) + '" rx="1.5"><title>' + esc(dstr(x.from) + ' → ' + dstr(x.to) + ': ' +
+         fmtQ(v, dp) + ' ' + unitTxt) + '</title></rect>';
+    if (n <= 9) s += '<text class="tx b" x="' + cx.toFixed(1) + '" y="' + (by - 5).toFixed(1) + '" text-anchor="middle">' +
+      esc(fmtQ(v, mode === 'cost' ? 2 : (v >= 100 ? 0 : dp))) + '</text>';
+    if (i % step === 0 || i === n - 1)
+      s += '<text class="tx" x="' + cx.toFixed(1) + '" y="' + (padT + ph + 15) + '" text-anchor="middle">' + esc(dshort(x.to)) + '</text>';
+  });
+  if (mode === 'daily'){
+    let d = '', open = false;
+    per.forEach((x, i) => {
+      if (x.trail == null){ open = false; return; }
+      const cx = padL + slot * i + slot / 2, y = padT + ph - (top > 0 ? (x.trail / top) * ph : 0);
+      d += (open ? 'L' : 'M') + cx.toFixed(1) + ' ' + y.toFixed(1) + ' '; open = true;
+    });
+    if (d) s += '<path class="tline" d="' + d.trim() + '"/>';
+  }
+  s += '<text class="tx" x="' + padL + '" y="' + (H - 9) + '">' + esc(unitTxt) +
+       ' · period ending</text>';
+  s += '</svg>';
+  return s;
+}
+function paintChart(){
+  const p = P(), m = M(), c = computeMeter(m, p);
+  const host = $('chartHost');
+  const W = Math.max(320, Math.round(host.clientWidth || 700));
+  const H = Math.max(200, Math.min(320, Math.round(W * 0.34)));
+  host.innerHTML = chartSVG(c.periods, ST.chartMode, c, W, H);
+  $('lgTrail').hidden = ST.chartMode !== 'daily';
+  const modeTxt = ST.chartMode === 'cost' ? 'cost including tax' : ST.chartMode === 'daily' ? 'daily average' : 'total consumption';
+  $('cSub').textContent = (m.label || 'Meter') + ' · ' + modeTxt + ' · ' + c.periods.length + ' period' + (c.periods.length === 1 ? '' : 's');
+}
+
+/* ── painting: summary ───────────────────────────────────────────── */
+function paintSummary(){
+  const p = P(), sm = summarise(p), body = $('sBody'), foot = $('sFoot');
+  body.textContent = ''; foot.textContent = '';
+  sm.rows.forEach(r => {
+    const tr = el('tr');
+    const th = el('th', 'rowh', r.meter.label || 'Meter'); th.scope = 'row';
+    tr.appendChild(th);
+    tr.appendChild(el('td', '', TYPEN[r.meter.type] + (r.meter.serial ? ' · ' + r.meter.serial : '')));
+    tr.appendChild(el('td', 'n', r.opening == null ? '—' : fmtQ(r.opening, 3)));
+    tr.appendChild(el('td', 'n', r.closing == null ? '—' : fmtQ(r.closing, 3)));
+    tr.appendChild(el('td', 'n', r.use == null ? '—' : fmtQ(r.use, 3) + ' ' + r.meter.unit));
+    tr.appendChild(el('td', 'n', r.bill == null ? '—' : fmtQ(r.bill, billDp(r.bunit)) + ' ' + r.bunit));
+    tr.appendChild(el('td', 'n', r.n ? fmt(r.days, 0) : '—'));
+    tr.appendChild(el('td', 'n', r.dailyAvg == null ? '—' : fmtQ(r.dailyAvg, 3)));
+    tr.appendChild(el('td', 'n', money(r.ex)));
+    tr.appendChild(el('td', 'n', money(r.inc)));
+    body.appendChild(tr);
+  });
+  const tr = el('tr');
+  const t1 = el('td', '', 'Total'); t1.colSpan = 8; tr.appendChild(t1);
+  tr.appendChild(el('td', 'n', money(sm.ex)));
+  tr.appendChild(el('td', 'n', money(sm.inc)));
+  foot.appendChild(tr);
+  const rng = (p.from || p.to) ? (p.from ? dstr(p.from) : 'first reading') + ' to ' + (p.to ? dstr(p.to) : 'last reading') : 'all readings on file';
+  $('sSub').textContent = rng;
+  $('sFootNote').textContent = 'Tax at ' + fmtQ(num(p.tax, 0), 2) + '%: ' + money(sm.tax) +
+    '. Periods are included when the closing reading date falls inside the statement period.';
+}
+
+/* ── print document ──────────────────────────────────────────────── */
+function prTable(head, rows, foot){
+  let s = '<div class="tw"><table><thead><tr>' + head.map(h =>
+    '<th scope="col"' + (h[1] ? ' class="n"' : '') + '>' + esc(h[0]) + '</th>').join('') + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    s += '<tr>' + r.map((c2, i) => '<td' + (head[i] && head[i][1] ? ' class="n"' : '') + '>' + c2 + '</td>').join('') + '</tr>';
+  });
+  s += '</tbody>';
+  if (foot) s += '<tfoot><tr>' + foot.map((c2, i) => '<td' + (head[i] && head[i][1] ? ' class="n"' : '') +
+    (c2 && c2.span ? ' colspan="' + c2.span + '"' : '') + '>' + (c2 && c2.span ? c2.t : c2) + '</td>').join('') + '</tr></tfoot>';
+  return s + '</table></div>';
+}
+function buildPrint(){
+  const p = P(), sm = summarise(p), mode = p.pmode || 'full';
+  const rng = (p.from ? dstr(p.from) : 'first reading') + ' to ' + (p.to ? dstr(p.to) : 'last reading');
+
+  /* letterhead */
+  let h = '<div class="pr-title">Utility meter statement</div>';
+  h += '<table class="pr-meta"><tbody>';
+  const add = (k, v) => { if (v) h += '<tr><td class="k">' + esc(k) + '</td><td>' + esc(v) + '</td></tr>'; };
+  add('Property', p.name);
+  add('Address', p.addr);
+  add('Statement ref', p.ref);
+  add('Period', rng);
+  add('Prepared by', p.by);
+  add('Prepared for', p.forWhom);
+  add('Issued', dstr(todayISO()));
+  h += '</tbody></table>';
+  $('prHead').innerHTML = h;
+
+  /* body */
+  let d = '';
+  const metersToShow = mode === 'one' ? [M()] : p.meters;
+
+  d += '<div class="pr-sec"><h3>Summary</h3>';
+  const rows = sm.rows.filter(r => mode !== 'one' || r.meter.id === M().id).map(r => ([
+    esc(r.meter.label || 'Meter') + (r.meter.serial ? '<br><span style="font-size:9pt;color:#555">' + esc(r.meter.serial) + '</span>' : ''),
+    esc(TYPEN[r.meter.type]),
+    r.opening == null ? '—' : esc(fmtQ(r.opening, 3)),
+    r.closing == null ? '—' : esc(fmtQ(r.closing, 3)),
+    r.use == null ? '—' : esc(fmtQ(r.use, 3) + ' ' + r.meter.unit),
+    r.bill == null ? '—' : esc(fmtQ(r.bill, billDp(r.bunit)) + ' ' + r.bunit),
+    r.n ? esc(fmt(r.days, 0)) : '—',
+    esc(money(r.ex)), esc(money(r.inc))
+  ]));
+  let sEx = 0, sInc = 0, sTax = 0, anyC = false;
+  sm.rows.forEach(r => { if (mode === 'one' && r.meter.id !== M().id) return;
+    if (r.ex != null){ sEx += r.ex; sTax += r.tax; sInc += r.inc; anyC = true; } });
+  d += prTable(
+    [['Meter', 0], ['Utility', 0], ['Opening', 1], ['Closing', 1], ['Use (dial)', 1], ['Billable', 1], ['Days', 1], ['Cost ex tax', 1], ['Cost inc tax', 1]],
+    rows,
+    [{ span: 7, t: 'Total — ' + esc(rng) }, esc(anyC ? money(sEx) : '—'), esc(anyC ? money(sInc) : '—')]
+  );
+  d += '<p class="pr-sub" style="margin-top:5px">Tax at ' + esc(fmtQ(num(p.tax, 0), 2)) + '% on unit cost and standing charge: ' +
+       esc(anyC ? money(sTax) : '—') + '. Figures are calculated from the readings and rates recorded in this log.</p></div>';
+
+  if (mode !== 'summary'){
+    metersToShow.forEach(m => {
+      const c = computeMeter(m, p);
+      const inc = c.periods.filter(x => inRange(p, x.to));
+      d += '<div class="pr-sec"><h3>' + esc(m.label || 'Meter') + ' — ' + esc(TYPEN[m.type]) + '</h3>';
+      d += '<p class="pr-sub">' + (m.serial ? esc(m.serial) + ' · ' : '') + 'dial reads ' + esc(m.unit) +
+        (c.mult !== 1 ? ' × ' + esc(fmtQ(c.mult, 4)) : '') + ' · billed in ' + esc(c.bunit) +
+        ' at ' + esc(sym() + fmtQ(c.rate, 4)) + ' per ' + esc(c.bunit) +
+        ' plus ' + esc(sym() + fmtQ(c.stand, 4)) + ' per day standing charge' +
+        (m.type === 'gas' ? ' · calorific value ' + esc(fmtQ(c.cv, 2)) + ' MJ/m³, correction factor ' + esc(fmtQ(c.corr, 5)) : '') + '.</p>';
+      const prRows = [];
+      const first = inc.length ? inc[0] : null;
+      if (first) prRows.push([esc(dstr(first.from)), esc(fmtQ(first.fromVal, 3)), first.fromEst ? 'E' : 'A', '—', '—', '—', '—', 'Opening', '—']);
+      inc.forEach(x => {
+        prRows.push([
+          esc(dstr(x.to)), esc(fmtQ(x.toVal, 3)), x.toEst ? 'E' : 'A',
+          x.dial == null ? '—' : esc(fmtQ(x.dial, 3)),
+          x.billable == null ? '—' : esc(fmtQ(x.billable, billDp(c.bunit))),
+          esc(fmt(x.days, 0)),
+          x.dailyAvg == null ? '—' : esc(fmtQ(x.dailyAvg, 3)),
+          x.neg ? 'Reads back' : x.anomaly ? 'FLAG ' + esc((x.variance >= 0 ? '+' : '') + fmt(x.variance, 0) + '%')
+            : x.zero ? 'No use' : x.variance != null ? esc((x.variance >= 0 ? '+' : '') + fmt(x.variance, 0) + '%') : 'Baseline',
+          x.costInc == null ? '—' : esc(money(x.costInc))
+        ]);
+      });
+      if (!inc.length) prRows.push(['—', '—', '', '—', '—', '—', '—', 'No periods in this statement period', '—']);
+      let mb = 0, mdial = 0, md = 0, mi = 0, anyM = false;
+      inc.forEach(x => { if (x.billable != null){ mb += x.billable; mdial += x.dial; md += x.days; anyM = true; } if (x.costInc != null) mi += x.costInc; });
+      d += prTable(
+        [['Reading date', 0], ['Reading', 1], ['A/E', 0], ['Use (dial)', 1], ['Billable (' + c.bunit + ')', 1], ['Days', 1], ['Per day', 1], ['Check', 0], ['Cost inc tax', 1]],
+        prRows,
+        [{ span: 3, t: 'Meter total' }, esc(anyM ? fmtQ(mdial, 3) + ' ' + m.unit : '—'), esc(anyM ? fmtQ(mb, billDp(c.bunit)) : '—'),
+         esc(anyM ? fmt(md, 0) : '—'), esc(anyM && md > 0 ? fmtQ(mb / md, 3) : '—'), '', esc(anyM ? money(mi) : '—')]
+      );
+      if (p.charts) d += '<div class="chartwrap" style="margin-top:6px">' + chartSVG(inc, ST.chartMode, c, 660, 200) + '</div>';
+      d += '</div>';
+    });
+  }
+
+  /* flags */
+  const flags = [];
+  p.meters.forEach(m => {
+    if (mode === 'one' && m.id !== M().id) return;
+    const c = computeMeter(m, p);
+    c.periods.filter(x => inRange(p, x.to)).forEach(x => {
+      if (x.anomaly) flags.push([m.label, dstr(x.from) + ' → ' + dstr(x.to),
+        fmtQ(x.dailyAvg, 3) + ' ' + c.bunit + '/day against trailing ' + fmtQ(x.trail, 3) + ' — ' +
+        (x.variance >= 0 ? '+' : '') + fmt(x.variance, 0) + '% above the trailing average']);
+      else if (x.neg) flags.push([m.label, dstr(x.to), 'Reading is lower than the previous reading — excluded from totals']);
+      else if (x.zero) flags.push([m.label, dstr(x.from) + ' → ' + dstr(x.to), 'No consumption recorded over ' + fmt(x.days, 0) + ' days']);
+      if (x.rollover) flags.push([m.label, dstr(x.to), 'Dial rollover applied on a ' + c.digits + '-digit meter']);
+    });
+  });
+  d += '<div class="pr-sec"><h3>Checks and flags</h3>';
+  if (flags.length) d += prTable([['Meter', 0], ['Period', 0], ['Finding', 0]], flags.map(f => f.map(esc)));
+  else d += '<p class="pr-sub">No period in this statement exceeds its trailing average by more than ' +
+    esc(fmtQ(num(p.thresh, 40), 0)) + '%, and no reading anomalies were detected.</p>';
+  d += '</div>';
+
+  /* basis */
+  d += '<div class="pr-sec"><h3>Basis of calculation</h3><p class="pr-sub" style="color:#333">' +
+    'Consumption = current reading − previous reading, multiplied by the dial multiplier. ' +
+    'Gas volume is converted to energy as kWh = m³ × volume correction factor × calorific value (MJ/m³) ÷ 3.6; ' +
+    'imperial gas dials convert at 1 unit of 100 ft³ = 2.83 m³. ' +
+    'Period cost = billable quantity × unit rate + days × standing charge, plus tax at ' + esc(fmtQ(num(p.tax, 0), 2)) + '%. ' +
+    'A period is flagged when its daily average exceeds the mean daily average of the previous ' +
+    (num(p.window, 6) > 0 ? esc(fmt(Math.round(num(p.window, 6)), 0)) + ' period(s)' : 'periods') +
+    ' by more than ' + esc(fmtQ(num(p.thresh, 40), 0)) + '%, once at least ' +
+    esc(fmt(Math.round(num(p.minPrior, 3)), 0)) + ' earlier period(s) exist. A/E marks an actual or estimated reading.' +
+    '</p></div>';
+
+  if (p.notes) d += '<div class="pr-sec"><h3>Notes</h3><p class="pr-sub" style="color:#333">' + esc(p.notes) + '</p></div>';
+
+  d += '<div class="pr-sec"><h3>Important</h3><p class="pr-sub" style="color:#333">' +
+    'This statement is a record of the readings entered and an estimate of cost at the rates entered. It is not a bill, ' +
+    'not a supplier calculation and not evidence of a fault. Calorific value, VAT treatment and billing periods vary by ' +
+    'supplier and region — check every figure against the supplier\'s own bill before relying on it or passing a charge on. ' +
+    'A flagged period means consumption per day rose against recent periods; the cause must be established by inspection. ' +
+    'If a gas escape is suspected, leave the building and call the national gas emergency number. Suspected leaks, faulty ' +
+    'meters and disputed readings are matters for the supplier or a qualified engineer.' +
+    '</p></div>';
+
+  if (p.sign){
+    d += '<div class="sigrow"><div>Prepared by — signature and date</div><div>Received by — signature and date</div></div>';
+  }
+  $('prDoc').innerHTML = d;
+}
+
+/* ── render ──────────────────────────────────────────────────────── */
+function paint(){
+  paintStats(); paintRows(); paintAlerts(); paintChart(); paintSummary(); paintMeters(); paintConvNote(); buildPrint();
+}
+function renderAll(){
+  paintPropSelect(); paintPropFields(); paintMeterEditor(); renderRows(); paint();
+  $('sampleNote').hidden = !ST.sample;
+}
+function paintPropSelect(){
+  const s = $('propSel'); s.textContent = '';
+  ST.props.forEach(p => {
+    const o = document.createElement('option'); o.value = p.id; o.textContent = p.name || 'Untitled property'; s.appendChild(o);
+  });
+  s.value = ST.activeProp;
+  $('bDelProp').disabled = ST.props.length <= 1;
+  $('bDelMeter').disabled = P().meters.length <= 1;
+}
+function paintPropFields(){
+  const p = P();
+  document.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p;
+    if (inp.type === 'checkbox') inp.checked = !!p[k];
+    else inp.value = p[k] == null ? '' : p[k];
+  });
+  $('curWrap').hidden = p.cur !== 'custom';
+  $('chartMode').value = ST.chartMode;
+}
+
+/* ── validation ──────────────────────────────────────────────────── */
+function setErr(inp, box, msg){
+  inp.classList.toggle('inv', !!msg);
+  if (box){ box.hidden = !msg; box.textContent = msg || ''; }
+}
+function validateAll(){
+  const p = P(), m = M();
+  const a = tms(p.from), b = tms(p.to);
+  setErr($('p_to'), $('e_period'), (isFinite(a) && isFinite(b) && a > b) ? 'The “to” date is before the “from” date.' : '');
+  const tax = num(p.tax, NaN);
+  setErr($('p_tax'), $('e_tax'), (p.tax !== '' && (!isFinite(tax) || tax < 0 || tax > 100)) ? 'Enter a percentage between 0 and 100.' : '');
+  const th = num(p.thresh, NaN);
+  setErr($('p_thresh'), $('e_thresh'), (!isFinite(th) || th < 1 || th > 1000) ? 'Enter 1–1000%. Using 40% meanwhile.' : '');
+  const w = num(p.window, NaN);
+  setErr($('p_window'), $('e_window'), (!isFinite(w) || w < 0 || w > 60) ? 'Enter 0–60 periods. Using 6 meanwhile.' : '');
+  const mp = num(p.minPrior, NaN);
+  setErr($('p_minp'), $('e_minp'), (!isFinite(mp) || mp < 1 || mp > 12) ? 'Enter 1–12 periods. Using 3 meanwhile.' : '');
+  const mu = num(m.mult, NaN);
+  setErr($('m_mult'), $('e_mult'), (!isFinite(mu) || mu <= 0) ? 'Multiplier must be greater than zero. Using 1 meanwhile.' : '');
+  const dg = num(m.digits, NaN);
+  setErr($('m_digits'), $('e_digits'), (!isFinite(dg) || dg < 0 || dg > 10) ? 'Enter 0–10 digits. Using 0 meanwhile.' : '');
+  const rt = num(m.rate, NaN);
+  setErr($('m_rate'), $('e_rate'), (!isFinite(rt) || rt < 0) ? 'Enter a rate of zero or more.' : '');
+  const sc = num(m.stand, NaN);
+  setErr($('m_stand'), $('e_stand'), (!isFinite(sc) || sc < 0) ? 'Enter a standing charge of zero or more.' : '');
+  if (m.type === 'gas'){
+    const cv = num(m.cv, NaN);
+    setErr($('m_cv'), $('e_cv'), (!isFinite(cv) || cv < 1 || cv > 100) ? 'Calorific value is normally 37.5–43.0 MJ/m³. Using 39.5 meanwhile.' : '');
+    const co = num(m.corr, NaN);
+    setErr($('m_corr'), $('e_corr'), (!isFinite(co) || co < 0.5 || co > 1.5) ? 'Correction factor is normally 1.02264. Using it meanwhile.' : '');
+  }
+}
+
+/* ── persistence ─────────────────────────────────────────────────── */
+let saveWarned = false;
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(ST)); }
+  catch (e){
+    if (!saveWarned){ saveWarned = true;
+      const n = $('sampleNote'); n.hidden = false;
+      n.innerHTML = '<strong>Saving is unavailable in this browser.</strong> The tool works normally, but your data will be lost when the page closes — export JSON to keep it.';
+    }
+  }
+}
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    const o = JSON.parse(raw);
+    if (!o || !Array.isArray(o.props)) return false;
+    ST = normalize(o);
+    return true;
+  } catch (e){ return false; }
+}
+
+/* ── exports ─────────────────────────────────────────────────────── */
+function dl(name, mime, text){
+  try {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.rel = 'noopener';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1200);
+  } catch (e){ /* nothing more we can do offline */ }
+}
+function cq(v){ const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function buildCSV(){
+  const head = ['Property','Address','Statement ref','Meter','Serial','Utility','Reading date','Reading','Dial unit',
+    'Actual/Estimated','In statement period','Period days','Use (dial units)','Billable quantity','Billing unit',
+    'Daily average','Trailing daily average','Variance %','Flag','Unit rate','Standing charge/day','Cost ex tax','Tax','Cost inc tax','Note'];
+  const lines = [head.map(cq).join(',')];
+  ST.props.forEach(p => {
+    p.meters.forEach(m => {
+      const c = computeMeter(m, p);
+      const byId = {}; c.periods.forEach(x => byId[x.id] = x);
+      const sorted = m.readings.slice().sort((a, b) => {
+        const ta = tms(a.date), tb = tms(b.date);
+        if (isFinite(ta) && isFinite(tb)) return ta - tb;
+        return isFinite(ta) ? -1 : isFinite(tb) ? 1 : 0;
+      });
+      sorted.forEach(r => {
+        const x = byId[r.id];
+        const flag = !x ? 'Opening reading' : x.neg ? 'Reads back' : x.anomaly ? 'FLAG above trailing average'
+          : x.sameDay ? 'Same-day reading' : x.zero ? 'No consumption' : 'OK';
+        lines.push([
+          p.name, p.addr, p.ref, m.label, m.serial, TYPEN[m.type], r.date, r.val, m.unit,
+          r.est ? 'Estimated' : 'Actual', inRange(p, r.date) ? 'Yes' : 'No',
+          x ? x.days : '', x && x.dial != null ? x.dial.toFixed(4) : '',
+          x && x.billable != null ? x.billable.toFixed(4) : '', c.bunit,
+          x && x.dailyAvg != null ? x.dailyAvg.toFixed(4) : '',
+          x && x.trail != null ? x.trail.toFixed(4) : '',
+          x && x.variance != null ? x.variance.toFixed(1) : '',
+          flag, c.rate, c.stand,
+          x && x.costEx != null ? x.costEx.toFixed(2) : '',
+          x && x.tax != null ? x.tax.toFixed(2) : '',
+          x && x.costInc != null ? x.costInc.toFixed(2) : '',
+          r.note
+        ].map(cq).join(','));
+      });
+    });
+  });
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+
+/* ── actions ─────────────────────────────────────────────────────── */
+function bindFields(){
+  document.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p;
+    const h = () => {
+      const p = P();
+      p[k] = inp.type === 'checkbox' ? inp.checked : inp.value;
+      if (k === 'name'){ const o = $('propSel').querySelector('option[value="' + p.id + '"]'); if (o) o.textContent = inp.value || 'Untitled property'; }
+      if (k === 'cur'){ $('curWrap').hidden = inp.value !== 'custom'; paintMeterEditor(); }
+      if (k === 'curSym') paintMeterEditor();
+      ST.sample = false; $('sampleNote').hidden = true;
+      save(); validateAll(); paint();
+    };
+    inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', h);
+    inp.addEventListener('blur', validateAll);
+  });
+  document.querySelectorAll('[data-m]').forEach(inp => {
+    const k = inp.dataset.m;
+    const h = () => {
+      const m = M();
+      m[k] = inp.value;
+      if (k === 'type'){
+        const units = UNITS[inp.value] ? UNITS[inp.value].map(u => u[0]) : ['kWh'];
+        if (units.indexOf(m.unit) < 0) m.unit = units[0];
+        paintMeterEditor();
+      }
+      if (k === 'label') paintMeters();
+      ST.sample = false; $('sampleNote').hidden = true;
+      save(); validateAll(); paint();
+    };
+    inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', h);
+    inp.addEventListener('blur', validateAll);
+  });
+}
+function boot(){
+  bindFields();
+
+  $('chartMode').addEventListener('change', e => { ST.chartMode = e.target.value; save(); paint(); });
+
+  $('propSel').addEventListener('change', e => {
+    ST.activeProp = e.target.value;
+    ST.activeMeter = P().meters[0].id;
+    save(); renderAll();
+  });
+  $('bNewProp').addEventListener('click', () => {
+    const p = newProp({ name: 'Property ' + (ST.props.length + 1), cur: P().cur, curSym: P().curSym,
+      tax: P().tax, thresh: P().thresh, window: P().window, minPrior: P().minPrior, by: P().by });
+    p.meters[0].readings = [newReading({ date: addDays(todayISO(), -30), val: '' }), newReading({ date: todayISO(), val: '' })];
+    ST.props.push(p); ST.activeProp = p.id; ST.activeMeter = p.meters[0].id;
+    ST.sample = false; save(); renderAll(); $('p_name').focus(); $('p_name').select();
+  });
+  $('bDupProp').addEventListener('click', () => {
+    const copy = JSON.parse(JSON.stringify(P()));
+    const p = newProp(copy);
+    p.id = uid(); p.name = (copy.name || 'Property') + ' (copy)';
+    p.meters.forEach(m => { m.id = uid(); m.readings.forEach(r => r.id = uid()); });
+    ST.props.push(p); ST.activeProp = p.id; ST.activeMeter = p.meters[0].id;
+    ST.sample = false; save(); renderAll();
+  });
+  $('bDelProp').addEventListener('click', () => {
+    if (ST.props.length <= 1) return;
+    if (!confirm('Delete “' + (P().name || 'this property') + '” and all of its meters and readings?')) return;
+    ST.props = ST.props.filter(p => p.id !== ST.activeProp);
+    ST.activeProp = ST.props[0].id; ST.activeMeter = ST.props[0].meters[0].id;
+    ST.sample = false; save(); renderAll();
+  });
+
+  $('bNewMeter').addEventListener('click', () => {
+    const p = P();
+    const m = newMeter({ label: 'Meter ' + (p.meters.length + 1) });
+    m.readings = [newReading({ date: addDays(todayISO(), -30), val: '' }), newReading({ date: todayISO(), val: '' })];
+    p.meters.push(m); ST.activeMeter = m.id;
+    ST.sample = false; save(); renderAll(); $('m_label').focus(); $('m_label').select();
+  });
+  $('bDupMeter').addEventListener('click', () => {
+    const p = P(), copy = JSON.parse(JSON.stringify(M()));
+    const m = newMeter(copy);
+    m.id = uid(); m.label = (copy.label || 'Meter') + ' (copy)';
+    m.readings.forEach(r => r.id = uid());
+    p.meters.push(m); ST.activeMeter = m.id;
+    ST.sample = false; save(); renderAll();
+  });
+  $('bDelMeter').addEventListener('click', () => {
+    const p = P();
+    if (p.meters.length <= 1) return;
+    if (!confirm('Delete meter “' + (M().label || 'this meter') + '” and all of its readings?')) return;
+    p.meters = p.meters.filter(m => m.id !== ST.activeMeter);
+    ST.activeMeter = p.meters[0].id;
+    ST.sample = false; save(); renderAll();
+  });
+
+  $('bAddRead').addEventListener('click', () => {
+    const m = M();
+    const dated = m.readings.map(r => tms(r.date)).filter(isFinite).sort((a, b) => a - b);
+    const lastISO = dated.length ? new Date(dated[dated.length - 1]).toISOString().slice(0, 10) : null;
+    let next = todayISO();
+    if (lastISO && tms(lastISO) >= tms(todayISO())) next = addDays(lastISO, 30);
+    else if (lastISO) next = todayISO();
+    m.readings.push(newReading({ date: next, val: '' }));
+    ST.sample = false; save(); renderAll();
+    const rows = $('rBody').querySelectorAll('tr[data-rid]');
+    if (rows.length){ const inp = rows[rows.length - 1].querySelector('.rdg'); if (inp) inp.focus(); }
+  });
+  $('bSortRead').addEventListener('click', () => {
+    const m = M();
+    m.readings.sort((a, b) => {
+      const ta = tms(a.date), tb = tms(b.date);
+      if (isFinite(ta) && isFinite(tb)) return ta - tb;
+      return isFinite(ta) ? -1 : isFinite(tb) ? 1 : 0;
+    });
+    save(); renderAll();
+  });
+
+  $('bBlank').addEventListener('click', () => { ST = blankState(); save(); renderAll(); $('p_name').focus(); $('p_name').select(); });
+
+  $('bPrint').addEventListener('click', () => { buildPrint(); window.print(); });
+  $('bCsv').addEventListener('click', () => dl('meter-readings-' + slug(P().name) + '-' + todayISO() + '.csv', 'text/csv;charset=utf-8', buildCSV()));
+  $('bJson').addEventListener('click', () => dl('meter-readings-' + slug(P().name) + '-' + todayISO() + '.json', 'application/json', JSON.stringify(ST, null, 2)));
+  $('bImp').addEventListener('click', () => $('fileImp').click());
+  $('fileImp').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const o = JSON.parse(String(rd.result));
+        if (!o || !Array.isArray(o.props) || !o.props.length) throw new Error('bad');
+        ST = normalize(o); save(); renderAll();
+      } catch (err){
+        const n = $('sampleNote'); n.hidden = false;
+        n.innerHTML = '<strong>That file could not be read.</strong> Import expects a JSON file exported by this tool.';
+      }
+      e.target.value = '';
+    };
+    rd.readAsText(f);
+  });
+  $('bClear').addEventListener('click', () => {
+    if (!confirm('Clear every property, meter and reading stored in this browser? This cannot be undone.')) return;
+    try { localStorage.removeItem(KEY); } catch (e){}
+    ST = blankState(); save(); renderAll();
+  });
+
+  let rt = null;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(paintChart, 140); });
+
+  if (!load()) ST = sampleState();
+  renderAll();
+  validateAll();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+</script>
+</body>
+</html>

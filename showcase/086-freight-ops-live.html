@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solvix Freight Ops — Live Board</title>
+<meta name="description" content="Live logistics operations board: active load tenders, lane rate sparklines, a network map of trucks in transit and a real-time alert feed. Paper, ink and signal orange.">
+<meta name="theme-color" content="#FAFAF9">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FAFAF9'/%3E%3Crect x='4' y='11' width='16' height='11' fill='%231A1A1A'/%3E%3Crect x='20' y='14' width='7' height='8' fill='%23FF6A00'/%3E%3Ccircle cx='9' cy='24' r='2.5' fill='%231A1A1A'/%3E%3Ccircle cx='23' cy='24' r='2.5' fill='%231A1A1A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FAFAF9;
+  --paper-2:#F2F2EF;
+  --paper-3:#ECECE8;
+  --ink:#1A1A1A;
+  --ink-2:#55554F;
+  --ink-3:#8A8A83;
+  --grid:#E5E5E0;
+  --grid-2:#CFCFC8;
+  --sig:#FF6A00;
+  --sig-soft:rgba(255,106,0,.14);
+  --sig-line:rgba(255,106,0,.45);
+  --display:"Schibsted Grotesk",system-ui,"Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --pad:clamp(14px,1.6vw,22px);
+}
+*{box-sizing:border-box}
+html{background:var(--paper);color:var(--ink);-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  font-family:var(--mono);
+  font-size:12.5px;
+  line-height:1.45;
+  font-feature-settings:"tnum" 1,"zero" 1;
+  font-variant-numeric:tabular-nums slashed-zero;
+  background:var(--paper);
+  color:var(--ink);
+  min-height:100vh;
+}
+:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:600;letter-spacing:-.01em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.label{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-weight:500}
+
+/* ---------- top strip ---------- */
+.top{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:14px var(--pad);
+  border-bottom:1px solid var(--ink);
+  background:var(--paper);
+  position:sticky;top:0;z-index:5;
+}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.brand svg{width:40px;height:26px;flex:none}
+.brand h1{font-size:clamp(18px,1.6vw,22px);font-weight:700;line-height:1;white-space:nowrap}
+.brand h1 span{font-weight:400;color:var(--ink-2);margin-left:.5em}
+.brand h1 em{font-style:normal;color:var(--sig)}
+.status{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.status .item{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--sig);box-shadow:0 0 0 0 var(--sig-line);animation:ping 1.6s ease-out infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 var(--sig-line)}100%{box-shadow:0 0 0 9px rgba(255,106,0,0)}}
+.paused .live-dot{animation:none;background:var(--ink-3)}
+.clock{font-weight:500;font-size:13px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--ink);padding:6px 12px;border-radius:2px;
+  font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;
+  transition:background .15s,color .15s,transform .08s;
+}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn:active{transform:translateY(1px)}
+.btn[aria-pressed="true"]{background:var(--sig);border-color:var(--sig);color:var(--paper)}
+.btn .sq{width:8px;height:8px;background:currentColor;display:inline-block}
+
+/* ---------- KPI strip ---------- */
+.kpis{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  border-bottom:1px solid var(--grid);
+}
+.kpi{
+  padding:16px var(--pad) 14px;
+  border-right:1px solid var(--grid);
+  display:flex;flex-direction:column;gap:8px;min-width:0;
+}
+.kpi:last-child{border-right:0}
+.kpi .v{
+  font-family:var(--display);font-weight:700;font-size:clamp(30px,2.7vw,42px);line-height:.95;letter-spacing:-.03em;
+  font-feature-settings:"tnum" 1;display:flex;align-items:baseline;gap:6px;
+}
+.kpi .v small{font-size:.45em;font-weight:500;color:var(--ink-2);letter-spacing:0}
+.kpi .d{color:var(--ink-2);font-size:11px;display:flex;gap:8px;align-items:center}
+.kpi .d b{color:var(--sig);font-weight:500}
+.kpi .d.down b{color:var(--ink)}
+.kpi .bar{height:3px;background:var(--grid);position:relative;overflow:hidden;margin-top:2px}
+.kpi .bar i{position:absolute;inset:0;right:auto;background:var(--sig);transition:width .8s cubic-bezier(.2,.8,.2,1)}
+
+/* ---------- grid ---------- */
+.board{
+  display:grid;
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  grid-auto-rows:min-content;
+}
+.panel{border-bottom:1px solid var(--grid);border-right:1px solid var(--grid);min-width:0;display:flex;flex-direction:column}
+.panel.last{border-right:0}
+.ph{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:12px var(--pad) 10px;border-bottom:1px solid var(--grid);
+}
+.ph h2{font-size:15px;font-weight:600;display:flex;align-items:baseline;gap:10px}
+.ph h2 .n{font-family:var(--mono);font-size:11px;color:var(--ink-2);font-weight:500;letter-spacing:.08em}
+.ph .meta{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.tenders{grid-column:1/8;grid-row:2}
+.lanes{grid-column:1/8;grid-row:3}
+.side{grid-column:8/13;grid-row:2/4;display:flex;flex-direction:column;min-width:0;border-bottom:1px solid var(--grid)}
+.side .panel{border-right:0}
+.side .alerts{flex:1;border-bottom:0}
+.note{grid-column:1/13;grid-row:4}
+
+/* ---------- table ---------- */
+.twrap{position:relative}
+.tw{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.twrap::after{content:"";position:absolute;top:0;right:0;bottom:0;width:36px;pointer-events:none;background:linear-gradient(90deg,rgba(250,250,249,0),var(--paper));opacity:0;transition:opacity .2s}
+.twrap.more::after{opacity:1}
+.scrollhint{display:none}
+table{border-collapse:collapse;width:100%;min-width:790px}
+thead th{
+  text-align:left;font-weight:500;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);
+  padding:8px 8px;border-bottom:1px solid var(--grid);white-space:nowrap;background:var(--paper);
+}
+thead th:first-child,tbody td:first-child{padding-left:var(--pad)}
+thead th:last-child,tbody td:last-child{padding-right:var(--pad)}
+th.num,td.num{text-align:right}
+tbody td{padding:8px 8px;border-bottom:1px solid var(--grid);white-space:nowrap;vertical-align:middle;line-height:1.3}
+tbody tr{transition:opacity .25s,background-color .2s}
+tbody tr:hover{background:var(--paper-2)}
+tbody tr.dim{opacity:.28}
+tbody tr.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:var(--sig-soft)}100%{background:transparent}}
+tbody tr.enter{animation:enter .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes enter{0%{opacity:0;transform:translateX(-10px);background:var(--sig-soft)}100%{opacity:1;transform:none}}
+tbody tr.gone{animation:gone .4s ease-in forwards}
+@keyframes gone{to{opacity:0;transform:translateX(10px)}}
+td.id{font-weight:500}
+td .arw{color:var(--ink-3);margin:0 5px}
+td .rate{display:inline-flex;align-items:center;gap:6px}
+td .tick{font-size:10px;color:var(--sig);font-weight:500;min-width:1em;text-align:right}
+.st{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 7px;border-radius:2px;border:1px solid var(--grid-2);color:var(--ink-2);line-height:1.5;
+}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.st-open{border-color:var(--ink);color:var(--ink)}
+.st-countered{border-color:var(--sig);color:var(--sig)}
+.st-accepted{background:var(--sig);border-color:var(--sig);color:var(--paper)}
+.st-expiring{border-color:var(--sig);color:var(--sig)}
+.st-expiring::before{animation:blink .9s steps(2,start) infinite}
+.st-expired{border-style:dashed;color:var(--ink-3)}
+@keyframes blink{to{opacity:0}}
+td.due{font-weight:500}
+tr.exp td.due{color:var(--sig)}
+tr.expd td{color:var(--ink-3)}
+.tfoot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px var(--pad);color:var(--ink-2);font-size:11px;margin-top:auto}
+.tfoot b{color:var(--ink);font-weight:500}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;border:1px solid var(--sig);color:var(--sig);
+  padding:2px 8px;border-radius:2px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;
+}
+.chip[hidden]{display:none}
+.chip .x{font-size:12px;line-height:1}
+
+/* ---------- map ---------- */
+.mapwrap{padding:10px var(--pad) 6px;position:relative;flex:1;display:flex;flex-direction:column}
+.mapwrap svg{width:100%;height:auto;display:block}
+.usa{fill:var(--paper-2);stroke:var(--grid-2);stroke-width:1.5;stroke-linejoin:round}
+.lane{fill:none;stroke:var(--grid-2);stroke-width:2.2;stroke-dasharray:5 7;cursor:pointer;transition:stroke .2s,stroke-width .2s}
+.lane-hit{fill:none;stroke:transparent;stroke-width:22;cursor:pointer}
+.lane.on,.lane-hit:hover+.lane,.lane-hit:focus-visible+.lane{stroke:var(--sig);stroke-width:3;stroke-dasharray:none}
+.lane-hit:focus-visible{outline:none;stroke:var(--sig-soft)}
+.hub circle{fill:var(--paper);stroke:var(--ink);stroke-width:2.2}
+.hub text{font-family:var(--mono);font-size:21px;font-weight:500;fill:var(--ink);letter-spacing:.06em}
+.truck{will-change:transform}
+.truck .box{fill:var(--sig)}
+.truck .cab{fill:var(--ink)}
+.truck .trail{stroke:var(--sig);stroke-width:3;opacity:.35}
+.truck.on .box{fill:var(--ink)}
+.maplegend{display:flex;gap:18px;flex-wrap:wrap;padding:8px 0 4px;color:var(--ink-2);font-size:11px}
+.maplegend span{display:inline-flex;align-items:center;gap:7px}
+.maplegend i{display:inline-block;width:14px;height:7px;background:var(--sig)}
+.maplegend i.dash{height:0;border-top:2px dashed var(--grid-2);width:18px}
+.maplegend i.hub{width:8px;height:8px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink)}
+.tip{
+  position:absolute;pointer-events:none;background:var(--ink);color:var(--paper);
+  padding:6px 9px;border-radius:2px;font-size:11px;line-height:1.4;white-space:nowrap;
+  transform:translate(-50%,calc(-100% - 12px));opacity:0;transition:opacity .12s;z-index:3;
+}
+.tip b{color:var(--sig);font-weight:500}
+.tip.show{opacity:1}
+
+/* ---------- lanes / sparklines ---------- */
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{
+  padding:14px var(--pad) 12px;border-right:1px solid var(--grid);border-bottom:1px solid var(--grid);
+  text-align:left;display:flex;flex-direction:column;gap:8px;min-width:0;
+  transition:background .15s;position:relative;
+}
+.card:nth-child(4n){border-right:0}
+.card:nth-child(n+5){border-bottom:0}
+.card:hover{background:var(--paper-2)}
+.card[aria-pressed="true"]{background:var(--sig-soft)}
+.card[aria-pressed="true"]::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--sig)}
+.card .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card .lane-id{font-weight:700;font-size:12px;letter-spacing:.04em}
+.card .dl{font-size:11px;color:var(--ink-2)}
+.card .dl.up{color:var(--sig)}
+.card .px{font-family:var(--display);font-weight:700;font-size:clamp(22px,1.9vw,28px);letter-spacing:-.03em;line-height:1;font-feature-settings:"tnum" 1}
+.card .px small{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-2);letter-spacing:.06em;margin-left:5px}
+.card svg{width:100%;height:46px;display:block;overflow:visible}
+.spark .area{fill:var(--sig);opacity:.10}
+.spark .line{fill:none;stroke:var(--sig);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.spark .base{stroke:var(--grid);stroke-width:1;stroke-dasharray:2 3}
+.spark .dot{fill:var(--sig)}
+.spark .halo{fill:none;stroke:var(--sig);stroke-width:1;opacity:0}
+.spark.pop .halo{animation:halo .9s ease-out}
+@keyframes halo{0%{r:2;opacity:.9}100%{r:9;opacity:0}}
+.spark.draw .line{stroke-dasharray:400;stroke-dashoffset:400;animation:draw 1.4s cubic-bezier(.4,0,.2,1) forwards;animation-delay:calc(var(--i)*.09s)}
+.spark.draw .area{opacity:0;animation:fade .6s ease forwards;animation-delay:calc(var(--i)*.09s + .9s)}
+.spark.draw .dot{opacity:0;animation:fade .3s ease forwards;animation-delay:calc(var(--i)*.09s + 1.2s)}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes fade{to{opacity:1}}
+.spark.draw .area{--o:.1}
+@keyframes fade{to{opacity:var(--o,1)}}
+.card .ft{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
+
+/* ---------- alerts ---------- */
+.feed{list-style:none;margin:0;padding:0;flex:1}
+.feed li{
+  display:grid;grid-template-columns:auto auto 1fr;gap:12px;align-items:start;
+  padding:10px var(--pad);border-bottom:1px solid var(--grid);
+}
+.feed li:last-child{border-bottom:0}
+.feed li.enter{animation:enter .5s cubic-bezier(.2,.8,.2,1)}
+.feed time{color:var(--ink-2);font-size:11px;padding-top:1px}
+.sev{
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+  padding:1px 6px;border-radius:2px;line-height:1.6;min-width:44px;text-align:center;
+}
+.sev-high{background:var(--sig);color:var(--paper)}
+.sev-med{border:1px solid var(--sig);color:var(--sig)}
+.sev-low{border:1px solid var(--grid-2);color:var(--ink-2)}
+.feed p{margin:0;line-height:1.45}
+.feed p b{font-weight:500;color:var(--ink)}
+.feed p .mono{color:var(--ink-2)}
+
+/* ---------- note ---------- */
+.note{border-right:0}
+.note .body{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:0}
+.note .col{padding:18px var(--pad) 22px}
+.note .col+.col{border-left:1px solid var(--grid)}
+.note h3{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:12px;line-height:1.15}
+.note p{margin:0 0 12px;max-width:68ch;color:var(--ink);font-size:12.5px;line-height:1.6}
+.note p:last-child{margin-bottom:0}
+.note dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12px}
+.note dt{font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.note dd{margin:0;color:var(--ink-2);line-height:1.5}
+.sig{color:var(--sig)}
+footer{
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:14px var(--pad) 22px;color:var(--ink-2);font-size:11px;border-top:1px solid var(--ink);
+}
+footer b{color:var(--ink);font-weight:500}
+
+/* ---------- responsive ---------- */
+@media (max-width:1100px){
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .kpi:nth-child(3){border-right:0}
+  .kpi:nth-child(-n+3){border-bottom:1px solid var(--grid)}
+  .tenders,.lanes,.side,.note{grid-column:1/13;grid-row:auto}
+  .panel{border-right:0}
+  .side .alerts{border-bottom:1px solid var(--grid)}
+  .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:760px){
+  .top{padding:12px var(--pad)}
+  .brand h1 span{display:block;margin:6px 0 0;font-size:13px}
+  .status{width:100%;justify-content:space-between;gap:12px}
+  .status .shift{display:none}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .kpi:nth-child(3){border-right:1px solid var(--grid)}
+  .kpi:nth-child(2n){border-right:0}
+  .kpi:nth-child(-n+4){border-bottom:1px solid var(--grid)}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card:nth-child(2n){border-right:0}
+  .card:nth-child(2n+1){border-right:1px solid var(--grid)}
+  .card:nth-child(n+5){border-bottom:1px solid var(--grid)}
+  .card:nth-child(n+7){border-bottom:0}
+  .note .body{grid-template-columns:1fr}
+  .note .col+.col{border-left:0;border-top:1px solid var(--grid)}
+  .hub text{font-size:27px}
+  .hint-desk{display:none}.scrollhint{display:inline}
+  .kpi .d{font-size:10.5px}
+  .feed li{grid-template-columns:auto auto 1fr}
+  .feed li p{grid-column:1/-1}
+}
+@media (prefers-reduced-motion:reduce){
+  .live-dot,.st-expiring::before,.spark.pop .halo{animation:none}
+  .spark.draw .line,.spark.draw .area,.spark.draw .dot{animation:none;stroke-dashoffset:0;opacity:1}
+  .spark.draw .area{opacity:.1}
+  tbody tr.enter,tbody tr.flash,tbody tr.gone,.feed li.enter{animation:none}
+  .truck{transition:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="brand">
+    <svg viewBox="0 0 40 26" aria-hidden="true" focusable="false">
+      <rect x="0" y="4" width="24" height="15" fill="#1A1A1A"/>
+      <rect x="24" y="9" width="11" height="10" fill="#FF6A00"/>
+      <rect x="35" y="15" width="5" height="4" fill="#1A1A1A"/>
+      <circle cx="7" cy="21" r="3.2" fill="#1A1A1A"/><circle cx="7" cy="21" r="1.2" fill="#FAFAF9"/>
+      <circle cx="29" cy="21" r="3.2" fill="#1A1A1A"/><circle cx="29" cy="21" r="1.2" fill="#FAFAF9"/>
+    </svg>
+    <h1>Solvix Freight Ops<span>Live Board <em>·</em> Desk B, North American spot</span></h1>
+  </div>
+  <div class="status" role="status" aria-live="off">
+    <span class="item"><span class="live-dot" aria-hidden="true"></span><span class="label" id="livelabel">Live feed</span></span>
+    <span class="item clock"><span class="label">UTC</span><time id="clock" datetime="">--:--:--</time></span>
+    <span class="item shift"><span class="label">Shift</span><span>B · 14:00–22:00</span></span>
+    <button class="btn" id="pause" aria-pressed="false" aria-label="Pause live feed"><span class="sq" aria-hidden="true"></span><span id="pausetext">Pause feed</span></button>
+  </div>
+</header>
+
+<main class="board">
+  <section class="kpis" aria-label="Board metrics" style="grid-column:1/13">
+    <div class="kpi"><span class="label">Active tenders</span><span class="v" id="k-active">14</span><span class="d"><b id="k-active-d">+3</b> vs. shift open</span></div>
+    <div class="kpi"><span class="label">Accept rate</span><span class="v"><span id="k-accept">71</span><small>%</small></span><span class="bar" aria-hidden="true"><i id="k-accept-bar" style="width:71%"></i></span></div>
+    <div class="kpi"><span class="label">Avg. spot $/mi</span><span class="v"><small>$</small><span id="k-rate">2.31</span></span><span class="d"><b id="k-rate-d">+0.04</b> w/w · diesel $3.88</span></div>
+    <div class="kpi"><span class="label">Trucks in transit</span><span class="v" id="k-trucks">16</span><span class="d">across <b>14</b> monitored lanes</span></div>
+    <div class="kpi"><span class="label">On-time pickup</span><span class="v"><span id="k-otp">94.2</span><small>%</small></span><span class="bar" aria-hidden="true"><i id="k-otp-bar" style="width:94.2%"></i></span></div>
+    <div class="kpi"><span class="label">Open alerts</span><span class="v" id="k-alerts">5</span><span class="d"><b id="k-alerts-h">2</b> high · needs a human</span></div>
+  </section>
+
+  <section class="panel tenders" aria-labelledby="h-tenders">
+    <div class="ph">
+      <h2 id="h-tenders">Active load tenders <span class="n" id="rowcount">14 rows</span></h2>
+      <div class="meta">
+        <button class="chip" id="filterchip" hidden aria-label="Clear lane filter"><span id="filtertext"></span><span class="x" aria-hidden="true">×</span></button>
+        <span class="label">Updated <span id="lastupd">just now</span></span>
+      </div>
+    </div>
+    <div class="twrap">
+    <div class="tw" tabindex="0" aria-label="Tender table, scrolls horizontally on small screens">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Load</th><th scope="col">Lane</th><th scope="col">Equip</th>
+            <th scope="col" class="num">Miles</th><th scope="col" class="num">Rate</th><th scope="col" class="num">$/mi</th>
+            <th scope="col">Carrier</th><th scope="col">Tender</th><th scope="col" class="num">Respond by</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    </div>
+    <div class="tfoot">
+      <span class="hint-desk">Click a lane on the map or a lane card to filter. <b>Esc</b> clears.</span><span class="scrollhint">Swipe the table sideways for rate, carrier and tender · tap a lane card to filter</span>
+      <span>Feed: <b id="feedstate">streaming</b> · tick <b id="tickno">0</b></span>
+    </div>
+  </section>
+
+  <div class="side">
+  <section class="panel map last" aria-labelledby="h-map">
+    <div class="ph">
+      <h2 id="h-map">Network <span class="n">Trucks in transit</span></h2>
+      <div class="meta"><span class="label" id="mapstat">16 units moving</span></div>
+    </div>
+    <div class="mapwrap">
+      <svg id="map" viewBox="0 0 1000 620" role="img" aria-labelledby="map-title map-desc">
+        <title id="map-title">Stylized map of the contiguous United States with fourteen freight lanes and trucks moving along them</title>
+        <desc id="map-desc">Lanes connect Seattle, Los Angeles, Phoenix, Salt Lake City, Denver, Dallas, Houston, Kansas City, Minneapolis, Chicago, Memphis, Atlanta, Charlotte and Newark. Orange markers are trucks in transit.</desc>
+        <defs>
+          <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" fill="#CFCFC8"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="1000" height="620" fill="url(#dots)"/>
+        <path class="usa" d="M5,14 L34,0 L508,0 L602,24 L686,60 L720,96 L722,156 L780,139 L830,120 L915,96 L983,41 L983,101 L932,132 L932,175 L864,204 L839,264 L830,290 L839,331 L788,365 L746,420 L737,446 L759,571 L732,586 L715,509 L695,456 L678,463 L610,451 L593,478 L525,463 L471,514 L468,554 L432,516 L400,461 L314,413 L285,425 L237,425 L173,396 L134,396 L110,360 L75,348 L51,293 L10,206 L15,144 Z"/>
+        <g id="lanes"></g>
+        <g id="hubs"></g>
+        <g id="trucks"></g>
+      </svg>
+      <div class="tip" id="tip" role="tooltip"></div>
+      <div class="maplegend" aria-hidden="true">
+        <span><i></i>Truck in transit</span>
+        <span><i class="dash"></i>Monitored lane</span>
+        <span><i class="hub"></i>Hub / cross-dock</span>
+        <span>Hover a unit for load · click a lane to filter</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel alerts last" aria-labelledby="h-alerts">
+    <div class="ph">
+      <h2 id="h-alerts">Alert feed <span class="n" id="alertcount">5 open</span></h2>
+      <div class="meta"><span class="label">Newest first</span></div>
+    </div>
+    <ol class="feed" id="feed" aria-live="polite" aria-relevant="additions"></ol>
+  </section>
+
+  </div>
+
+  <section class="panel lanes" aria-labelledby="h-lanes">
+    <div class="ph">
+      <h2 id="h-lanes">Lane spot rates <span class="n">$ per mile · last 28 ticks</span></h2>
+      <div class="meta"><span class="label">Van, 53′ · all-in incl. fuel</span></div>
+    </div>
+    <div class="cards" id="cards" role="group" aria-label="Lane rate cards, each toggles a table filter"></div>
+  </section>
+
+  <section class="panel note" aria-labelledby="h-note">
+    <div class="ph"><h2 id="h-note">Shift handover <span class="n">Written 14:00 UTC · Desk B</span></h2></div>
+    <div class="body">
+      <div class="col">
+        <h3>Board is warm, not hot. Watch the Southwest and the East Coast dock windows.</h3>
+        <p>Spot capacity out of Los Angeles tightened overnight after the I-40 closure at Kingman pushed every Phoenix and Dallas outbound onto I-10. Expect LAX–DFW and LAX–PHX to keep printing above contract until ADOT reopens the westbound lanes; we have already accepted two counters at <span class="sig">$2.55/mi</span> rather than risk a second rejection. Do not chase the third — the customer's ceiling is $2.60 and Redline knows it.</p>
+        <p>Chicago is the quiet problem. Three units are sitting past free time at DC-4 and the detention clock is running at $65/hr per unit. Receiving says the dock is short two forklift operators; if the 16:00 wave slips again, pull Iron Bend's two remaining CHI–EWR tenders and re-post them at the 18:00 rate refresh so the appointment times stay honest.</p>
+        <p>Everything south of Memphis is behaving. Tallgrass and Kestrel are accepting inside four minutes on MEM–ATL and HOU–ATL, and reefer SVX-241188 is reading nominal again after the probe reconnect. Fuel reset this morning to $3.88 national average, so the surcharge column on every new tender is already +$0.04 against last week.</p>
+      </div>
+      <div class="col">
+        <h3>Reading the board</h3>
+        <dl>
+          <dt>OPEN</dt><dd>Tender sent, carrier has not responded. The respond-by clock is the contractual window.</dd>
+          <dt>COUNTERED</dt><dd>Carrier came back with a rate. The board shows the counter; the tick mark is the delta from our offer.</dd>
+          <dt>ACCEPTED</dt><dd>Booked. Row stays for one refresh cycle then rolls off into dispatch.</dd>
+          <dt>EXPIRING</dt><dd>Under two minutes left. Orange means a person should look at it now.</dd>
+          <dt>$/MI</dt><dd>All-in linehaul plus fuel divided by practical miles. Sparklines are the last 28 rate ticks for the lane.</dd>
+          <dt>TRUCKS</dt><dd>Positions are interpolated from the last ELD ping. Orange unit is moving; ink unit is on a filtered lane.</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span><b>Solvix Freight Ops</b> · Simulated feed for the tender desk showcase. No real carriers, loads or rates are represented.</span>
+  <span>Paper · ink · signal orange. Schibsted Grotesk &amp; JetBrains Mono.</span>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  var $=function(s,r){return (r||document).querySelector(s)};
+  var reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var rnd=function(a,b){return a+Math.random()*(b-a)};
+  var ri=function(a,b){return Math.floor(rnd(a,b+1))};
+  var pick=function(arr){return arr[ri(0,arr.length-1)]};
+  var fmt=function(n){return n.toLocaleString('en-US')};
+  var pad=function(n){return (n<10?'0':'')+n};
+
+  /* ---------- data ---------- */
+  var HUBS={
+    SEA:[46,34],LAX:[115,359],PHX:[219,374],SLC:[222,197],DEN:[341,223],DFW:[478,389],HOU:[502,461],
+    KC:[515,238],MSP:[537,96],MEM:[593,334],CHI:[634,170],ATL:[688,367],CLT:[749,331],EWR:[861,199]
+  };
+  var LANES=[
+    {id:'LAX-DFW',mi:1435,base:2.41,curve:1},
+    {id:'DFW-ATL',mi:781,base:2.18,curve:-1},
+    {id:'CHI-EWR',mi:790,base:2.66,curve:-1},
+    {id:'ATL-EWR',mi:868,base:2.32,curve:1},
+    {id:'MEM-ATL',mi:384,base:2.05,curve:1},
+    {id:'DEN-CHI',mi:1003,base:2.12,curve:-1},
+    {id:'SEA-SLC',mi:840,base:2.37,curve:1},
+    {id:'HOU-ATL',mi:792,base:2.09,curve:1},
+    {id:'CHI-MEM',mi:530,base:1.98,curve:1},
+    {id:'PHX-DFW',mi:1066,base:2.21,curve:1},
+    {id:'LAX-PHX',mi:372,base:2.74,curve:1},
+    {id:'MSP-CHI',mi:409,base:2.15,curve:-1},
+    {id:'KC-CHI',mi:510,base:2.02,curve:1},
+    {id:'SLC-DEN',mi:520,base:2.28,curve:-1}
+  ];
+  var CARRIERS=['Redline Carriers','Blue Mesa Transport','Kestrel Logistics','Northstar Haulage','Tallgrass Freight','Iron Bend Trucking','Sable Ridge Express','Harbor & Plains','Copperline Dedicated'];
+  var EQUIP=["53′ DRY","53′ DRY","53′ DRY","53′ RFR","48′ FLT","53′ DRY"];
+  var ALERTS=[
+    ['high','<b>I-40 closed</b> both directions at MM 186 near Kingman. PHX–LAX and DFW–LAX loads rerouting via I-10, <span class="mono">+58 mi</span>.'],
+    ['med','Kestrel Logistics acceptance on <b>DFW–ATL</b> fell below 60% this shift. Auto-tender paused, broker desk notified.'],
+    ['low','Reefer <b>SVX-241188</b> probe reconnected; readings nominal at <span class="mono">−10 °F</span>.'],
+    ['high','<b>Detention clock running</b> at CHI DC-4: 3 units past 2 h free time, <span class="mono">$65/hr</span> each.'],
+    ['med','Fuel surcharge index reset: national diesel <span class="mono">$3.88/gal</span>, +$0.04 week over week.'],
+    ['low','<b>MSP–CHI</b> spot crossed the contract floor ($2.10/mi). Auto-tender re-enabled for Tallgrass.'],
+    ['med','Winter weather advisory on I-80 Wyoming. Chain law likely from <span class="mono">22:00 MT</span>; SLC–DEN ETAs +2 h.'],
+    ['high','Tender <b>SVX-241203</b> rejected twice on LAX–DFW. Escalated to broker desk, customer ceiling $2.60/mi.'],
+    ['low','EWR receiving dock hours extended to <span class="mono">22:00</span> through Friday; CHI–EWR appointments rebalanced.'],
+    ['med','Iron Bend Trucking driver hours: 2 units on <b>CHI–EWR</b> will hit 14 h before delivery; swap at Toledo yard proposed.'],
+    ['low','ELD ping gap 11 min on unit <b>T-1207</b> east of Amarillo; position interpolated, no action.']
+  ];
+
+  /* ---------- state ---------- */
+  var running=true, hidden=false, tick=0, seq=241207, activeLane=null, hoverLane=null;
+  var rows=[], series={}, trucks=[], alerts=[];
+  var accepted=18, responded=25, otp=94.2;
+
+  /* ---------- map ---------- */
+  var svg=$('#map'), gL=$('#lanes'), gH=$('#hubs'), gT=$('#trucks'), tip=$('#tip');
+  var NS='http://www.w3.org/2000/svg';
+  var el=function(n,attrs,parent){var e=document.createElementNS(NS,n);for(var k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e};
+  var lanePaths={};
+  LANES.forEach(function(L){
+    var p=L.id.split('-'), a=HUBS[p[0]], b=HUBS[p[1]];
+    var mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2, dx=b[0]-a[0], dy=b[1]-a[1], len=Math.hypot(dx,dy);
+    var k=L.curve*Math.min(60,len*0.16);
+    var cx=mx+(-dy/len)*k, cy=my+(dx/len)*k;
+    var d='M'+a[0]+','+a[1]+' Q'+cx+','+cy+' '+b[0]+','+b[1];
+    var hit=el('path',{d:d,'class':'lane-hit','data-lane':L.id,tabindex:'0',role:'button','aria-label':'Filter tenders to lane '+L.id},gL);
+    var path=el('path',{d:d,'class':'lane','data-lane':L.id},gL);
+    lanePaths[L.id]={path:path,len:path.getTotalLength(),hit:hit};
+    hit.addEventListener('click',function(){toggleLane(L.id)});
+    hit.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleLane(L.id)}});
+    hit.addEventListener('mouseenter',function(){setHover(L.id)});
+    hit.addEventListener('mouseleave',function(){setHover(null)});
+  });
+  Object.keys(HUBS).forEach(function(h){
+    var c=HUBS[h], g=el('g',{'class':'hub'},gH);
+    el('circle',{cx:c[0],cy:c[1],r:7},g);
+    var right=(h==='LAX'||h==='SEA'||h==='SLC'||h==='PHX'||h==='DEN'||h==='HOU'||h==='DFW'||h==='ATL'||h==='CLT');
+    var t=el('text',{x:c[0]+(right?14:-14),y:c[1]+(h==='PHX'||h==='DFW'||h==='ATL'||h==='HOU'?28:-13),'text-anchor':right?'start':'end'},g);
+    if(h==='EWR'){t.setAttribute('x',c[0]+14);t.setAttribute('text-anchor','start');t.setAttribute('y',c[1]-13)}
+    if(h==='CLT'){t.setAttribute('x',c[0]+14);t.setAttribute('y',c[1]+28)}
+    if(h==='MEM'){t.setAttribute('x',c[0]-14);t.setAttribute('y',c[1]+28)}
+    if(h==='CHI'){t.setAttribute('x',c[0]-14);t.setAttribute('y',c[1]-13)}
+    if(h==='KC'){t.setAttribute('x',c[0]-14);t.setAttribute('y',c[1]+28)}
+    t.textContent=h;
+  });
+
+  function makeTruck(i){
+    var L=LANES[i%LANES.length];
+    var g=el('g',{'class':'truck','data-lane':L.id,tabindex:'0','aria-label':'Truck on lane '+L.id},gT);
+    el('line',{'class':'trail',x1:-15,y1:0,x2:-38,y2:0},g);
+    el('rect',{'class':'box',x:-16,y:-7,width:22,height:14,rx:2},g);
+    el('rect',{'class':'cab',x:7,y:-5.5,width:8,height:11,rx:1.5},g);
+    var tr={g:g,lane:L.id,t:Math.random(),speed:rnd(9,16),dir:Math.random()<.5?1:-1,id:'T-'+(1180+i*7),load:'SVX-'+(241150+i*4),carrier:pick(CARRIERS)};
+        g.addEventListener('mouseenter',function(){showTip(tr)});
+    g.addEventListener('focus',function(){showTip(tr)});
+    g.addEventListener('mouseleave',hideTip);
+    g.addEventListener('blur',hideTip);
+    return tr;
+  }
+  for(var i=0;i<16;i++)trucks.push(makeTruck(i));
+  trucks.push(makeTruck(0));trucks[16].t=(trucks[0].t+.5)%1;trucks[16].id='T-1291';trucks[16].load='SVX-241214';
+  trucks.forEach(function(tr){placeTruck(tr)});
+  $('#k-trucks').textContent=trucks.length;
+  $('#mapstat').textContent=trucks.length+' units moving';
+
+  function placeTruck(tr){
+    var lp=lanePaths[tr.lane], len=lp.len;
+    var s=(tr.dir>0?tr.t:1-tr.t)*len;
+    var p=lp.path.getPointAtLength(s);
+    var q=lp.path.getPointAtLength(Math.min(len,Math.max(0,s+tr.dir*2)));
+    var ang=Math.atan2(q.y-p.y,q.x-p.x)*180/Math.PI;
+    tr.g.setAttribute('transform','translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+') rotate('+ang.toFixed(1)+')');
+    tr.x=p.x;tr.y=p.y;
+  }
+  var lastT=0;
+  function frame(ts){
+    if(!running||hidden||reduced)return;
+    var dt=lastT?Math.min(.1,(ts-lastT)/1000):0;lastT=ts;
+    trucks.forEach(function(tr){
+      tr.t+=tr.speed*dt/lanePaths[tr.lane].len;
+      if(tr.t>1){tr.t-=1;tr.dir*=-1;tr.load='SVX-'+(++seq)}
+      placeTruck(tr);
+    });
+    if(tipFor)positionTip(tipFor);
+    requestAnimationFrame(frame);
+  }
+  function startFrames(){lastT=0;if(!reduced)requestAnimationFrame(frame)}
+  startFrames();
+
+  var tipFor=null;
+  function showTip(tr){tipFor=tr;tip.innerHTML='<b>'+tr.id+'</b> · '+tr.lane+'<br>'+tr.load+' · '+tr.carrier;tip.classList.add('show');positionTip(tr)}
+  function hideTip(){tipFor=null;tip.classList.remove('show')}
+  function positionTip(tr){
+    var r=svg.getBoundingClientRect(), wrap=svg.parentNode.getBoundingClientRect();
+    var sx=r.width/1000, sy=r.height/620;
+    tip.style.left=(r.left-wrap.left+tr.x*sx)+'px';
+    tip.style.top=(r.top-wrap.top+tr.y*sy)+'px';
+  }
+
+  /* ---------- lane filter ---------- */
+  function toggleLane(id){activeLane=activeLane===id?null:id;applyLane()}
+  function setHover(id){hoverLane=id;applyLane()}
+  function applyLane(){
+    var id=activeLane||hoverLane;
+    LANES.forEach(function(L){lanePaths[L.id].path.classList.toggle('on',L.id===id)});
+    trucks.forEach(function(tr){tr.g.classList.toggle('on',!!id&&tr.lane!==id)});
+    rows.forEach(function(r){r.tr.classList.toggle('dim',!!id&&r.lane!==id)});
+    document.querySelectorAll('.card').forEach(function(c){c.setAttribute('aria-pressed',c.dataset.lane===activeLane?'true':'false')});
+    var chip=$('#filterchip');chip.hidden=!activeLane;if(activeLane)$('#filtertext').textContent='Lane '+activeLane;
+  }
+  $('#filterchip').addEventListener('click',function(){activeLane=null;applyLane()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&activeLane){activeLane=null;applyLane()}});
+
+  /* ---------- sparklines ---------- */
+  var cards=$('#cards');
+  var W=200,H=46;
+  function sparkPath(data){
+    var min=Math.min.apply(null,data), max=Math.max.apply(null,data), span=(max-min)||.1;
+    var pts=data.map(function(v,i){return [(i/(data.length-1))*W, 4+(1-(v-min)/span)*(H-8)]});
+    var d=pts.map(function(p,i){return (i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)}).join(' ');
+    return {d:d,area:d+' L'+W+','+H+' L0,'+H+' Z',last:pts[pts.length-1]};
+  }
+  LANES.slice(0,8).forEach(function(L,i){
+    var data=[],v=L.base*rnd(.94,1.02);
+    for(var k=0;k<28;k++){v=v+rnd(-.05,.055);v=Math.max(L.base*.86,Math.min(L.base*1.16,v));data.push(v)}
+    series[L.id]=data;
+    var b=document.createElement('button');
+    b.className='card';b.type='button';b.dataset.lane=L.id;b.setAttribute('aria-pressed','false');
+    b.setAttribute('aria-label','Lane '+L.id+', filter table');
+    var sp=sparkPath(data);
+    b.innerHTML='<div class="h"><span class="lane-id">'+L.id.replace('-',' → ')+'</span><span class="dl"></span></div>'+
+      '<div class="px"><span class="val"></span><small>$/MI</small></div>'+
+      '<svg class="spark draw" style="--i:'+i+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+
+      '<line class="base" x1="0" y1="'+(H-1)+'" x2="'+W+'" y2="'+(H-1)+'"/>'+
+      '<path class="area" d="'+sp.area+'"/><path class="line" d="'+sp.d+'"/>'+
+      '<circle class="halo" cx="'+sp.last[0]+'" cy="'+sp.last[1]+'" r="2"/>'+
+      '<circle class="dot" cx="'+sp.last[0]+'" cy="'+sp.last[1]+'" r="2.4"/></svg>'+
+      '<div class="ft"><span>'+fmt(L.mi)+' mi</span><span class="hl"></span></div>';
+    b.addEventListener('click',function(){toggleLane(L.id)});
+    b.addEventListener('mouseenter',function(){setHover(L.id)});
+    b.addEventListener('mouseleave',function(){setHover(null)});
+    cards.appendChild(b);
+    paintCard(L.id,false);
+  });
+  function paintCard(id,pop){
+    var c=cards.querySelector('[data-lane="'+id+'"]');if(!c)return;
+    var data=series[id], last=data[data.length-1], first=data[0], delta=(last-first)/first*100;
+    var sp=sparkPath(data), s=c.querySelector('.spark');
+    if(pop){s.classList.remove('draw')}
+    s.querySelector('.line').setAttribute('d',sp.d);
+    s.querySelector('.area').setAttribute('d',sp.area);
+    ['.dot','.halo'].forEach(function(q){var e=s.querySelector(q);e.setAttribute('cx',sp.last[0]);e.setAttribute('cy',sp.last[1])});
+    c.querySelector('.val').textContent=last.toFixed(2);
+    var dl=c.querySelector('.dl');dl.textContent=(delta>=0?'▲ +':'▼ ')+delta.toFixed(1)+'%';dl.classList.toggle('up',delta>=0);
+    var min=Math.min.apply(null,data),max=Math.max.apply(null,data);
+    c.querySelector('.hl').textContent='L '+min.toFixed(2)+' · H '+max.toFixed(2);
+    if(pop&&!reduced){s.classList.remove('pop');void s.offsetWidth;s.classList.add('pop')}
+  }
+
+  /* ---------- table ---------- */
+  var tbody=$('#rows');
+  function newRow(status,due){
+    var L=pick(LANES), ppm=(series[L.id]?series[L.id][27]:L.base)*rnd(.96,1.05);
+    var r={id:'SVX-'+(++seq),lane:L.id,mi:L.mi,eq:pick(EQUIP),ppm:ppm,carrier:pick(CARRIERS),status:status||'open',due:due||ri(120,1500),delta:0};
+    if(r.eq.indexOf('RFR')>-1)r.ppm*=1.22;if(r.eq.indexOf('FLT')>-1)r.ppm*=1.12;
+    r.rate=Math.round(r.ppm*r.mi/5)*5;
+    r.tr=document.createElement('tr');r.tr.dataset.lane=r.lane;
+    r.tr.innerHTML='<td class="id"></td><td class="lane"></td><td class="eq"></td><td class="num mi"></td><td class="num rt"><span class="rate"><span class="tick"></span><span class="rv"></span></span></td><td class="num pm"></td><td class="cr"></td><td class="stc"><span class="st"></span></td><td class="num due"></td>';
+    r.tr.addEventListener('mouseenter',function(){setHover(r.lane)});
+    r.tr.addEventListener('mouseleave',function(){setHover(null)});
+    paintRow(r);return r;
+  }
+  function paintRow(r){
+    var tr=r.tr, p=r.lane.split('-');
+    $('.id',tr).textContent=r.id;
+    $('.lane',tr).innerHTML=p[0]+'<span class="arw">→</span>'+p[1];
+    $('.eq',tr).textContent=r.eq;
+    $('.mi',tr).textContent=fmt(r.mi);
+    $('.rv',tr).textContent='$'+fmt(r.rate);
+    $('.tick',tr).textContent=r.delta>0?'▲':r.delta<0?'▼':'';
+    $('.pm',tr).textContent=(r.rate/r.mi).toFixed(2);
+    $('.cr',tr).textContent=r.carrier;
+    var st=$('.st',tr);st.className='st st-'+r.status;st.textContent=r.status;
+    tr.classList.toggle('exp',r.status==='expiring');tr.classList.toggle('expd',r.status==='expired'||r.status==='accepted');
+    $('.due',tr).textContent=r.status==='accepted'?'booked':r.status==='expired'?'—':pad(Math.floor(r.due/60))+':'+pad(r.due%60);
+  }
+  var initStatus=['open','open','countered','open','accepted','open','open','countered','open','expiring','open','countered','open','open'];
+  initStatus.forEach(function(s,i){var r=newRow(s,s==='expiring'?ri(20,110):undefined);rows.push(r);tbody.appendChild(r.tr)});
+  // deterministic lane spread so filters have hits
+  rows.forEach(function(r,i){r.lane=LANES[i%LANES.length].id;r.mi=LANES[i%LANES.length].mi;r.rate=Math.round(r.ppm*r.mi/5)*5;r.tr.dataset.lane=r.lane;paintRow(r)});
+
+  function flash(tr){if(reduced)return;tr.classList.remove('flash');void tr.offsetWidth;tr.classList.add('flash')}
+  function removeRow(r){
+    var i=rows.indexOf(r);if(i<0)return;rows.splice(i,1);
+    if(reduced){r.tr.remove()}else{r.tr.classList.add('gone');setTimeout(function(){r.tr.remove()},380)}
+  }
+  function addRow(){
+    var r=newRow('open',ri(300,1500));rows.unshift(r);tbody.insertBefore(r.tr,tbody.firstChild);
+    if(!reduced)r.tr.classList.add('enter');
+    if(activeLane&&r.lane!==activeLane)r.tr.classList.add('dim');
+  }
+  function mutate(){
+    tick++;$('#tickno').textContent=tick;
+    var live=rows.filter(function(r){return r.status==='open'||r.status==='countered'||r.status==='expiring'});
+    var roll=Math.random();
+    if(roll<.42&&live.length){ // counter
+      var r=pick(live);var f=rnd(1.02,1.07);r.rate=Math.round(r.rate*f/5)*5;r.delta=1;r.status='countered';r.carrier=r.carrier;paintRow(r);flash(r.tr);responded++;
+    }else if(roll<.72&&live.length){ // accept
+      var a=pick(live);a.status='accepted';paintRow(a);flash(a.tr);accepted++;responded++;
+      setTimeout(function(){removeRow(a);addRow();updateKpis()},ri(6000,12000));
+    }else{ // new tender
+      addRow();
+      if(rows.length>16){var old=rows[rows.length-1];removeRow(old)}
+    }
+    // sparkline tick on a random lane
+    var lid=pick(LANES.slice(0,8)).id, s=series[lid], last=s[s.length-1];
+    var L=LANES.filter(function(x){return x.id===lid})[0];
+    var nv=Math.max(L.base*.86,Math.min(L.base*1.16,last+rnd(-.05,.055)));
+    s.push(nv);s.shift();paintCard(lid,true);
+    // drift otp
+    otp=Math.max(90,Math.min(97.5,otp+rnd(-.15,.15)));
+    updateKpis();
+    $('#lastupd').textContent='just now';lastUpd=Date.now();
+  }
+  var lastUpd=Date.now();
+  function countdown(){
+    var changed=false;
+    rows.forEach(function(r){
+      if(r.status==='open'||r.status==='countered'||r.status==='expiring'){
+        r.due=Math.max(0,r.due-1);
+        if(r.due<120&&r.status!=='expiring'){r.status='expiring';changed=true}
+        if(r.due===0){r.status='expired';paintRow(r);changed=true;setTimeout(function(){removeRow(r);addRow();updateKpis()},5000);return}
+        $('.due',r.tr).textContent=pad(Math.floor(r.due/60))+':'+pad(r.due%60);
+        if(changed)paintRow(r);
+      }
+    });
+    var ago=Math.round((Date.now()-lastUpd)/1000);
+    $('#lastupd').textContent=ago<2?'just now':ago+'s ago';
+  }
+  function updateKpis(){
+    var active=rows.filter(function(r){return r.status!=='expired'&&r.status!=='accepted'}).length;
+    $('#k-active').textContent=active;$('#rowcount').textContent=rows.length+' rows';
+    var ad=active-11;$('#k-active-d').textContent=(ad>=0?'+':'')+ad;
+    var pct=Math.round(accepted/responded*100);$('#k-accept').textContent=pct;$('#k-accept-bar').style.width=pct+'%';
+    var sum=0,n=0;rows.forEach(function(r){if(r.status!=='expired'){sum+=r.rate/r.mi;n++}});
+    var avg=n?sum/n:0;$('#k-rate').textContent=avg.toFixed(2);
+    var d=avg-2.27;$('#k-rate-d').textContent=(d>=0?'+':'−')+Math.abs(d).toFixed(2);
+    $('#k-otp').textContent=otp.toFixed(1);$('#k-otp-bar').style.width=otp+'%';
+    var hi=alerts.filter(function(a){return a[0]==='high'}).length;
+    $('#k-alerts').textContent=alerts.length;$('#k-alerts-h').textContent=hi;$('#alertcount').textContent=alerts.length+' open';
+  }
+
+  /* ---------- alerts ---------- */
+  var feed=$('#feed'), alertIdx=0;
+  function utcNow(offsetSec){var d=new Date(Date.now()-(offsetSec||0)*1000);return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds())}
+  function pushAlert(a,offset,animate){
+    alerts.unshift(a);
+    var li=document.createElement('li');if(animate&&!reduced)li.className='enter';
+    li.innerHTML='<time datetime="'+utcNow(offset)+'Z">'+utcNow(offset)+'</time><span class="sev sev-'+a[0]+'">'+a[0]+'</span><p>'+a[1]+'</p>';
+    feed.insertBefore(li,feed.firstChild);
+    while(feed.children.length>7){feed.removeChild(feed.lastChild);alerts.pop()}
+  }
+  pushAlert(ALERTS[4],1260);pushAlert(ALERTS[3],905);pushAlert(ALERTS[2],540);pushAlert(ALERTS[1],312);pushAlert(ALERTS[0],88);alertIdx=5;
+  updateKpis();
+
+  /* ---------- clock / loops ---------- */
+  var clock=$('#clock');
+  function tickClock(){var d=new Date();clock.textContent=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());clock.setAttribute('datetime',d.toISOString())}
+  tickClock();
+  setInterval(tickClock,1000);
+  setInterval(function(){if(running&&!hidden)countdown()},1000);
+  setInterval(function(){if(running&&!hidden)mutate()},2400);
+  setInterval(function(){if(running&&!hidden){pushAlert(ALERTS[alertIdx%ALERTS.length],0,true);alertIdx++;updateKpis()}},9000);
+
+  var pauseBtn=$('#pause');
+  pauseBtn.addEventListener('click',function(){
+    running=!running;
+    pauseBtn.setAttribute('aria-pressed',running?'false':'true');
+    pauseBtn.setAttribute('aria-label',running?'Pause live feed':'Resume live feed');
+    $('#pausetext').textContent=running?'Pause feed':'Resume feed';
+    $('#livelabel').textContent=running?'Live feed':'Feed paused';
+    $('#feedstate').textContent=running?'streaming':'paused';
+    document.body.classList.toggle('paused',!running);
+    if(running)startFrames();
+  });
+  document.addEventListener('visibilitychange',function(){hidden=document.hidden;if(!hidden&&running)startFrames()});
+  var tw=$('.tw'), twrap=$('.twrap');
+  function scrollHint(){twrap.classList.toggle('more',tw.scrollWidth-tw.clientWidth-tw.scrollLeft>4)}
+  tw.addEventListener('scroll',scrollHint,{passive:true});scrollHint();
+  window.addEventListener('resize',function(){scrollHint();if(tipFor)positionTip(tipFor)});
+})();
+</script>
+</body>
+</html>

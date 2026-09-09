@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WORDS IN MOTION — a kinetic typography piece about momentum</title>
+<meta name="description" content="Eight statements about momentum, each one deformed by the speed of your scroll. Black, white, one red. Type is the only image.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23000'/%3E%3Cpath d='M14 50 L26 14 L38 50 L50 14' fill='none' stroke='%23fff' stroke-width='7' stroke-linejoin='miter'/%3E%3Crect x='50' y='42' width='9' height='9' fill='%23f00'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Six+Caps&family=Anton&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --w:#fff; --k:#000; --r:#ff0000;
+    --v:0;      /* signed, smoothed scroll velocity, roughly -1..1 */
+    --av:0;     /* absolute velocity 0..1 */
+    --dir:1;    /* last scroll direction */
+    --display:'Six Caps', 'Arial Narrow', Impact, sans-serif;
+    --text:'Anton', Impact, 'Arial Narrow', sans-serif;
+    --ease:cubic-bezier(.2,.8,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:auto;background:var(--k)}
+  body{
+    font-family:var(--text);
+    color:var(--k);
+    background:var(--w);
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.2;
+  }
+  ::selection{background:var(--r);color:var(--w)}
+  a{color:inherit}
+  :focus-visible{outline:4px solid var(--r);outline-offset:4px}
+
+  /* ---------- fixed chrome ---------- */
+  .hud{
+    position:fixed;inset:auto 0 0 0;z-index:20;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    padding:clamp(12px,1.6vw,22px) clamp(14px,2vw,28px);
+    pointer-events:none;
+    color:var(--w);transition:color .25s;
+    font-size:clamp(11px,.9vw,14px);letter-spacing:.14em;text-transform:uppercase;
+  }
+  .hud > *{pointer-events:auto}
+  .hud .meter{display:flex;align-items:center;gap:10px}
+  .hud .meter i{
+    display:block;width:clamp(80px,12vw,180px);height:8px;background:currentColor;position:relative;overflow:hidden;
+  }
+  .hud .meter i::after{
+    content:"";position:absolute;top:0;bottom:0;left:50%;width:50%;
+    background:var(--r);
+    transform-origin:left center;
+    transform:scaleX(var(--v));
+  }
+  .hud output{font-variant-numeric:tabular-nums;min-width:5.5ch;display:inline-block}
+  .hud button{
+    font:inherit;letter-spacing:inherit;text-transform:inherit;
+    background:transparent;color:inherit;border:2px solid currentColor;
+    padding:6px 12px;cursor:pointer;
+  }
+  .hud button[aria-pressed="false"]{text-decoration:line-through}
+
+  .progress{
+    position:fixed;top:0;left:0;height:6px;width:100%;z-index:20;
+    background:transparent;pointer-events:none;
+  }
+  .progress b{display:block;height:100%;width:100%;background:var(--r);transform-origin:left;transform:scaleX(var(--p,0))}
+  html.on-w .hud{color:var(--k)}
+  html.on-r .hud .meter i::after,html.on-r .progress b{background:var(--k)}
+
+  /* ---------- statements ---------- */
+  .stmt{
+    position:relative;
+    min-height:100svh;min-height:100vh;
+    display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:minmax(0,1fr);
+    padding:clamp(18px,3vw,44px) clamp(14px,3vw,48px) clamp(72px,9vw,96px);
+    overflow:hidden;
+    isolation:isolate;
+  }
+  .stmt.k{background:var(--k);color:var(--w)}
+  .stmt.w{background:var(--w);color:var(--k)}
+  .stmt.r{background:var(--r);color:var(--w)}
+
+  .stmt .idx{
+    font-family:var(--display);
+    font-size:clamp(48px,7vw,120px);line-height:.85;
+    display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  }
+  .stmt .idx small{
+    font-family:var(--text);font-size:clamp(11px,.85vw,14px);letter-spacing:.18em;text-transform:uppercase;
+    max-width:26ch;text-align:right;line-height:1.4;
+  }
+  .stmt .idx em{font-style:normal;color:var(--r)}
+  .stmt.r .idx em{color:var(--k)}
+
+  .big{
+    min-width:0;max-width:100%;
+    font-family:var(--display);
+    font-weight:400;
+    text-transform:uppercase;
+    line-height:.82;
+    letter-spacing:-.01em;
+    padding:.04em 0 .06em;
+    align-self:center;
+    display:block;
+    will-change:transform;
+    word-break:normal;
+  }
+  .big .word{display:inline-block;white-space:nowrap}
+  .big .ch{display:inline-block;will-change:transform}
+  .big .sp{display:inline-block;width:.18em}
+
+  .stmt .cap{
+    display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,3vw,40px);
+    font-size:clamp(14px,1.15vw,18px);letter-spacing:.02em;line-height:1.55;
+    max-width:1100px;
+  }
+  .stmt .cap p{max-width:44ch}
+  .stmt .cap .tag{
+    font-size:clamp(11px,.85vw,13px);letter-spacing:.2em;text-transform:uppercase;
+    display:flex;gap:10px;align-items:center;
+  }
+  .stmt .cap .tag::before{content:"";width:28px;height:4px;background:var(--r);display:inline-block}
+  .stmt.r .cap .tag::before{background:var(--k)}
+
+  /* 01 — SKEW */
+  #s1 .big{
+    font-size:clamp(150px,min(44vw,56vh),92vh);
+    transform:skewX(calc(var(--v) * -32deg));
+    transform-origin:50% 100%;
+  }
+  #s1 .big .ch{transition:none}
+
+  /* 02 — SPLIT */
+  #s2 .big{font-size:clamp(96px,23vw,50vh)}
+  #s2 .big .ch{
+    transform:translateX(calc(var(--v) * var(--o) * 1.6vw)) translateY(calc(var(--av) * var(--j) * .12em));
+  }
+
+  /* 03 — MARQUEE */
+  #s3{grid-template-rows:auto 1fr auto}
+  .marquee{
+    align-self:center;
+    display:flex;flex-direction:column;gap:0;
+    overflow:hidden;width:100vw;margin-left:calc(-1 * clamp(14px,3vw,48px));
+  }
+  .track{
+    display:flex;white-space:nowrap;will-change:transform;
+    font-family:var(--display);text-transform:uppercase;
+    font-size:clamp(120px,24vw,42vh);line-height:.8;
+  }
+  .track span{padding-right:.18em;flex:none}
+  .track span i{font-style:normal;color:var(--r)}
+  .track.alt{color:transparent;-webkit-text-stroke:2px currentColor;-webkit-text-stroke-color:var(--w)}
+  .track.alt span i{color:transparent;-webkit-text-stroke-color:var(--r)}
+
+  /* 04 — STRETCH */
+  #s4 .big{
+    font-size:clamp(150px,min(40vw,36vh),80vh);
+    transform:scaleY(calc(1 + var(--av) * 1.1)) translateY(calc(var(--v) * -3vh));
+    transform-origin:50% 60%;
+  }
+
+  /* 05 — WAVE */
+  #s5 .big{font-size:clamp(90px,min(20vw,34vh),44vh);text-align:center}
+  #s5 .big .ch{
+    transform:translateY(calc(var(--v) * var(--wv) * 22vh)) rotate(calc(var(--v) * var(--wr) * 14deg));
+  }
+
+  /* 06 — ROTATE */
+  #s6 .big{font-size:clamp(110px,min(22vw,30vh),46vh);display:flex;flex-wrap:wrap;column-gap:.18em;justify-content:center;align-items:flex-end}
+  #s6 .big .sp,#s8 .big .sp{display:none}
+  #s6 .big .word{
+    transform:rotate(calc(var(--v) * var(--rs) * 18deg)) translateY(calc(var(--av) * var(--rs) * -6vh));
+    transform-origin:50% 100%;
+  }
+
+  /* 07 — SHEAR */
+  #s7 .big{font-size:clamp(130px,min(30vw,34vh),64vh);display:grid;gap:.05em}
+  #s7 .big .row{display:block;line-height:.78;white-space:nowrap}
+  #s7 .big .row:nth-child(odd){transform:translateX(calc(var(--v) * 22vw))}
+  #s7 .big .row:nth-child(even){transform:translateX(calc(var(--v) * -22vw))}
+  #s7 .big .row .red{color:var(--r)}
+  #s7 .rule{height:1.2vh;background:var(--r);transform:scaleX(calc(1 - var(--av)));transform-origin:50% 50%}
+
+  /* 08 — REUNITE */
+  #s8 .big{font-size:clamp(160px,min(50vw,56vh),90vh);text-align:center}
+  #s8 .big .ch{
+    transform:translateX(calc(var(--av) * var(--o) * 4vw)) scaleX(calc(1 + var(--av) * .6));
+    transform-origin:50% 50%;
+  }
+  #s8 .big .dot{color:var(--r);display:inline-block}
+
+  /* ---------- essay ---------- */
+  .essay{
+    background:var(--w);color:var(--k);
+    padding:clamp(60px,10vw,140px) clamp(14px,3vw,48px) clamp(80px,12vw,160px);
+    display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr);gap:clamp(24px,5vw,90px);
+    border-top:12px solid var(--k);
+  }
+  .essay h2{
+    font-family:var(--display);font-size:clamp(90px,16vw,240px);line-height:.8;text-transform:uppercase;
+    position:sticky;top:clamp(20px,4vw,60px);align-self:start;
+  }
+  .essay h2 span{display:block;color:var(--r)}
+  .essay .body{font-size:clamp(17px,1.35vw,22px);line-height:1.5;letter-spacing:.01em}
+  .essay .body p{margin-bottom:1.3em;max-width:58ch}
+  .essay .body p:first-of-type::first-letter{font-family:var(--display);font-size:4.2em;float:left;line-height:.78;padding-right:.12em;color:var(--r)}
+  .essay ol{list-style:none;counter-reset:law;margin:2.4em 0 0;border-top:4px solid var(--k)}
+  .essay ol li{
+    counter-increment:law;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:baseline;
+    padding:.9em 0;border-bottom:2px solid var(--k);
+  }
+  .essay ol li::before{
+    content:"0" counter(law);font-family:var(--display);font-size:2.6em;line-height:.8;color:var(--r);min-width:1.4ch;
+  }
+  .essay ol li b{display:block;text-transform:uppercase;letter-spacing:.08em;font-size:.85em;margin-bottom:.15em}
+
+  footer{
+    background:var(--k);color:var(--w);
+    padding:clamp(30px,5vw,60px) clamp(14px,3vw,48px) clamp(90px,10vw,120px);
+    display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px 40px;
+    font-size:clamp(11px,.9vw,14px);letter-spacing:.14em;text-transform:uppercase;line-height:1.7;
+  }
+  footer .mark{font-family:var(--display);font-size:clamp(60px,8vw,120px);line-height:.8;letter-spacing:0;text-transform:uppercase;width:100%}
+  footer .mark i{font-style:normal;color:var(--r)}
+  footer p{max-width:44ch}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:760px){
+    .stmt .cap{grid-template-columns:1fr;gap:10px}
+    .stmt .idx small{max-width:16ch}
+    .stmt .cap p{max-width:none}
+    #s1 .big{font-size:min(60vw,60vh)}
+    #s2 .big{font-size:min(30vw,36vh)}
+    #s4 .big{font-size:min(40vw,60vh)}
+    #s5 .big{font-size:min(26vw,30vh)}
+    #s6 .big{font-size:min(30vw,30vh)}
+    #s7 .big{font-size:min(34vw,44vh)}
+    #s8 .big{font-size:min(60vw,60vh)}
+    .track{font-size:min(34vw,30vh)}
+    .hud{padding-bottom:14px}
+    .essay{grid-template-columns:1fr}
+    .essay h2{position:static}
+    .hud .meter output,.hud .meter > span{display:none}
+  }
+
+  /* ---------- motion preferences ---------- */
+  html.still .big,html.still .big .ch,html.still .big .word,html.still .big .row,html.still #s7 .rule{transform:none !important}
+  html.still .track{transform:none !important}
+  html.still .hud .meter i::after{transform:scaleX(0)}
+  @media (prefers-reduced-motion: reduce){
+    .big,.big .ch,.big .word,.big .row,#s7 .rule,.track{transform:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"><b id="prog"></b></div>
+
+<header class="stmt k" id="s1" aria-labelledby="h1">
+  <div class="idx"><span>01<em>/</em>08</span><small>Words in motion · a kinetic reading on momentum · scroll to deform</small></div>
+  <h1 class="big" id="h1" data-fx="skew">Momentum</h1>
+  <div class="cap">
+    <p class="tag">Skew · driven by scroll velocity</p>
+    <p>Nothing on this page is an image. Eight statements, one red, and the speed of your thumb. Scroll fast and the letters lean, split, stretch and run. Stop, and they stand still again.</p>
+  </div>
+</header>
+
+<main>
+<section class="stmt w" id="s2" aria-labelledby="h2s">
+  <div class="idx"><span>02<em>/</em>08</span><small>Split · the letters pull apart as you accelerate</small></div>
+  <h2 class="big" id="h2s" data-fx="split">Nothing moves until you do</h2>
+  <div class="cap">
+    <p class="tag">Split · letters separate, then reunite</p>
+    <p>An object at rest stays at rest. So does a project, a paragraph, a person. The first push is the expensive one; everything after it is cheaper than you fear.</p>
+  </div>
+</section>
+
+<section class="stmt k" id="s3" aria-labelledby="h3s">
+  <div class="idx"><span>03<em>/</em>08</span><small>Marquee · reverses direction when you change yours</small></div>
+  <h2 id="h3s" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Keep going, keep going</h2>
+  <div class="marquee" aria-hidden="true">
+    <div class="track" data-speed="1"><span>Keep going <i>—</i> </span><span>Keep going <i>—</i> </span><span>Keep going <i>—</i> </span><span>Keep going <i>—</i> </span><span>Keep going <i>—</i> </span><span>Keep going <i>—</i> </span></div>
+    <div class="track alt" data-speed="-0.7"><span>Don’t stop <i>—</i> </span><span>Don’t stop <i>—</i> </span><span>Don’t stop <i>—</i> </span><span>Don’t stop <i>—</i> </span><span>Don’t stop <i>—</i> </span><span>Don’t stop <i>—</i> </span></div>
+  </div>
+  <div class="cap">
+    <p class="tag">Marquee · direction follows the scroll</p>
+    <p>Scroll down and the top line runs left. Scroll up and it turns around. Momentum has no opinion about direction; it only remembers the last thing you did and keeps doing it.</p>
+  </div>
+</section>
+
+<section class="stmt r" id="s4" aria-labelledby="h4s">
+  <div class="idx"><span>04<em>/</em>08</span><small>Stretch · the faster you go, the taller it grows</small></div>
+  <h2 class="big" id="h4s" data-fx="stretch">Speed is a shape</h2>
+  <div class="cap">
+    <p class="tag">Stretch · vertical scale from speed</p>
+    <p>A sprinter’s photograph is longer than the sprinter. Everything that moves quickly gets drawn out along its own path. This word is the only one on the page that gets taller when you hurry.</p>
+  </div>
+</section>
+
+<section class="stmt w" id="s5" aria-labelledby="h5s">
+  <div class="idx"><span>05<em>/</em>08</span><small>Wave · each letter rides a different phase</small></div>
+  <h2 class="big" id="h5s" data-fx="wave">Small steps compound</h2>
+  <div class="cap">
+    <p class="tag">Wave · per-letter vertical offset</p>
+    <p>One percent is nothing. One percent, three hundred and sixty-five times, is thirty-seven times where you started. The wave here is built from letters that each move a little; together they look like a lot.</p>
+  </div>
+</section>
+
+<section class="stmt k" id="s6" aria-labelledby="h6s">
+  <div class="idx"><span>06<em>/</em>08</span><small>Rotate · words tip over in alternating directions</small></div>
+  <h2 class="big" id="h6s" data-fx="rotate">Fall forward not back</h2>
+  <div class="cap">
+    <p class="tag">Rotate · alternating pivot per word</p>
+    <p>Walking is controlled falling. You lean past your balance and a foot arrives just in time. Progress feels the same: slightly off-balance, caught by the next small act.</p>
+  </div>
+</section>
+
+<section class="stmt w" id="s7" aria-labelledby="h7s">
+  <div class="idx"><span>07<em>/</em>08</span><small>Shear · the lines slide against each other</small></div>
+  <h2 class="big" id="h7s" data-fx="shear"><span class="row">Friction <span class="red">is</span></span><span class="rule" aria-hidden="true"></span><span class="row">optional</span></h2>
+  <div class="cap">
+    <p class="tag">Shear · rows offset in opposite directions</p>
+    <p>Most of what slows you down is not the hill. It is the meeting before the work, the tab before the page, the perfect tool before the rough draft. Remove the rubbing surfaces and the same push carries you twice as far.</p>
+  </div>
+</section>
+
+<section class="stmt k" id="s8" aria-labelledby="h8s">
+  <div class="idx"><span>08<em>/</em>08</span><small>Reunite · stop scrolling and the word comes home</small></div>
+  <h2 class="big" id="h8s" data-fx="reunite">Begin<span class="dot" aria-hidden="true">.</span></h2>
+  <div class="cap">
+    <p class="tag">Reunite · letters return when velocity is zero</p>
+    <p>Whatever you were putting off while you read this: that. The letters only hold together when you are still, which is a decent description of a decision.</p>
+  </div>
+</section>
+
+<section class="essay w" aria-labelledby="essay-h">
+  <h2 id="essay-h">Notes on<span>motion</span></h2>
+  <div class="body">
+    <p>Kinetic typography is usually a film technique: words timed to a voice, cut to a beat, exported once and watched the same way by everyone. This page moves the timeline into your hand. There is no autoplay. The scrollbar is the playhead, and its velocity is the only performer. Read slowly and the page is a poster. Read quickly and the poster starts to tear.</p>
+    <p>The mechanics are deliberately plain. On every frame the script measures how far the page travelled since the last one, smooths that number, clamps it, and writes it into two CSS custom properties: a signed velocity and its absolute value. Every deformation you see is a single CSS transform reading one of those properties. Skew reads the sign. Stretch reads the magnitude. The split statement multiplies velocity by each letter’s distance from the centre of its line, so the outer letters travel farthest and the middle barely stirs. The marquee keeps its own position and simply flips direction whenever your scroll direction flips, then borrows your speed on top of its idle drift.</p>
+    <p>Two typefaces do all the work. Six Caps is an ultra-condensed grotesque with almost no counters, which means it survives being sheared and stretched without turning to mush. Anton carries the captions: heavy enough to sit next to a wall of display type without disappearing, quiet enough to be read. The palette is white, black and one red, and the red is rationed: a slash in the counters, a rule between rows, a single full stop at the end.</p>
+    <ol>
+      <li><span><b>Velocity, not position</b>The page does not care where you are, only how fast you got there. Parallax measures place; this measures effort.</span></li>
+      <li><span><b>Every effect is reversible</b>Stop, and within a second every glyph is back in its resting form. Nothing is broken, only bent.</span></li>
+      <li><span><b>One red</b>Colour is the loudest instrument, so it gets one note per screen.</span></li>
+      <li><span><b>Type is the only image</b>No photographs, no icons, no illustrations. If it cannot be said in letters it is not on the page.</span></li>
+    </ol>
+  </div>
+</section>
+</main>
+
+<footer class="k">
+  <p class="mark">Words<i>/</i>in<i>/</i>motion</p>
+  <p>Page 68 of 100 · A kinetic typography study · Set in Six Caps and Anton · White, black and one red</p>
+  <p>Motion respects your system preference. The button in the corner freezes every transform if the page moves more than you would like.</p>
+</footer>
+
+<div class="hud">
+  <div class="meter" aria-live="off">
+    <span>Velocity</span><i aria-hidden="true"></i><output id="vout" aria-label="Scroll velocity">+0.00</output>
+  </div>
+  <button id="motion" type="button" aria-pressed="true">Motion</button>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
+  var on=!reduce.matches;
+  var btn=document.getElementById('motion');
+  var vout=document.getElementById('vout');
+  var prog=document.getElementById('prog');
+  function setMotion(v){on=v;btn.setAttribute('aria-pressed',String(v));root.classList.toggle('still',!v);}
+  setMotion(on);
+  btn.addEventListener('click',function(){setMotion(!on);});
+  reduce.addEventListener&&reduce.addEventListener('change',function(e){setMotion(!e.matches);});
+
+  /* split statements into words and letters */
+  function splitText(el){
+    var words=[], out=document.createDocumentFragment(), chars=[];
+    Array.prototype.slice.call(el.childNodes).forEach(function(n){
+      if(n.nodeType===3){
+        n.textContent.trim().split(/\s+/).forEach(function(w){
+          if(!w) return;
+          var ws=document.createElement('span');ws.className='word';
+          w.split('').forEach(function(c){var s=document.createElement('span');s.className='ch';s.textContent=c;ws.appendChild(s);chars.push(s);});
+          words.push(ws);
+          out.appendChild(ws);
+          var sp=document.createElement('span');sp.className='sp';sp.innerHTML=' ';out.appendChild(sp);
+        });
+      } else { out.appendChild(n); }
+    });
+    var last=out.lastChild; if(last&&last.className==='sp') out.removeChild(last);
+    el.setAttribute('aria-label',el.textContent.replace(/\s+/g,' ').trim());
+    el.textContent='';el.appendChild(out);
+    var n=chars.length, mid=(n-1)/2;
+    chars.forEach(function(s,i){
+      s.style.setProperty('--o',((i-mid)/Math.max(mid,1)).toFixed(3));           /* -1..1 from centre */
+      s.style.setProperty('--j',(Math.sin(i*2.399)).toFixed(3));                /* jitter */
+      s.style.setProperty('--wv',(Math.sin(i/n*Math.PI*2)).toFixed(3));         /* wave phase */
+      s.style.setProperty('--wr',(Math.cos(i/n*Math.PI*2)).toFixed(3));
+    });
+    words.forEach(function(w,i){w.style.setProperty('--rs',i%2?'1':'-1');});
+    return chars;
+  }
+  document.querySelectorAll('.big[data-fx]').forEach(function(el){
+    if(el.dataset.fx==='shear') return;
+    splitText(el);
+  });
+
+  /* fit display type: shrink until the widest word fits its column */
+  var bigs=Array.prototype.slice.call(document.querySelectorAll('.big'));
+  function fit(){
+    bigs.forEach(function(el){
+      el.style.fontSize='';
+      var avail=el.parentElement.clientWidth - parseFloat(getComputedStyle(el.parentElement).paddingLeft)*2;
+      var base=parseFloat(getComputedStyle(el).fontSize);
+      var parts=el.querySelectorAll('.word,.row'); var widest=0;
+      if(parts.length){parts.forEach(function(w){widest=Math.max(widest,w.getBoundingClientRect().width);});}
+      else widest=el.getBoundingClientRect().width;
+      if(widest>avail && widest>0){ el.style.fontSize=(base*avail/widest*0.985).toFixed(1)+'px'; }
+    });
+  }
+  fit(); window.addEventListener('resize',fit);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fit);
+
+  /* velocity engine */
+  var lastY=window.scrollY, vel=0, shown=0, dir=1, running=false, lastT=performance.now();
+  var tracks=Array.prototype.slice.call(document.querySelectorAll('.track')).map(function(t){
+    var first=t.firstElementChild;
+    return {el:t,x:0,speed:parseFloat(t.dataset.speed)||1,w:first?first.getBoundingClientRect().width:600};
+  });
+  function measure(){tracks.forEach(function(t){var f=t.el.firstElementChild;if(f)t.w=f.getBoundingClientRect().width||t.w;});}
+  window.addEventListener('resize',measure);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(measure);
+
+  var maxH=1, curCls='on-k';
+  var sects=Array.prototype.slice.call(document.querySelectorAll('.stmt, .essay, footer'));
+  root.classList.add('on-k');
+  function frame(now){
+    var dt=Math.min(64,now-lastT)||16; lastT=now;
+    var y=window.scrollY, dy=y-lastY; lastY=y;
+    var inst=dy/dt*16;                 /* px per 16ms */
+    if(dy!==0) dir=dy>0?1:-1;
+    vel+= (inst-vel)*0.22;             /* smooth in */
+    vel*=0.92;                         /* decay */
+    if(Math.abs(vel)<0.02) vel=0;
+    var norm=Math.max(-1,Math.min(1,vel/38));
+    /* ease so small scrolls register but big ones saturate */
+    var s=Math.sign(norm)*Math.pow(Math.abs(norm),0.8);
+    if(Math.abs(s-shown)>0.0005 || s===0&&shown!==0){
+      shown=s;
+      root.style.setProperty('--v',s.toFixed(4));
+      root.style.setProperty('--av',Math.abs(s).toFixed(4));
+      root.style.setProperty('--dir',dir);
+      vout.textContent=(s>=0?'+':'−')+Math.abs(s).toFixed(2);
+    }
+    /* which section sits under the HUD? tint the chrome to stay in palette */
+    var probeY=window.innerHeight-30, cls='on-k';
+    for(var i=0;i<sects.length;i++){var r=sects[i].getBoundingClientRect();if(r.top<=probeY&&r.bottom>probeY){cls=sects[i].classList.contains('w')?'on-w':sects[i].classList.contains('r')?'on-r':'on-k';break;}}
+    if(cls!==curCls){root.classList.remove(curCls);root.classList.add(cls);curCls=cls;}
+    maxH=Math.max(1,document.documentElement.scrollHeight-window.innerHeight);
+    prog.style.transform='scaleX('+(y/maxH).toFixed(4)+')';
+
+    /* marquee: base drift in scroll direction, plus scroll speed */
+    if(on){
+      var boost=Math.abs(vel)*1.1;
+      tracks.forEach(function(t){
+        var v=(0.9+boost)*t.speed*dir*(dt/16);
+        t.x-=v;
+        if(t.x<=-t.w) t.x+=t.w; else if(t.x>0) t.x-=t.w;
+        t.el.style.transform='translate3d('+t.x.toFixed(2)+'px,0,0)';
+      });
+    }
+    if(!document.hidden) requestAnimationFrame(frame); else running=false;
+  }
+  function start(){if(!running){running=true;lastT=performance.now();lastY=window.scrollY;requestAnimationFrame(frame);}}
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)start();});
+  start();
+})();
+</script>
+</body>
+</html>

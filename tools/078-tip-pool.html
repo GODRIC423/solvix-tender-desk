@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tip Pooling Calculator</title>
+<meta name="description" content="Split a shift or week's card and cash tips fairly by equal share, hours worked, or role-weighted points, with note-rounded cash payouts and a printable distribution sheet.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='white' font-family='Arial,sans-serif' font-weight='700'%3E%24%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#A8434F; --accent-ink:#82333C; --accent-wash:#F8EAEC; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#E2828D; --accent-ink:#EEA3AC; --accent-wash:#2A1418; --on-accent:#1B0A0C;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#E2828D; --accent-ink:#EEA3AC; --accent-wash:#2A1418; --on-accent:#1B0A0C;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════ */
+[hidden]{display:none!important}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.grid.cols-2,.grid.cols-3{min-width:0}
+.grid.cols-2>*,.grid.cols-3>*{min-width:0}
+.wfull{width:100%}
+.roleline{display:grid;grid-template-columns:1fr 90px 34px;gap:6px;align-items:center}
+.roleline+.roleline{margin-top:6px}
+.roleline .cnt{font:11px var(--mono);color:var(--muted);text-align:right;padding-right:2px}
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.printhead{border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:12px}
+.printhead .pt-title{font-size:17pt;font-weight:700}
+.printhead .pt-sub{font-size:10pt;color:#333;margin-top:3px}
+.printhead .pt-meta{display:flex;gap:22px;margin-top:8px;font-size:10pt}
+.smallnote{font-size:11.5px;color:var(--muted);margin-top:4px}
+.remrow td{background:var(--warn-wash)!important}
+th.center,td.center{text-align:center}
+.custcur{max-width:64px}
+select.methodsel{font-weight:600}
+.rowbtn{background:transparent;border:1px solid var(--line-hard);color:var(--muted);border-radius:4px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font:600 14px/1 var(--mono)}
+.rowbtn:hover{color:var(--bad);border-color:var(--bad)}
+.appbar .sp{flex:1 1 auto}
+.restbl th,.restbl td{padding:6px 7px;font-size:12.5px}
+@media(max-width:520px){.appbar h1{max-width:150px}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="appbar">
+    <div class="brand">
+      <div class="mark">TP</div>
+      <div>
+        <h1>Tip Pooling Calculator</h1>
+        <div class="sub">RETAIL &amp; HOSPITALITY</div>
+      </div>
+    </div>
+    <div class="row noprint">
+      <button type="button" class="btn" id="btnPrint">🖶 Print</button>
+      <button type="button" class="btn" id="btnCsv">⬇ CSV</button>
+      <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    </div>
+  </header>
+
+  <!-- printable header, hidden on screen -->
+  <div class="printonly printhead">
+    <div class="pt-title">Tip Pool Distribution Sheet</div>
+    <div class="pt-sub" id="ptVenue">—</div>
+    <div class="pt-meta">
+      <div><strong>Period:</strong> <span id="ptShift">—</span></div>
+      <div><strong>Date:</strong> <span id="ptDate">—</span></div>
+      <div><strong>Method:</strong> <span id="ptMethod">—</span></div>
+      <div><strong>Prepared:</strong> <span id="ptGenerated">—</span></div>
+    </div>
+  </div>
+
+  <div class="app" style="padding:0;max-width:none">
+    <div class="split">
+
+      <!-- LEFT: inputs -->
+      <div class="stack">
+
+        <div class="card">
+          <div class="hd"><h2>Pool &amp; period</h2></div>
+          <div class="bd stack">
+            <div class="grid cols-2">
+              <div class="f">
+                <label for="venue">Venue / business name</label>
+                <input type="text" id="venue" maxlength="60">
+              </div>
+              <div class="f">
+                <label for="shiftLabel">Shift / week label</label>
+                <input type="text" id="shiftLabel" maxlength="60">
+              </div>
+            </div>
+            <div class="grid cols-3">
+              <div class="f">
+                <label for="poolDate">Date</label>
+                <input type="date" id="poolDate">
+              </div>
+              <div class="f">
+                <label for="period">Reporting period</label>
+                <select id="period">
+                  <option value="shift">Per shift</option>
+                  <option value="week">Per week</option>
+                </select>
+              </div>
+              <div class="f">
+                <label for="currency">Currency</label>
+                <select id="currency">
+                  <option value="$">$ Dollar</option>
+                  <option value="£">£ Pound</option>
+                  <option value="€">€ Euro</option>
+                  <option value="custom">Custom symbol…</option>
+                </select>
+              </div>
+            </div>
+            <div class="f" id="customCurWrap" hidden>
+              <label for="customCurrency">Custom symbol</label>
+              <input type="text" id="customCurrency" class="custcur" maxlength="3" placeholder="kr">
+            </div>
+
+            <hr style="border:0;border-top:1px solid var(--line);margin:2px 0">
+
+            <div class="grid cols-2">
+              <div class="f">
+                <label for="cardGross" id="lblCardGross">Card tips — gross</label>
+                <input type="number" id="cardGross" inputmode="decimal" step="0.01" min="0">
+                <div class="err" id="errCardGross" hidden></div>
+              </div>
+              <div class="f">
+                <label for="cardFeePct">Card processing fee (%)</label>
+                <input type="number" id="cardFeePct" inputmode="decimal" step="0.1" min="0" max="100">
+                <div class="err" id="errCardFeePct" hidden></div>
+                <div class="hint">Deducted before the pool is split, shown separately below.</div>
+              </div>
+            </div>
+            <div class="grid cols-3">
+              <div class="stat"><div class="k">Fee amount</div><div class="v" id="outFeeAmt" style="font-size:17px">—</div></div>
+              <div class="stat"><div class="k">Card tips — net</div><div class="v" id="outCardNet" style="font-size:17px">—</div></div>
+              <div class="f">
+                <label for="cashTips" id="lblCashTips">Cash tips</label>
+                <input type="number" id="cashTips" inputmode="decimal" step="0.01" min="0">
+                <div class="err" id="errCashTips" hidden></div>
+              </div>
+            </div>
+            <div class="f">
+              <label for="cashUnit">Round cash payouts to nearest</label>
+              <select id="cashUnit"></select>
+              <div class="hint">Card tips (paid via payroll/bank) are always split to the exact cent. Cash payouts round to whole notes; any leftover is shown, never silently dropped.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><h2>Split method</h2></div>
+          <div class="bd stack">
+            <div class="f">
+              <label for="method">How is the pool divided?</label>
+              <select id="method" class="methodsel">
+                <option value="equal">Equal split — every included person gets the same share</option>
+                <option value="hours">Hours-weighted — share is proportional to hours worked</option>
+                <option value="points">Points-weighted — hours × role weight</option>
+              </select>
+            </div>
+            <div class="hint" id="methodHint"></div>
+
+            <fieldset id="rolesFieldset">
+              <legend>Role weights</legend>
+              <div class="roleline" style="margin-bottom:6px">
+                <div class="lbl">Role</div><div class="lbl" style="text-align:right">Weight</div><div></div>
+              </div>
+              <div id="rolesList" class="stack" style="gap:6px"></div>
+              <div style="margin-top:9px"><button type="button" class="btn sm" id="btnAddRole">+ Add role</button></div>
+              <div class="err" id="errRole" hidden></div>
+              <div class="hint">Points = hours worked × role weight. Only used by the points-weighted method.</div>
+            </fieldset>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><h2>Staff roster</h2></div>
+          <div class="bd">
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:26px">In</th>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th class="r" id="thHours">Hours</th>
+                    <th style="width:34px"></th>
+                  </tr>
+                </thead>
+                <tbody id="staffBody"></tbody>
+              </table>
+            </div>
+            <div style="margin-top:10px"><button type="button" class="btn sm" id="btnAddStaff">+ Add staff member</button></div>
+            <div class="hint" style="margin-top:6px">Untick "In" for anyone who didn't work this pool — they stay on the roster with a zero share.</div>
+          </div>
+        </div>
+
+        <div class="note warn">
+          <strong>Not legal advice.</strong> Who may legally share in a tip pool (e.g. whether kitchen or other non-tipped staff can be included), employer contributions, and record-keeping rules vary by country and state/province and change over time. This tool only does the arithmetic — check current wage-and-hour law in your jurisdiction, or ask an employment lawyer or accountant, before finalising a tip-pooling policy.
+        </div>
+      </div>
+
+      <!-- RIGHT: results -->
+      <div class="stack sticky">
+        <div class="card">
+          <div class="hd"><h2>Distribution summary</h2></div>
+          <div class="bd stack">
+            <div class="stat hero">
+              <div class="k">Total pool to distribute</div>
+              <div class="v" id="heroTotal">—</div>
+              <div class="u" id="heroSub">card net + cash</div>
+            </div>
+            <div class="statrow">
+              <div class="stat"><div class="k">Card net</div><div class="v" id="statCardNet" style="font-size:17px">—</div></div>
+              <div class="stat"><div class="k">Cash tips</div><div class="v" id="statCash" style="font-size:17px">—</div></div>
+              <div class="stat"><div class="k">Total points</div><div class="v" id="statPoints" style="font-size:17px">—</div></div>
+              <div class="stat"><div class="k">Staff sharing</div><div class="v" id="statHeads" style="font-size:17px">—</div></div>
+            </div>
+            <div id="noPointsNote" class="note bad" hidden><strong>No hours or points yet.</strong> Add hours (or tick staff in) so the pool has something to split against.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><h2>Per-person payout</h2></div>
+          <div class="bd" style="padding:0">
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Role</th>
+                    <th class="n">Pts</th><th class="n">Share</th>
+                    <th class="n">Card</th><th class="n">Cash</th><th class="n">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="resultsBody" class="restbl"></tbody>
+                <tfoot id="resultsFoot" class="restbl"></tfoot>
+              </table>
+            </div>
+          </div>
+          <div class="ft" id="remainderFt" hidden>
+            <span class="chip warn">Unallocated remainder</span>
+            <span class="mono" id="remainderVal">—</span>
+            <span class="hint">— round-off left over from note rounding; keep as petty cash or carry into the next pool.</span>
+          </div>
+        </div>
+
+        <footer class="hint" style="line-height:1.6">
+          Assumes card tips are paid out via payroll/bank transfer to the exact cent, and cash tips are physically handed out and so are rounded to whole notes. Points = hours worked × role weight; equal split ignores hours and weight entirely. This is an arithmetic aid, not a record of employer tip-pool compliance.
+        </footer>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LS_KEY='solvix.tip-pool.v1';
+
+var DEFAULT_STATE = {
+  currency:'$', customCurrency:'',
+  venue:'The Anchor & Vine',
+  shiftLabel:'Friday Dinner Shift',
+  poolDate: new Date().toISOString().slice(0,10),
+  period:'shift',
+  cardGross:842.50, cardFeePct:2.5,
+  cashTips:216.00, cashUnit:5,
+  method:'points',
+  roles:[
+    {id:'r1',name:'Server',weight:1.0},
+    {id:'r2',name:'Bartender',weight:1.0},
+    {id:'r3',name:'Busser',weight:0.5},
+    {id:'r4',name:'Kitchen',weight:0.3}
+  ],
+  staff:[
+    {id:'s1',name:'Maria Lopez',roleId:'r1',hours:6.5,include:true},
+    {id:'s2',name:'James Chen',roleId:'r1',hours:6.0,include:true},
+    {id:'s3',name:'Ava Brooks',roleId:'r2',hours:5.5,include:true},
+    {id:'s4',name:'Tyler Reed',roleId:'r3',hours:6.0,include:true},
+    {id:'s5',name:'Sam Okafor',roleId:'r4',hours:7.0,include:true}
+  ]
+};
+
+var state = null;
+var uidCounter = 0;
+
+function uid(p){ uidCounter++; return p+Date.now().toString(36)+uidCounter; }
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function loadState(){
+  try{
+    var raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(parsed && typeof parsed==='object' && Array.isArray(parsed.staff) && Array.isArray(parsed.roles)){
+        return parsed;
+      }
+    }
+  }catch(e){}
+  return clone(DEFAULT_STATE);
+}
+
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+}
+
+/* ---------- number helpers ---------- */
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:0; }
+function round2(n){ if(!isFinite(n)) return 0; var r = Math.round((n+ (n>=0?1:-1)*1e-9)*100)/100; return r===0?0:r; }
+function safe(n){ if(!isFinite(n)) return 0; return Object.is(n,-0)?0:n; }
+function curSymbol(){
+  if(state.currency==='custom') return (state.customCurrency||'').trim() || '$';
+  return state.currency;
+}
+function money(n){
+  n = safe(n);
+  if(!isFinite(n)) return '—';
+  var r = round2(n);
+  return curSymbol() + r.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function pctFmt(n){
+  if(!isFinite(n)) return '—';
+  return round2(n).toFixed(1)+'%';
+}
+function ptsFmt(n){
+  if(!isFinite(n)) return '—';
+  var r = Math.round(n*100)/100;
+  return (r===Math.round(r) ? r.toFixed(0) : r.toFixed(2));
+}
+function hoursFmt(n){
+  if(!isFinite(n)) return '—';
+  var r = Math.round(n*100)/100;
+  return (r===Math.round(r) ? r.toFixed(0) : r.toFixed(2));
+}
+
+/* Largest-remainder apportionment: distribute `totalCents` across
+   `values` (raw dollar-scale shares) in whole multiples of `unitCents`,
+   giving everyone floor(share) first then handing leftover whole units
+   to the largest fractional remainders. Anything smaller than one unit
+   that's left over is returned as `unallocatedCents`, never hidden. */
+function apportion(values, totalCents, unitCents){
+  var n = values.length;
+  if(n===0) return {shareCents:[], unallocatedCents: totalCents};
+  if(!isFinite(totalCents)) totalCents = 0;
+  unitCents = Math.max(1, Math.round(unitCents)||1);
+  var valuesCents = values.map(function(v){ return isFinite(v)? v*100 : 0; });
+  var counts = valuesCents.map(function(v){ return Math.floor(v/unitCents + 1e-6); });
+  var remainders = valuesCents.map(function(v,i){ return v - counts[i]*unitCents; });
+  var baseCents = counts.reduce(function(a,c){ return a + c*unitCents; },0);
+  var leftoverCents = totalCents - baseCents;
+  var extraUnits = Math.floor(leftoverCents/unitCents + 1e-6);
+  if(extraUnits<0) extraUnits = 0;
+  var order = remainders.map(function(r,i){ return i; })
+    .sort(function(a,b){ return remainders[b]-remainders[a]; });
+  var finalCounts = counts.slice();
+  for(var k=0;k<extraUnits && k<order.length;k++){ finalCounts[order[k]] += 1; }
+  var shareCents = finalCounts.map(function(c){ return c*unitCents; });
+  var allocated = shareCents.reduce(function(a,b){ return a+b; },0);
+  var unallocatedCents = totalCents - allocated;
+  if(unallocatedCents < 0) unallocatedCents = 0;
+  return {shareCents:shareCents, unallocatedCents:unallocatedCents};
+}
+
+function csvField(v){
+  v = (v===null||v===undefined) ? '' : String(v);
+  if(/[",\n]/.test(v)){ v = '"'+v.replace(/"/g,'""')+'"'; }
+  return v;
+}
+
+/* ---------- computation ---------- */
+function computeAll(){
+  var cardGross = round2(num(state.cardGross));
+  var feePct = num(state.cardFeePct);
+  if(feePct<0) feePct=0; if(feePct>100) feePct=100;
+  var feeAmt = round2(cardGross*feePct/100);
+  var cardNet = round2(cardGross-feeAmt);
+  var cashTips = round2(num(state.cashTips));
+  var poolTotal = round2(cardNet+cashTips);
+
+  var roleMap = {};
+  state.roles.forEach(function(r){ roleMap[r.id]=r; });
+
+  var rows = state.staff.map(function(s){
+    var role = roleMap[s.roleId] || null;
+    var weight = role ? num(role.weight) : 0;
+    var hours = Math.max(0, num(s.hours));
+    var included = s.include !== false;
+    var points = 0;
+    if(included){
+      if(state.method==='equal') points = 1;
+      else if(state.method==='hours') points = hours;
+      else points = hours*weight;
+    }
+    return {s:s, role:role, hours:hours, weight:weight, included:included, points:points};
+  });
+
+  var totalPoints = rows.reduce(function(a,r){ return a+r.points; },0);
+  var hasPoints = totalPoints > 1e-9;
+
+  var results, cardUnallocated=0, cashUnallocated=0;
+
+  if(!hasPoints || rows.length===0){
+    results = rows.map(function(r){
+      return Object.assign({}, r, {cardCents:0, cashCents:0, totalCents:0, sharePct:0});
+    });
+    cardUnallocated = Math.round(cardNet*100);
+    cashUnallocated = Math.round(cashTips*100);
+  } else {
+    var cardRaw = rows.map(function(r){ return r.points/totalPoints*cardNet; });
+    var cashRaw = rows.map(function(r){ return r.points/totalPoints*cashTips; });
+    var cardApp = apportion(cardRaw, Math.round(cardNet*100), 1);
+    var cashUnitCents = Math.max(1, Math.round(num(state.cashUnit)*100)||1);
+    var cashApp = apportion(cashRaw, Math.round(cashTips*100), cashUnitCents);
+    cardUnallocated = cardApp.unallocatedCents;
+    cashUnallocated = cashApp.unallocatedCents;
+    results = rows.map(function(r,i){
+      var cardCents = cardApp.shareCents[i]||0;
+      var cashCents = cashApp.shareCents[i]||0;
+      return Object.assign({}, r, {
+        cardCents:cardCents, cashCents:cashCents, totalCents:cardCents+cashCents,
+        sharePct: r.points/totalPoints*100
+      });
+    });
+  }
+
+  var totalDistributedCents = results.reduce(function(a,r){ return a+r.totalCents; },0);
+  var unallocatedCents = cardUnallocated + cashUnallocated;
+  var headcount = rows.filter(function(r){ return r.included; }).length;
+
+  return {
+    cardGross:cardGross, feePct:feePct, feeAmt:feeAmt, cardNet:cardNet,
+    cashTips:cashTips, poolTotal:poolTotal, rows:results, totalPoints:totalPoints,
+    hasPoints:hasPoints, headcount:headcount,
+    totalDistributedCents:totalDistributedCents, unallocatedCents:unallocatedCents
+  };
+}
+
+/* ---------- rendering ---------- */
+var els = {};
+['venue','shiftLabel','poolDate','period','currency','customCurrency','customCurWrap',
+ 'cardGross','cardFeePct','cashTips','cashUnit','method','methodHint',
+ 'rolesList','staffBody','resultsBody','resultsFoot',
+ 'outFeeAmt','outCardNet','heroTotal','heroSub','statCardNet','statCash','statPoints','statHeads',
+ 'noPointsNote','remainderFt','remainderVal','thHours','lblCardGross','lblCashTips',
+ 'errCardGross','errCardFeePct','errCashTips','errRole',
+ 'ptVenue','ptShift','ptDate','ptMethod','ptGenerated'
+].forEach(function(id){ els[id]=document.getElementById(id); });
+
+var CASH_UNITS = [0.01,1,5,10,20];
+
+function methodLabel(m){
+  return m==='equal' ? 'Equal split' : m==='hours' ? 'Hours-weighted' : 'Points-weighted (role weight)';
+}
+function periodWord(){ return state.period==='week' ? 'week' : 'shift'; }
+function periodWordCap(){ var w=periodWord(); return w.charAt(0).toUpperCase()+w.slice(1); }
+
+function renderStatic(){
+  els.venue.value = state.venue;
+  els.shiftLabel.value = state.shiftLabel;
+  els.poolDate.value = state.poolDate;
+  els.period.value = state.period;
+  els.currency.value = (state.currency==='$'||state.currency==='£'||state.currency==='€') ? state.currency : 'custom';
+  els.customCurrency.value = state.customCurrency;
+  els.customCurWrap.hidden = els.currency.value !== 'custom';
+  els.cardGross.value = state.cardGross;
+  els.cardFeePct.value = state.cardFeePct;
+  els.cashTips.value = state.cashTips;
+  els.method.value = state.method;
+
+  els.lblCardGross.textContent = 'Card tips — gross (this ' + periodWord() + ')';
+  els.lblCashTips.textContent = 'Cash tips (this ' + periodWord() + ')';
+  els.thHours.textContent = 'Hours (' + periodWord() + ')';
+
+  els.methodHint.textContent =
+    state.method==='equal' ? 'Every included staff member gets an identical share, regardless of hours or role.' :
+    state.method==='hours' ? 'Share is proportional to hours worked this ' + periodWord() + '. Role weighting is ignored.' :
+    'Share is proportional to hours worked × role weight (points). Edit weights below.';
+
+  // cash rounding select
+  var cur = curSymbol();
+  els.cashUnit.innerHTML = CASH_UNITS.map(function(u){
+    var label = u===0.01 ? 'No rounding (exact cents)' : cur + u.toLocaleString() + ' note';
+    return '<option value="'+u+'"'+(Math.abs(u-num(state.cashUnit))<1e-9?' selected':'')+'>'+label+'</option>';
+  }).join('');
+}
+
+function renderRoles(){
+  var staffCount = {};
+  state.staff.forEach(function(s){ staffCount[s.roleId] = (staffCount[s.roleId]||0)+1; });
+  els.rolesList.innerHTML = state.roles.map(function(r){
+    var n = staffCount[r.id]||0;
+    return '<div class="roleline" data-role="'+r.id+'">' +
+      '<input type="text" data-field="name" value="'+escAttr(r.name)+'" aria-label="Role name">' +
+      '<input type="number" data-field="weight" value="'+r.weight+'" step="0.05" min="0" aria-label="Role weight">' +
+      '<button type="button" class="rowbtn" data-remove-role="'+r.id+'" title="Remove role" aria-label="Remove role ' + escAttr(r.name) + '">✕</button>' +
+      '</div>' +
+      '<div class="cnt">'+n+' staff assigned</div>';
+  }).join('');
+}
+
+function optionsForRoles(selectedId){
+  return state.roles.map(function(r){
+    return '<option value="'+r.id+'"'+(r.id===selectedId?' selected':'')+'>'+escHtml(r.name)+'</option>';
+  }).join('');
+}
+
+function renderStaff(){
+  if(state.staff.length===0){
+    els.staffBody.innerHTML = '<tr><td colspan="5"><div class="empty">No staff yet. Add someone to split the pool.</div></td></tr>';
+    return;
+  }
+  els.staffBody.innerHTML = state.staff.map(function(s){
+    var roleValid = state.roles.some(function(r){ return r.id===s.roleId; });
+    return '<tr data-staff="'+s.id+'">' +
+      '<td class="center"><input type="checkbox" data-field="include" '+(s.include!==false?'checked':'')+' aria-label="Include '+escAttr(s.name)+' in this pool"></td>' +
+      '<td><input type="text" data-field="name" value="'+escAttr(s.name)+'" aria-label="Staff name" placeholder="Name"></td>' +
+      '<td><select data-field="roleId" aria-label="Role for '+escAttr(s.name)+'">' + optionsForRoles(roleValid?s.roleId:null) + '</select></td>' +
+      '<td class="n"><input type="number" data-field="hours" value="'+s.hours+'" step="0.25" min="0" class="ta-r" aria-label="Hours for '+escAttr(s.name)+'"></td>' +
+      '<td class="center"><button type="button" class="rowbtn" data-remove-staff="'+s.id+'" title="Remove" aria-label="Remove '+escAttr(s.name)+'">✕</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function escHtml(s){
+  return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; });
+}
+function escAttr(s){
+  return escHtml(s).replace(/"/g,'&quot;');
+}
+
+var lastCompute = null;
+
+function renderResults(){
+  var c = computeAll();
+  lastCompute = c;
+  var cur = curSymbol();
+
+  els.outFeeAmt.textContent = money(c.feeAmt);
+  els.outCardNet.textContent = money(c.cardNet);
+  els.statCardNet.textContent = money(c.cardNet);
+  els.statCash.textContent = money(c.cashTips);
+  els.statPoints.textContent = c.hasPoints ? ptsFmt(c.totalPoints) : '—';
+  els.statHeads.textContent = c.headcount;
+
+  els.heroTotal.textContent = money(c.poolTotal);
+  els.heroSub.textContent = 'card net ' + money(c.cardNet) + ' + cash ' + money(c.cashTips);
+
+  els.noPointsNote.hidden = c.hasPoints;
+
+  if(c.rows.length===0){
+    els.resultsBody.innerHTML = '<tr><td colspan="7"><div class="empty">Add staff to see the split.</div></td></tr>';
+    els.resultsFoot.innerHTML = '';
+  } else {
+    els.resultsBody.innerHTML = c.rows.map(function(r){
+      var name = r.s.name || '(unnamed)';
+      var roleName = r.role ? r.role.name : '—';
+      var dim = !r.included ? ' style="opacity:.5"' : '';
+      return '<tr'+dim+'>' +
+        '<td>'+escHtml(name)+'</td>' +
+        '<td>'+escHtml(roleName)+'</td>' +
+        '<td class="n">'+ (r.included? ptsFmt(r.points) : '0') +'</td>' +
+        '<td class="n">'+ (c.hasPoints && r.included ? pctFmt(r.sharePct) : '—') +'</td>' +
+        '<td class="n">'+ money(r.cardCents/100) +'</td>' +
+        '<td class="n">'+ money(r.cashCents/100) +'</td>' +
+        '<td class="n" style="font-weight:650">'+ money(r.totalCents/100) +'</td>' +
+        '</tr>';
+    }).join('');
+    var totalCard = c.rows.reduce(function(a,r){ return a+r.cardCents; },0)/100;
+    var totalCash = c.rows.reduce(function(a,r){ return a+r.cashCents; },0)/100;
+    var totalAll = c.totalDistributedCents/100;
+    els.resultsFoot.innerHTML = '<tr><td colspan="4">Total distributed</td>' +
+      '<td class="n">'+money(totalCard)+'</td><td class="n">'+money(totalCash)+'</td><td class="n">'+money(totalAll)+'</td></tr>';
+  }
+
+  if(c.unallocatedCents > 0.5){
+    els.remainderFt.hidden = false;
+    els.remainderVal.textContent = money(c.unallocatedCents/100);
+  } else {
+    els.remainderFt.hidden = true;
+  }
+
+  // print header
+  els.ptVenue.textContent = state.venue || '—';
+  els.ptShift.textContent = (state.shiftLabel||'—') + ' (' + periodWordCap() + ')';
+  els.ptDate.textContent = state.poolDate || '—';
+  els.ptMethod.textContent = methodLabel(state.method);
+  els.ptGenerated.textContent = new Date().toLocaleString();
+}
+
+function renderAll(){
+  renderStatic();
+  renderRoles();
+  renderStaff();
+  renderResults();
+}
+
+/* ---------- validation ---------- */
+function validateNumber(input, errEl, opts){
+  opts = opts||{};
+  var v = parseFloat(input.value);
+  var msg = '';
+  if(input.value.trim()==='' || !isFinite(v)){ msg='Enter a number'; v = opts.fallback!==undefined?opts.fallback:0; }
+  else if(opts.min!==undefined && v<opts.min){ msg='Must be '+opts.min+' or more'; v=opts.min; }
+  else if(opts.max!==undefined && v>opts.max){ msg='Can\'t exceed '+opts.max; v=opts.max; }
+  if(msg){
+    input.classList.add('inv'); errEl.hidden=false; errEl.textContent=msg;
+    input.value = v;
+  } else {
+    input.classList.remove('inv'); errEl.hidden=true;
+  }
+  return v;
+}
+
+/* ---------- events ---------- */
+function bindTopFields(){
+  els.venue.addEventListener('input', function(){ state.venue=els.venue.value; saveState(); renderResults(); });
+  els.shiftLabel.addEventListener('input', function(){ state.shiftLabel=els.shiftLabel.value; saveState(); renderResults(); });
+  els.poolDate.addEventListener('input', function(){ state.poolDate=els.poolDate.value; saveState(); renderResults(); });
+  els.period.addEventListener('change', function(){ state.period=els.period.value; saveState(); renderStatic(); renderResults(); });
+  els.currency.addEventListener('change', function(){
+    state.currency = els.currency.value;
+    saveState(); renderStatic(); renderResults();
+  });
+  els.customCurrency.addEventListener('input', function(){ state.customCurrency=els.customCurrency.value; saveState(); renderStatic(); renderResults(); });
+
+  els.cardGross.addEventListener('input', function(){ state.cardGross=num(els.cardGross.value); saveState(); renderResults(); });
+  els.cardGross.addEventListener('blur', function(){ state.cardGross=validateNumber(els.cardGross, els.errCardGross, {min:0}); saveState(); renderResults(); });
+  els.cardFeePct.addEventListener('input', function(){ state.cardFeePct=num(els.cardFeePct.value); saveState(); renderResults(); });
+  els.cardFeePct.addEventListener('blur', function(){ state.cardFeePct=validateNumber(els.cardFeePct, els.errCardFeePct, {min:0,max:100}); saveState(); renderResults(); });
+  els.cashTips.addEventListener('input', function(){ state.cashTips=num(els.cashTips.value); saveState(); renderResults(); });
+  els.cashTips.addEventListener('blur', function(){ state.cashTips=validateNumber(els.cashTips, els.errCashTips, {min:0}); saveState(); renderResults(); });
+
+  els.cashUnit.addEventListener('change', function(){ state.cashUnit=num(els.cashUnit.value); saveState(); renderResults(); });
+  els.method.addEventListener('change', function(){ state.method=els.method.value; saveState(); renderStatic(); renderResults(); });
+}
+
+function bindRoles(){
+  els.rolesList.addEventListener('input', function(e){
+    var line = e.target.closest('.roleline'); if(!line) return;
+    var id = line.getAttribute('data-role');
+    var role = state.roles.find(function(r){ return r.id===id; });
+    if(!role) return;
+    var field = e.target.getAttribute('data-field');
+    if(field==='name') role.name = e.target.value;
+    else if(field==='weight') role.weight = num(e.target.value);
+    saveState();
+    if(field==='weight'){ renderResults(); } else { renderStaff(); renderResults(); }
+  });
+  els.rolesList.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-remove-role]'); if(!btn) return;
+    var id = btn.getAttribute('data-remove-role');
+    var inUse = state.staff.some(function(s){ return s.roleId===id; });
+    if(inUse){
+      els.errRole.hidden = false;
+      els.errRole.textContent = "Can't remove — still assigned to at least one staff member. Reassign them first.";
+      return;
+    }
+    if(state.roles.length<=1){
+      els.errRole.hidden = false;
+      els.errRole.textContent = 'Keep at least one role.';
+      return;
+    }
+    els.errRole.hidden = true;
+    state.roles = state.roles.filter(function(r){ return r.id!==id; });
+    saveState(); renderRoles(); renderResults();
+  });
+  document.getElementById('btnAddRole').addEventListener('click', function(){
+    state.roles.push({id:uid('r'), name:'New role', weight:1.0});
+    saveState(); renderRoles(); renderStaff(); renderResults();
+  });
+}
+
+function bindStaff(){
+  els.staffBody.addEventListener('input', function(e){
+    var tr = e.target.closest('tr[data-staff]'); if(!tr) return;
+    var id = tr.getAttribute('data-staff');
+    var s = state.staff.find(function(x){ return x.id===id; });
+    if(!s) return;
+    var field = e.target.getAttribute('data-field');
+    if(field==='name') s.name = e.target.value;
+    else if(field==='hours') s.hours = num(e.target.value);
+    saveState(); renderResults();
+  });
+  els.staffBody.addEventListener('change', function(e){
+    var tr = e.target.closest('tr[data-staff]'); if(!tr) return;
+    var id = tr.getAttribute('data-staff');
+    var s = state.staff.find(function(x){ return x.id===id; });
+    if(!s) return;
+    var field = e.target.getAttribute('data-field');
+    if(field==='include') s.include = e.target.checked;
+    else if(field==='roleId') s.roleId = e.target.value;
+    else if(field==='hours') s.hours = Math.max(0, num(e.target.value));
+    saveState(); renderResults();
+  });
+  els.staffBody.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-remove-staff]'); if(!btn) return;
+    var id = btn.getAttribute('data-remove-staff');
+    state.staff = state.staff.filter(function(s){ return s.id!==id; });
+    saveState(); renderStaff(); renderRoles(); renderResults();
+  });
+  document.getElementById('btnAddStaff').addEventListener('click', function(){
+    var fallbackRole = state.roles[0] ? state.roles[0].id : null;
+    state.staff.push({id:uid('s'), name:'', roleId:fallbackRole, hours:0, include:true});
+    saveState(); renderStaff(); renderRoles(); renderResults();
+  });
+}
+
+function bindActions(){
+  document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
+  document.getElementById('btnClear').addEventListener('click', function(){
+    if(!window.confirm('Clear all saved data and reset to the sample tip pool? This cannot be undone.')) return;
+    try{ localStorage.removeItem(LS_KEY); }catch(e){}
+    state = clone(DEFAULT_STATE);
+    saveState();
+    renderAll();
+  });
+  document.getElementById('btnCsv').addEventListener('click', exportCsv);
+}
+
+function exportCsv(){
+  var c = lastCompute || computeAll();
+  var cur = curSymbol();
+  var rows = [];
+  rows.push(['Tip Pool Distribution', state.venue||'']);
+  rows.push(['Period', (state.shiftLabel||'') + ' (' + periodWordCap() + ')']);
+  rows.push(['Date', state.poolDate||'']);
+  rows.push(['Split method', methodLabel(state.method)]);
+  rows.push([]);
+  rows.push(['Pool summary','']);
+  rows.push(['Card tips (gross)', round2(c.cardGross).toFixed(2)]);
+  rows.push(['Card processing fee (%)', c.feePct]);
+  rows.push(['Card fee amount', c.feeAmt.toFixed(2)]);
+  rows.push(['Card tips (net)', c.cardNet.toFixed(2)]);
+  rows.push(['Cash tips', c.cashTips.toFixed(2)]);
+  rows.push(['Total pool', c.poolTotal.toFixed(2)]);
+  rows.push(['Cash rounded to nearest', num(state.cashUnit)===0.01 ? 'exact cent' : cur+num(state.cashUnit)]);
+  rows.push([]);
+  rows.push(['Name','Role','Included','Hours','Points','Share %','Card payout','Cash payout','Total payout']);
+  c.rows.forEach(function(r){
+    rows.push([
+      r.s.name||'', r.role?r.role.name:'', r.included?'Yes':'No',
+      hoursFmt(r.hours), r.included?ptsFmt(r.points):'0',
+      c.hasPoints && r.included ? round2(r.sharePct).toFixed(1) : '',
+      (r.cardCents/100).toFixed(2), (r.cashCents/100).toFixed(2), (r.totalCents/100).toFixed(2)
+    ]);
+  });
+  rows.push(['','','','','','Total', (c.rows.reduce(function(a,r){return a+r.cardCents;},0)/100).toFixed(2),
+    (c.rows.reduce(function(a,r){return a+r.cashCents;},0)/100).toFixed(2), (c.totalDistributedCents/100).toFixed(2)]);
+  if(c.unallocatedCents>0.5){
+    rows.push([]);
+    rows.push(['Unallocated remainder (petty cash / carry forward)', (c.unallocatedCents/100).toFixed(2)]);
+  }
+
+  var csv = rows.map(function(row){ return row.map(csvField).join(','); }).join('\r\n');
+  var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var fname = 'tip-pool-'+(state.poolDate||'export')+'.csv';
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+/* ---------- init ---------- */
+state = loadState();
+bindTopFields();
+bindRoles();
+bindStaff();
+bindActions();
+renderAll();
+
+})();
+</script>
+</body>
+</html>

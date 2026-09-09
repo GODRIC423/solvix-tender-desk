@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Low-Poly Range — a landscape folded from noise</title>
+<meta name="description" content="A generative low-poly mountain range rendered as flat-shaded SVG triangles. Click to regenerate; adjust elevation, sun angle and haze; read a short note on why triangles are the whole trick.">
+<meta name="theme-color" content="#5D3A9B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%235D3A9B'/%3E%3Cpath d='M1 29 12 7l6 10 4-5 9 17z' fill='%23FF7B54'/%3E%3Cpath d='M12 7l3.2 5.4L12 15l-3.2-2.6z' fill='%23F3F7FA'/%3E%3Cpath d='M18 17l4-5 3 6-4 1z' fill='%23FFB26B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,500;0,700;0,900;1,300&display=swap" rel="stylesheet">
+<style>
+:root{
+  --coral:#FF7B54;--peach:#FFB26B;--purple:#5D3A9B;--snow:#F3F7FA;
+  --deep:#2A1A4E;--ink:#2E1D52;--lilac:#C9B8E8;--peach-pale:#FFE3CB;
+  --font:'Exo 2',system-ui,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--font);background:var(--snow);color:var(--ink);line-height:1.55;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:3px solid var(--coral);outline-offset:3px}
+a{color:inherit}
+
+/* ---------- stage ---------- */
+.stage{position:relative;height:100svh;min-height:600px;overflow:hidden;background:var(--purple);cursor:crosshair}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ui{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr;grid-template-areas:"top top" "copy card";padding:clamp(18px,2.6vw,36px) clamp(18px,3.2vw,48px);gap:16px;pointer-events:none}
+.top{grid-area:top;display:flex;justify-content:space-between;align-items:center;color:var(--snow);font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;font-weight:500}
+.top a{pointer-events:auto;text-decoration:none;padding:6px 2px;border-bottom:1px solid transparent}
+.top a:hover{border-bottom-color:var(--peach)}
+.top nav{display:flex;gap:26px}
+.mark{display:flex;align-items:center;gap:10px}
+.mark svg{width:20px;height:20px}
+.copy{grid-area:copy;align-self:end;color:var(--snow);max-width:680px;position:relative}
+.copy::before{content:"";position:absolute;inset:-40% -30% -30% -30%;background:radial-gradient(ellipse at 30% 70%,rgba(42,26,78,.55),rgba(42,26,78,0) 70%);z-index:-1;pointer-events:none}
+.eyebrow{margin:0 0 14px;font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;font-weight:500;color:var(--peach-pale)}
+.eyebrow b{font-weight:700;color:var(--snow);font-variant-numeric:tabular-nums}
+h1{margin:0 0 .28em;font-size:clamp(3.4rem,9.4vw,8.6rem);font-weight:900;line-height:.88;letter-spacing:-.035em;text-transform:uppercase}
+h1 span{display:block;color:var(--peach)}
+.lede{margin:0;font-size:clamp(1.02rem,1.35vw,1.28rem);font-weight:300;max-width:34em;line-height:1.5}
+.hint{margin:16px 0 0;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--peach-pale);display:flex;align-items:center;gap:10px;font-weight:500}
+.hint i{display:inline-block;width:9px;height:9px;background:var(--coral);clip-path:polygon(50% 0,100% 100%,0 100%);animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(1px)}50%{transform:translateY(-3px)}}
+
+/* ---------- control card ---------- */
+.card{grid-area:card;align-self:start;justify-self:end;pointer-events:auto;width:310px;background:rgba(243,247,250,.9);color:var(--ink);padding:22px 22px 20px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));box-shadow:0 30px 60px -20px rgba(42,26,78,.55);cursor:default}
+.card h2{margin:0;font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;font-weight:700;color:var(--purple);display:flex;justify-content:space-between;align-items:baseline}
+.card h2 output{font-weight:500;letter-spacing:.06em;color:var(--coral);font-variant-numeric:tabular-nums}
+.ctl{display:grid;gap:14px;margin-top:18px}
+.f label{display:flex;justify-content:space-between;align-items:baseline;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--purple)}
+.f label output{font-size:.95rem;letter-spacing:0;text-transform:none;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.f label output small{font-weight:300;color:var(--purple);margin-left:6px;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}
+input[type=range]{--p:50%;-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;margin:2px 0 0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:linear-gradient(90deg,var(--coral) var(--p),rgba(93,58,155,.22) var(--p))}
+input[type=range]::-moz-range-track{height:4px;background:linear-gradient(90deg,var(--coral) var(--p),rgba(93,58,155,.22) var(--p))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-8px;background:var(--purple);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);transition:transform .15s}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:0;background:var(--purple);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.25)}
+input[type=range]:focus-visible{outline:none}
+input[type=range]:focus-visible::-webkit-slider-thumb{background:var(--coral);box-shadow:0 0 0 4px rgba(255,123,84,.35)}
+input[type=range]:focus-visible::-moz-range-thumb{background:var(--coral);box-shadow:0 0 0 4px rgba(255,123,84,.35)}
+.actions{display:flex;gap:10px;margin-top:18px;align-items:center}
+.btn{font:inherit;font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.74rem;border:0;cursor:pointer;padding:13px 18px;color:var(--snow);background:var(--coral);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));transition:background .18s,transform .18s;flex:1}
+.btn:hover{background:#ff6a3d;transform:translateY(-1px)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:transparent;color:var(--purple);flex:0 0 auto;padding:13px 10px;outline-offset:-1px}
+.btn.ghost:hover{background:rgba(93,58,155,.1)}
+.facets{margin:14px 0 0;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);display:flex;justify-content:space-between}
+.facets b{font-variant-numeric:tabular-nums;color:var(--ink)}
+kbd{font:inherit;font-size:.7em;font-weight:700;padding:1px 6px;border:1px solid rgba(93,58,155,.4);color:var(--purple);vertical-align:1px}
+
+/* ---------- below the fold ---------- */
+.wrap{max-width:1140px;margin:0 auto;padding:clamp(72px,11vh,140px) clamp(20px,4.5vw,56px)}
+.sec-head{display:flex;align-items:baseline;gap:18px;margin-bottom:clamp(28px,4vh,48px)}
+.sec-head .n{font-size:.8rem;letter-spacing:.2em;font-weight:700;color:var(--coral);text-transform:uppercase}
+h2.big{margin:0;font-size:clamp(2.1rem,4.6vw,3.8rem);font-weight:900;text-transform:uppercase;letter-spacing:-.025em;line-height:.95;color:var(--purple)}
+.note{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(32px,5vw,80px);align-items:start}
+.note p{margin:0 0 1.15em;font-size:clamp(1.02rem,1.2vw,1.2rem);font-weight:300;line-height:1.6}
+.note p:first-of-type::first-letter{font-weight:900;font-size:3.1em;float:left;line-height:.8;margin:.06em .12em 0 0;color:var(--coral)}
+.note p b{font-weight:700;color:var(--purple)}
+.diagram{position:sticky;top:24px}
+.diagram svg{width:100%;height:auto;display:block}
+.diagram figcaption{margin-top:12px;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);font-weight:500}
+.diagram .lbl{font-family:var(--font);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;fill:var(--purple)}
+.ramp{margin-top:28px}
+.ramp-row{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));height:56px}
+.ramp-row i{display:block;clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),0 100%)}
+.ramp-row i:nth-child(even){clip-path:polygon(0 0,100% 0,100% 100%,0 calc(100% - 10px))}
+.ramp-ax{display:flex;justify-content:space-between;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--purple);margin-top:8px}
+.diagram .eq{font-family:var(--font);font-size:15px;font-weight:500;fill:var(--ink)}
+
+.recipe{background:var(--purple);color:var(--snow);position:relative;overflow:hidden}
+.recipe::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(135deg,rgba(255,123,84,.16) 0 42%,transparent 42.2%),
+  linear-gradient(225deg,rgba(255,178,107,.12) 0 28%,transparent 28.2%);pointer-events:none}
+.recipe .wrap{position:relative}
+.recipe h2.big{color:var(--snow)}
+.recipe .sec-head .n{color:var(--peach)}
+.steps{list-style:none;counter-reset:s;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;background:rgba(243,247,250,.14)}
+.steps li{counter-increment:s;background:var(--purple);padding:28px 26px 30px;position:relative;transition:background .25s}
+.steps li:hover{background:#6a45ad}
+.steps li::before{content:counter(s,decimal-leading-zero);display:block;font-size:.76rem;letter-spacing:.22em;font-weight:700;color:var(--peach);margin-bottom:14px}
+.steps li::after{content:"";position:absolute;top:28px;right:26px;width:14px;height:14px;background:var(--coral);clip-path:polygon(50% 0,100% 100%,0 100%);transition:transform .3s}
+.steps li:hover::after{transform:rotate(180deg)}
+.steps h3{margin:0 0 8px;font-size:1.25rem;font-weight:700;letter-spacing:-.01em}
+.steps p{margin:0;font-weight:300;font-size:.98rem;line-height:1.55;color:var(--peach-pale)}
+.steps code{font-family:var(--font);font-weight:700;color:var(--peach);letter-spacing:.02em}
+
+.palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;margin-top:clamp(32px,5vh,56px)}
+.sw{padding:22px 18px 18px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%)}
+.sw b{font-size:.74rem;letter-spacing:.2em;text-transform:uppercase}
+.sw span{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+.sw small{font-weight:300;font-size:.88rem;opacity:.9;margin-top:6px}
+
+footer{background:var(--deep);color:var(--lilac);padding:34px clamp(20px,4.5vw,56px);font-size:.8rem;letter-spacing:.12em;text-transform:uppercase}
+footer .row{max-width:1140px;margin:0 auto;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer b{color:var(--snow)}
+
+/* ---------- responsive ---------- */
+@media (max-width:900px){
+  .note{grid-template-columns:1fr}
+  .diagram{position:static;order:-1}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .palette{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:720px){
+  .stage{min-height:640px}
+  .ui{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;grid-template-areas:"top" "copy" "card";gap:14px}
+  .top nav{display:none}
+  .copy{align-self:end;max-width:none}
+  .lede{max-width:none}
+  .hint{display:none}
+  .card{width:100%;justify-self:stretch;padding:16px 16px 14px;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px))}
+  .ctl{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+  .f label{flex-direction:column;align-items:flex-start;gap:2px;font-size:.62rem}
+  .f label output{font-size:.9rem}
+  .f label output small{display:none}
+  .actions{margin-top:8px}
+  .facets{margin-top:10px}
+  .steps{grid-template-columns:1fr}
+  h1{font-size:clamp(3rem,15vw,5rem)}
+}
+@media (prefers-reduced-motion:reduce){
+  .hint i{animation:none}
+  html{scroll-behavior:auto}
+  .btn,.steps li,.steps li::after,input[type=range]::-webkit-slider-thumb{transition:none}
+}
+</style>
+</head>
+<body>
+<main>
+<section class="stage" id="stage" aria-label="Generative low-poly mountain range. Click anywhere to regenerate.">
+  <svg id="scene" viewBox="0 0 1440 900" preserveAspectRatio="none" role="img" aria-labelledby="sceneTitle">
+    <title id="sceneTitle">A faceted mountain range at sunset, generated from noise</title>
+    <defs>
+      <linearGradient id="skyGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="560">
+        <stop offset="0" stop-color="#5D3A9B"/>
+        <stop offset=".58" stop-color="#FF7B54"/>
+        <stop offset="1" stop-color="#FFB26B"/>
+      </linearGradient>
+      <radialGradient id="glowGrad">
+        <stop offset="0" stop-color="#FFE3CB" stop-opacity=".95"/>
+        <stop offset=".35" stop-color="#FFB26B" stop-opacity=".55"/>
+        <stop offset="1" stop-color="#FFB26B" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect id="sky" x="0" y="0" width="1440" height="900" fill="url(#skyGrad)"/>
+    <g id="bands"></g>
+    <circle id="sunGlow" cx="700" cy="300" r="260" fill="url(#glowGrad)"/>
+    <polygon id="sun" points="" fill="#F3F7FA"/>
+    <g id="terrain" shape-rendering="crispEdges"></g>
+  </svg>
+
+  <div class="ui">
+    <header class="top">
+      <a class="mark" href="#stage" aria-label="Low-Poly Range, page thirty-nine">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M1 29 12 7l6 10 4-5 9 17z" fill="#FF7B54"/><path d="M12 7l3.2 5.4L12 15l-3.2-2.6z" fill="#F3F7FA"/><path d="M18 17l4-5 3 6-4 1z" fill="#FFB26B"/></svg>
+        <span>№ 39 · Low-Poly Range</span>
+      </a>
+      <nav aria-label="Page sections">
+        <a href="#note">Triangulation</a>
+        <a href="#recipe">Recipe</a>
+      </nav>
+    </header>
+
+    <div class="copy">
+      <p class="eyebrow">Generative landscape · seed <b id="seedTxt">—</b></p>
+      <h1>Low-Poly <span>Range</span></h1>
+      <p class="lede">A mountain range folded from noise. Every click builds new peaks; the sun decides which faces catch fire, and the haze decides how far you can see.</p>
+      <p class="hint"><i aria-hidden="true"></i> Click the landscape or press <kbd style="color:var(--peach-pale);border-color:rgba(255,227,203,.5)">R</kbd> to fold a new one</p>
+    </div>
+
+    <aside class="card" aria-labelledby="ctlTitle">
+      <h2 id="ctlTitle">Range controls <output id="seedOut" aria-live="polite">—</output></h2>
+      <div class="ctl">
+        <div class="f">
+          <label for="elev">Elevation <output id="elevOut" for="elev">1.00<small>×</small></output></label>
+          <input type="range" id="elev" min="0.35" max="1.7" step="0.01" value="1">
+        </div>
+        <div class="f">
+          <label for="sunA">Sun angle <output id="sunOut" for="sunA">38°<small>low west</small></output></label>
+          <input type="range" id="sunA" min="2" max="178" step="1" value="38">
+        </div>
+        <div class="f">
+          <label for="haze">Haze <output id="hazeOut" for="haze">55<small>%</small></output></label>
+          <input type="range" id="haze" min="0" max="1" step="0.01" value="0.55">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="regen" type="button">Regenerate</button>
+        <button class="btn ghost" id="reset" type="button" aria-label="Reset controls to defaults">Reset</button>
+      </div>
+      <p class="facets"><span>Facets <b id="facetOut">0</b></span><span>Flat-shaded · 1 SVG</span></p>
+    </aside>
+  </div>
+</section>
+
+<section id="note" class="wrap" aria-labelledby="noteTitle">
+  <div class="sec-head"><span class="n">01 — Note</span><h2 class="big" id="noteTitle">Why triangles are the whole trick</h2></div>
+  <div class="note">
+    <div>
+      <p>Everything on the screen above that looks like a mountain is a grid. Forty-odd columns by eighteen rows of vertices, each one nudged sideways a little so the lattice stops looking like graph paper, each one lifted by a value read from a noise field. Two triangles per cell, and the triangles are the point: <b>three points always sit on a single plane</b>, so a triangle has exactly one normal and therefore exactly one colour. A quad would not cooperate — four points almost never share a plane, and a renderer would have to invent a bend across the middle.</p>
+      <p>The shading is deliberately flat. For every face we take the cross product of two edges to get its normal, dot that against the direction of the sun, and clamp. The result is a single number between zero and one that says how squarely the face looks at the light. That number picks a point on the ramp from <b>dusk purple</b> through <b>coral</b> to <b>peach</b>. No interpolation across the face, no gradients, no blurring between neighbours. The seams between triangles are the picture, not a flaw in it.</p>
+      <p>Depth is faked twice. Rows further from the camera are squeezed towards the horizon, and their colours are pulled towards the sky by the haze control — the same aerial perspective painters have leaned on since the fifteenth century, reduced to one linear interpolation per face. Snow is a height threshold rather than a texture: any face whose centroid climbs above the snowline is blended towards white, and the blend still respects the light, so the shaded sides of the summits stay a cold lilac while the sunward sides burn.</p>
+      <p>Because the geometry is rebuilt from a seed, the range is reproducible. The hex value in the corner of the control card is the entire mountain: feed it back in and you get the same ridges, the same diagonals, the same single valley that happened to open up in the middle.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 560 360" role="img" aria-label="Diagram: a jittered grid split into triangles, one triangle highlighted with its normal vector pointing toward a low sun; the face colour is the dot product of normal and light direction.">
+        <rect width="560" height="360" fill="#FFE3CB"/>
+        <g id="dg"></g>
+        <polygon points="470,62 486,48 508,50 520,66 516,88 498,98 478,92 466,76" fill="#F3F7FA" stroke="#FF7B54" stroke-width="2"/>
+        <text class="lbl" x="490" y="122" text-anchor="middle">sun · L</text>
+        <text class="eq" x="24" y="336">colour = ramp( max(0, N · L) )</text>
+        <text class="lbl" x="536" y="336" text-anchor="end">one normal per face</text>
+      </svg>
+      <figcaption>Fig. 1 — a lattice, two triangles per cell, and one dot product each.</figcaption>
+      <div class="ramp" role="img" aria-label="The shading ramp: eleven discrete steps from dusk purple through coral to peach, indexed by the dot product of normal and light from zero to one.">
+        <div class="ramp-row" id="ramp"></div>
+        <div class="ramp-ax"><span>N · L = 0</span><span>shadow → lit</span><span>1</span></div>
+      </div>
+      <figcaption>Fig. 2 — the ramp is sampled, never blended across a face.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="recipe" class="recipe" aria-labelledby="recipeTitle">
+  <div class="wrap">
+    <div class="sec-head"><span class="n">02 — Recipe</span><h2 class="big" id="recipeTitle">How a range is built in six steps</h2></div>
+    <ol class="steps">
+      <li><h3>Seed</h3><p>A 32-bit integer drives a tiny <code>mulberry32</code> generator. The same seed always rebuilds the same range, down to the last diagonal.</p></li>
+      <li><h3>Noise</h3><p>Five octaves of ridged value noise. Each octave is folded — <code>1 − |2n − 1|</code> — so valleys stay soft and crests come out sharp.</p></li>
+      <li><h3>Lattice</h3><p>Vertices are jittered up to a third of a cell in both directions. Boundary vertices stay pinned so the mesh still meets the frame.</p></li>
+      <li><h3>Split</h3><p>Each cell chooses its diagonal at random. Alternating diagonals read as a herringbone; random ones read as rock.</p></li>
+      <li><h3>Light</h3><p>The sun-angle slider moves a direction vector across the sky. One dot product per face turns geometry into colour; nothing is interpolated.</p></li>
+      <li><h3>Haze</h3><p>Faces are mixed toward the horizon colour by <code>depth^1.4 × haze</code>, so the far ridge dissolves long before the near one does.</p></li>
+    </ol>
+    <div class="palette" aria-label="Palette">
+      <div class="sw" style="background:#FF7B54;color:#2A1A4E"><b>Sunset coral</b><span>#FF7B54</span><small>faces square to a low sun</small></div>
+      <div class="sw" style="background:#FFB26B;color:#2A1A4E"><b>Peach</b><span>#FFB26B</span><small>horizon and haze</small></div>
+      <div class="sw" style="background:#3E2670;color:#F3F7FA"><b>Dusk purple</b><span>#5D3A9B</span><small>everything turned away</small></div>
+      <div class="sw" style="background:#F3F7FA;color:#2A1A4E"><b>Snow</b><span>#F3F7FA</span><small>above the snowline</small></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="row">
+    <span><b>Page 39 of 100</b> · Low-Poly Range</span>
+    <span>One SVG · no libraries · <kbd style="color:var(--peach);border-color:rgba(255,178,107,.5)">R</kbd> regenerates</span>
+    <span>Type: <b>Exo 2</b></span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const svg = $('#scene'), stage = $('#stage');
+  const gTerrain = $('#terrain'), gBands = $('#bands'), sunEl = $('#sun'), glowEl = $('#sunGlow'), skyEl = $('#sky');
+  const skyGrad = $('#skyGrad'), stops = skyGrad.querySelectorAll('stop');
+  const elevIn = $('#elev'), sunIn = $('#sunA'), hazeIn = $('#haze');
+  const elevOut = $('#elevOut'), sunOut = $('#sunOut'), hazeOut = $('#hazeOut');
+  const seedTxt = $('#seedTxt'), seedOut = $('#seedOut'), facetOut = $('#facetOut');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- colour helpers ---- */
+  const C = { coral:[255,123,84], peach:[255,178,107], purple:[93,58,155], snow:[243,247,250], deep:[38,22,70], pale:[255,227,203] };
+  const mix = (a,b,t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+  const rgb = c => 'rgb(' + (c[0]|0) + ',' + (c[1]|0) + ',' + (c[2]|0) + ')';
+  const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+  const smooth = (a,b,x) => { const t = clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+
+  /* ---- noise ---- */
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function makeNoise(rand){
+    const N = 128, g = new Float32Array(N*N);
+    for (let i=0;i<N*N;i++) g[i] = rand();
+    return (x,y) => {
+      const xi = Math.floor(x), yi = Math.floor(y);
+      const fx = x-xi, fy = y-yi, sx = fx*fx*(3-2*fx), sy = fy*fy*(3-2*fy);
+      const x0 = xi&(N-1), x1 = (xi+1)&(N-1), y0 = yi&(N-1), y1 = (yi+1)&(N-1);
+      const a = g[y0*N+x0], b = g[y0*N+x1], c = g[y1*N+x0], d = g[y1*N+x1];
+      return a + (b-a)*sx + (c-a)*sy + (a-b-c+d)*sx*sy;
+    };
+  }
+  function ridged(noise,x,y,oct){
+    let sum=0, amp=0.5, f=1, w=1, norm=0;
+    for (let o=0;o<oct;o++){
+      let n = noise(x*f,y*f); n = 1-Math.abs(2*n-1); n *= n; n *= w;
+      w = clamp(n*2,0,1); sum += n*amp; norm += amp; amp *= 0.5; f *= 2.03;
+    }
+    return sum/norm;
+  }
+  function fbm(noise,x,y,oct){
+    let sum=0, amp=0.5, f=1, norm=0;
+    for (let o=0;o<oct;o++){ sum += noise(x*f,y*f)*amp; norm += amp; amp *= 0.5; f *= 2.1; }
+    return sum/norm;
+  }
+
+  /* ---- state ---- */
+  let W = 1440, H = 900, horizon = 380, cols = 44, rows = 18, K = 4.6;
+  let seed = 0, nV = 0;
+  let hCur, hTarget, jx, jz, diag, fj;       // heights, jitter, diagonals, per-facet jitter
+  let px, py, wy;                            // screen x/y and world height
+  let polys = [];
+  let morphId = 0, renderId = 0;
+
+  function measure(){
+    W = stage.clientWidth || 1440; H = stage.clientHeight || 900;
+    horizon = Math.round(H * (W < 720 ? 0.4 : 0.44));
+    cols = clamp(Math.round(W / 31), 18, 52);
+    rows = W < 720 ? 15 : 18;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    skyEl.setAttribute('width', W); skyEl.setAttribute('height', H);
+    skyGrad.setAttribute('y2', horizon * 1.18);
+  }
+
+  function ensurePolys(){
+    const n = cols*rows*2;
+    if (polys.length === n) return;
+    gTerrain.textContent = '';
+    polys = [];
+    const frag = document.createDocumentFragment();
+    for (let i=0;i<n;i++){ const p = document.createElementNS('http://www.w3.org/2000/svg','polygon'); frag.appendChild(p); polys.push(p); }
+    gTerrain.appendChild(frag);
+    facetOut.textContent = n.toLocaleString('en-GB');
+  }
+
+  function buildTarget(){
+    const rand = mulberry32(seed);
+    const noise = makeNoise(rand);
+    nV = (cols+1)*(rows+1);
+    hTarget = new Float32Array(nV); jx = new Float32Array(nV); jz = new Float32Array(nV);
+    diag = new Uint8Array(cols*rows); fj = new Float32Array(cols*rows*2);
+    const ox = rand()*64, oz = rand()*64, f = 0.115;
+    const valleyX = 0.25 + rand()*0.5, valleyW = 0.08 + rand()*0.1;
+    for (let j=0;j<=rows;j++){
+      for (let i=0;i<=cols;i++){
+        const idx = j*(cols+1)+i;
+        const u = i/cols;
+        let base = ridged(noise, i*f + ox, j*f*1.35 + oz, 5);
+        const mask = fbm(noise, i*f*0.32 + 37.7, j*f*0.45 + 91.3, 3);
+        let h = base * (0.28 + 0.72*mask);
+        // one valley somewhere, so ranges have a gap
+        h *= 1 - 0.55*Math.exp(-Math.pow((u-valleyX)/valleyW,2)) * (0.4 + 0.6*(j/rows));
+        h = Math.pow(h, 1.12);
+        hTarget[idx] = h;
+        jx[idx] = (i===0||i===cols) ? 0 : (rand()-0.5)*0.66;
+        jz[idx] = (j===0||j===rows) ? 0 : (rand()-0.5)*0.6;
+      }
+    }
+    for (let q=0;q<cols*rows;q++) diag[q] = rand() < 0.5 ? 1 : 0;
+    for (let t=0;t<fj.length;t++) fj[t] = (rand()-0.5)*0.09;
+    const hex = (seed>>>0).toString(16).toUpperCase().padStart(8,'0');
+    seedTxt.textContent = hex; seedOut.textContent = hex;
+  }
+
+  /* ---- render ---- */
+  function render(){
+    if (!hCur) return;
+    const elev = +elevIn.value, th = +sunIn.value*Math.PI/180, haze = +hazeIn.value;
+    const sunH = Math.sin(th);
+    let Lx = -Math.cos(th), Ly = 0.24 + 0.76*sunH, Lz = -0.42;
+    const ll = Math.hypot(Lx,Ly,Lz); Lx/=ll; Ly/=ll; Lz/=ll;
+    const lit = mix(C.coral, C.peach, 0.2 + 0.8*sunH);
+    const litHot = mix(lit, C.pale, 0.25*sunH);
+    const shadow = mix(C.deep, C.purple, 0.5);
+    const shadowWarm = mix(shadow, C.coral, 0.12);
+    const hazeCol = mix(mix(C.peach, C.coral, 0.4*(1-sunH)), C.pale, 0.35*sunH);
+    const snowLit = mix(C.snow, C.pale, 0.3*(1-sunH));
+    const snowShade = mix(C.snow, C.purple, 0.5);
+    const snowline = 0.5 - 0.14*(elev-1);
+
+    if (!px || px.length !== nV){ px = new Float32Array(nV); py = new Float32Array(nV); wy = new Float32Array(nV); }
+    const half = cols/2;
+    for (let j=0;j<=rows;j++){
+      for (let i=0;i<=cols;i++){
+        const idx = j*(cols+1)+i;
+        const zN = (j + jz[idx]) / rows;
+        const amp = elev * (0.26 + 0.74*Math.pow(zN,1.25));
+        const yBase = H*1.05 - (H*1.05 - horizon) * (1 - Math.pow(1 - zN, 2.15));
+        const pxScale = H * 0.5 * (1 - 0.42*zN);
+        // perspective: near rows spread wider than the frame, far rows just cover it
+        const spread = W * (1.08 + (1 - zN) * 0.85) / cols;
+        px[idx] = W*0.5 + (i + jx[idx] - half) * spread;
+        py[idx] = yBase - hCur[idx]*amp*pxScale;
+        wy[idx] = hCur[idx]*amp*K;
+      }
+    }
+    let t = 0;
+    for (let j=rows-1;j>=0;j--){
+      const zN = (j+0.5)/rows;
+      const hz = haze * Math.pow(zN,1.4) * 0.92;
+      for (let i=0;i<cols;i++){
+        const a = j*(cols+1)+i, b = a+1, c = a+cols+1, d = c+1;
+        const q = j*cols+i;
+        const tris = diag[q] ? [[a,b,d],[a,d,c]] : [[a,b,c],[b,d,c]];
+        for (let k=0;k<2;k++){
+          const [ia,ib,ic] = tris[k];
+          const poly = polys[t];
+          poly.setAttribute('points', px[ia]+','+py[ia]+' '+px[ib]+','+py[ib]+' '+px[ic]+','+py[ic]);
+          // world coords: X = i + jx, Y = height, Z = -(j + jz)
+          const ax = (ia%(cols+1)) + jx[ia], az = -((ia/(cols+1)|0) + jz[ia]);
+          const bx = (ib%(cols+1)) + jx[ib], bz = -((ib/(cols+1)|0) + jz[ib]);
+          const cx = (ic%(cols+1)) + jx[ic], cz = -((ic/(cols+1)|0) + jz[ic]);
+          const e1x = bx-ax, e1y = wy[ib]-wy[ia], e1z = bz-az;
+          const e2x = cx-ax, e2y = wy[ic]-wy[ia], e2z = cz-az;
+          let nx = e1y*e2z - e1z*e2y, ny = e1z*e2x - e1x*e2z, nz = e1x*e2y - e1y*e2x;
+          if (ny < 0){ nx=-nx; ny=-ny; nz=-nz; }
+          const nl = Math.hypot(nx,ny,nz) || 1;
+          const lam = clamp((nx*Lx + ny*Ly + nz*Lz)/nl, 0, 1);
+          let s = clamp(0.05 + 0.95*Math.pow(lam,1.3) + fj[t], 0, 1);
+          let col = s < 0.5 ? mix(shadow, shadowWarm, s*2) : mix(shadowWarm, litHot, (s-0.5)*2);
+          const hAvg = (hCur[ia]+hCur[ib]+hCur[ic])/3;
+          const sn = smooth(snowline, snowline+0.16, hAvg);
+          if (sn > 0) col = mix(col, mix(snowShade, snowLit, s), sn*0.95);
+          if (hz > 0) col = mix(col, hazeCol, hz);
+          poly.setAttribute('fill', rgb(col));
+          t++;
+        }
+      }
+    }
+    // sun
+    const sx = W*(0.06 + 0.88*(+sunIn.value/180));
+    const sy = horizon - sunH*horizon*0.74 + H*0.015;
+    const r = Math.max(26, H*0.052);
+    let pts = '';
+    for (let k=0;k<8;k++){ const a = Math.PI/8 + k*Math.PI/4; pts += (sx + Math.cos(a)*r) + ',' + (sy + Math.sin(a)*r) + ' '; }
+    sunEl.setAttribute('points', pts.trim());
+    sunEl.setAttribute('fill', rgb(mix(C.snow, C.pale, 0.5*(1-sunH))));
+    glowEl.setAttribute('cx', sx); glowEl.setAttribute('cy', sy);
+    glowEl.setAttribute('r', Math.max(160, H*0.32) * (0.85 + 0.3*(1-sunH)));
+    stops[2].setAttribute('stop-color', rgb(hazeCol));
+    stops[1].setAttribute('stop-color', rgb(mix(C.coral, C.purple, 0.15*(1-sunH))));
+  }
+
+  function scheduleRender(){ if (renderId) return; renderId = requestAnimationFrame(() => { renderId = 0; render(); }); }
+
+  /* ---- sky bands: faceted strata behind the sun (flat polygons, no smoothing) ---- */
+  function buildBands(){
+    gBands.textContent = '';
+    const rand = mulberry32(seed ^ 0x9E3779B9);
+    const n = 5;
+    for (let b=0;b<n;b++){
+      const y = horizon*(0.22 + 0.62*(b/(n-1))) + (rand()-0.5)*horizon*0.05;
+      const th = y/horizon*8 + 3;
+      let pts = '';
+      const segs = 7;
+      for (let s=0;s<=segs;s++){ pts += (s/segs*W) + ',' + (y + (rand()-0.5)*th*3) + ' '; }
+      for (let s=segs;s>=0;s--){ pts += (s/segs*W) + ',' + (y + th + (rand()-0.5)*th*2.5) + ' '; }
+      const p = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      p.setAttribute('points', pts.trim());
+      p.setAttribute('fill', b%2 ? '#FFB26B' : '#F3F7FA');
+      p.setAttribute('opacity', (0.05 + rand()*0.08).toFixed(3));
+      gBands.appendChild(p);
+    }
+  }
+
+  /* ---- generate + morph ---- */
+  function generate(newSeed, animate){
+    seed = newSeed >>> 0;
+    buildTarget();
+    buildBands();
+    if (morphId){ cancelAnimationFrame(morphId); morphId = 0; }
+    if (!animate || reduced || !hCur || hCur.length !== nV){
+      hCur = hTarget.slice(); render(); return;
+    }
+    const from = hCur.slice(), to = hTarget, t0 = performance.now(), dur = 950;
+    const step = now => {
+      let t = clamp((now - t0)/dur, 0, 1);
+      t = 1 - Math.pow(1 - t, 3);
+      for (let i=0;i<nV;i++) hCur[i] = from[i] + (to[i]-from[i])*t;
+      render();
+      morphId = t < 1 ? requestAnimationFrame(step) : 0;
+    };
+    morphId = requestAnimationFrame(step);
+  }
+  function randomSeed(){ return (Math.random()*4294967295) >>> 0; }
+
+  /* ---- sky animation (slow breathing of the gradient) ---- */
+  let skyId = 0;
+  function sky(now){
+    skyId = 0;
+    if (document.hidden) return;
+    const t = now*0.001;
+    stops[1].setAttribute('offset', (0.58 + 0.05*Math.sin(t*0.37)).toFixed(4));
+    stops[0].setAttribute('stop-color', rgb(mix(C.purple, C.deep, 0.5 + 0.5*Math.sin(t*0.21))));
+    const base = Math.max(160, H*0.32) * (0.85 + 0.3*(1 - Math.sin(+sunIn.value*Math.PI/180)));
+    glowEl.setAttribute('r', base * (1 + 0.04*Math.sin(t*0.9)));
+    sunEl.setAttribute('transform', 'rotate(' + (t*2.5 % 360).toFixed(2) + ' ' + glowEl.getAttribute('cx') + ' ' + glowEl.getAttribute('cy') + ')');
+    skyId = requestAnimationFrame(sky);
+  }
+  function startSky(){ if (!reduced && !skyId && !document.hidden) skyId = requestAnimationFrame(sky); }
+  document.addEventListener('visibilitychange', startSky);
+
+  /* ---- controls ---- */
+  const dirWord = a => a < 22 ? 'on the horizon' : a < 70 ? 'low west' : a < 110 ? 'overhead' : a < 158 ? 'low east' : 'on the horizon';
+  function syncOutputs(){
+    const e = +elevIn.value, a = +sunIn.value, h = +hazeIn.value;
+    elevOut.innerHTML = e.toFixed(2) + '<small>×</small>';
+    sunOut.innerHTML = a + '°<small>' + dirWord(a) + '</small>';
+    hazeOut.innerHTML = Math.round(h*100) + '<small>%</small>';
+    for (const inp of [elevIn, sunIn, hazeIn]){
+      const p = (inp.value - inp.min)/(inp.max - inp.min)*100;
+      inp.style.setProperty('--p', p.toFixed(2) + '%');
+    }
+  }
+  for (const inp of [elevIn, sunIn, hazeIn]) inp.addEventListener('input', () => { syncOutputs(); scheduleRender(); });
+  $('#regen').addEventListener('click', () => generate(randomSeed(), true));
+  $('#reset').addEventListener('click', () => { elevIn.value = 1; sunIn.value = 38; hazeIn.value = 0.55; syncOutputs(); scheduleRender(); });
+  svg.addEventListener('click', () => generate(randomSeed(), true));
+  document.addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'r' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'button') return;
+    generate(randomSeed(), true);
+  });
+
+  let rz = 0;
+  addEventListener('resize', () => {
+    clearTimeout(rz);
+    rz = setTimeout(() => {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      if (w === W && h === H) return;
+      measure(); ensurePolys(); generate(seed, false);
+    }, 160);
+  });
+
+  /* ---- static diagram ---- */
+  (function diagram(){
+    const g = document.getElementById('dg');
+    const rand = mulberry32(39);
+    const cx = 5, cy = 3, w = 560, h = 360, top = 130, cell = 88, rowH = 60;
+    const P = [];
+    for (let j=0;j<=cy;j++){ P[j] = []; for (let i=0;i<=cx;i++){
+      const jxx = (i===0||i===cx) ? 0 : (rand()-0.5)*28, jyy = (j===0||j===cy) ? 0 : (rand()-0.5)*20;
+      P[j][i] = [i*cell + jxx + (i===cx?0:0), top + j*rowH + jyy - (j===0? 40*rand():0)];
+    }}
+    const L = [-0.62, 0.78];
+    const ns = 'http://www.w3.org/2000/svg';
+    let hi = null;
+    for (let j=0;j<cy;j++) for (let i=0;i<cx;i++){
+      const a=P[j][i], b=P[j][i+1], c=P[j+1][i], d=P[j+1][i+1];
+      const dg = rand()<0.5;
+      const tris = dg ? [[a,b,d],[a,d,c]] : [[a,b,c],[b,d,c]];
+      tris.forEach((tr,k) => {
+        const p = document.createElementNS(ns,'polygon');
+        p.setAttribute('points', tr.map(q=>q.join(',')).join(' '));
+        // fake 2D normal from the triangle's leaning direction
+        const mx = (tr[0][0]+tr[1][0]+tr[2][0])/3, my = (tr[0][1]+tr[1][1]+tr[2][1])/3;
+        const nx = (mx - w*0.5)/w*1.6 + (rand()-0.5)*0.9, ny = -0.6 - (my-top)/h;
+        const nl = Math.hypot(nx,ny); const lam = clamp((nx*L[0] + ny*L[1])/nl*-1,0,1);
+        const s = 0.15 + 0.85*lam;
+        const col = s < 0.5 ? mix(C.deep, C.purple, s*2) : mix(C.purple, C.coral, (s-0.5)*2);
+        p.setAttribute('fill', rgb(col));
+        p.setAttribute('stroke', '#FFE3CB'); p.setAttribute('stroke-width', '1.2'); p.setAttribute('stroke-linejoin', 'round');
+        g.appendChild(p);
+        if (j===1 && i===2 && k===0) hi = {tr, mx, my};
+      });
+    }
+    if (hi){
+      const p = document.createElementNS(ns,'polygon');
+      p.setAttribute('points', hi.tr.map(q=>q.join(',')).join(' '));
+      p.setAttribute('fill', '#FFB26B'); p.setAttribute('stroke', '#F3F7FA'); p.setAttribute('stroke-width', '3');
+      g.appendChild(p);
+      const line = document.createElementNS(ns,'line');
+      line.setAttribute('x1', hi.mx); line.setAttribute('y1', hi.my); line.setAttribute('x2', hi.mx+46); line.setAttribute('y2', hi.my-64);
+      line.setAttribute('stroke', '#F3F7FA'); line.setAttribute('stroke-width', '3'); g.appendChild(line);
+      const head = document.createElementNS(ns,'polygon');
+      head.setAttribute('points', (hi.mx+46)+','+(hi.my-64)+' '+(hi.mx+30)+','+(hi.my-58)+' '+(hi.mx+42)+','+(hi.my-48));
+      head.setAttribute('fill', '#F3F7FA'); g.appendChild(head);
+      const dot = document.createElementNS(ns,'circle'); dot.setAttribute('cx', hi.mx); dot.setAttribute('cy', hi.my); dot.setAttribute('r', 4); dot.setAttribute('fill', '#2A1A4E'); g.appendChild(dot);
+      const txt = document.createElementNS(ns,'text'); txt.setAttribute('class','lbl'); txt.setAttribute('x', hi.mx+54); txt.setAttribute('y', hi.my-70); txt.setAttribute('fill', '#2A1A4E'); txt.textContent = 'N'; g.appendChild(txt);
+      // light ray from sun to the highlighted face
+      const ray = document.createElementNS(ns,'line');
+      ray.setAttribute('x1', 470); ray.setAttribute('y1', 90); ray.setAttribute('x2', hi.mx+14); ray.setAttribute('y2', hi.my-8);
+      ray.setAttribute('stroke', '#FF7B54'); ray.setAttribute('stroke-width', '2'); ray.setAttribute('stroke-dasharray', '6 6'); g.appendChild(ray);
+    }
+  })();
+
+  /* ---- ramp figure ---- */
+  (function ramp(){
+    const el = document.getElementById('ramp');
+    const shadow = mix(C.deep, C.purple, 0.5), shadowWarm = mix(shadow, C.coral, 0.12), lit = mix(mix(C.coral, C.peach, 0.7), C.pale, 0.15);
+    for (let k=0;k<11;k++){
+      const s = k/10, col = s < 0.5 ? mix(shadow, shadowWarm, s*2) : mix(shadowWarm, lit, (s-0.5)*2);
+      const i = document.createElement('i'); i.style.background = rgb(col); el.appendChild(i);
+    }
+  })();
+
+  /* ---- boot ---- */
+  measure(); ensurePolys(); syncOutputs();
+  generate(randomSeed(), false);
+  startSky();
+})();
+</script>
+</body>
+</html>

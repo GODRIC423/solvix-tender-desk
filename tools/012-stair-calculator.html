@@ -1,0 +1,1106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stair Rise &amp; Run Calculator — Solvix Toolkit</title>
+<meta name="description" content="Work out riser height, tread depth, number of risers, total run and stringer length from a total rise. Checks each flight against the usual adopted stair limits, draws the stair to scale and prints a cut list.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23B45309'/%3E%3Cpath d='M5 26h5v-5h6v-5h6v-5h5V6' fill='none' stroke='%23fff' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#B45309;--accent-ink:#8F4207;--accent-wash:#FBF0DC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E8944A;--accent-ink:#F3B076;--accent-wash:#2E2011;--on-accent:#180D03}}
+:root[data-theme="dark"]{--accent:#E8944A;--accent-ink:#F3B076;--accent-wash:#2E2011;--on-accent:#180D03}
+
+.appbar{margin-bottom:14px}
+@media print{.app{padding-top:0}}
+.stackgap{display:flex;flex-direction:column;gap:14px;min-width:0}
+.split>*{min-width:0}
+.stackgap>*{min-width:0;max-width:100%}
+[hidden]{display:none!important}
+.tw{max-width:100%}
+#tFlights{font-size:13.5px}
+#tFlights th{white-space:normal}
+#tFlights th,#tFlights td{padding:7px 7px}
+#tFlights input[type=number]{min-width:66px}
+#tFlights td.n{min-width:56px}
+td.lab input{min-width:140px}
+#tChecks td:nth-child(2),#tChecks td:nth-child(3){white-space:nowrap}
+#tCut td:first-child{min-width:120px}
+.note.warn#disclaimer{margin-bottom:14px}
+@media(max-width:560px){#disclaimer{font-size:12.8px}}
+.fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.statgrid{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.statgrid .stat .v{font-size:18px}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.dwgwrap{background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:6px}
+svg.dwg{width:100%;height:auto;display:block}
+.ck{display:flex;gap:8px;align-items:baseline;justify-content:space-between;font-size:13px;
+  padding:5px 0;border-bottom:1px dotted var(--line)}
+.ck:last-child{border-bottom:0}
+.ck .cn{color:var(--ink-2)}
+.ck .cv{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-left:auto;padding-right:8px}
+.minibar{display:none}
+@media(max-width:900px){
+  .col-r{order:-1}
+  .sticky{position:static}
+  .minibar{display:flex;position:sticky;top:48px;z-index:35;gap:10px;align-items:center;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:7px 11px;margin:0 0 12px;flex-wrap:wrap}
+  .minibar .mk{font:600 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .minibar .mv{font:700 16px/1 var(--mono);color:var(--accent-ink)}
+  .minibar .mm{font:400 11.5px/1.3 var(--mono);color:var(--ink-2);order:3;flex:1 1 100%}
+  .minibar .chip{order:2}
+}
+.sampleflag{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.del{color:var(--bad)}
+.tot{font-weight:650}
+td.lab input{font-family:var(--sans);text-align:left}
+.smallcap{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+footer.foot{max-width:1180px;margin:0 auto;padding:18px clamp(10px,2vw,22px) 40px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.phead{border-bottom:2px solid #000;padding-bottom:9px;margin-bottom:12px}
+.phead .pt{font-size:17pt;font-weight:700;letter-spacing:-.01em}
+.phead .ps{font-size:9.5pt;color:#333;margin-top:2px}
+.pmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px 18px;margin-top:10px;font-size:9.5pt}
+.pmeta div span{display:block;font-weight:700;text-transform:uppercase;font-size:7.5pt;letter-spacing:.06em;color:#444}
+.psum{border:1px solid #888;padding:8px 10px;margin-bottom:10px}
+.psum table{font-size:10pt}
+.psum td{border:0;padding:2px 8px 2px 0}
+@media print{
+  .tw{overflow:visible!important}
+  .pmir{display:none!important}
+  .pv{display:block!important;font-weight:600;padding:1px 0}
+  #tFlights{font-size:8.4pt}
+  #tFlights th,#tFlights td{padding:4px 5px;white-space:normal}
+  #tFlights th:first-child,#tFlights td:first-child{width:1%;padding-left:0;padding-right:0}
+  #tChecks,#tCut,#tMat{font-size:9pt}
+  #tCut th,#tCut td{padding:5px 6px}
+  .dwgwrap{border:1px solid #bbb;break-inside:avoid}
+  .minibar{display:none!important}
+  .phead{display:block}
+  h1,h2{color:#000}
+}
+</style>
+</head>
+<body>
+
+
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+
+<main class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">SR</div>
+    <div style="min-width:0">
+      <h1>Stair Rise &amp; Run Calculator</h1>
+      <div class="sub">RISERS · TREADS · STRINGERS</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm" id="bSample">Load sample</button>
+    <button type="button" class="btn sm" id="bJson">JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import</button>
+    <button type="button" class="btn sm" id="bCsv">CSV</button>
+    <button type="button" class="btn sm pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn sm dgr" id="bClear">Clear all data</button>
+  </div>
+</div>
+
+
+  <!-- print letterhead -->
+  <div class="printonly">
+    <div class="phead">
+      <div class="pt">Stair Rise &amp; Run Calculation</div>
+      <div class="ps">Riser and tread schedule, code check, scale elevation and cut list</div>
+      <div class="pmeta">
+        <div><span>Job reference</span><b id="pRef">—</b></div>
+        <div><span>Client</span><b id="pClient">—</b></div>
+        <div><span>Site / location</span><b id="pSite">—</b></div>
+        <div><span>Prepared by</span><b id="pBy">—</b></div>
+        <div><span>Date</span><b id="pDate">—</b></div>
+        <div><span>Units</span><b id="pUnits">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="minibar noprint" id="minibar">
+    <span class="mk">Riser</span><span class="mv" id="mbRiser">—</span>
+    <span class="mm" id="mbMeta">—</span>
+    <span class="chip" id="mbChip" style="margin-left:auto">—</span>
+  </div>
+
+  <div class="note warn" id="disclaimer">
+    <strong>Check against your adopted building code before you cut.</strong>
+    This tool applies the common residential stair limits (riser 4&nbsp;in–7¾&nbsp;in, tread depth ≥&nbsp;10&nbsp;in,
+    riser&nbsp;+&nbsp;tread 17–18&nbsp;in, 2&nbsp;×&nbsp;riser&nbsp;+&nbsp;tread 24–25&nbsp;in, headroom ≥&nbsp;6&nbsp;ft&nbsp;8&nbsp;in)
+    to the figures you type. It does <strong>not</strong> know your jurisdiction's amendments, occupancy class,
+    guard and handrail rules, landing sizes or structural sizing, and it does not replace a plans examiner,
+    building control officer, architect or structural engineer. Measure the finished floor-to-finished-floor
+    rise on site, and verify every figure before ordering or cutting material.
+  </div>
+
+  <div class="printonly" id="printSummary"></div>
+
+  <div class="split">
+    <div class="stackgap">
+
+      <div class="note sampleflag" id="sampleCard">
+        <span class="chip">Sample data</span>
+        <span style="flex:1;min-width:170px">Worked example figures so you can see the tool running. Type over them, or clear them.</span>
+        <button type="button" class="btn sm noprint" id="bClearSample">Clear sample</button>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Job details</h2>
+          <div class="seg noprint" role="group" aria-label="Unit system">
+            <button type="button" id="uImp" aria-pressed="true">Imperial (in)</button>
+            <button type="button" id="uMet" aria-pressed="false">Metric (mm)</button>
+          </div>
+        </div>
+        <div class="bd">
+          <div class="fgrid wide">
+            <div class="f"><label for="fRef">Job reference</label><input id="fRef" data-k="ref" type="text" class="pmir" autocomplete="off"><span class="pv printonly" data-pv="fRef"></span></div>
+            <div class="f"><label for="fClient">Client</label><input id="fClient" data-k="client" type="text" class="pmir" autocomplete="off"><span class="pv printonly" data-pv="fClient"></span></div>
+            <div class="f"><label for="fSite">Site / location</label><input id="fSite" data-k="site" type="text" class="pmir" autocomplete="off"><span class="pv printonly" data-pv="fSite"></span></div>
+            <div class="f"><label for="fBy">Prepared by</label><input id="fBy" data-k="prepared" type="text" class="pmir" autocomplete="off"><span class="pv printonly" data-pv="fBy"></span></div>
+            <div class="f"><label for="fDate">Date</label><input id="fDate" data-k="date" type="date" class="pmir"><span class="pv printonly" data-pv="fDate"></span></div>
+            <div class="f"><label for="fCur">Currency</label>
+              <select id="fCur">
+                <option value="£">£ Pound</option><option value="$">$ Dollar</option>
+                <option value="€">€ Euro</option><option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f" id="curCustomWrap" hidden><label for="fCurCustom">Custom symbol</label><input id="fCurCustom" data-k="curCustom" type="text" maxlength="4" autocomplete="off"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Flights</h2>
+          <span class="hint">One row per flight. Tick “Detail” to draw and check that flight.</span>
+          <button type="button" class="btn sm noprint" id="bAdd">+ Add flight</button>
+        </div>
+        <div class="tw">
+          <table id="tFlights">
+            <thead><tr>
+              <th scope="col"><span class="noprint">Detail</span></th>
+              <th scope="col">Flight</th>
+              <th scope="col" class="n" id="hRise">Total rise</th>
+              <th scope="col" class="n" id="hTarget">Target riser</th>
+              <th scope="col" class="n" id="hGoing">Tread depth</th>
+              <th scope="col" class="n">Risers</th>
+              <th scope="col" class="n">Actual riser</th>
+              <th scope="col" class="n">Treads</th>
+              <th scope="col" class="n">Total run</th>
+              <th scope="col" class="n">Stringer</th>
+              <th scope="col" class="n">Pitch</th>
+              <th scope="col">Code</th>
+              <th scope="col"><span class="noprint">Remove</span></th>
+            </tr></thead>
+            <tbody id="rows"></tbody>
+            <tfoot><tr>
+              <td colspan="5" class="tot">Job totals</td>
+              <td class="n" id="tRisers">—</td>
+              <td class="n">—</td>
+              <td class="n" id="tTreads">—</td>
+              <td class="n" id="tRun">—</td>
+              <td class="n" id="tStr">—</td>
+              <td class="n">—</td><td colspan="2"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft" style="display:block">
+          <div class="row" style="gap:10px"><span class="lbl">Job totals</span><span class="mono" id="ftTotals" style="font-size:13px">—</span></div>
+          <div class="hint" style="margin-top:6px">Risers = round(total rise ÷ target riser). Actual riser = total rise ÷ risers. Treads = risers − 1. Total run = treads × tread depth. Stringer = √(rise² + run²).</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Build settings</h2><span class="hint">Applied to every flight</span></div>
+        <div class="bd">
+          <div class="fgrid">
+            <div class="f"><label for="fWidth">Stair width <span data-u></span></label><input id="fWidth" data-k="width" type="number" step="any" min="0" inputmode="decimal"><span class="err" id="eWidth"></span></div>
+            <div class="f"><label for="fNosing">Nosing overhang <span data-u></span></label><input id="fNosing" data-k="nosing" type="number" step="any" min="0" inputmode="decimal"><span class="hint">Adds to tread board width, not to tread depth.</span><span class="err" id="eNosing"></span></div>
+            <div class="f"><label for="fTreadThk">Tread thickness <span data-u></span></label><input id="fTreadThk" data-k="treadThk" type="number" step="any" min="0" inputmode="decimal"><span class="err" id="eTreadThk"></span></div>
+            <div class="f"><label for="fHead">Headroom available <span data-u></span></label><input id="fHead" data-k="headroom" type="number" step="any" min="0" inputmode="decimal"><span class="hint">Vertical, nosing line to soffit.</span><span class="err" id="eHead"></span></div>
+            <div class="f"><label for="fFloor">Floor assembly thickness <span data-u></span></label><input id="fFloor" data-k="floorThk" type="number" step="any" min="0" inputmode="decimal"><span class="hint">Used for the stairwell opening guide.</span><span class="err" id="eFloor"></span></div>
+            <div class="f"><label for="fAvail">Available run (optional) <span data-u></span></label><input id="fAvail" data-k="availRun" type="number" step="any" min="0" inputmode="decimal"><span class="hint">Floor space for the detailed flight.</span><span class="err" id="eAvail"></span></div>
+            <div class="f"><label for="fSQty">Stringers per flight</label><input id="fSQty" data-k="stringerQty" type="number" step="1" min="1" inputmode="numeric"><span class="err" id="eSQty"></span></div>
+            <div class="f"><label for="fAllow">Stringer cut allowance <span data-u></span></label><input id="fAllow" data-k="stringerAllow" type="number" step="any" min="0" inputmode="decimal"><span class="hint">Waste at top and bottom cuts.</span><span class="err" id="eAllow"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="dwgCard">
+        <div class="hd"><h2>Scale elevation — <span id="dwgName">—</span></h2><span class="hint" id="dwgScale">Drawn to scale</span></div>
+        <div class="bd"><div class="dwgwrap" id="dwg"></div></div>
+        <div class="ft"><span class="hint">Side elevation, drawn to scale from the figures above. Nosings, stringer housings and trim thickness are not shown.</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Code check — <span id="ckName">—</span></h2><span class="chip" id="ckVerdict">—</span></div>
+        <div class="tw">
+          <table id="tChecks">
+            <thead><tr><th scope="col">Check</th><th scope="col">Requirement</th><th scope="col" class="n">Actual</th><th scope="col">Result</th><th scope="col">Reference</th></tr></thead>
+            <tbody id="ckRows"></tbody>
+          </table>
+        </div>
+        <div class="ft"><span class="hint" id="ckFoot">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Cut list</h2><span class="hint">Stock lengths rounded <strong>up</strong></span></div>
+        <div class="tw">
+          <table id="tCut">
+            <thead><tr><th scope="col">Flight</th><th scope="col">Item</th><th scope="col" class="n">Qty</th><th scope="col">Size each</th><th scope="col">Notes</th></tr></thead>
+            <tbody id="cutRows"></tbody>
+          </table>
+        </div>
+        <div class="ft"><span class="hint" id="cutFoot">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Material estimate</h2><span class="hint" id="rateUnit">Rates per linear ft</span></div>
+        <div class="bd">
+          <div class="fgrid">
+            <div class="f"><label for="fRS">Stringer stock rate</label><input id="fRS" data-k="rate.stringer" type="number" step="any" min="0" inputmode="decimal"></div>
+            <div class="f"><label for="fRT">Tread stock rate</label><input id="fRT" data-k="rate.tread" type="number" step="any" min="0" inputmode="decimal"></div>
+            <div class="f"><label for="fRR">Riser stock rate</label><input id="fRR" data-k="rate.riser" type="number" step="any" min="0" inputmode="decimal"></div>
+          </div>
+        </div>
+        <div class="tw">
+          <table id="tMat">
+            <thead><tr><th scope="col">Item</th><th scope="col" class="n">Linear qty</th><th scope="col" class="n">Rate</th><th scope="col" class="n">Amount</th></tr></thead>
+            <tbody id="matRows"></tbody>
+            <tfoot><tr><td colspan="3" class="tot">Material subtotal</td><td class="n" id="matTotal">—</td></tr></tfoot>
+          </table>
+        </div>
+        <div class="ft"><span class="hint">Timber only — no fixings, finish, labour or waste beyond the stringer allowance.</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Notes</h2></div>
+        <div class="bd"><div class="f"><label for="fNotes">Notes for this job</label><textarea id="fNotes" data-k="notes" class="pmir"></textarea><span class="pv printonly" data-pv="fNotes"></span></div></div>
+      </div>
+
+    </div>
+
+    <div class="col-r">
+      <div class="card sticky noprint">
+        <div class="hd"><h2>Result — <span id="rName">—</span></h2><span class="chip" id="rVerdict">—</span></div>
+        <div class="bd stack">
+          <div class="stat hero">
+            <div class="k">Riser height — each</div>
+            <div class="v" id="hHero">—</div>
+            <div class="u" id="hHeroSub">—</div>
+          </div>
+          <div class="statgrid">
+            <div class="stat"><div class="k">Risers</div><div class="v" id="sRisers">—</div></div>
+            <div class="stat"><div class="k">Treads</div><div class="v" id="sTreads">—</div></div>
+            <div class="stat"><div class="k">Total run</div><div class="v" id="sRun">—</div></div>
+            <div class="stat"><div class="k">Stringer length</div><div class="v" id="sStr">—</div></div>
+            <div class="stat"><div class="k">Pitch angle</div><div class="v" id="sPitch">—</div></div>
+            <div class="stat"><div class="k">Stairwell opening</div><div class="v" id="sOpen">—</div></div>
+          </div>
+          <div>
+            <div class="smallcap" style="margin-bottom:4px">Code checks</div>
+            <div id="miniChecks"></div>
+          </div>
+        </div>
+        <div class="ft"><span class="lbl">Status</span><span class="mono" id="rCount" style="margin-left:auto">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="printonly" style="margin-top:8mm;font-size:9pt;color:#333;border-top:1px solid #888;padding-top:6px">
+    Produced with the Solvix Stair Rise &amp; Run Calculator. Figures derived from the input dimensions shown on this document.
+    All dimensions to be verified on site against the finished floor levels and against the building code adopted by the authority having jurisdiction before any material is ordered or cut.
+  </div>
+</main>
+
+<footer class="foot noprint">
+  Assumes a straight flight of uniform risers, total rise measured finished floor to finished floor, tread depth measured nosing to nosing (the going), and stringers cut from a single length.
+  Limits applied: riser 4&nbsp;in–7.75&nbsp;in, tread depth ≥&nbsp;10&nbsp;in, riser&nbsp;+&nbsp;tread 17–18&nbsp;in, 2&nbsp;×&nbsp;riser&nbsp;+&nbsp;tread 24–25&nbsp;in, headroom ≥&nbsp;6&nbsp;ft&nbsp;8&nbsp;in (2032&nbsp;mm) — the residential values in IRC R311.7 and the classic Blondel rule. Metric equivalents are converted from those inch values.
+  Everything is stored in this browser only; nothing is uploaded.
+</footer>
+
+<script>
+(function(){
+'use strict';
+var KEY='solvix.stair-calculator.v1', MM=25.4, EPS=1e-6;
+var LIM={riserMin:4,riserMax:7.75,treadMin:10,sumMin:17,sumMax:18,blMin:24,blMax:25,head:80};
+var state=null, uid=1, clearArm=0, clearTimer=null;
+
+function $(s){return document.querySelector(s);}
+function el(id){return document.getElementById(id);}
+function fin(x){return typeof x==='number'&&isFinite(x);}
+function num(v){ if(v===''||v==null) return NaN; var x=parseFloat(String(v).replace(/[\s,]/g,'')); return isFinite(x)?x:NaN; }
+function fmt(x,dp){ if(!fin(x)) return '—'; var v=+x.toFixed(dp); if(Object.is(v,-0)) v=0;
+  return v.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* ── units ─────────────────────────────────────────────────────── */
+function met(){ return state.units==='met'; }
+function ul(){ return met()?'mm':'in'; }
+function toDisp(mm){ if(!fin(mm)) return ''; var v=met()?mm:mm/MM; return String(+(v.toFixed(met()?2:4))); }
+function fromDisp(v){ var x=num(v); return fin(x)?(met()?x:x*MM):NaN; }
+function L(mm,dp){ if(!fin(mm)) return '—'; return met()? fmt(mm,dp==null?1:dp)+' mm' : fmt(mm/MM,dp==null?2:dp)+' in'; }
+function Lnum(mm){ if(!fin(mm)) return '—'; return met()? fmt(mm,1) : fmt(mm/MM,2); }
+function ftin(inch){
+  if(!fin(inch)) return '—';
+  var neg=inch<0, x=Math.abs(inch);
+  var s16=Math.round(x*16), whole=Math.floor(s16/16), f=s16%16;
+  var ft=Math.floor(whole/12), rem=whole%12, fs='';
+  if(f){ var n=f,d=16; while(n%2===0){n/=2;d/=2;} fs=' '+n+'/'+d; }
+  return (neg?'-':'')+(ft?ft+"' ":'')+rem+fs+'"';
+}
+function Llong(mm){
+  if(!fin(mm)) return '—';
+  if(met()) return mm>=1000 ? fmt(mm,0)+' mm ('+fmt(mm/1000,3)+' m)' : fmt(mm,1)+' mm';
+  return fmt(mm/MM,2)+' in ('+ftin(mm/MM)+')';
+}
+function lin(mm){ if(!fin(mm)) return '—'; return met()? fmt(mm/1000,2)+' m' : fmt(mm/MM/12,2)+' ft'; }
+function linQty(mm){ if(!fin(mm)) return NaN; return met()? mm/1000 : mm/MM/12; }
+function rateToDisp(perM){ if(!fin(perM)) return ''; return String(+((met()?perM:perM*0.3048).toFixed(2))); }
+function rateFromDisp(v){ var x=num(v); if(!fin(x)) return NaN; return met()? x : x/0.3048; }
+function sym(){ return state.job.cur==='custom' ? (state.job.curCustom||'') : state.job.cur; }
+function money(x){ if(!fin(x)) return '—'; return sym()+fmt(x,2); }
+
+/* ── state ─────────────────────────────────────────────────────── */
+function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function nid(){ return 'f'+(uid++); }
+
+function sampleState(units){
+  var i=function(v){return v*MM;};
+  var s={ v:1, units:units, sample:true, uid:1,
+    job:{ref:'',client:'',site:'',prepared:'',date:today(),notes:'',cur:'$',curCustom:''},
+    flights:[], activeId:null,
+    width:0,nosing:0,treadThk:0,headroom:0,floorThk:0,availRun:NaN,
+    stringerQty:3,stringerAllow:0, rates:{stringer:0,tread:0,riser:0} };
+  if(units==='met'){
+    s.job={ref:'J-2418 · Stair set',client:'Harlow & Vance Joinery',site:'12 Ashgrove Rise — hall to first floor',prepared:'Site foreman',date:today(),notes:'Rise measured finished floor to finished floor after screed. Confirm headroom at trimmer before cutting stringers.',cur:'£',curCustom:''};
+    s.flights=[{id:'f1',label:'Flight A — hall to landing',rise:2700,target:175,going:265},
+               {id:'f2',label:'Flight B — deck steps',rise:1050,target:175,going:280}];
+    s.width=900; s.nosing=25; s.treadThk=25; s.headroom=2100; s.floorThk=300; s.availRun=4200;
+    s.stringerAllow=150; s.rates={stringer:21.00,tread:14.00,riser:6.00};
+  }else{
+    s.job={ref:'J-2418 · Stair set',client:'Harlow & Vance Joinery',site:'12 Ashgrove Rise — hall to first floor',prepared:'Site foreman',date:today(),notes:'Rise measured finished floor to finished floor after underlayment. Confirm headroom at the trimmer before cutting stringers.',cur:'$',curCustom:''};
+    s.flights=[{id:'f1',label:'Flight A — hall to landing',rise:i(108),target:i(7),going:i(10.5)},
+               {id:'f2',label:'Flight B — deck steps',rise:i(42),target:i(7),going:i(11)}];
+    s.width=i(36); s.nosing=i(1); s.treadThk=i(1); s.headroom=i(84); s.floorThk=i(12); s.availRun=i(168);
+    s.stringerAllow=i(6); s.rates={stringer:6.50/0.3048,tread:4.25/0.3048,riser:1.80/0.3048};
+  }
+  s.activeId=s.flights[0].id; s.uid=3;
+  return s;
+}
+function blankState(units){
+  return { v:1, units:units||'imp', sample:false, uid:2,
+    job:{ref:'',client:'',site:'',prepared:'',date:today(),notes:'',cur:state?state.job.cur:'$',curCustom:state?state.job.curCustom:''},
+    flights:[{id:'f1',label:'Flight A',rise:NaN,target:units==='met'?175:7*MM,going:NaN}],
+    activeId:'f1',
+    width:NaN,nosing:NaN,treadThk:NaN,headroom:NaN,floorThk:NaN,availRun:NaN,
+    stringerQty:3,stringerAllow:NaN, rates:{stringer:NaN,tread:NaN,riser:NaN} };
+}
+
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state, function(k,v){ return (typeof v==='number'&&!isFinite(v))?null:v; })); }catch(e){} }
+function load(){
+  try{ var raw=localStorage.getItem(KEY); if(!raw) return null; var o=JSON.parse(raw); if(!o||!o.flights||!o.flights.length) return null;
+    return normalise(o);
+  }catch(e){ return null; }
+}
+function normalise(o){
+  var s=blankState(o.units==='met'?'met':'imp');
+  s.units=o.units==='met'?'met':'imp';
+  s.sample=!!o.sample;
+  ['ref','client','site','prepared','date','notes','cur','curCustom'].forEach(function(k){ if(o.job&&typeof o.job[k]==='string') s.job[k]=o.job[k]; });
+  ['width','nosing','treadThk','headroom','floorThk','availRun','stringerAllow'].forEach(function(k){ s[k]= (o[k]==null?NaN:+o[k]); if(!isFinite(s[k])) s[k]=NaN; });
+  s.stringerQty = (o.stringerQty==null||!isFinite(+o.stringerQty))?NaN:Math.max(0,Math.round(+o.stringerQty));
+  s.rates={stringer:NaN,tread:NaN,riser:NaN};
+  if(o.rates) ['stringer','tread','riser'].forEach(function(k){ var v=+o.rates[k]; s.rates[k]=isFinite(v)?v:NaN; });
+  s.flights=[]; var n=1;
+  (o.flights||[]).forEach(function(f){
+    var id='f'+(n++);
+    s.flights.push({id:id,label:String(f.label||('Flight '+n)),
+      rise:(f.rise==null||!isFinite(+f.rise))?NaN:+f.rise,
+      target:(f.target==null||!isFinite(+f.target))?NaN:+f.target,
+      going:(f.going==null||!isFinite(+f.going))?NaN:+f.going});
+  });
+  if(!s.flights.length) s.flights=[{id:'f1',label:'Flight A',rise:NaN,target:NaN,going:NaN}];
+  s.uid=n;
+  var found=s.flights.filter(function(f){return f.id===o.activeId;})[0];
+  s.activeId = found? found.id : s.flights[0].id;
+  return s;
+}
+
+/* ── maths ─────────────────────────────────────────────────────── */
+function calcFlight(f){
+  var c={risers:NaN,riser:NaN,treads:NaN,run:NaN,stringer:NaN,pitch:NaN,ok:null};
+  if(!fin(f.rise)||f.rise<=0||!fin(f.target)||f.target<=0) return c;
+  c.risers = Math.max(1, Math.round(f.rise/f.target));
+  c.riser  = f.rise/c.risers;
+  c.treads = c.risers-1;
+  if(fin(f.going)&&f.going>0){
+    c.run = c.treads*f.going;
+    c.stringer = Math.sqrt(f.rise*f.rise + c.run*c.run);
+    c.pitch = Math.atan2(f.rise, c.run)*180/Math.PI;
+  }
+  return c;
+}
+function checksFor(f,c){
+  var out=[];
+  function add(name,req,act,pass,ref){ out.push({name:name,req:req,act:act,pass:pass,ref:ref}); }
+  var r=fin(c.riser)?c.riser/MM:NaN, g=fin(f.going)?f.going/MM:NaN, h=fin(state.headroom)?state.headroom/MM:NaN;
+  add('Riser height', L(LIM.riserMin*MM)+' – '+L(LIM.riserMax*MM), L(c.riser),
+      fin(r)? (r>=LIM.riserMin-EPS && r<=LIM.riserMax+EPS) : null, 'IRC R311.7.5.1');
+  add('Tread depth (going)', 'min '+L(LIM.treadMin*MM), L(f.going),
+      fin(g)? (g>=LIM.treadMin-EPS) : null, 'IRC R311.7.5.2');
+  var sum=(fin(r)&&fin(g))?r+g:NaN;
+  add('Riser + tread', L(LIM.sumMin*MM)+' – '+L(LIM.sumMax*MM), L(fin(sum)?sum*MM:NaN),
+      fin(sum)? (sum>=LIM.sumMin-EPS && sum<=LIM.sumMax+EPS) : null, 'Rule of thumb R+T');
+  var bl=(fin(r)&&fin(g))?2*r+g:NaN;
+  add('2 × riser + tread', L(LIM.blMin*MM)+' – '+L(LIM.blMax*MM), L(fin(bl)?bl*MM:NaN),
+      fin(bl)? (bl>=LIM.blMin-EPS && bl<=LIM.blMax+EPS) : null, 'Blondel pace rule');
+  add('Headroom', 'min '+L(LIM.head*MM,met()?0:2)+(met()?'':' (6′ 8″)'), L(state.headroom),
+      fin(h)? (h>=LIM.head-EPS) : null, 'IRC R311.7.2');
+  if(fin(state.availRun)&&state.availRun>0){
+    add('Total run vs available run', 'max '+L(state.availRun), L(c.run),
+        fin(c.run)? (c.run<=state.availRun+EPS) : null, 'Site constraint');
+  }
+  return out;
+}
+function stock(mm){ if(!fin(mm)) return NaN; return met()? Math.ceil(mm/100)*100 : Math.ceil(mm/MM/12)*12*MM; }
+function openingLen(c){
+  if(!fin(c.riser)||c.riser<=0||!fin(state.floorThk)) return NaN;
+  var f=activeFlight(); if(!f||!fin(f.going)) return NaN;
+  var n=Math.ceil((LIM.head*MM + state.floorThk)/c.riser);
+  return n*f.going;
+}
+function activeFlight(){ var a=state.flights.filter(function(f){return f.id===state.activeId;})[0]; return a||state.flights[0]; }
+
+function model(){
+  var m={flights:[],tot:{risers:0,treads:0,run:0,str:0,rise:0,anyRun:false,anyStr:false},cut:[],mat:null};
+  state.flights.forEach(function(f){
+    var c=calcFlight(f); var ck=checksFor(f,c);
+    var done=ck.filter(function(x){return x.pass!==null;});
+    var pass=done.length? done.every(function(x){return x.pass;}) : null;
+    m.flights.push({f:f,c:c,ck:ck,pass:pass,passN:done.filter(function(x){return x.pass;}).length,totN:ck.length});
+    if(fin(c.risers)) m.tot.risers+=c.risers;
+    if(fin(c.treads)) m.tot.treads+=c.treads;
+    if(fin(c.run)){ m.tot.run+=c.run; m.tot.anyRun=true; }
+    if(fin(c.stringer)){ m.tot.str+=c.stringer; m.tot.anyStr=true; }
+    if(fin(f.rise)) m.tot.rise+=f.rise;
+  });
+  var q=fin(state.stringerQty)?state.stringerQty:NaN;
+  var sTot=0,tTot=0,rTot=0,anyS=false,anyT=false,anyR=false;
+  m.flights.forEach(function(x){
+    var f=x.f,c=x.c, name=f.label||'Flight';
+    var stk=fin(c.stringer)&&fin(state.stringerAllow)? stock(c.stringer+state.stringerAllow) : NaN;
+    m.cut.push({flight:name,item:'Stringer',qty:q,
+      size: fin(stk)? Llong(stk) : '—',
+      note: 'Cut diagonal '+Llong(c.stringer)+'; '+(fin(c.risers)?c.risers:'—')+' rise cuts @ '+L(c.riser)+' × '+L(f.going)+'. Drop bottom cut by tread thickness '+L(state.treadThk)+'.'});
+    if(fin(stk)&&fin(q)){ sTot+=stk*q; anyS=true; }
+    var boardW = (fin(f.going)&&fin(state.nosing))? f.going+state.nosing : NaN;
+    m.cut.push({flight:name,item:'Tread board',qty:fin(c.treads)?c.treads:NaN,
+      size: (fin(state.width)&&fin(boardW))? Llong(state.width)+' × '+L(boardW)+' wide' : '—',
+      note:'Tread depth '+L(f.going)+' + nosing '+L(state.nosing)+'. Material thickness '+L(state.treadThk)+'.'});
+    if(fin(c.treads)&&fin(state.width)){ tTot+=c.treads*state.width; anyT=true; }
+    m.cut.push({flight:name,item:'Riser board',qty:fin(c.risers)?c.risers:NaN,
+      size: (fin(state.width)&&fin(c.riser))? Llong(state.width)+' × '+L(c.riser)+' high' : '—',
+      note:'Height = actual riser. Top riser finishes flush with the upper floor.'});
+    if(fin(c.risers)&&fin(state.width)){ rTot+=c.risers*state.width; anyR=true; }
+  });
+  m.mat={s:anyS?sTot:NaN,t:anyT?tTot:NaN,r:anyR?rTot:NaN};
+  m.mat.cs = (fin(m.mat.s)&&fin(state.rates.stringer))? linQty(m.mat.s)*(met()?state.rates.stringer:state.rates.stringer*0.3048) : NaN;
+  m.mat.ct = (fin(m.mat.t)&&fin(state.rates.tread))? linQty(m.mat.t)*(met()?state.rates.tread:state.rates.tread*0.3048) : NaN;
+  m.mat.cr = (fin(m.mat.r)&&fin(state.rates.riser))? linQty(m.mat.r)*(met()?state.rates.riser:state.rates.riser*0.3048) : NaN;
+  var parts=[m.mat.cs,m.mat.ct,m.mat.cr].filter(fin);
+  m.mat.total = parts.length? parts.reduce(function(a,b){return a+b;},0) : NaN;
+  return m;
+}
+
+/* ── painting ──────────────────────────────────────────────────── */
+function paintInputs(){
+  el('uImp').setAttribute('aria-pressed', met()?'false':'true');
+  el('uMet').setAttribute('aria-pressed', met()?'true':'false');
+  Array.prototype.forEach.call(document.querySelectorAll('[data-u]'),function(s){ s.textContent='('+ul()+')'; });
+  el('hRise').textContent='Total rise ('+ul()+')';
+  el('hTarget').textContent='Target riser ('+ul()+')';
+  el('hGoing').textContent='Tread depth ('+ul()+')';
+  el('rateUnit').textContent='Rates per linear '+(met()?'m':'ft');
+  el('fRef').value=state.job.ref; el('fClient').value=state.job.client; el('fSite').value=state.job.site;
+  el('fBy').value=state.job.prepared; el('fDate').value=state.job.date; el('fNotes').value=state.job.notes;
+  el('fCur').value=state.job.cur; el('fCurCustom').value=state.job.curCustom;
+  el('curCustomWrap').hidden = state.job.cur!=='custom';
+  el('fWidth').value=toDisp(state.width); el('fNosing').value=toDisp(state.nosing);
+  el('fTreadThk').value=toDisp(state.treadThk); el('fHead').value=toDisp(state.headroom);
+  el('fFloor').value=toDisp(state.floorThk); el('fAvail').value=toDisp(state.availRun);
+  el('fAllow').value=toDisp(state.stringerAllow);
+  el('fSQty').value=fin(state.stringerQty)?String(state.stringerQty):'';
+  el('fRS').value=rateToDisp(state.rates.stringer);
+  el('fRT').value=rateToDisp(state.rates.tread);
+  el('fRR').value=rateToDisp(state.rates.riser);
+  el('sampleCard').hidden=!state.sample;
+}
+function renderRows(){
+  var tb=el('rows'), h='';
+  state.flights.forEach(function(f,i){
+    h+='<tr data-row="'+f.id+'">'+
+      '<td><input type="radio" name="activeFlight" value="'+f.id+'" '+(f.id===state.activeId?'checked':'')+' aria-label="Show detail for '+esc(f.label||('flight '+(i+1)))+'" style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td class="lab"><input type="text" class="pmir" data-k="label" data-id="'+f.id+'" value="'+esc(f.label)+'" aria-label="Flight name" autocomplete="off"><span class="pv printonly">'+esc(f.label)+'</span></td>'+
+      '<td><input type="number" step="any" min="0" inputmode="decimal" data-k="rise" data-id="'+f.id+'" value="'+toDisp(f.rise)+'" aria-label="Total rise"></td>'+
+      '<td><input type="number" step="any" min="0" inputmode="decimal" data-k="target" data-id="'+f.id+'" value="'+toDisp(f.target)+'" aria-label="Target riser"></td>'+
+      '<td><input type="number" step="any" min="0" inputmode="decimal" data-k="going" data-id="'+f.id+'" value="'+toDisp(f.going)+'" aria-label="Tread depth"></td>'+
+      '<td class="n" data-o="risers">—</td><td class="n" data-o="riser">—</td><td class="n" data-o="treads">—</td>'+
+      '<td class="n" data-o="run">—</td><td class="n" data-o="str">—</td><td class="n" data-o="pitch">—</td>'+
+      '<td data-o="code">—</td>'+
+      '<td><button type="button" class="btn sm ico del noprint" data-del="'+f.id+'" aria-label="Remove '+esc(f.label||'flight')+'"'+(state.flights.length<2?' disabled':'')+'>✕</button></td></tr>';
+  });
+  tb.innerHTML=h;
+}
+function chip(pass){ return pass===null? '<span class="chip">—</span>' : (pass? '<span class="chip ok">Pass</span>':'<span class="chip bad">Fail</span>'); }
+
+function paintOut(){
+  var m=model();
+  // rows
+  m.flights.forEach(function(x){
+    var tr=document.querySelector('tr[data-row="'+x.f.id+'"]'); if(!tr) return;
+    function set(k,v){ var c=tr.querySelector('[data-o="'+k+'"]'); if(c) c.innerHTML=v; }
+    set('risers', fin(x.c.risers)?x.c.risers:'—');
+    set('riser', Lnum(x.c.riser));
+    set('treads', fin(x.c.treads)?x.c.treads:'—');
+    set('run', Lnum(x.c.run));
+    set('str', Lnum(x.c.stringer));
+    set('pitch', fin(x.c.pitch)? fmt(x.c.pitch,1)+'°':'—');
+    set('code', chip(x.pass));
+  });
+  el('tRisers').textContent = m.tot.risers||'—';
+  el('tTreads').textContent = m.tot.treads||'—';
+  el('tRun').textContent = m.tot.anyRun? Lnum(m.tot.run):'—';
+  el('tStr').textContent = m.tot.anyStr? Lnum(m.tot.str):'—';
+  el('ftTotals').textContent = (m.tot.risers? m.tot.risers+' risers · '+m.tot.treads+' treads · rise '+L(m.tot.rise) : 'No figures yet')+
+    (m.tot.anyRun? ' · run '+L(m.tot.run):'')+(m.tot.anyStr? ' · stringer line '+L(m.tot.str):'');
+
+  var a=m.flights.filter(function(x){return x.f.id===state.activeId;})[0] || m.flights[0];
+  var f=a.f, c=a.c;
+  el('rName').textContent=f.label||'Flight';
+  el('ckName').textContent=f.label||'Flight';
+  el('dwgName').textContent=f.label||'Flight';
+  el('hHero').textContent = fin(c.riser)? Lnum(c.riser)+' '+ul() : '—';
+  el('hHeroSub').textContent = fin(c.riser)
+    ? (c.risers+' risers @ '+L(c.riser)+(met()?'':' ('+ftin(c.riser/MM)+')')+' · '+c.treads+' treads @ '+L(f.going))
+    : 'Enter a total rise and target riser.';
+  el('sRisers').textContent = fin(c.risers)?c.risers:'—';
+  el('sTreads').textContent = fin(c.treads)?c.treads:'—';
+  el('sRun').textContent = fin(c.run)? Lnum(c.run)+' '+ul():'—';
+  el('sStr').textContent = fin(c.stringer)? Lnum(c.stringer)+' '+ul():'—';
+  el('sPitch').textContent = fin(c.pitch)? fmt(c.pitch,1)+'°':'—';
+  var op=openingLen(c);
+  el('sOpen').textContent = fin(op)? Lnum(op)+' '+ul():'—';
+
+  var v=el('rVerdict'), cv=el('ckVerdict');
+  var txt = a.pass===null?'—':(a.pass?'All checks pass':'Check failed');
+  var cls = a.pass===null?'chip':(a.pass?'chip ok':'chip bad');
+  v.className=cls; v.textContent=txt; cv.className=cls; cv.textContent=txt;
+  var done=a.ck.filter(function(x){return x.pass!==null;}).length;
+  el('rCount').textContent = done? (a.passN+' of '+done+' checks pass') : 'Awaiting figures';
+
+  // check table + mini list
+  var ch='', mini='';
+  a.ck.forEach(function(k){
+    ch+='<tr><th scope="row" style="font:inherit;text-transform:none;letter-spacing:0;background:none;color:var(--ink);border-bottom:1px solid var(--line);padding:8px 10px">'+esc(k.name)+'</th>'+
+        '<td>'+esc(k.req)+'</td><td class="n">'+esc(k.act)+'</td><td>'+chip(k.pass)+'</td><td class="hint">'+esc(k.ref)+'</td></tr>';
+    mini+='<div class="ck"><span class="cn">'+esc(k.name)+'</span><span class="cv">'+esc(k.act)+'</span>'+chip(k.pass)+'</div>';
+  });
+  el('ckRows').innerHTML=ch; el('miniChecks').innerHTML=mini;
+  el('ckFoot').textContent='Pitch '+(fin(c.pitch)?fmt(c.pitch,1)+'°':'—')+
+    (fin(c.pitch)?(c.pitch>37?' — steeper than the 30–37° comfortable range.':(c.pitch<30?' — shallower than the 30–37° comfortable range.':' — within the 30–37° comfortable range.')):'')+
+    ' Minimum stairwell opening guide: '+(fin(op)?Llong(op):'—')+
+    ' (headroom '+L(LIM.head*MM,met()?0:2)+' + floor '+L(state.floorThk)+' ÷ riser, rounded up × tread depth).';
+
+  el('mbRiser').textContent = fin(c.riser)? Lnum(c.riser)+' '+ul():'—';
+  el('mbMeta').textContent = fin(c.risers)? (c.risers+' × riser · run '+Lnum(c.run)+' '+ul()) : 'Enter a total rise';
+  el('mbChip').className = cls; el('mbChip').textContent = a.pass===null?'—':(a.pass?'Pass':'Fail');
+
+  // cut list
+  var cut='';
+  m.cut.forEach(function(r){
+    cut+='<tr><td>'+esc(r.flight)+'</td><td>'+esc(r.item)+'</td><td class="n">'+(fin(r.qty)?r.qty:'—')+'</td><td>'+esc(r.size)+'</td><td class="hint">'+esc(r.note)+'</td></tr>';
+  });
+  el('cutRows').innerHTML = cut || '<tr><td colspan="5" class="empty">Add a flight to build a cut list.</td></tr>';
+  el('cutFoot').textContent='Stringer stock = diagonal + allowance '+L(state.stringerAllow)+', rounded up to the next '+(met()?'100 mm':'foot')+'. Quantities are per flight; totals '+
+    (fin(m.mat.s)?lin(m.mat.s)+' of stringer stock':'—')+'.';
+
+  // materials
+  var mr='';
+  function mrow(label,qmm,rate,cost){
+    mr+='<tr><td>'+label+'</td><td class="n">'+(fin(qmm)?lin(qmm):'—')+'</td><td class="n">'+(fin(rate)?money(met()?rate:rate*0.3048)+'/'+(met()?'m':'ft'):'—')+'</td><td class="n">'+money(cost)+'</td></tr>';
+  }
+  mrow('Stringer stock',m.mat.s,state.rates.stringer,m.mat.cs);
+  mrow('Tread stock',m.mat.t,state.rates.tread,m.mat.ct);
+  mrow('Riser stock',m.mat.r,state.rates.riser,m.mat.cr);
+  el('matRows').innerHTML=mr;
+  el('matTotal').textContent=money(m.mat.total);
+
+  // print blocks
+  el('pRef').textContent=state.job.ref||'—'; el('pClient').textContent=state.job.client||'—';
+  el('pSite').textContent=state.job.site||'—'; el('pBy').textContent=state.job.prepared||'—';
+  el('pDate').textContent=state.job.date||'—';
+  el('pUnits').textContent= met()?'Metric (mm)':'Imperial (inches)';
+  el('printSummary').innerHTML =
+    '<div class="psum"><table><tbody>'+
+    '<tr><td><b>Detailed flight</b></td><td>'+esc(f.label||'Flight')+'</td>'+
+        '<td><b>Total rise</b></td><td>'+Llong(f.rise)+'</td>'+
+        '<td><b>Risers</b></td><td>'+(fin(c.risers)?c.risers:'—')+'</td></tr>'+
+    '<tr><td><b>Riser height</b></td><td>'+Llong(c.riser)+'</td>'+
+        '<td><b>Tread depth</b></td><td>'+Llong(f.going)+'</td>'+
+        '<td><b>Treads</b></td><td>'+(fin(c.treads)?c.treads:'—')+'</td></tr>'+
+    '<tr><td><b>Total run</b></td><td>'+Llong(c.run)+'</td>'+
+        '<td><b>Stringer length</b></td><td>'+Llong(c.stringer)+'</td>'+
+        '<td><b>Pitch</b></td><td>'+(fin(c.pitch)?fmt(c.pitch,1)+'°':'—')+'</td></tr>'+
+    '<tr><td><b>Code check</b></td><td colspan="5">'+esc(txt)+' — '+esc(a.passN+' of '+done+' applicable checks')+'</td></tr>'+
+    '</tbody></table></div>';
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pv]'),function(sp){
+    var src=el(sp.getAttribute('data-pv')); sp.textContent = src? (src.value||'—') : '—';
+  });
+  state.flights.forEach(function(fl){
+    var tr=document.querySelector('tr[data-row="'+fl.id+'"]'); if(!tr) return;
+    var sp=tr.querySelector('.pv'); if(sp) sp.textContent=fl.label||'—';
+  });
+  drawSVG(f,c);
+  return m;
+}
+
+/* ── drawing ───────────────────────────────────────────────────── */
+function p(x){ return Math.round(x*100)/100; }
+function drawSVG(f,c){
+  var box=el('dwg');
+  if(!fin(f.rise)||f.rise<=0||!fin(c.riser)||!fin(f.going)||f.going<=0||!fin(c.risers)){
+    box.innerHTML='<div class="empty">Enter a total rise, target riser and tread depth to see the stair drawn to scale.</div>';
+    el('dwgScale').textContent='Drawn to scale';
+    return;
+  }
+  var rise=f.rise, run=fin(c.run)?c.run:0, N=c.risers, r=c.riser, g=f.going;
+  var wSpan=Math.max(run,g), hSpan=Math.max(rise,1);
+  var s=Math.min(880/wSpan, 470/hSpan);
+  var padL=140, padR=110, padT=60, padB=132;
+  var W=padL+wSpan*s+padR, H=padT+hSpan*s+padB;
+  var x0=padL, yB=padT+hSpan*s;
+  var xT=x0+run*s, yT=yB-rise*s;
+  var o=[];
+  o.push('<defs><marker id="svAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--ink-2)"/></marker></defs>');
+  // floors
+  var ft=Math.max(14, (fin(state.floorThk)?state.floorThk:0)*s);
+  o.push('<rect x="'+p(x0-105)+'" y="'+p(yB)+'" width="'+p(105+18)+'" height="16" fill="var(--line-hard)"/>');
+  o.push('<rect x="'+p(xT-18)+'" y="'+p(yT)+'" width="'+p(105+18)+'" height="'+p(ft)+'" fill="var(--line-hard)"/>');
+  o.push('<text x="'+p(x0-100)+'" y="'+p(yB+34)+'" font-size="19" fill="var(--muted)">Lower floor</text>');
+  o.push('<text x="'+p(xT+92)+'" y="'+p(yT-12)+'" font-size="19" fill="var(--muted)" text-anchor="end">Upper floor</text>');
+  // profile
+  var d='M '+p(x0)+' '+p(yB), x=x0, y=yB;
+  for(var i=0;i<N;i++){ y-=r*s; d+=' L '+p(x)+' '+p(y); if(i<N-1){ x+=g*s; d+=' L '+p(x)+' '+p(y); } }
+  o.push('<path d="'+d+'" fill="none" stroke="var(--ink)" stroke-width="3.2" stroke-linejoin="round"/>');
+  // stringer
+  o.push('<line x1="'+p(x0)+'" y1="'+p(yB)+'" x2="'+p(xT)+'" y2="'+p(yT)+'" stroke="var(--accent)" stroke-width="2.6" stroke-dasharray="10 7"/>');
+  var ang=fin(c.pitch)?-c.pitch:0, tt=0.74;
+  var mx=x0+(xT-x0)*tt, my=yB+(yT-yB)*tt;
+  var nl=Math.hypot(xT-x0,yT-yB)||1, nx=-(yT-yB)/nl, ny=(xT-x0)/nl; // perpendicular, points up-left
+  var lx=mx-nx*30, ly=my-ny*30;
+  o.push('<text x="'+p(lx)+'" y="'+p(ly)+'" font-size="21" fill="var(--accent-ink)" text-anchor="middle" transform="rotate('+p(ang)+' '+p(lx)+' '+p(ly)+')">Stringer '+esc(Lnum(c.stringer))+' '+ul()+'</text>');
+  // total rise dim
+  var dx=x0-62;
+  o.push('<line x1="'+p(dx)+'" y1="'+p(yB)+'" x2="'+p(dx)+'" y2="'+p(yT)+'" stroke="var(--ink-2)" stroke-width="1.6" marker-start="url(#svAr)" marker-end="url(#svAr)"/>');
+  o.push('<line x1="'+p(dx-8)+'" y1="'+p(yB)+'" x2="'+p(x0)+'" y2="'+p(yB)+'" stroke="var(--line-hard)" stroke-width="1"/>');
+  o.push('<line x1="'+p(dx-8)+'" y1="'+p(yT)+'" x2="'+p(xT)+'" y2="'+p(yT)+'" stroke="var(--line-hard)" stroke-width="1" stroke-dasharray="4 4"/>');
+  o.push('<text x="'+p(dx-12)+'" y="'+p((yB+yT)/2)+'" font-size="22" fill="var(--ink)" text-anchor="middle" transform="rotate(-90 '+p(dx-12)+' '+p((yB+yT)/2)+')">Total rise '+esc(Lnum(rise))+' '+ul()+'</text>');
+  // total run dim
+  var dy=yB+66;
+  o.push('<line x1="'+p(x0)+'" y1="'+p(dy)+'" x2="'+p(xT)+'" y2="'+p(dy)+'" stroke="var(--ink-2)" stroke-width="1.6" marker-start="url(#svAr)" marker-end="url(#svAr)"/>');
+  o.push('<line x1="'+p(x0)+'" y1="'+p(yB+16)+'" x2="'+p(x0)+'" y2="'+p(dy+8)+'" stroke="var(--line-hard)" stroke-width="1"/>');
+  o.push('<line x1="'+p(xT)+'" y1="'+p(yT)+'" x2="'+p(xT)+'" y2="'+p(dy+8)+'" stroke="var(--line-hard)" stroke-width="1" stroke-dasharray="4 4"/>');
+  o.push('<text x="'+p((x0+xT)/2)+'" y="'+p(dy+26)+'" font-size="22" fill="var(--ink)" text-anchor="middle">Total run '+esc(Lnum(run))+' '+ul()+'</text>');
+  // step callout
+  if(N>1){
+    var k=Math.min(N-2, Math.max(0, Math.round((N-1)*0.28)));
+    var xa=x0+k*g*s, ya=yB-(k+1)*r*s;
+    o.push('<line x1="'+p(xa)+'" y1="'+p(ya-30)+'" x2="'+p(xa+g*s)+'" y2="'+p(ya-30)+'" stroke="var(--accent-ink)" stroke-width="1.6" marker-start="url(#svAr)" marker-end="url(#svAr)"/>');
+    o.push('<text x="'+p(xa+g*s/2)+'" y="'+p(ya-38)+'" font-size="20" fill="var(--accent-ink)" text-anchor="middle">tread '+esc(Lnum(g))+'</text>');
+    o.push('<line x1="'+p(xa-26)+'" y1="'+p(ya+r*s)+'" x2="'+p(xa-26)+'" y2="'+p(ya)+'" stroke="var(--accent-ink)" stroke-width="1.6" marker-start="url(#svAr)" marker-end="url(#svAr)"/>');
+    o.push('<line x1="'+p(xa-26)+'" y1="'+p(ya)+'" x2="'+p(xa)+'" y2="'+p(ya)+'" stroke="var(--accent-ink)" stroke-width="1"/>');
+    o.push('<text x="'+p(xa-34)+'" y="'+p(ya+r*s/2+7)+'" font-size="20" fill="var(--accent-ink)" text-anchor="end">riser '+esc(Lnum(r))+'</text>');
+  }
+  // pitch angle
+  if(fin(c.pitch)&&run>0){
+    var R=Math.min(120, run*s*0.5), a=c.pitch*Math.PI/180;
+    o.push('<path d="M '+p(x0+R)+' '+p(yB)+' A '+p(R)+' '+p(R)+' 0 0 0 '+p(x0+R*Math.cos(a))+' '+p(yB-R*Math.sin(a))+'" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/>');
+    o.push('<text x="'+p(x0+R+16)+'" y="'+p(yB-14)+'" font-size="20" fill="var(--ink-2)">'+fmt(c.pitch,1)+'°</text>');
+  }
+  // scale bar
+  var unitMM = met()?500:304.8, barW=unitMM*s, bx=x0-105, by=H-30;
+  o.push('<line x1="'+p(bx)+'" y1="'+p(by)+'" x2="'+p(bx+barW)+'" y2="'+p(by)+'" stroke="var(--ink-2)" stroke-width="3"/>');
+  o.push('<line x1="'+p(bx)+'" y1="'+p(by-8)+'" x2="'+p(bx)+'" y2="'+p(by+8)+'" stroke="var(--ink-2)" stroke-width="2"/>');
+  o.push('<line x1="'+p(bx+barW)+'" y1="'+p(by-8)+'" x2="'+p(bx+barW)+'" y2="'+p(by+8)+'" stroke="var(--ink-2)" stroke-width="2"/>');
+  o.push('<text x="'+p(bx)+'" y="'+p(by-14)+'" font-size="19" fill="var(--muted)">'+(met()?'500 mm':'1 ft')+' scale</text>');
+  box.innerHTML='<svg class="dwg" viewBox="0 0 '+p(W)+' '+p(H)+'" role="img" aria-label="Scale side elevation of '+esc(f.label||'the flight')+': '+esc(N+' risers at '+L(c.riser)+', '+(N-1)+' treads at '+L(g)+', total rise '+L(rise)+', total run '+L(run))+'">'+o.join('')+'</svg>';
+  el('dwgScale').textContent='Drawn to scale · '+(met()?'500 mm':'1 ft')+' bar shown';
+}
+
+/* ── validation ────────────────────────────────────────────────── */
+var FIELDS={width:['eWidth','Stair width'],nosing:['eNosing','Nosing'],treadThk:['eTreadThk','Tread thickness'],
+  headroom:['eHead','Headroom'],floorThk:['eFloor','Floor thickness'],availRun:['eAvail','Available run'],
+  stringerAllow:['eAllow','Cut allowance']};
+function validateAll(){
+  Object.keys(FIELDS).forEach(function(k){
+    var input=document.querySelector('[data-k="'+k+'"]'), e=el(FIELDS[k][0]); if(!input||!e) return;
+    var v=state[k], msg='';
+    if(input.value.trim()!=='' && !fin(v)) msg='Enter a number.';
+    else if(fin(v)&&v<0) msg='Cannot be negative.';
+    else if(k!=='availRun' && k!=='nosing' && input.value.trim()==='') msg='';
+    e.textContent=msg; input.classList.toggle('inv', !!msg);
+  });
+  var q=el('fSQty'), eq=el('eSQty');
+  var msg = q.value.trim()!=='' && (!fin(state.stringerQty)||state.stringerQty<1) ? 'Must be 1 or more.' : '';
+  eq.textContent=msg; q.classList.toggle('inv', !!msg);
+  Array.prototype.forEach.call(document.querySelectorAll('#rows input[type=number]'),function(inp){
+    var bad = inp.value.trim()!=='' && !(num(inp.value)>0);
+    inp.classList.toggle('inv',bad);
+    inp.setAttribute('title', bad?'Enter a positive number':'');
+  });
+}
+
+/* ── export ────────────────────────────────────────────────────── */
+function csvCell(v){ v=(v==null?'':String(v)); return /[",\n\r]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function csvRow(a){ return a.map(csvCell).join(','); }
+function dl(name, mime, text){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b), a=document.createElement('a');
+    a.href=u; a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); },400);
+  }catch(e){}
+}
+function slug(){ return (state.job.ref||'stair').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase()||'stair'; }
+function u(x){ return fin(x)? +( (met()?x:x/MM).toFixed(3) ) : ''; }
+function buildCSV(){
+  var m=model(), L2=[];
+  L2.push(csvRow(['Solvix Stair Rise & Run Calculator']));
+  L2.push(csvRow(['Job reference',state.job.ref]));
+  L2.push(csvRow(['Client',state.job.client]));
+  L2.push(csvRow(['Site / location',state.job.site]));
+  L2.push(csvRow(['Prepared by',state.job.prepared]));
+  L2.push(csvRow(['Date',state.job.date]));
+  L2.push(csvRow(['Units',met()?'Metric — all lengths in millimetres (mm)':'Imperial — all lengths in inches (in)']));
+  L2.push(csvRow(['Currency',sym()]));
+  L2.push('');
+  L2.push(csvRow(['FLIGHTS']));
+  L2.push(csvRow(['Flight','Total rise','Target riser','Tread depth','Risers','Actual riser','Treads','Total run','Stringer length','Pitch (deg)','Code check']));
+  m.flights.forEach(function(x){
+    L2.push(csvRow([x.f.label,u(x.f.rise),u(x.f.target),u(x.f.going),fin(x.c.risers)?x.c.risers:'',u(x.c.riser),
+      fin(x.c.treads)?x.c.treads:'',u(x.c.run),u(x.c.stringer),fin(x.c.pitch)?+x.c.pitch.toFixed(2):'',
+      x.pass===null?'':(x.pass?'PASS':'FAIL')]));
+  });
+  L2.push(csvRow(['Job totals','','','',m.tot.risers||'','',m.tot.treads||'',m.tot.anyRun?u(m.tot.run):'',m.tot.anyStr?u(m.tot.str):'','','']));
+  L2.push('');
+  var a=m.flights.filter(function(x){return x.f.id===state.activeId;})[0]||m.flights[0];
+  L2.push(csvRow(['CODE CHECK — '+(a.f.label||'Flight')]));
+  L2.push(csvRow(['Check','Requirement','Actual','Result','Reference']));
+  a.ck.forEach(function(k){ L2.push(csvRow([k.name,k.req,k.act,k.pass===null?'n/a':(k.pass?'PASS':'FAIL'),k.ref])); });
+  L2.push('');
+  L2.push(csvRow(['BUILD SETTINGS']));
+  L2.push(csvRow(['Stair width',u(state.width)]));
+  L2.push(csvRow(['Nosing overhang',u(state.nosing)]));
+  L2.push(csvRow(['Tread thickness',u(state.treadThk)]));
+  L2.push(csvRow(['Headroom available',u(state.headroom)]));
+  L2.push(csvRow(['Floor assembly thickness',u(state.floorThk)]));
+  L2.push(csvRow(['Available run',u(state.availRun)]));
+  L2.push(csvRow(['Stringers per flight',fin(state.stringerQty)?state.stringerQty:'']));
+  L2.push(csvRow(['Stringer cut allowance',u(state.stringerAllow)]));
+  L2.push('');
+  L2.push(csvRow(['CUT LIST']));
+  L2.push(csvRow(['Flight','Item','Qty','Size each','Notes']));
+  m.cut.forEach(function(r){ L2.push(csvRow([r.flight,r.item,fin(r.qty)?r.qty:'',r.size,r.note])); });
+  L2.push('');
+  L2.push(csvRow(['MATERIAL ESTIMATE ('+(met()?'linear metres':'linear feet')+')']));
+  L2.push(csvRow(['Item','Linear qty','Rate','Amount']));
+  function mrow(n,q,rate,cost){ L2.push(csvRow([n, fin(q)?+linQty(q).toFixed(2):'', fin(rate)?+(met()?rate:rate*0.3048).toFixed(2):'', fin(cost)?+cost.toFixed(2):''])); }
+  mrow('Stringer stock',m.mat.s,state.rates.stringer,m.mat.cs);
+  mrow('Tread stock',m.mat.t,state.rates.tread,m.mat.ct);
+  mrow('Riser stock',m.mat.r,state.rates.riser,m.mat.cr);
+  L2.push(csvRow(['Material subtotal','','',fin(m.mat.total)?+m.mat.total.toFixed(2):'']));
+  L2.push('');
+  L2.push(csvRow(['Notes',state.job.notes]));
+  L2.push(csvRow(['Disclaimer','This tool applies widely adopted residential stair limits (riser 4-7.75 in, tread depth min 10 in, riser+tread 17-18 in, 2 x riser + tread 24-25 in, headroom min 6 ft 8 in) to the figures entered. It does not know your jurisdiction, amendments, occupancy, guard or handrail rules, landing sizes or structural sizing, and is not a substitute for a plans examiner, building control officer, architect or structural engineer. Verify every figure before ordering or cutting.']));
+  return L2.join('\r\n');
+}
+
+/* ── events ────────────────────────────────────────────────────── */
+function markEdited(){ if(state.sample){ state.sample=false; el('sampleCard').hidden=true; } }
+
+function onInput(e){
+  var t=e.target; if(!t.dataset||!t.dataset.k) return;
+  var k=t.dataset.k, id=t.dataset.id;
+  markEdited();
+  if(id){
+    var f=state.flights.filter(function(x){return x.id===id;})[0]; if(!f) return;
+    if(k==='label'){ f.label=t.value; renderLabels(); } else f[k]=fromDisp(t.value);
+  } else if(k.indexOf('rate.')===0){
+    state.rates[k.slice(5)]=rateFromDisp(t.value);
+  } else if(['ref','client','site','prepared','date','notes','curCustom'].indexOf(k)>=0){
+    state.job[k]=t.value;
+  } else if(k==='stringerQty'){
+    var q=num(t.value); state.stringerQty = fin(q)? Math.max(0,Math.round(q)) : NaN;
+  } else {
+    state[k]=fromDisp(t.value);
+  }
+  validateAll(); save(); paintOut();
+}
+function renderLabels(){
+  state.flights.forEach(function(f){
+    var tr=document.querySelector('tr[data-row="'+f.id+'"]'); if(!tr) return;
+    var b=tr.querySelector('[data-del]'); if(b) b.setAttribute('aria-label','Remove '+(f.label||'flight'));
+  });
+}
+function setUnits(next){
+  if(state.units===next) return;
+  state.units=next; paintInputs(); renderRows(); validateAll(); save(); paintOut();
+}
+function armClear(){
+  var b=el('bClear');
+  if(clearArm){ clearArm=0; clearTimeout(clearTimer); b.textContent='Clear all data'; b.classList.remove('pri');
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    state=blankState(state.units); uid=2; paintInputs(); renderRows(); validateAll(); save(); paintOut(); return; }
+  clearArm=1; b.textContent='Click again to erase'; b.classList.add('pri');
+  clearTimer=setTimeout(function(){ clearArm=0; b.textContent='Clear all data'; b.classList.remove('pri'); },5000);
+}
+
+function boot(){
+  var saved=load();
+  state = saved || sampleState('imp');
+  uid = (state.uid||state.flights.length+1);
+  paintInputs(); renderRows(); validateAll(); paintOut(); save();
+
+  document.addEventListener('input', onInput);
+  document.addEventListener('blur', function(e){ if(e.target&&e.target.dataset&&e.target.dataset.k) validateAll(); }, true);
+
+  document.addEventListener('change', function(e){
+    var t=e.target;
+    if(t.name==='activeFlight'){ state.activeId=t.value; save(); paintOut(); }
+    if(t.id==='fCur'){ markEdited(); state.job.cur=t.value; el('curCustomWrap').hidden = t.value!=='custom'; save(); paintOut(); }
+  });
+  document.addEventListener('click', function(e){
+    var t=e.target.closest? e.target.closest('[data-del]') : null;
+    if(t){ var id=t.getAttribute('data-del');
+      if(state.flights.length<2) return;
+      state.flights=state.flights.filter(function(f){return f.id!==id;});
+      if(state.activeId===id) state.activeId=state.flights[0].id;
+      markEdited(); renderRows(); validateAll(); save(); paintOut(); }
+  });
+
+  el('bAdd').addEventListener('click', function(){
+    var last=state.flights[state.flights.length-1]||{};
+    var id='f'+(uid++);
+    state.flights.push({id:id,label:'Flight '+String.fromCharCode(65+state.flights.length),
+      rise:NaN, target:fin(last.target)?last.target:(met()?175:7*MM), going:fin(last.going)?last.going:NaN});
+    state.uid=uid; markEdited(); renderRows(); validateAll(); save(); paintOut();
+    var inp=document.querySelector('tr[data-row="'+id+'"] [data-k="rise"]'); if(inp) inp.focus();
+  });
+  el('uImp').addEventListener('click', function(){ setUnits('imp'); });
+  el('uMet').addEventListener('click', function(){ setUnits('met'); });
+  el('bSample').addEventListener('click', function(){ state=sampleState(state.units); uid=state.uid; paintInputs(); renderRows(); validateAll(); save(); paintOut(); });
+  el('bClearSample').addEventListener('click', function(){ state=blankState(state.units); uid=2; paintInputs(); renderRows(); validateAll(); save(); paintOut(); });
+  el('bPrint').addEventListener('click', function(){ window.print(); });
+  el('bCsv').addEventListener('click', function(){ dl(slug()+'-stairs.csv','text/csv;charset=utf-8','﻿'+buildCSV()); });
+  el('bJson').addEventListener('click', function(){
+    dl(slug()+'-stairs.json','application/json',JSON.stringify({tool:'solvix.stair-calculator',v:1,saved:new Date().toISOString(),state:JSON.parse(JSON.stringify(state,function(k,v){return (typeof v==='number'&&!isFinite(v))?null:v;}))},null,2));
+  });
+  el('bImport').addEventListener('click', function(){ el('fileIn').click(); });
+  el('fileIn').addEventListener('change', function(e){
+    var file=e.target.files&&e.target.files[0]; if(!file) return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{
+        var o=JSON.parse(String(fr.result)); var src=o&&o.state?o.state:o;
+        var ns=normalise(src); state=ns; uid=state.uid||2;
+        paintInputs(); renderRows(); validateAll(); save(); paintOut();
+        el('bImport').textContent='Imported'; setTimeout(function(){ el('bImport').textContent='Import'; },2000);
+      }catch(err){
+        el('bImport').textContent='Bad file'; el('bImport').classList.add('dgr');
+        setTimeout(function(){ el('bImport').textContent='Import'; el('bImport').classList.remove('dgr'); },2500);
+      }
+      el('fileIn').value='';
+    };
+    fr.readAsText(file);
+  });
+  el('bClear').addEventListener('click', armClear);
+
+  window.stairModel=model; // exposed for QA scripts
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();
+</script>
+</body>
+</html>

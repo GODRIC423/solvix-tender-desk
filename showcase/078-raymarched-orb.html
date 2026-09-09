@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orb — a raymarched thin-film sphere</title>
+<meta name="description" content="A fullscreen raymarched orb rendered in a raw WebGL fragment shader: a signed distance field, sphere tracing, and thin-film iridescence. Move the mouse to move the light.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='38%25' cy='35%25' r='65%25'%3E%3Cstop offset='0' stop-color='%23f4f1ff'/%3E%3Cstop offset='.35' stop-color='%23d9a6ff'/%3E%3Cstop offset='.7' stop-color='%2333d1c0'/%3E%3Cstop offset='1' stop-color='%23000'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' fill='%23000'/%3E%3Ccircle cx='32' cy='32' r='24' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000;
+    --ink: #f3f1f6;
+    --ink-soft: rgba(243, 241, 246, .62);
+    --ink-faint: rgba(243, 241, 246, .34);
+    --film-a: #d9a6ff;
+    --film-b: #33d1c0;
+    --film-c: #ffb36b;
+    --film-d: #7fa6ff;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color-scheme: dark; scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Syne', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::selection { background: rgba(217, 166, 255, .35); color: #fff; }
+
+  /* ---------- fixed shader stage ---------- */
+  .stage {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .stage canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  .stage.is-fallback canvas { display: none; }
+  .fallback-orb {
+    display: none;
+    position: absolute;
+    left: 50%; top: 50%;
+    width: min(62vmin, 560px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 36% 32%, rgba(255,255,255,.9) 0, rgba(255,255,255,.15) 9%, transparent 14%),
+      radial-gradient(circle at 40% 38%, #f6f0ff 0, #d9a6ff 22%, #7fa6ff 40%, #33d1c0 58%, #ffb36b 74%, #14060c 92%, #000 100%);
+    box-shadow: 0 0 120px rgba(217,166,255,.25), 0 0 260px rgba(51,209,192,.15);
+  }
+  .stage.is-fallback .fallback-orb { display: block; }
+
+  /* the hero occupies exactly one screen so the caption sits at the bottom-left */
+  .hero {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: clamp(20px, 3vw, 40px) clamp(20px, 4vw, 56px);
+    pointer-events: none;
+  }
+  .hero > * { pointer-events: auto; }
+
+  .marks {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .marks span { display: inline-flex; gap: .8em; }
+
+  .caption {
+    align-self: end;
+    max-width: 34ch;
+    display: grid;
+    gap: 14px;
+  }
+  .caption h1 {
+    margin: 0;
+    font-size: clamp(44px, 6.4vw, 96px);
+    line-height: .88;
+    letter-spacing: -.035em;
+    font-weight: 800;
+    color: var(--ink);
+    text-shadow: 0 0 60px rgba(0,0,0,.6);
+  }
+  .caption p {
+    margin: 0;
+    font-size: clamp(13px, 1.05vw, 15px);
+    line-height: 1.55;
+    color: var(--ink-soft);
+    font-weight: 500;
+    text-wrap: pretty;
+  }
+  .caption p b { color: var(--ink); font-weight: 600; }
+  .caption .hint {
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .caption .hint::before {
+    content: "";
+    width: 28px; height: 1px;
+    background: linear-gradient(90deg, var(--film-a), var(--film-b));
+  }
+  .hint-key { display: none; }
+  @media (hover: hover) and (pointer: fine) { .hint-key { display: inline; } .hint-touch { display: none; } }
+
+  /* ---------- essay ---------- */
+  .essay {
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0, #000 min(220px, 18vh)), #000;
+    padding: clamp(120px, 16vh, 200px) clamp(20px, 4vw, 56px) clamp(80px, 10vh, 140px);
+  }
+  .essay-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(56px, 8vw, 120px);
+  }
+  @media (min-width: 900px) {
+    .essay-inner { grid-template-columns: 1fr 1fr; align-items: start; }
+    .essay-inner > .sticky { position: sticky; top: 12vh; }
+  }
+
+  .kicker {
+    font-size: 11px;
+    letter-spacing: .24em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 0 0 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kicker i {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, var(--film-a) 40%, var(--film-b) 80%);
+  }
+  .essay h2 {
+    margin: 0 0 28px;
+    font-size: clamp(30px, 3.6vw, 52px);
+    line-height: 1.02;
+    letter-spacing: -.03em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .essay h2 em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--film-a), var(--film-d) 35%, var(--film-b) 70%, var(--film-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .essay p {
+    margin: 0 0 20px;
+    font-size: clamp(15px, 1.15vw, 17px);
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    text-wrap: pretty;
+  }
+  .essay p strong { color: var(--ink); font-weight: 600; }
+  .essay code {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: .88em;
+    color: var(--ink);
+    background: rgba(255,255,255,.06);
+    padding: .1em .4em;
+    border-radius: 4px;
+  }
+  .essay section + section { margin-top: clamp(64px, 8vh, 110px); }
+
+  /* sphere tracing diagram */
+  figure.trace {
+    margin: 0;
+    border-top: 1px solid rgba(255,255,255,.1);
+    padding-top: 22px;
+  }
+  figure.trace svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  figure.trace figcaption {
+    margin-top: 14px;
+    font-size: 12px;
+    letter-spacing: .04em;
+    color: var(--ink-faint);
+    line-height: 1.5;
+    max-width: 44ch;
+  }
+
+  /* wavelength strip */
+  .film-strip {
+    margin: 32px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 6px;
+    overflow: hidden;
+    max-width: 56ch;
+  }
+  .film-strip li {
+    padding: 14px 14px 12px;
+    background: rgba(255,255,255,.03);
+    font-size: 12px;
+    letter-spacing: .04em;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+  .film-strip li b {
+    display: block;
+    color: var(--ink);
+    font-size: 15px;
+    letter-spacing: -.01em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .film-strip li span { display: block; height: 3px; margin-top: 10px; border-radius: 2px; }
+
+  .colophon {
+    position: relative;
+    z-index: 1;
+    background: #000;
+    padding: 0 clamp(20px, 4vw, 56px) clamp(28px, 4vh, 44px);
+  }
+  .colophon-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    border-top: 1px solid rgba(255,255,255,.1);
+    padding-top: 22px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 24px;
+    font-size: 11px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .colophon a { color: inherit; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.18); padding-bottom: 2px; }
+  .colophon a:hover { color: var(--ink); border-color: var(--film-a); }
+
+  :focus-visible { outline: 2px solid var(--film-a); outline-offset: 4px; border-radius: 2px; }
+  .stage canvas:focus-visible { outline-offset: -4px; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 640px) {
+    .caption { max-width: 100%; }
+    .caption h1 { font-size: clamp(56px, 18vw, 84px); }
+    .marks { font-size: 10px; letter-spacing: .18em; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage" aria-hidden="false">
+  <canvas id="gl" tabindex="0" aria-label="Interactive raymarched iridescent orb. Move the pointer or use the arrow keys to move the light." role="img"></canvas>
+  <div class="fallback-orb" aria-hidden="true"></div>
+</div>
+
+<header class="hero">
+  <div class="marks" aria-label="Page marks">
+    <span>078<em aria-hidden="true">/</em>100</span>
+    <span id="lightpos" aria-live="off">light 0.00 0.00</span>
+  </div>
+  <div aria-hidden="true"></div>
+  <div class="caption">
+    <h1>Orb</h1>
+    <p>A sphere that exists only as a <b>signed distance function</b>: for any point in space, one number says how far away the surface is. A ray steps by that number, again and again, until the number reaches zero. The colour is a thin oil film, computed per wavelength.</p>
+    <p class="hint"><span class="hint-key">Move the pointer to move the light</span><span class="hint-touch">Drag to move the light</span></p>
+  </div>
+</header>
+
+<main class="essay" id="notes">
+  <div class="essay-inner">
+    <div class="sticky">
+      <p class="kicker"><i aria-hidden="true"></i>Notes on the shader</p>
+      <h2>Nothing here is a mesh. The whole scene is <em>one function</em> of position.</h2>
+      <figure class="trace">
+        <svg viewBox="0 0 520 300" role="img" aria-labelledby="trace-title trace-desc">
+          <title id="trace-title">Sphere tracing diagram</title>
+          <desc id="trace-desc">A ray leaves a camera on the left and advances toward a sphere on the right. At each step a dashed circle shows the safe distance returned by the signed distance function; the circles shrink as the ray approaches the surface.</desc>
+          <defs>
+            <linearGradient id="orbg" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#d9a6ff"/>
+              <stop offset=".5" stop-color="#7fa6ff"/>
+              <stop offset="1" stop-color="#33d1c0"/>
+            </linearGradient>
+          </defs>
+          <line x1="24" y1="150" x2="405" y2="150" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+          <circle cx="24" cy="150" r="3.5" fill="#f3f1f6"/>
+          <text x="20" y="176" fill="rgba(243,241,246,.5)" font-size="11" font-family="Syne, sans-serif" letter-spacing="1.5">CAMERA</text>
+          <!-- safe-radius circles: centre at ray position, radius = sdf -->
+          <g fill="none" stroke="rgba(217,166,255,.55)" stroke-dasharray="3 4" stroke-width="1">
+            <circle cx="24"  cy="150" r="110"/>
+            <circle cx="134" cy="150" r="82"/>
+            <circle cx="216" cy="150" r="60"/>
+            <circle cx="276" cy="150" r="42"/>
+            <circle cx="318" cy="150" r="30"/>
+            <circle cx="348" cy="150" r="21"/>
+            <circle cx="369" cy="150" r="14"/>
+            <circle cx="383" cy="150" r="9"/>
+            <circle cx="392" cy="150" r="6"/>
+          </g>
+          <g fill="#f3f1f6">
+            <circle cx="134" cy="150" r="2.4"/>
+            <circle cx="216" cy="150" r="2.4"/>
+            <circle cx="276" cy="150" r="2.4"/>
+            <circle cx="318" cy="150" r="2.4"/>
+            <circle cx="348" cy="150" r="2.4"/>
+            <circle cx="369" cy="150" r="2.4"/>
+            <circle cx="383" cy="150" r="2.4"/>
+            <circle cx="392" cy="150" r="2.4"/>
+          </g>
+          <circle cx="470" cy="150" r="72" fill="url(#orbg)" fill-opacity=".18" stroke="url(#orbg)" stroke-width="1.5"/>
+          <text x="440" y="246" fill="rgba(243,241,246,.5)" font-size="11" font-family="Syne, sans-serif" letter-spacing="1.5">d(p) = |p| − r</text>
+          <text x="134" y="52" fill="rgba(243,241,246,.5)" font-size="11" font-family="Syne, sans-serif" letter-spacing="1.5">EACH STEP = SAFE RADIUS</text>
+        </svg>
+        <figcaption>Sphere tracing. Every step travels exactly the distance the field reports, so the ray can never pass through the surface; it converges on it.</figcaption>
+      </figure>
+    </div>
+
+    <div>
+      <section aria-labelledby="h-sdf">
+        <h2 id="h-sdf" class="sr-only">Signed distance functions</h2>
+        <p><strong>A signed distance function</strong> takes a point and returns the shortest distance to a surface, negative on the inside. For a sphere it is embarrassingly short: <code>length(p) − r</code>. The orb above is that sphere with a slow, low-frequency displacement added to the radius so the surface breathes, and the whole thing lives inside a single fragment shader with no geometry uploaded at all. Two triangles cover the screen; everything else is arithmetic.</p>
+        <p>Because the function is analytic, there is nothing to tessellate. Zoom in forever and the silhouette stays a curve. The normal is not stored either — it is the gradient of the field, estimated with four evaluations arranged as a tetrahedron, which is cheaper than the usual six and just as smooth.</p>
+      </section>
+
+      <section aria-labelledby="h-march">
+        <h2 id="h-march">Marching without <em>missing</em></h2>
+        <p>Rendering is <strong>sphere tracing</strong>. From the camera, a ray asks the field how far the nearest surface is, then moves forward by exactly that amount. It cannot overshoot, because a sphere of that radius around the ray is guaranteed empty. Near a silhouette the steps shrink and pile up, which is why raymarchers spend most of their budget on edges; the shader stops after ninety-six steps or once the distance drops under a fraction of a millimetre in scene units.</p>
+        <p>The blackness around the orb is not laziness. Rays that escape past a far bound are painted with a faint vignette and a soft bloom whose colour is borrowed from the light, so the sphere appears to sit in a room rather than in a void.</p>
+      </section>
+
+      <section aria-labelledby="h-film">
+        <h2 id="h-film">Colour from <em>thickness</em>, not from paint</h2>
+        <p>The iridescence is a physically motivated <strong>thin-film interference</strong> model. Imagine an oil layer a few hundred nanometres deep. Light reflecting from its top surface interferes with light reflecting from the bottom; whether a wavelength adds or cancels depends on the optical path <code>2·n·d·cos θ</code>. The shader evaluates that phase separately for red, green and blue wavelengths, so the same patch of surface turns violet, teal or amber depending on how steeply you look at it.</p>
+        <p>Film thickness is itself a function of position and time — a slow noise field — so the colour bands drift across the surface like soap on water. The mouse moves the key light; the light drives both the specular lobe and the incidence angle, so pulling it across the screen sweeps the entire spectrum around the orb. A Fresnel term keeps the centre glassy and the rim bright, and a soft white highlight anchors the form.</p>
+        <ul class="film-strip" aria-label="Wavelengths sampled by the shader">
+          <li><b>650 nm</b>red channel<span style="background:#ff9a8b"></span></li>
+          <li><b>532 nm</b>green channel<span style="background:#7dffd2"></span></li>
+          <li><b>450 nm</b>blue channel<span style="background:#a6b8ff"></span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="colophon">
+  <div class="colophon-inner">
+    <span>Raw WebGL 1 · GLSL ES 1.00 · no libraries</span>
+    <span><a href="#top" id="totop">Back to the orb</a></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('gl');
+  var readout = document.getElementById('lightpos');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false })
+        || canvas.getContext('experimental-webgl');
+
+  if (!gl) { stage.classList.add('is-fallback'); return; }
+
+  var VERT = [
+    'attribute vec2 a;',
+    'void main(){ gl_Position = vec4(a, 0.0, 1.0); }'
+  ].join('\n');
+
+  var FRAG = [
+    'precision highp float;',
+    'uniform vec2 uRes;',
+    'uniform float uTime;',
+    'uniform vec2 uLight;',   // eased light position in [-1,1]
+
+    // ---- hash / noise ----
+    'float hash(vec3 p){ p = fract(p*0.3183099 + vec3(0.1,0.2,0.3)); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }',
+    'float noise(vec3 x){',
+    '  vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);',
+    '  return mix(mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x),',
+    '                 mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),',
+    '             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),',
+    '                 mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);',
+    '}',
+
+    // ---- signed distance field: a breathing sphere ----
+    'float sdf(vec3 p){',
+    '  float t = uTime*0.35;',
+    '  float d = length(p) - 1.0;',
+    '  float w = 0.035*sin(3.0*p.x + t)*sin(2.0*p.y - t*0.8)*sin(4.0*p.z + t*0.6);',
+    '  w += 0.012*(noise(p*1.8 + vec3(0.0, t*0.4, 0.0)) - 0.5);',
+    '  return d + w;',
+    '}',
+
+    'vec3 calcNormal(vec3 p){',
+    '  const float h = 0.001;',
+    '  const vec2 k = vec2(1.0,-1.0);',
+    '  return normalize( k.xyy*sdf(p + k.xyy*h) + k.yyx*sdf(p + k.yyx*h) + k.yxy*sdf(p + k.yxy*h) + k.xxx*sdf(p + k.xxx*h) );',
+    '}',
+
+    'float march(vec3 ro, vec3 rd){',
+    '  float t = 0.0;',
+    '  for(int i=0;i<96;i++){',
+    '    vec3 p = ro + rd*t;',
+    '    float d = sdf(p);',
+    '    if(d < 0.0006) return t;',
+    '    t += d*0.9;',
+    '    if(t > 9.0) break;',
+    '  }',
+    '  return -1.0;',
+    '}',
+
+    // ---- thin-film interference, per RGB wavelength ----
+    'vec3 thinFilm(float cosI, float thick){',
+    '  float n = 1.38;',                                   // film index (oil)
+    '  float sinT2 = (1.0 - cosI*cosI)/(n*n);',
+    '  float cosT = sqrt(max(0.0, 1.0 - sinT2));',
+    '  float opd = 2.0*n*thick*cosT;',                     // optical path difference in nm
+    '  vec3 lambda = vec3(650.0, 532.0, 450.0);',
+    '  vec3 phase = 6.2831853*opd/lambda + 3.14159265;',   // half-wave loss at the top boundary
+    '  vec3 r = 0.5 + 0.5*cos(phase);',
+    '  r = r*r;',
+    // real films are never fully saturated: pull towards the mean a little
+    '  float m = (r.x + r.y + r.z)/3.0;',
+    '  return mix(vec3(m), r, 0.86);',
+    '}',
+
+    'vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }',
+
+    'void main(){',
+    '  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/min(uRes.x, uRes.y);',
+    '  float aspect = uRes.x/uRes.y;',
+    '  bool landscape = aspect >= 1.0;',
+    // on wide screens the orb sits a little right of centre so the caption owns the lower-left
+    '  vec2 off = landscape ? vec2(-0.14, 0.02) : vec2(0.0, -0.13);',
+    '  vec2 suv = uv + off;',
+    '  float focal = landscape ? 1.36 : 1.62;',
+    '  vec3 ro = vec3(0.0, 0.0, 4.5);',
+    '  vec3 rd = normalize(vec3(suv, -focal));',
+    '  float projR = focal*0.228;',                         // projected orb radius in uv units
+    '  vec3 lp = vec3(uLight.x*2.8, uLight.y*2.4, 2.6);',
+    '  vec3 lightCol = vec3(1.0, 0.97, 0.94);',
+
+    '  float t = march(ro, rd);',
+    '  vec3 col;',
+    '  float lightDist = length(uv - uLight*0.5);',
+    '  vec3 bgGlow = vec3(0.95, 0.9, 1.0)*0.007/(0.3 + lightDist*lightDist*3.0);',
+    '  float vign = 1.0 - smoothstep(0.3, 1.2, length(uv));',
+    '  vec3 bg = vec3(0.005, 0.005, 0.008)*vign + bgGlow*vign;',
+
+    '  if(t > 0.0){',
+    '    vec3 p = ro + rd*t;',
+    '    vec3 n = calcNormal(p);',
+    '    vec3 v = -rd;',
+    '    vec3 l = normalize(lp - p);',
+    '    vec3 h = normalize(l + v);',
+    '    float NdV = clamp(dot(n, v), 0.0, 1.0);',
+    '    float NdL = clamp(dot(n, l), 0.0, 1.0);',
+    '    float NdH = clamp(dot(n, h), 0.0, 1.0);',
+
+    // film thickness drifts across the surface (first-order soap-film range)
+    '    float tt = uTime*0.12;',
+    '    float th = 210.0 + 240.0*noise(p*1.5 + vec3(tt, -tt*0.7, tt*0.4)) + 60.0*noise(p*3.5 - vec3(0.0, tt, 0.0));',
+    '    vec3 film = thinFilm(NdV, th);',
+
+    '    float fres = pow(1.0 - NdV, 3.0);',
+
+    // dark glassy body; iridescence blooms towards the rim and towards the light
+    '    vec3 base = vec3(0.010, 0.009, 0.014);',
+    '    float wrap = clamp((dot(n, l) + 0.4)/1.4, 0.0, 1.0);',
+    '    vec3 diffuse = base + film*0.05*wrap;',
+    '    vec3 irid = film*(0.10 + 1.7*fres)*(0.25 + 0.75*NdL);',
+    // light-facing sheen: a wide lobe tinted by the film
+    '    vec3 sheen = film*pow(NdH, 5.0)*0.5*NdL;',
+    // tight white key highlight
+    '    float spec = pow(NdH, 260.0)*1.4 + pow(NdH, 40.0)*0.07;',
+    '    vec3 specCol = lightCol*spec;',
+    // cool fill from the opposite side so the shadowed hemisphere reads
+    '    vec3 fillDir = normalize(vec3(-lp.x, -lp.y*0.5, 1.2));',
+    '    float fill = clamp(dot(n, fillDir), 0.0, 1.0);',
+    '    vec3 fillCol = film*0.14*fill*fres;',
+    // soft white rim
+    '    float rim = pow(1.0 - NdV, 7.0)*0.7;',
+    '    col = diffuse + irid + sheen + specCol + fillCol + rim*vec3(0.92, 0.93, 1.0)*(0.35 + 0.65*NdL);',
+    '    float edge = smoothstep(0.0, 0.03, NdV);',
+    '    col = mix(bg, col, edge);',
+    '  } else {',
+    '    col = bg;',
+    // halo: soft coloured glow hugging the silhouette, brighter on the lit side
+    '    float dist = max(0.0, length(suv) - projR);',
+    '    float halo = exp(-dist*11.0);',
+    '    float ang = atan(suv.y, suv.x);',
+    '    vec3 haloCol = mix(vec3(0.85, 0.65, 1.0), vec3(0.35, 0.9, 0.85), 0.5 + 0.5*sin(ang*2.0 + uTime*0.2));',
+    '    float side = 0.55 + 0.45*dot(normalize(suv + 1e-5), normalize(uLight + 1e-5));',
+    '    col += haloCol*halo*0.075*side;',
+    '  }',
+
+    '  col = aces(col*1.05);',
+    '  col = pow(col, vec3(1.0/2.2));',
+    // film grain, very light, to break banding in the blacks
+    '  float g = hash(vec3(gl_FragCoord.xy, floor(uTime*24.0)));',
+    '  col += (g - 0.5)*0.014;',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '}'
+  ].join('\n');
+
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      var log = gl.getShaderInfoLog(s);
+      gl.deleteShader(s);
+      throw new Error(log || 'shader compile failed');
+    }
+    return s;
+  }
+
+  var prog;
+  try {
+    var vs = compile(gl.VERTEX_SHADER, VERT);
+    var fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'link failed');
+  } catch (e) {
+    stage.classList.add('is-fallback');
+    return;
+  }
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  var aLoc = gl.getAttribLocation(prog, 'a');
+  gl.enableVertexAttribArray(aLoc);
+  gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
+
+  var uRes = gl.getUniformLocation(prog, 'uRes');
+  var uTime = gl.getUniformLocation(prog, 'uTime');
+  var uLight = gl.getUniformLocation(prog, 'uLight');
+
+  // ---- sizing: cap DPR, and cap total pixels so full-screen raymarching stays smooth ----
+  var W = 0, H = 0;
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var cw = stage.clientWidth, ch = stage.clientHeight;
+    var maxPixels = 1600 * 1000;
+    var scale = Math.min(1, Math.sqrt(maxPixels / (cw * ch * dpr * dpr)));
+    W = Math.max(1, Math.round(cw * dpr * scale));
+    H = Math.max(1, Math.round(ch * dpr * scale));
+    if (canvas.width !== W || canvas.height !== H) {
+      canvas.width = W; canvas.height = H;
+    }
+    gl.viewport(0, 0, W, H);
+  }
+
+  // ---- pointer -> light, eased ----
+  var target = { x: 0.35, y: 0.3 };
+  var light = { x: 0.35, y: 0.3 };
+  var idleT = 0;
+  var hasPointer = false;
+
+  function setTargetFromClient(cx, cy) {
+    var r = stage.getBoundingClientRect();
+    var nx = ((cx - r.left) / r.width) * 2 - 1;
+    var ny = -(((cy - r.top) / r.height) * 2 - 1);
+    // normalise like the shader (divide by min dimension)
+    var ar = r.width / r.height;
+    if (ar > 1) nx *= ar; else ny /= ar;
+    target.x = Math.max(-1.6, Math.min(1.6, nx));
+    target.y = Math.max(-1.2, Math.min(1.2, ny));
+    hasPointer = true;
+  }
+
+  window.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') return;
+    setTargetFromClient(e.clientX, e.clientY);
+  }, { passive: true });
+
+  canvas.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'touch') { setTargetFromClient(e.clientX, e.clientY); }
+  });
+  canvas.addEventListener('touchmove', function (e) {
+    var t = e.touches[0];
+    if (t) { setTargetFromClient(t.clientX, t.clientY); }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('keydown', function (e) {
+    var step = 0.12, handled = true;
+    switch (e.key) {
+      case 'ArrowLeft': target.x -= step; break;
+      case 'ArrowRight': target.x += step; break;
+      case 'ArrowUp': target.y += step; break;
+      case 'ArrowDown': target.y -= step; break;
+      case 'Home': target.x = 0.35; target.y = 0.3; break;
+      default: handled = false;
+    }
+    if (handled) {
+      target.x = Math.max(-1.6, Math.min(1.6, target.x));
+      target.y = Math.max(-1.2, Math.min(1.2, target.y));
+      hasPointer = true;
+      e.preventDefault();
+    }
+  });
+
+  // ---- render loop ----
+  var start = performance.now();
+  var last = start;
+  var raf = 0;
+  var running = false;
+  var frozenTime = 0;
+
+  function frame(now) {
+    raf = 0;
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    var motion = reduced.matches ? 0 : 1;
+
+    // idle drift of the light when nobody has touched it
+    if (!hasPointer && motion) {
+      idleT += dt;
+      target.x = 0.35 + Math.sin(idleT * 0.35) * 0.45;
+      target.y = 0.3 + Math.cos(idleT * 0.27) * 0.3;
+    }
+    var k = 1 - Math.pow(0.001, dt); // ~ critically damped feel
+    light.x += (target.x - light.x) * k;
+    light.y += (target.y - light.y) * k;
+
+    var t = motion ? (now - start) / 1000 : frozenTime;
+    if (motion) frozenTime = t;
+
+    gl.uniform2f(uRes, W, H);
+    gl.uniform1f(uTime, t);
+    gl.uniform2f(uLight, light.x, light.y);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (readout) readout.textContent = 'light ' + light.x.toFixed(2) + ' ' + light.y.toFixed(2);
+
+    // stop rendering once the stage is scrolled fully out of view
+    var inView = window.scrollY < stage.clientHeight * 1.15;
+    var settled = Math.abs(target.x - light.x) < 0.0005 && Math.abs(target.y - light.y) < 0.0005;
+    if (running && inView && !(reduced.matches && settled)) raf = requestAnimationFrame(frame);
+    else running = false;
+  }
+
+  function kick() {
+    if (!running && !document.hidden) {
+      running = true;
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    }
+  }
+  function stop() {
+    running = false;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  }
+
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else kick(); });
+  window.addEventListener('scroll', kick, { passive: true });
+  window.addEventListener('pointermove', kick, { passive: true });
+  canvas.addEventListener('keydown', kick);
+  canvas.addEventListener('touchmove', kick, { passive: true });
+  window.addEventListener('resize', function () { resize(); kick(); });
+  reduced.addEventListener && reduced.addEventListener('change', kick);
+
+  resize();
+  kick();
+
+  // graceful handling of context loss
+  canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); stop(); });
+  canvas.addEventListener('webglcontextrestored', function () { location.reload(); });
+
+  var totop = document.getElementById('totop');
+  if (totop) totop.addEventListener('click', function (e) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' });
+    canvas.focus({ preventScroll: true });
+  });
+})();
+</script>
+</body>
+</html>

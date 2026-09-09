@@ -1,0 +1,1696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>On-Call Rotation Planner — fair round-robin rota, who&rsquo;s on now, handover &amp; swaps</title>
+<meta name="description" content="Build a fair on-call rota by round-robin across your team, weekly or daily handover at a set time, honouring each person's blackout dates. Shows who is on call right now and when the next handover falls, reports shifts, weekend days and public-holiday days per person so the split is visibly even, and records every swap. Prints a schedule, exports CSV, JSON and an iCal (.ics) calendar.">
+<meta name="theme-color" content="#0F6E75">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F6E75'/%3E%3Cpath d='M24.4 16.4a8.4 8.4 0 1 1-2.6-6' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M22.6 4.6v6h-6' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16.4' r='2.9' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#0F6E75;--accent-ink:#0B555A;--accent-wash:#E1F0F1;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB5BE;--accent-ink:#6ED2D9;--accent-wash:#102A2E;--on-accent:#04181A}}
+:root[data-theme="dark"]{--accent:#3FB5BE;--accent-ink:#6ED2D9;--accent-wash:#102A2E;--on-accent:#04181A}
+
+[hidden]{display:none!important}
+.sr{display:inline-block;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;padding:0;margin:0;border:0;font-size:1px;line-height:1}
+.app{max-width:1300px}
+.split>*,.stack,.card,.pagestack>*{min-width:0}
+.tw{max-width:100%}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:520px){.span2{grid-column:span 1}}
+.msg{margin:0}
+.msg:not(:empty){padding:8px 11px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 12.5px/1.4 var(--sans)}
+
+/* banner */
+.banner{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.banner .bt{margin-right:auto;min-width:220px;flex:1 1 240px}
+
+/* stat band */
+.statband{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(152px,1fr))}
+.statband .stat{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.statband .stat.hero{grid-column:span 2}
+@media(max-width:470px){.statband{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+  .statband .stat.hero{grid-column:1/-1}}
+.stat.hero .v{font:750 27px/1.14 var(--sans);letter-spacing:-.022em;color:var(--accent-ink);
+  overflow-wrap:anywhere}
+.stat .sub2{font:11.5px/1.38 var(--sans);color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.stat.hero .sub2{color:var(--accent-ink);font-weight:600}
+.stat.flagbad{background:var(--bad-wash);border-color:var(--bad)}
+.stat.flagbad .v{color:var(--bad)}
+.stat.flagok .v{color:var(--ok)}
+.stat .v.sm{font-size:18px}
+.stat .v.nm{font:750 19px/1.2 var(--sans);letter-spacing:-.015em;overflow-wrap:anywhere}
+
+/* tables */
+#memTbl{min-width:760px}
+#memTbl td input{font-size:14px}
+#schedTbl{min-width:980px}
+#swapTbl{min-width:720px}
+#fairTbl{min-width:0}
+tr.isnow>td{background:var(--accent-wash)}
+tr.isnow>td:first-child{box-shadow:inset 3px 0 0 0 var(--accent)}
+tr.gap>td{background:var(--bad-wash)}
+tr.gap:hover>td{background:var(--bad-wash)}
+td.who .nm{font-weight:650;line-height:1.25}
+td.who .ct{font:11.5px/1.35 var(--mono);color:var(--muted);overflow-wrap:anywhere}
+td.dt .d1{font-weight:600;white-space:nowrap}
+td.dt .d2{font:11.5px/1.3 var(--mono);color:var(--muted);white-space:nowrap}
+.tag{display:inline-block;font:700 9.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  padding:3px 5px;border-radius:2px;background:var(--sunk);color:var(--ink-2);white-space:nowrap}
+.tag.now{background:var(--accent);color:var(--on-accent)}
+.tag.next{background:var(--accent-wash);color:var(--accent-ink);border:1px solid var(--accent)}
+.tag.hol{background:var(--warn-wash);color:var(--warn)}
+.tag.sw{background:var(--ok-wash);color:var(--ok)}
+.tag.gp{background:var(--bad);color:#fff}
+.tag.past{background:transparent;color:var(--faint)}
+.tags{display:flex;flex-wrap:wrap;gap:3px}
+.rmbtn{border:1px solid var(--line);background:var(--raise);color:var(--muted);border-radius:3px;
+  font:700 11px/1 var(--mono);padding:4px 7px;cursor:pointer}
+.rmbtn:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-wash)}
+tr.inact td.who .nm{color:var(--muted);text-decoration:line-through}
+.bl{font:12px/1.35 var(--mono)}
+.blmeta{font:11px/1.3 var(--sans);color:var(--muted);margin-top:2px}
+.blmeta.bad{color:var(--bad);font-weight:650}
+
+/* fairness */
+.fair .kv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.fair .kv:last-child{border-bottom:0}
+.fair .nm{font-weight:650;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fair .nums{font:12.5px/1.3 var(--mono);color:var(--ink-2);white-space:nowrap;text-align:right}
+.fair .bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.fair .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.fair .bar i.hi{background:var(--bad)}
+.fair .bar i.lo{background:var(--warn)}
+.fair .sub{grid-column:1/-1;font:11px/1.35 var(--sans);color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:5px 12px;font:11.5px/1.4 var(--sans);color:var(--muted)}
+.kvrow{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kvrow:last-child{border-bottom:0}
+.kvrow .v{font-family:var(--mono);font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kvrow .v.bad{color:var(--bad)} .kvrow .v.ok{color:var(--ok)} .kvrow .v.warn{color:var(--warn)}
+
+/* swap panel */
+.swappanel{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));align-items:end}
+.swappanel .act{display:flex;gap:8px}
+@media(max-width:640px){.swappanel .act{grid-column:1/-1}}
+
+/* printed document */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:1.5pt solid #000;padding-bottom:5pt;margin-bottom:7pt}
+.doc .lh .org{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.02em}
+.doc .lh .wk{font-family:var(--mono);font-size:9.5pt;margin-top:3pt;font-weight:700}
+.doc .lh .ref{font-family:var(--mono);font-size:8pt;color:#333;margin-top:2pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:4pt 10pt;margin-bottom:8pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:20pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:4pt;table-layout:fixed}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top;word-wrap:break-word}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7pt;letter-spacing:.06em;text-transform:uppercase}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tr.hl td{background:#eaeaea!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc tfoot td{background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc .cols{display:grid;grid-template-columns:1fr 1fr;gap:10pt;align-items:start}
+.doc .box{border:1pt solid #000;padding:5pt 7pt;font-size:8.5pt;line-height:1.5}
+.doc .box b.t{font-size:7.5pt;letter-spacing:.09em;text-transform:uppercase;display:block;margin-bottom:3pt}
+.doc .now{border:1.5pt solid #000;padding:6pt 8pt;margin-bottom:8pt;display:flex;
+  justify-content:space-between;gap:14pt;flex-wrap:wrap}
+.doc .now .lab{font-size:7.5pt;letter-spacing:.09em;text-transform:uppercase;color:#444;font-weight:700}
+.doc .now .big{font-size:15pt;font-weight:700;letter-spacing:-.01em}
+.doc .now .sm{font-size:8.5pt;color:#333;font-family:var(--mono)}
+.doc .sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14pt;margin-top:14pt}
+.doc .sign div{font-size:7.5pt;letter-spacing:.08em;text-transform:uppercase;color:#444}
+.doc .sign div i{display:block;height:26pt;border-bottom:.75pt solid #000;margin-bottom:3pt}
+.doc .fine{font-size:7.5pt;line-height:1.45;color:#222;margin-top:8pt}
+@media print{
+  .doc table{break-inside:auto}
+  .doc thead{display:table-header-group}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">OC</div>
+    <div style="min-width:0">
+      <h1>On-Call Rotation Planner</h1>
+      <div class="sub">ROUND-ROBIN ROTA &middot; FAIRNESS &middot; HANDOVER</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn sm" id="btnCsv">CSV</button>
+    <button type="button" class="btn sm" id="btnIcs">iCal (.ics)</button>
+    <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+    <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+    <button type="button" class="btn sm dgr" id="btnClear">Clear all data</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint pagestack">
+
+  <section class="statband" id="statband" aria-live="polite">
+    <div class="stat hero"><div class="k" id="sNowK">On call now</div><div class="v" id="sNow">&mdash;</div><div class="sub2" id="sNowSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Next handover</div><div class="v sm" id="sHand">&mdash;</div><div class="sub2" id="sHandSub">&mdash;</div></div>
+    <div class="stat"><div class="k">Then on call</div><div class="v nm" id="sNext">&mdash;</div><div class="sub2" id="sNextSub">&mdash;</div></div>
+    <div class="stat" id="sGapBox"><div class="k">Uncovered shifts</div><div class="v" id="sGap">&mdash;</div><div class="sub2" id="sGapSub">&mdash;</div></div>
+    <div class="stat" id="sFairBox"><div class="k">Fairness spread</div><div class="v" id="sFair">&mdash;</div><div class="sub2" id="sFairSub">&mdash;</div></div>
+  </section>
+
+  <div class="note banner" id="sampleBanner">
+    <div class="bt"><strong>Sample rota loaded.</strong> A six-person weekly on-call rotation starting this
+      Monday, with example leave and public holidays. Replace it with your own team, or start from an empty rota.</div>
+    <button type="button" class="btn sm" id="btnBlank">Start a blank rota</button>
+  </div>
+
+  <div class="note warn" id="disclaimerBox">
+    <strong>Planning aid only &mdash; not a working-time or pay compliance check.</strong>
+    This tool allocates on-call cover fairly and shows who holds the pager. It does not check rest periods,
+    maximum weekly hours, night-work limits or standby pay, it does not know your public holidays (it uses
+    only the dates you enter), and it is not a call-out or escalation system. Before you publish a rota,
+    check it against the contracts of employment, any collective or works agreement, and the working-time
+    rules that apply where your people are based &mdash; take advice from your HR or legal adviser if in doubt.
+  </div>
+
+  <div class="split">
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd">
+          <h2>Rotation setup</h2>
+          <button type="button" class="btn sm" id="btnSample">Load sample</button>
+        </div>
+        <div class="bd stack">
+          <div class="fgrid wide">
+            <div class="f"><label for="iOrg">Organisation</label>
+              <input id="iOrg" type="text" autocomplete="organization" placeholder="Company name"></div>
+            <div class="f"><label for="iTeam">Team / rota name</label>
+              <input id="iTeam" type="text" placeholder="e.g. Platform Ops primary"></div>
+            <div class="f"><label for="iContact">Rota owner &amp; contact</label>
+              <input id="iContact" type="text" placeholder="Name, phone or email"></div>
+            <div class="f"><label for="iEsc">Escalation / second line</label>
+              <input id="iEsc" type="text" placeholder="Who to call if the on-call engineer does not answer"></div>
+          </div>
+          <div class="fgrid">
+            <div class="f"><label for="iStart">First handover date</label>
+              <input id="iStart" type="date"><div class="err" id="eStart" hidden></div></div>
+            <div class="f"><label for="iTime">Handover time</label>
+              <input id="iTime" type="time" step="300"><div class="err" id="eTime" hidden></div></div>
+            <div class="f"><label for="iCad">Handover every</label>
+              <select id="iCad">
+                <option value="daily">Day (daily rota)</option>
+                <option value="weekly">Week (weekly rota)</option>
+                <option value="fortnightly">2 weeks</option>
+                <option value="custom">Custom number of days</option>
+              </select></div>
+            <div class="f" id="stepWrap" hidden><label for="iStep">Days per shift</label>
+              <input id="iStep" type="number" min="1" max="31" step="1"><div class="err" id="eStep" hidden></div></div>
+            <div class="f"><label for="iPeriods">Shifts to generate</label>
+              <input id="iPeriods" type="number" min="1" max="120" step="1"><div class="err" id="ePeriods" hidden></div></div>
+            <div class="f"><label for="iTz">Time zone label</label>
+              <input id="iTz" type="text" placeholder="e.g. Europe/London"></div>
+          </div>
+          <p class="hint" id="rangeHint">&mdash;</p>
+          <div class="fgrid wide">
+            <div class="f"><label for="iMode">Allocation rule</label>
+              <select id="iMode">
+                <option value="balanced">Balanced round-robin &mdash; fewest shifts first</option>
+                <option value="strict">Strict round-robin &mdash; rota order, skip unavailable</option>
+              </select></div>
+            <div class="f"><label for="iWknd">Weekend days</label>
+              <select id="iWknd">
+                <option value="satsun">Saturday &amp; Sunday</option>
+                <option value="frisat">Friday &amp; Saturday</option>
+                <option value="thufri">Thursday &amp; Friday</option>
+                <option value="sunonly">Sunday only</option>
+                <option value="none">Do not count weekends</option>
+              </select></div>
+          </div>
+          <label class="check" for="iB2B"><input type="checkbox" id="iB2B">
+            <span>Avoid the same person taking two shifts back to back, where someone else is available</span></label>
+        </div>
+      </section>
+
+
+      <section class="card">
+        <div class="hd"><h2>Public holidays</h2><span class="chip" id="holChip">&mdash;</span></div>
+        <div class="bd stack">
+          <div class="f"><label for="iHol">Holiday dates &mdash; one per line, optional name after an equals sign</label>
+            <textarea id="iHol" rows="5" spellcheck="false"
+              placeholder="2026-12-25 = Christmas Day&#10;2026-12-28 = Substitute day"></textarea>
+            <div class="err" id="eHol" hidden></div>
+            <p class="hint">These are the dates <em>you</em> enter. No public-holiday calendar is built in, and
+              none is looked up &mdash; check your own jurisdiction's official list.</p></div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="stack">
+      <section class="card sticky">
+        <div class="hd"><h2>Fairness report</h2>
+          <span class="chip" id="fairChip">&mdash;</span>
+          <button type="button" class="btn sm" id="btnCsvFair">CSV</button>
+        </div>
+        <div class="bd">
+          <div class="fair" id="fairList"><p class="empty">Add people to the rota to see the split.</p></div>
+        </div>
+        <div class="ft" style="display:block">
+          <div class="kvrow"><span>Shifts allocated</span><span class="v" id="fShifts">&mdash;</span></div>
+          <div class="kvrow"><span>Even split would be</span><span class="v" id="fTarget">&mdash;</span></div>
+          <div class="kvrow"><span>Shift spread (max &minus; min)</span><span class="v" id="fSpread">&mdash;</span></div>
+          <div class="kvrow"><span>Weekend-day spread</span><span class="v" id="fWspread">&mdash;</span></div>
+          <div class="kvrow"><span>Holiday-day spread</span><span class="v" id="fHspread">&mdash;</span></div>
+          <p class="legend" style="margin-top:8px"><span>Bar = share of shifts. Target line is an equal split
+            of every generated shift across the people on the rota.</span></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+    <section class="card">
+      <div class="hd">
+        <h2>Team &amp; availability</h2>
+        <span class="chip" id="memChip">&mdash;</span>
+        <button type="button" class="btn sm" id="btnAddMem">+ Add person</button>
+      </div>
+      <div class="tw"><table id="memTbl">
+        <caption class="lbl" style="text-align:left;padding:8px 10px 0">Rota order runs top to bottom</caption>
+        <thead><tr>
+          <th scope="col" style="width:34px">#</th>
+          <th scope="col" style="width:20%;min-width:150px">Name</th>
+          <th scope="col" style="width:17%;min-width:130px">Contact</th>
+          <th scope="col" style="min-width:230px">Unavailable dates (blackout)</th>
+          <th scope="col" class="c" style="width:58px">On rota</th>
+          <th scope="col" style="width:74px"><span class="lbl">Order</span></th>
+          <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+        </tr></thead>
+        <tbody id="memBody"></tbody>
+      </table></div>
+      <div class="ft"><p class="hint">Blackout dates: single days or ranges, separated by commas &mdash;
+        <span class="mono">2026-04-06, 2026-04-13..2026-04-20</span>. A person is skipped for any shift that
+        overlaps one of their blackout days.</p></div>
+    </section>
+
+  <section class="card">
+    <div class="hd">
+      <h2>Schedule</h2>
+      <span class="chip" id="schedChip">&mdash;</span>
+      <div class="f" style="flex-direction:row;align-items:center;gap:6px">
+        <label for="iAsAt" style="text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--ink-2)">Show as at</label>
+        <input id="iAsAt" type="datetime-local" style="width:200px">
+        <button type="button" class="btn sm" id="btnNow">Now</button>
+      </div>
+    </div>
+    <div class="tw"><table id="schedTbl">
+      <thead><tr>
+        <th scope="col" style="width:46px">Shift</th>
+        <th scope="col">Starts</th>
+        <th scope="col">Ends</th>
+        <th scope="col" class="n" style="width:56px">Days</th>
+        <th scope="col" class="n" style="width:64px">W/end</th>
+        <th scope="col" class="n" style="width:56px">Hol</th>
+        <th scope="col">On call</th>
+        <th scope="col" style="width:190px">Assign / cover</th>
+        <th scope="col" style="width:150px">Status</th>
+      </tr></thead>
+      <tbody id="schedBody"></tbody>
+    </table></div>
+    <div class="ft"><p class="hint" id="schedFoot">&mdash;</p></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Swaps &amp; cover log</h2><span class="chip" id="swapChip">&mdash;</span>
+      <button type="button" class="btn sm dgr" id="btnResetOv">Reset all manual changes</button></div>
+    <div class="bd stack">
+      <div class="swappanel">
+        <div class="f"><label for="iSwapA">Swap this shift</label><select id="iSwapA"></select></div>
+        <div class="f"><label for="iSwapB">with this shift</label><select id="iSwapB"></select></div>
+        <div class="f"><label for="iSwapNote">Reason (optional)</label>
+          <input id="iSwapNote" type="text" placeholder="e.g. wedding, agreed with team lead"></div>
+        <div class="act"><button type="button" class="btn pri" id="btnSwap">Record swap</button></div>
+      </div>
+      <div class="err" id="eSwap" hidden></div>
+      <p class="msg" id="swapMsg"></p>
+    </div>
+    <div class="tw"><table id="swapTbl">
+      <thead><tr>
+        <th scope="col" style="width:132px">Recorded</th>
+        <th scope="col" style="width:74px">Type</th>
+        <th scope="col">Shift</th>
+        <th scope="col">Was</th>
+        <th scope="col">Now</th>
+        <th scope="col">Reason</th>
+        <th scope="col" style="width:44px"><span class="sr">Remove</span></th>
+      </tr></thead>
+      <tbody id="swapBody"></tbody>
+    </table></div>
+  </section>
+
+</main>
+
+<footer class="app noprint" style="padding-top:0">
+  <p class="hint" id="methodNote">&mdash;</p>
+</footer>
+
+<section class="printonly doc" id="printdoc"></section>
+
+<script>
+"use strict";
+(function(){
+/* ══════════════════════════════════════════════════════════════════
+   On-Call Rotation Planner
+   Round-robin allocation over a chosen period, honouring per-person
+   blackout dates, with a fairness report and a swap log. Everything
+   below is computed — nothing is hardcoded.
+   ══════════════════════════════════════════════════════════════════ */
+var KEY='solvix.oncall-rotation.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var DOW3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var DOWL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var WKSETS={satsun:[0,6],frisat:[5,6],thufri:[4,5],sunonly:[0],none:[]};
+var WKLABEL={satsun:'Saturday & Sunday',frisat:'Friday & Saturday',thufri:'Thursday & Friday',
+             sunonly:'Sunday only',none:'not counted'};
+var CAD={daily:1,weekly:7,fortnightly:14};
+var MAXSHIFTS=120;
+
+/* ── small helpers ─────────────────────────────────────────────── */
+function p2(n){return n<10?'0'+n:''+n;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:d;}
+function intv(v,d){var n=parseInt(v,10);return isFinite(n)?n:d;}
+function uid(){return 'm'+Math.random().toString(36).slice(2,9);}
+function dparse(s){
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var y=+m[1],mo=+m[2],d=+m[3];
+  if(mo<1||mo>12||d<1||d>31||y<1900||y>2200)return null;
+  var dt=new Date(y,mo-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return null;
+  return dt;
+}
+function diso(dt){return dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate());}
+function dadd(dt,n){return new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+n,
+  dt.getHours(),dt.getMinutes(),0,0);}
+function tparse(s){
+  var m=/^(\d{1,2}):(\d{2})/.exec(String(s==null?'':s).trim());
+  if(!m)return null;
+  var h=+m[1],mi=+m[2];
+  if(h<0||h>23||mi<0||mi>59)return null;
+  return {h:h,m:mi};
+}
+function fmtD(dt){return DOW3[dt.getDay()]+' '+dt.getDate()+' '+MON3[dt.getMonth()]+' '+dt.getFullYear();}
+function fmtDshort(dt){return DOW3[dt.getDay()]+' '+dt.getDate()+' '+MON3[dt.getMonth()];}
+function fmtT(dt){return p2(dt.getHours())+':'+p2(dt.getMinutes());}
+function fmtDT(dt){return fmtD(dt)+', '+fmtT(dt);}
+function dur(ms){
+  if(!isFinite(ms))return '—';
+  if(ms<0)ms=0;
+  var mins=Math.floor(ms/60000);
+  var d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60;
+  if(d>0)return d+' d '+h+' h';
+  if(h>0)return h+' h '+m+' m';
+  return m+' m';
+}
+function dtlocal(dt){return dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate())+'T'+
+  p2(dt.getHours())+':'+p2(dt.getMinutes());}
+function slug(s){return String(s||'rota').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+  .replace(/^-|-$/g,'').slice(0,40)||'rota';}
+function setErr(el,msg){
+  if(!el)return;
+  if(msg){el.textContent=msg;el.hidden=false;}else{el.textContent='';el.hidden=true;}
+}
+function mark(input,bad){if(input){if(bad)input.classList.add('inv');else input.classList.remove('inv');}}
+
+/* ── state ─────────────────────────────────────────────────────── */
+var S=null;
+
+function blankState(){
+  return {
+    v:1, sample:false,
+    org:{business:'',team:'',contact:'',esc:''},
+    rot:{start:diso(new Date()),time:'09:00',cad:'weekly',step:7,periods:8,
+         wknd:'satsun',mode:'balanced',b2b:true,tz:''},
+    members:[{id:uid(),name:'',contact:'',black:'',active:true},
+             {id:uid(),name:'',contact:'',black:'',active:true},
+             {id:uid(),name:'',contact:'',black:'',active:true}],
+    hol:'', ov:{}, swaps:[], asAt:''
+  };
+}
+
+function sampleState(){
+  var n=new Date();n.setHours(0,0,0,0);
+  var wd=n.getDay();
+  var mon=new Date(n.getFullYear(),n.getMonth(),n.getDate()+(wd===0?-6:1-wd));
+  var iso=function(off){return diso(dadd(mon,off));};
+  var st=blankState();
+  st.sample=true;
+  st.org={business:'Northgate Systems Ltd',team:'Platform Ops — primary on-call',
+    contact:'R. Iyer, operations lead — 07700 900010',
+    esc:'Second line: infrastructure duty manager — 07700 900020'};
+  st.rot={start:iso(0),time:'09:00',cad:'weekly',step:7,periods:12,
+    wknd:'satsun',mode:'balanced',b2b:true,tz:'Europe/London'};
+  st.members=[
+    {id:uid(),name:'Priya Raman',    contact:'07700 900118',black:'',                      active:true},
+    {id:uid(),name:'Daniel Okafor',  contact:'07700 900342',black:iso(7)+'..'+iso(20),     active:true},
+    {id:uid(),name:'Marta Lindqvist',contact:'07700 900507',black:iso(59),                 active:true},
+    {id:uid(),name:'Tom Whitfield',  contact:'07700 900661',black:'',                      active:true},
+    {id:uid(),name:'Aisha Bello',    contact:'07700 900774',black:iso(35)+'..'+iso(38),    active:true},
+    {id:uid(),name:'Jon Petrelli',   contact:'07700 900903',black:'',                      active:true}
+  ];
+  st.hol=iso(25)+' = Public holiday (sample entry)\n'+iso(60)+' = Company shutdown (sample entry)';
+  return st;
+}
+
+/* ── persistence ───────────────────────────────────────────────── */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+}
+function load(){
+  var raw=null;
+  try{raw=localStorage.getItem(KEY);}catch(e){raw=null;}
+  if(!raw)return null;
+  try{
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return null;
+    return normalise(o);
+  }catch(e){return null;}
+}
+function normalise(o){
+  var b=blankState();
+  var st={
+    v:1, sample:!!o.sample,
+    org:{business:'',team:'',contact:'',esc:''},
+    rot:{},members:[],hol:typeof o.hol==='string'?o.hol:'',
+    ov:{},swaps:[],asAt:typeof o.asAt==='string'?o.asAt:''
+  };
+  if(o.org&&typeof o.org==='object'){
+    st.org.business=String(o.org.business||'');st.org.team=String(o.org.team||'');
+    st.org.contact=String(o.org.contact||'');st.org.esc=String(o.org.esc||'');
+  }
+  var r=(o.rot&&typeof o.rot==='object')?o.rot:{};
+  st.rot={
+    start:typeof r.start==='string'?r.start:b.rot.start,
+    time:typeof r.time==='string'?r.time:b.rot.time,
+    cad:(r.cad==='daily'||r.cad==='weekly'||r.cad==='fortnightly'||r.cad==='custom')?r.cad:'weekly',
+    step:Math.min(31,Math.max(1,intv(r.step,7))),
+    periods:Math.min(MAXSHIFTS,Math.max(1,intv(r.periods,8))),
+    wknd:WKSETS[r.wknd]?r.wknd:'satsun',
+    mode:(r.mode==='strict')?'strict':'balanced',
+    b2b:r.b2b!==false,
+    tz:typeof r.tz==='string'?r.tz:''
+  };
+  if(Object.prototype.toString.call(o.members)==='[object Array]'){
+    for(var i=0;i<o.members.length&&i<60;i++){
+      var m=o.members[i]||{};
+      st.members.push({id:typeof m.id==='string'&&m.id?m.id:uid(),
+        name:String(m.name||''),contact:String(m.contact||''),
+        black:String(m.black||''),active:m.active!==false});
+    }
+  }
+  if(!st.members.length)st.members=b.members;
+  if(o.ov&&typeof o.ov==='object'){
+    for(var k in o.ov){if(Object.prototype.hasOwnProperty.call(o.ov,k)){
+      var val=o.ov[k];if(typeof val==='string')st.ov[k]=val;}}
+  }
+  if(Object.prototype.toString.call(o.swaps)==='[object Array]'){
+    for(var j=0;j<o.swaps.length&&j<400;j++){
+      var w=o.swaps[j]||{};
+      var legs=[];
+      if(Object.prototype.toString.call(w.legs)==='[object Array]'){
+        for(var q=0;q<w.legs.length&&q<2;q++){
+          var lg=w.legs[q]||{};
+          legs.push({date:String(lg.date||''),no:intv(lg.no,0),
+            label:String(lg.label||''),from:String(lg.from||''),to:String(lg.to||'')});
+        }
+      }
+      if(legs.length)st.swaps.push({ts:String(w.ts||''),
+        type:(w.type==='swap'?'swap':'cover'),legs:legs,note:String(w.note||'')});
+    }
+  }
+  return st;
+}
+
+/* ── parsing: blackout dates & holidays ────────────────────────── */
+function parseBlackout(txt){
+  var res={set:{},count:0,err:''};
+  var parts=String(txt||'').split(/[,;\n]+/);
+  for(var i=0;i<parts.length;i++){
+    var raw=parts[i].replace(/\s+/g,'');
+    if(!raw)continue;
+    var seg=raw.split('..');
+    if(seg.length===1){
+      var d=dparse(seg[0]);
+      if(!d){res.err='"'+parts[i].trim()+'" is not a date — use YYYY-MM-DD';return res;}
+      if(!res.set[diso(d)]){res.set[diso(d)]=1;res.count++;}
+    }else if(seg.length===2){
+      var a=dparse(seg[0]),b=dparse(seg[1]);
+      if(!a||!b){res.err='"'+parts[i].trim()+'" is not a valid range — use YYYY-MM-DD..YYYY-MM-DD';return res;}
+      var span=Math.round((b-a)/86400000);
+      if(span<0){res.err='range "'+parts[i].trim()+'" ends before it starts';return res;}
+      if(span>730){res.err='range "'+parts[i].trim()+'" is longer than two years';return res;}
+      for(var k=0;k<=span;k++){
+        var iso=diso(dadd(a,k));
+        if(!res.set[iso]){res.set[iso]=1;res.count++;}
+      }
+    }else{
+      res.err='"'+parts[i].trim()+'" is not a date or a range';return res;
+    }
+  }
+  return res;
+}
+function parseHolidays(txt){
+  var res={map:{},list:[],err:''};
+  var lines=String(txt||'').split(/[\n;,]+/);
+  for(var i=0;i<lines.length;i++){
+    var ln=lines[i].trim();
+    if(!ln)continue;
+    var eq=ln.indexOf('=');
+    var ds=eq>=0?ln.slice(0,eq).trim():ln;
+    var nm=eq>=0?ln.slice(eq+1).trim():'';
+    var d=dparse(ds);
+    if(!d){res.err='"'+ln+'" is not a date — use YYYY-MM-DD, one per line';return res;}
+    var iso=diso(d);
+    if(!res.map[iso]){res.map[iso]=nm||'Public holiday';res.list.push({iso:iso,d:d,name:res.map[iso]});}
+  }
+  res.list.sort(function(a,b){return a.d-b.d;});
+  return res;
+}
+
+/* ── the model ─────────────────────────────────────────────────── */
+function build(){
+  var M={ok:false,problems:[],shifts:[],mem:[],rota:[],hol:null,
+         step:0,periods:0,startDT:null,endDT:null,wkDays:[],
+         fair:[],totShifts:0,gaps:0,spread:0,wspread:0,hspread:0,target:0};
+
+  var hp=parseHolidays(S.hol);
+  M.hol=hp;
+
+  var wk=WKSETS[S.rot.wknd]||WKSETS.satsun;
+  M.wkDays=wk;
+
+  /* members on the rota, in rota order */
+  for(var i=0;i<S.members.length;i++){
+    var m=S.members[i];
+    var bp=parseBlackout(m.black);
+    var row={id:m.id,idx:i,name:(m.name||'').trim(),contact:(m.contact||'').trim(),
+      active:!!m.active,black:bp.set,blackCount:bp.count,blackErr:bp.err,
+      shifts:0,days:0,wkd:0,hold:0,onRota:false};
+    row.onRota=row.active&&row.name!=='';
+    M.mem.push(row);
+  }
+  M.rota=M.mem.filter(function(r){return r.onRota;});
+
+  /* period */
+  var sd=dparse(S.rot.start);
+  var tm=tparse(S.rot.time);
+  var step=S.rot.cad==='custom'?Math.min(31,Math.max(1,intv(S.rot.step,7))):CAD[S.rot.cad];
+  var periods=Math.min(MAXSHIFTS,Math.max(1,intv(S.rot.periods,8)));
+  M.step=step;M.periods=periods;
+  if(!sd)M.problems.push('start');
+  if(!tm)M.problems.push('time');
+  if(!M.rota.length)M.problems.push('team');
+  if(!sd||!tm)return M;
+
+  var base=new Date(sd.getFullYear(),sd.getMonth(),sd.getDate(),tm.h,tm.m,0,0);
+  M.startDT=base;
+
+  /* shift windows: shift i runs from base+i*step days to base+(i+1)*step days,
+     and covers the `step` calendar days beginning on its start date. */
+  for(var s=0;s<periods;s++){
+    var st=dadd(base,s*step), en=dadd(base,(s+1)*step);
+    var days=[],wkd=0,hold=0,holNames=[];
+    for(var d=0;d<step;d++){
+      var day=dadd(base,s*step+d);
+      var iso=diso(day);
+      days.push(iso);
+      if(wk.indexOf(day.getDay())>=0)wkd++;
+      if(hp.map[iso]){hold++;holNames.push(hp.map[iso]);}
+    }
+    M.shifts.push({no:s+1,start:st,end:en,startISO:diso(st),endISO:diso(en),
+      days:days,wkd:wkd,hold:hold,holNames:holNames,base:-1,fin:-1,src:'auto'});
+  }
+  M.endDT=M.shifts.length?M.shifts[M.shifts.length-1].end:base;
+  if(!M.rota.length)return M;
+
+  /* ── round-robin allocation ─────────────────────────────────── */
+  var n=M.rota.length,counts=[],k;
+  for(k=0;k<n;k++)counts.push(0);
+  var ptr=0,prev=-1;
+  for(var q=0;q<M.shifts.length;q++){
+    var sh=M.shifts[q],cand=[];
+    for(k=0;k<n;k++){
+      var idx=(ptr+k)%n;
+      if(free(M.rota[idx],sh))cand.push(idx);
+    }
+    if(!cand.length){sh.base=-1;prev=-1;continue;}
+    var pick=choose(cand,counts,S.rot.mode);
+    if(S.rot.b2b&&pick===prev&&cand.length>1){
+      var alt=[];
+      for(k=0;k<cand.length;k++)if(cand[k]!==prev)alt.push(cand[k]);
+      pick=choose(alt,counts,S.rot.mode);
+    }
+    sh.base=pick;counts[pick]++;ptr=(pick+1)%n;prev=pick;
+  }
+
+  /* ── manual overrides & swaps, applied on top ────────────────── */
+  for(var z=0;z<M.shifts.length;z++){
+    var sf=M.shifts[z];
+    sf.fin=sf.base;sf.src='auto';
+    var o=S.ov[sf.startISO];
+    if(typeof o==='string'&&o!==''){
+      if(o==='-'){sf.fin=-1;sf.src='manual';}
+      else{
+        var f=-1;
+        for(k=0;k<M.rota.length;k++)if(M.rota[k].id===o)f=k;
+        if(f>=0){sf.fin=f;sf.src=(f===sf.base?'auto':'manual');}
+      }
+    }
+    if(sf.fin<0)M.gaps++;
+  }
+
+  /* ── fairness, measured on the final (post-swap) allocation ──── */
+  for(var y=0;y<M.shifts.length;y++){
+    var s2=M.shifts[y];
+    if(s2.fin<0)continue;
+    var r=M.rota[s2.fin];
+    r.shifts++;r.days+=s2.days.length;r.wkd+=s2.wkd;r.hold+=s2.hold;
+    M.totShifts++;
+  }
+  var mins=null,maxs=null,minw=null,maxw=null,minh=null,maxh=null;
+  for(k=0;k<M.rota.length;k++){
+    var rr=M.rota[k];
+    if(mins===null||rr.shifts<mins)mins=rr.shifts;
+    if(maxs===null||rr.shifts>maxs)maxs=rr.shifts;
+    if(minw===null||rr.wkd<minw)minw=rr.wkd;
+    if(maxw===null||rr.wkd>maxw)maxw=rr.wkd;
+    if(minh===null||rr.hold<minh)minh=rr.hold;
+    if(maxh===null||rr.hold>maxh)maxh=rr.hold;
+  }
+  M.spread=(maxs===null)?0:maxs-mins;
+  M.wspread=(maxw===null)?0:maxw-minw;
+  M.hspread=(maxh===null)?0:maxh-minh;
+  M.target=M.rota.length?M.shifts.length/M.rota.length:0;
+  M.maxShifts=maxs||0;
+  M.ok=true;
+  return M;
+}
+function free(r,sh){
+  for(var i=0;i<sh.days.length;i++)if(r.black[sh.days[i]])return false;
+  return true;
+}
+function choose(cand,counts,mode){
+  if(mode==='strict')return cand[0];
+  var best=cand[0];
+  for(var j=1;j<cand.length;j++)if(counts[cand[j]]<counts[best])best=cand[j];
+  return best;
+}
+
+/* ── "as at" moment ────────────────────────────────────────────── */
+function asAtDate(){
+  if(S.asAt){
+    var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(S.asAt);
+    if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],0,0);
+  }
+  return new Date();
+}
+function positions(M,now){
+  var p={cur:-1,next:-1,state:'none'};
+  if(!M.shifts.length)return p;
+  if(now<M.shifts[0].start){p.state='before';p.next=0;return p;}
+  if(now>=M.shifts[M.shifts.length-1].end){p.state='after';return p;}
+  for(var i=0;i<M.shifts.length;i++){
+    if(now>=M.shifts[i].start&&now<M.shifts[i].end){
+      p.cur=i;p.next=(i+1<M.shifts.length)?i+1:-1;p.state='in';return p;
+    }
+  }
+  return p;
+}
+
+/* ══ rendering ════════════════════════════════════════════════════ */
+var M=null;
+
+function nameOf(M,i){return (i>=0&&M.rota[i])?M.rota[i].name:'';}
+
+function renderAll(opts){
+  opts=opts||{};
+  M=build();
+  var focusId=document.activeElement?document.activeElement.id:'';
+  validate();
+  paintNow();
+  renderFair();
+  renderSchedule();
+  renderSwaps();
+  renderTeamMeta();
+  renderMisc();
+  buildPrintDoc();
+  if(focusId&&/^sel-/.test(focusId)){
+    var el=document.getElementById(focusId);
+    if(el&&el.focus)el.focus();
+  }
+  if(!opts.noSave)save();
+}
+
+function validate(){
+  var sd=dparse(S.rot.start),tm=tparse(S.rot.time);
+  setErr($('#eStart'),sd?'':'Enter a valid start date.');mark($('#iStart'),!sd);
+  setErr($('#eTime'),tm?'':'Enter a valid handover time (HH:MM).');mark($('#iTime'),!tm);
+  var per=intv(S.rot.periods,0);
+  var perBad=!(per>=1&&per<=MAXSHIFTS);
+  setErr($('#ePeriods'),perBad?('Enter a whole number of shifts, 1 to '+MAXSHIFTS+'.'):'');
+  mark($('#iPeriods'),perBad);
+  var stBad=false;
+  if(S.rot.cad==='custom'){var st=intv(S.rot.step,0);stBad=!(st>=1&&st<=31);}
+  setErr($('#eStep'),stBad?'Enter a whole number of days, 1 to 31.':'');mark($('#iStep'),stBad);
+  setErr($('#eHol'),M.hol.err||'');mark($('#iHol'),!!M.hol.err);
+}
+
+function paintNow(){
+  if(!M)return;
+  var now=asAtDate();
+  var p=positions(M,now);
+  var kEl=$('#sNowK'),vEl=$('#sNow'),subEl=$('#sNowSub');
+  var handV=$('#sHand'),handS=$('#sHandSub'),nx=$('#sNext'),nxS=$('#sNextSub');
+  var tz=S.rot.tz?(' · '+S.rot.tz):'';
+
+  if(!M.shifts.length||!M.rota.length){
+    kEl.textContent='On call now';
+    vEl.textContent='—';
+    subEl.textContent=!M.rota.length?'Add at least one person with a name to the rota.'
+      :'Set a valid start date and handover time.';
+    handV.textContent='—';handS.textContent='—';
+    nx.textContent='—';nxS.textContent='—';
+  }else if(p.state==='before'){
+    var f=M.shifts[0];
+    kEl.textContent='On call from '+fmtDshort(f.start);
+    vEl.textContent=f.fin>=0?nameOf(M,f.fin):'Not covered';
+    subEl.textContent=(f.fin>=0&&M.rota[f.fin].contact?M.rota[f.fin].contact+' · ':'')+
+      'rota starts '+fmtDT(f.start)+tz;
+    handV.textContent=dur(f.start-now);
+    handS.textContent='First handover '+fmtDT(f.start);
+    var n2=M.shifts[1];
+    nx.textContent=n2?(n2.fin>=0?nameOf(M,n2.fin):'Not covered'):'—';
+    nxS.textContent=n2?('from '+fmtDT(n2.start)):'Only one shift generated';
+  }else if(p.state==='after'){
+    kEl.textContent='Rota ended';
+    vEl.textContent='—';
+    subEl.textContent='The last shift ended '+fmtDT(M.shifts[M.shifts.length-1].end)+
+      '. Extend the rota by generating more shifts.';
+    handV.textContent='—';handS.textContent='No handover scheduled';
+    nx.textContent='—';nxS.textContent='—';
+  }else{
+    var c=M.shifts[p.cur];
+    kEl.textContent='On call now';
+    vEl.textContent=c.fin>=0?nameOf(M,c.fin):'Not covered';
+    subEl.textContent=(c.fin>=0&&M.rota[c.fin].contact?M.rota[c.fin].contact+' · ':'')+
+      'shift '+c.no+' since '+fmtDT(c.start)+tz;
+    handV.textContent=dur(c.end-now);
+    handS.textContent=fmtDT(c.end)+tz;
+    var nn=p.next>=0?M.shifts[p.next]:null;
+    nx.textContent=nn?(nn.fin>=0?nameOf(M,nn.fin):'Not covered'):'—';
+    nxS.textContent=nn?((nn.fin>=0&&M.rota[nn.fin].contact?M.rota[nn.fin].contact+' · ':'')+
+      'shift '+nn.no):'Last shift of the rota';
+  }
+
+  var gapBox=$('#sGapBox');
+  $('#sGap').textContent=M.rota.length?String(M.gaps):'—';
+  $('#sGapSub').textContent=!M.rota.length?'—':(M.gaps?
+    'nobody is available — check blackout dates':'every shift has a named person');
+  gapBox.className='stat'+(M.rota.length?(M.gaps?' flagbad':' flagok'):'');
+
+  var fairBox=$('#sFairBox');
+  $('#sFair').textContent=M.rota.length?String(M.spread):'—';
+  $('#sFairSub').textContent=!M.rota.length?'—':(M.spread===0?'identical shift counts':
+    'shifts between busiest and quietest');
+  fairBox.className='stat'+(M.rota.length?(M.spread<=1?' flagok':(M.spread<=2?'':' flagbad')):'');
+
+  /* row highlights */
+  for(var i=0;i<M.shifts.length;i++){
+    var tr=document.getElementById('row-'+i);
+    if(!tr)continue;
+    tr.className=(i===p.cur?'isnow ':'')+(M.shifts[i].fin<0?'gap':'');
+    var stc=document.getElementById('st-'+i);
+    if(stc)stc.innerHTML=statusTags(M.shifts[i],i,p,now);
+  }
+}
+
+function statusTags(sh,i,p,now){
+  var t=[];
+  if(i===p.cur)t.push('<span class="tag now">On call now</span>');
+  else if(i===p.next)t.push('<span class="tag next">Next</span>');
+  else if(sh.end<=now)t.push('<span class="tag past">Done</span>');
+  if(sh.fin<0)t.push('<span class="tag gp">Uncovered</span>');
+  if(sh.src==='manual')t.push('<span class="tag sw">Manual</span>');
+  if(sh.hold>0)t.push('<span class="tag hol">Hol &times;'+sh.hold+'</span>');
+  return '<span class="tags">'+(t.join('')||'<span class="tag past">Scheduled</span>')+'</span>';
+}
+
+function renderFair(){
+  var host=$('#fairList');
+  if(!M.rota.length){
+    host.innerHTML='<p class="empty">Add people to the rota to see the split.</p>';
+    $('#fairChip').textContent='no team';$('#fairChip').className='chip';
+    $('#fShifts').textContent='—';$('#fTarget').textContent='—';
+    $('#fSpread').textContent='—';$('#fWspread').textContent='—';$('#fHspread').textContent='—';
+    return;
+  }
+  var maxS=M.maxShifts||1,h=[];
+  var tgt=M.target;
+  for(var i=0;i<M.rota.length;i++){
+    var r=M.rota[i];
+    var pct=Math.round((r.shifts/maxS)*100);
+    var cls=r.shifts>Math.ceil(tgt)?' hi':(r.shifts<Math.floor(tgt)?' lo':'');
+    var share=M.totShifts?((r.shifts/M.totShifts)*100).toFixed(1):'0.0';
+    h.push('<div class="kv"><div class="nm">'+esc(r.name)+'</div>'+
+      '<div class="nums">'+r.shifts+' shift'+(r.shifts===1?'':'s')+' · '+r.days+' d</div>'+
+      '<div class="bar"><i class="'+cls.trim()+'" style="width:'+pct+'%"></i></div>'+
+      '<div class="sub">'+r.wkd+' weekend day'+(r.wkd===1?'':'s')+' · '+r.hold+
+      ' holiday day'+(r.hold===1?'':'s')+' · '+share+'% of shifts'+
+      (r.blackCount?' · '+r.blackCount+' blackout day'+(r.blackCount===1?'':'s'):'')+'</div></div>');
+  }
+  host.innerHTML=h.join('');
+  $('#fShifts').textContent=M.totShifts+' of '+M.shifts.length;
+  $('#fTarget').textContent=(Math.round(tgt*100)/100).toFixed(2)+' each';
+  $('#fSpread').textContent=M.spread;
+  $('#fWspread').textContent=M.wspread+' day'+(M.wspread===1?'':'s');
+  $('#fHspread').textContent=M.hspread+' day'+(M.hspread===1?'':'s');
+  $('#fSpread').className='v '+(M.spread<=1?'ok':(M.spread<=2?'warn':'bad'));
+  var wkPerShift=0;
+  for(var q=0;q<M.shifts.length;q++)if(M.shifts[q].wkd>wkPerShift)wkPerShift=M.shifts[q].wkd;
+  $('#fWspread').className='v '+(M.wspread<=Math.max(1,wkPerShift)?'ok':'warn');
+  $('#fHspread').className='v '+(M.hspread<=1?'ok':'warn');
+  var chip=$('#fairChip');
+  if(M.spread<=1){chip.textContent='Even split';chip.className='chip ok';}
+  else if(M.spread<=2){chip.textContent='Slightly uneven';chip.className='chip warn';}
+  else{chip.textContent='Uneven — review';chip.className='chip bad';}
+}
+
+function renderSchedule(){
+  var body=$('#schedBody');
+  if(!M.shifts.length||!M.rota.length){
+    body.innerHTML='<tr><td colspan="9"><p class="empty">'+
+      (!M.rota.length?'Add at least one person with a name, then the rota builds itself.'
+        :'Set a valid start date and handover time.')+'</p></td></tr>';
+    $('#schedChip').textContent='—';$('#schedChip').className='chip';
+    $('#schedFoot').textContent='—';
+    return;
+  }
+  var now=asAtDate(),p=positions(M,now),h=[];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i];
+    var r=s.fin>=0?M.rota[s.fin]:null;
+    var opts=['<option value=""'+(!S.ov[s.startISO]?' selected':'')+'>Auto — '+
+      esc(s.base>=0?nameOf(M,s.base):'nobody available')+'</option>'];
+    for(var k=0;k<M.rota.length;k++){
+      opts.push('<option value="'+esc(M.rota[k].id)+'"'+
+        (S.ov[s.startISO]===M.rota[k].id?' selected':'')+'>'+esc(M.rota[k].name)+'</option>');
+    }
+    opts.push('<option value="-"'+(S.ov[s.startISO]==='-'?' selected':'')+'>&mdash; Nobody &mdash;</option>');
+    h.push('<tr id="row-'+i+'" class="'+(i===p.cur?'isnow ':'')+(s.fin<0?'gap':'')+'">'+
+      '<td class="n">'+s.no+'</td>'+
+      '<td class="dt"><span class="d1">'+esc(fmtD(s.start))+'</span><br><span class="d2">'+fmtT(s.start)+'</span></td>'+
+      '<td class="dt"><span class="d1">'+esc(fmtD(s.end))+'</span><br><span class="d2">'+fmtT(s.end)+'</span></td>'+
+      '<td class="n">'+s.days.length+'</td>'+
+      '<td class="n">'+s.wkd+'</td>'+
+      '<td class="n">'+s.hold+'</td>'+
+      '<td class="who">'+(r?('<span class="nm">'+esc(r.name)+'</span>'+
+        (r.contact?'<br><span class="ct">'+esc(r.contact)+'</span>':''))
+        :'<span class="nm" style="color:var(--bad)">Not covered</span>')+'</td>'+
+      '<td><label class="sr" for="sel-'+i+'">Assign shift '+s.no+'</label>'+
+        '<select id="sel-'+i+'" data-shift="'+i+'" class="asg">'+opts.join('')+'</select></td>'+
+      '<td id="st-'+i+'">'+statusTags(s,i,p,now)+'</td></tr>');
+  }
+  body.innerHTML=h.join('');
+  var chip=$('#schedChip');
+  chip.textContent=M.shifts.length+' shifts · '+M.step+' day'+(M.step===1?'':'s')+' each';
+  chip.className='chip';
+  var lastEnd=M.shifts[M.shifts.length-1].end;
+  $('#schedFoot').textContent='Rota runs '+fmtDT(M.startDT)+' to '+fmtDT(lastEnd)+
+    (S.rot.tz?(' ('+S.rot.tz+')'):'')+' · '+M.rota.length+' people on the rota · '+
+    'weekends counted as '+WKLABEL[S.rot.wknd]+' · '+M.hol.list.length+' holiday date'+
+    (M.hol.list.length===1?'':'s')+' entered.';
+  fillSwapSelects();
+}
+
+function fillSwapSelects(){
+  var a=$('#iSwapA'),b=$('#iSwapB');
+  var prevA=a.value,prevB=b.value,oa=[],ob=[];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i];
+    var lbl='Shift '+s.no+' — '+fmtDshort(s.start)+' — '+(s.fin>=0?nameOf(M,s.fin):'not covered');
+    oa.push('<option value="'+i+'">'+esc(lbl)+'</option>');
+    ob.push('<option value="'+i+'">'+esc(lbl)+'</option>');
+  }
+  a.innerHTML=oa.join('');b.innerHTML=ob.join('');
+  if(prevA&&a.querySelector('option[value="'+prevA+'"]'))a.value=prevA;
+  if(prevB&&b.querySelector('option[value="'+prevB+'"]'))b.value=prevB;
+  else if(M.shifts.length>1&&!prevB)b.value='1';
+}
+
+function renderSwaps(){
+  var body=$('#swapBody');
+  if(!S.swaps.length){
+    body.innerHTML='<tr><td colspan="7"><p class="empty">No swaps or cover changes recorded yet. '+
+      'Change the “Assign / cover” box on any shift, or use the swap panel above.</p></td></tr>';
+    $('#swapChip').textContent='none';$('#swapChip').className='chip';
+    return;
+  }
+  var h=[];
+  for(var i=0;i<S.swaps.length;i++){
+    var w=S.swaps[i],sh=[],was=[],now=[];
+    for(var k=0;k<w.legs.length;k++){
+      sh.push(esc(w.legs[k].label||('Shift '+w.legs[k].no)));
+      was.push(esc(w.legs[k].from||'Not covered'));
+      now.push(esc(w.legs[k].to||'Not covered'));
+    }
+    h.push('<tr><td class="mono" style="font-size:12px">'+esc(w.ts)+'</td>'+
+      '<td><span class="tag '+(w.type==='swap'?'sw':'')+'">'+(w.type==='swap'?'Swap':'Cover')+'</span></td>'+
+      '<td>'+sh.join('<br>')+'</td><td>'+was.join('<br>')+'</td><td>'+now.join('<br>')+'</td>'+
+      '<td>'+esc(w.note||'—')+'</td>'+
+      '<td><button type="button" class="rmbtn rmswap" data-i="'+i+'" '+
+      'title="Delete this log entry (it does not undo the change)" aria-label="Delete log entry '+(i+1)+'">&times;</button></td></tr>');
+  }
+  body.innerHTML=h.join('');
+  $('#swapChip').textContent=S.swaps.length+' recorded';
+  $('#swapChip').className='chip ok';
+}
+
+function renderTeam(){
+  var body=$('#memBody'),h=[];
+  for(var i=0;i<S.members.length;i++){
+    var m=S.members[i];
+    h.push('<tr data-i="'+i+'" class="'+(m.active?'':'inact')+'">'+
+      '<td class="n">'+(i+1)+'</td>'+
+      '<td><label class="sr" for="mn-'+i+'">Name of person '+(i+1)+'</label>'+
+        '<input id="mn-'+i+'" type="text" class="mname" data-i="'+i+'" value="'+esc(m.name)+'" placeholder="Full name"></td>'+
+      '<td><label class="sr" for="mc-'+i+'">Contact for person '+(i+1)+'</label>'+
+        '<input id="mc-'+i+'" type="text" class="mcontact" data-i="'+i+'" value="'+esc(m.contact)+'" placeholder="Phone or email"></td>'+
+      '<td><label class="sr" for="mb-'+i+'">Blackout dates for person '+(i+1)+'</label>'+
+        '<input id="mb-'+i+'" type="text" class="mblack bl" data-i="'+i+'" value="'+esc(m.black)+'" '+
+        'placeholder="e.g. 2026-04-06, 2026-04-13..2026-04-20" spellcheck="false">'+
+        '<div class="blmeta" id="bm-'+i+'"></div></td>'+
+      '<td class="c"><label class="sr" for="ma-'+i+'">Person '+(i+1)+' is on the rota</label>'+
+        '<input id="ma-'+i+'" type="checkbox" class="mactive" data-i="'+i+'" '+(m.active?'checked':'')+
+        ' style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td><button type="button" class="rmbtn mup" data-i="'+i+'" aria-label="Move '+(i+1)+' up" title="Move up">&uarr;</button> '+
+        '<button type="button" class="rmbtn mdn" data-i="'+i+'" aria-label="Move '+(i+1)+' down" title="Move down">&darr;</button></td>'+
+      '<td><button type="button" class="rmbtn mrm" data-i="'+i+'" aria-label="Remove person '+(i+1)+'" title="Remove">&times;</button></td></tr>');
+  }
+  body.innerHTML=h.join('');
+}
+
+function renderTeamMeta(){
+  for(var i=0;i<M.mem.length;i++){
+    var r=M.mem[i],el=document.getElementById('bm-'+i),inp=document.getElementById('mb-'+i);
+    if(!el)continue;
+    if(r.blackErr){el.textContent=r.blackErr;el.className='blmeta bad';mark(inp,true);}
+    else{
+      el.className='blmeta';
+      el.textContent=r.blackCount?(r.blackCount+' day'+(r.blackCount===1?'':'s')+' unavailable'):'';
+      mark(inp,false);
+    }
+    var tr=el.closest('tr');
+    if(tr)tr.className=(S.members[i]&&S.members[i].active)?'':'inact';
+  }
+  var on=M.rota.length,tot=S.members.length;
+  var chip=$('#memChip');
+  chip.textContent=on+' of '+tot+' on rota';
+  chip.className='chip'+(on?' ok':' bad');
+}
+
+function renderMisc(){
+  $('#holChip').textContent=M.hol.err?'check dates':(M.hol.list.length+' date'+(M.hol.list.length===1?'':'s'));
+  $('#holChip').className='chip'+(M.hol.err?' bad':'');
+  $('#sampleBanner').hidden=!S.sample;
+  var st=dparse(S.rot.start);
+  if(st&&M.shifts.length){
+    $('#rangeHint').textContent='Handover on a '+DOWL[M.startDT.getDay()]+' at '+fmtT(M.startDT)+
+      '. '+M.shifts.length+' shifts of '+M.step+' day'+(M.step===1?'':'s')+' cover '+
+      fmtD(M.startDT)+' to '+fmtD(dadd(M.startDT,M.shifts.length*M.step-1))+' ('+
+      (M.shifts.length*M.step)+' days).';
+  }else{
+    $('#rangeHint').textContent='Enter a valid start date and handover time to generate the rota.';
+  }
+  $('#methodNote').innerHTML='Shift <em>i</em> starts at the first handover date and time plus '+
+    '<em>i</em> &times; the shift length, and ends when the next shift starts; it covers exactly that '+
+    'many calendar days beginning on its start date, and those days are what the weekend, public-holiday '+
+    'and blackout counts are measured on. Allocation walks the rota in order from the person after the '+
+    'last one picked, skips anyone whose blackout dates touch the shift, and'+
+    (S.rot.mode==='balanced'?' gives the shift to whichever available person has fewest shifts so far, '+
+      'ties going to whoever is next in rota order':' gives the shift to the first available person in that order')+
+    (S.rot.b2b?', avoiding two shifts in a row for the same person where someone else is free':'')+
+    '. Manual assignments and recorded swaps are applied on top and are what the fairness report counts. '+
+    'Weekend days are '+WKLABEL[S.rot.wknd]+'; public holidays are only the dates you enter. All times are '+
+    'local wall-clock times'+(S.rot.tz?(' for '+esc(S.rot.tz)):'')+
+    ' with no daylight-saving conversion applied. Data is saved only in this browser. '+
+    'Not legal, employment or working-time advice.';
+}
+
+/* ══ printed document ═════════════════════════════════════════════ */
+function buildPrintDoc(){
+  var host=$('#printdoc');
+  var now=new Date(),p=positions(M,asAtDate()),h=[];
+  var team=S.org.team||'On-call rotation';
+  var ref='ONCALL-'+slug(team).toUpperCase().slice(0,16)+'-'+String(S.rot.start||'').replace(/-/g,'');
+  var range=(M.shifts.length&&M.startDT)?(fmtD(M.startDT)+' to '+fmtD(M.shifts[M.shifts.length-1].end)):'—';
+
+  h.push('<div class="lh"><div><div class="org">'+esc(S.org.business||'On-call rota')+'</div>'+
+    '<div class="oaddr">'+esc(team)+(S.org.contact?'\n'+esc(S.org.contact):'')+
+    (S.org.esc?'\n'+esc(S.org.esc):'')+'</div></div>'+
+    '<div class="ttl"><h2>ON-CALL ROTA</h2><div class="wk">'+esc(range)+'</div>'+
+    '<div class="ref">Ref '+esc(ref)+'<br>Issued '+esc(fmtD(now))+' '+fmtT(now)+'</div></div></div>');
+
+  /* who is on now */
+  var curName='—',curContact='',nextWhen='—',nextWho='';
+  if(M.shifts.length&&M.rota.length){
+    if(p.state==='in'&&p.cur>=0){
+      var c=M.shifts[p.cur];
+      curName=c.fin>=0?nameOf(M,c.fin):'Not covered';
+      curContact=c.fin>=0?M.rota[c.fin].contact:'';
+      nextWhen=fmtDT(c.end);
+      nextWho=p.next>=0?(M.shifts[p.next].fin>=0?nameOf(M,M.shifts[p.next].fin):'not covered'):'end of rota';
+    }else if(p.state==='before'){
+      curName='Rota not yet started';
+      nextWhen=fmtDT(M.shifts[0].start);
+      nextWho=M.shifts[0].fin>=0?nameOf(M,M.shifts[0].fin):'not covered';
+    }else{curName='Rota ended';}
+  }
+  h.push('<div class="now"><div><div class="lab">On call when issued</div>'+
+    '<div class="big">'+esc(curName)+'</div><div class="sm">'+esc(curContact||'—')+'</div></div>'+
+    '<div><div class="lab">Next handover</div><div class="big" style="font-size:11pt">'+esc(nextWhen)+'</div>'+
+    '<div class="sm">then '+esc(nextWho||'—')+'</div></div>'+
+    '<div><div class="lab">Escalation</div><div class="big" style="font-size:10pt">'+
+    esc(S.org.esc||'Not set')+'</div><div class="sm">'+esc(S.rot.tz||'local time')+'</div></div></div>');
+
+  h.push('<div class="meta">'+
+    cell('Rota',team)+cell('First handover',M.startDT?fmtDT(M.startDT):'—')+
+    cell('Handover every',M.step+' day'+(M.step===1?'':'s')+' at '+(S.rot.time||'—'))+
+    cell('Time zone',S.rot.tz||'Local time')+
+    cell('Shifts',String(M.shifts.length))+
+    cell('People on rota',String(M.rota.length))+
+    cell('Allocation',S.rot.mode==='balanced'?'Balanced round-robin':'Strict round-robin')+
+    cell('Weekend days',WKLABEL[S.rot.wknd])+'</div>');
+
+  /* schedule */
+  h.push('<h3 class="sec">Schedule — '+M.shifts.length+' shift'+(M.shifts.length===1?'':'s')+'</h3>');
+  if(!M.shifts.length||!M.rota.length){
+    h.push('<p style="font-size:9pt">No rota generated — add people and a valid start date.</p>');
+  }else{
+    h.push('<table><colgroup><col style="width:7%"><col style="width:20%"><col style="width:20%">'+
+      '<col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:20%">'+
+      '<col style="width:14%"></colgroup><thead><tr>'+
+      '<th class="c">Shift</th><th>From</th><th>To</th><th class="n">Days</th><th class="n">W/end</th>'+
+      '<th class="n">Hol</th><th>On call</th><th>Contact</th></tr></thead><tbody>');
+    for(var i=0;i<M.shifts.length;i++){
+      var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+      h.push('<tr'+(i===p.cur?' class="hl"':'')+'><td class="c">'+s.no+'</td>'+
+        '<td>'+esc(fmtD(s.start))+' '+fmtT(s.start)+'</td>'+
+        '<td>'+esc(fmtD(s.end))+' '+fmtT(s.end)+'</td>'+
+        '<td class="n">'+s.days.length+'</td><td class="n">'+s.wkd+'</td><td class="n">'+s.hold+'</td>'+
+        '<td>'+esc(r?r.name:'NOT COVERED')+(s.src==='manual'?' *':'')+'</td>'+
+        '<td>'+esc(r?r.contact:'')+'</td></tr>');
+    }
+    h.push('</tbody></table>');
+    var anyManual=false;
+    for(var mm=0;mm<M.shifts.length;mm++)if(M.shifts[mm].src==='manual')anyManual=true;
+    if(anyManual)h.push('<p style="font-size:7.5pt;margin:0 0 4pt">* assigned or swapped by hand — '+
+      'see the swap log below.</p>');
+  }
+
+  /* fairness + holidays */
+  h.push('<div class="cols"><div><h3 class="sec">Fairness</h3>');
+  if(M.rota.length){
+    h.push('<table><thead><tr><th>Person</th><th class="n">Shifts</th><th class="n">Days</th>'+
+      '<th class="n">W/end</th><th class="n">Hol</th></tr></thead><tbody>');
+    for(var k=0;k<M.rota.length;k++){
+      var rr=M.rota[k];
+      h.push('<tr><td>'+esc(rr.name)+'</td><td class="n">'+rr.shifts+'</td><td class="n">'+rr.days+
+        '</td><td class="n">'+rr.wkd+'</td><td class="n">'+rr.hold+'</td></tr>');
+    }
+    var tD=0,tW=0,tH=0;
+    for(var tt=0;tt<M.rota.length;tt++){tD+=M.rota[tt].days;tW+=M.rota[tt].wkd;tH+=M.rota[tt].hold;}
+    h.push('</tbody><tfoot><tr><td>Total</td><td class="n">'+M.totShifts+'</td><td class="n">'+tD+
+      '</td><td class="n">'+tW+'</td><td class="n">'+tH+'</td></tr>'+
+      '<tr><td>Spread (max &minus; min)</td><td class="n">'+M.spread+'</td><td class="n">&mdash;</td>'+
+      '<td class="n">'+M.wspread+'</td><td class="n">'+M.hspread+'</td></tr></tfoot></table>'+
+      '<p style="font-size:7.5pt;margin:0">An equal split of '+M.shifts.length+' shifts across '+
+      M.rota.length+' people is '+(Math.round(M.target*100)/100).toFixed(2)+' each. '+
+      'Spread is the busiest person minus the quietest.</p>');
+  }else{h.push('<p style="font-size:9pt">No one on the rota.</p>');}
+  h.push('</div><div><h3 class="sec">Public holidays &amp; unavailability</h3>');
+  if(M.hol.list.length){
+    h.push('<table><thead><tr><th>Date</th><th>Holiday</th></tr></thead><tbody>');
+    for(var q=0;q<M.hol.list.length;q++)
+      h.push('<tr><td>'+esc(fmtD(M.hol.list[q].d))+'</td><td>'+esc(M.hol.list[q].name)+'</td></tr>');
+    h.push('</tbody></table>');
+  }else{h.push('<p style="font-size:8.5pt;margin-bottom:4pt">No public holidays entered.</p>');}
+  var bl=[];
+  for(var z=0;z<M.rota.length;z++)if(M.rota[z].blackCount)
+    bl.push(esc(M.rota[z].name)+' — '+M.rota[z].blackCount+' day'+(M.rota[z].blackCount===1?'':'s')+
+      ' unavailable ('+esc(S.members[M.rota[z].idx].black)+')');
+  h.push('<p style="font-size:8pt;line-height:1.45">'+(bl.length?bl.join('<br>')
+    :'No blackout dates recorded.')+'</p></div></div>');
+
+  /* swaps */
+  h.push('<h3 class="sec">Swaps &amp; cover recorded</h3>');
+  if(S.swaps.length){
+    h.push('<table><colgroup><col style="width:16%"><col style="width:10%"><col style="width:24%">'+
+      '<col style="width:18%"><col style="width:18%"><col style="width:14%"></colgroup><thead><tr>'+
+      '<th>Recorded</th><th>Type</th><th>Shift</th><th>Was</th><th>Now</th><th>Reason</th></tr></thead><tbody>');
+    for(var w=0;w<S.swaps.length;w++){
+      var sw=S.swaps[w],a=[],b=[],c2=[];
+      for(var lg=0;lg<sw.legs.length;lg++){
+        a.push(esc(sw.legs[lg].label));b.push(esc(sw.legs[lg].from||'not covered'));
+        c2.push(esc(sw.legs[lg].to||'not covered'));
+      }
+      h.push('<tr><td>'+esc(sw.ts)+'</td><td>'+(sw.type==='swap'?'Swap':'Cover')+'</td><td>'+
+        a.join('<br>')+'</td><td>'+b.join('<br>')+'</td><td>'+c2.join('<br>')+'</td><td>'+
+        esc(sw.note||'')+'</td></tr>');
+    }
+    h.push('</tbody></table>');
+  }else{h.push('<p style="font-size:9pt">None recorded.</p>');}
+
+  h.push('<div class="cols" style="margin-top:8pt"><div class="box"><b class="t">Important — read before publishing</b>'+
+    'This rota is a planning aid. It allocates cover fairly and shows who holds the pager; it does '+
+    '<b>not</b> check rest periods, maximum weekly hours, night-work limits or standby and call-out pay, '+
+    'and it uses only the public-holiday dates entered by hand. Check the rota against contracts of '+
+    'employment, any collective or works agreement, and the working-time rules applying where each person '+
+    'is based. Take advice from your HR or legal adviser if in doubt.</div>'+
+    '<div class="box"><b class="t">How this rota was built</b>'+
+    'Shift <i>i</i> runs from the first handover plus <i>i</i> &times; '+M.step+' day'+(M.step===1?'':'s')+
+    ' until the next shift begins, covering '+M.step+' calendar day'+(M.step===1?'':'s')+
+    ' from its start date. Allocation walks the rota order from the person after the last one picked and '+
+    'skips anyone whose unavailable dates touch the shift'+
+    (S.rot.mode==='balanced'?', giving the shift to whichever available person has fewest shifts so far'
+      :', giving the shift to the first available person')+
+    (S.rot.b2b?', and avoids back-to-back shifts where someone else is free':'')+
+    '. Hand-made assignments and swaps override that and are counted in the fairness table. Times are '+
+    'local wall-clock times with no daylight-saving conversion.</div></div>');
+
+  h.push('<div class="sign"><div><i></i>Prepared by</div><div><i></i>Approved by</div><div><i></i>Date</div></div>');
+  h.push('<p class="fine">'+esc(S.org.business||'')+(S.org.business?' — ':'')+esc(team)+
+    ' · rota issued '+esc(fmtD(now))+' '+fmtT(now)+' · ref '+esc(ref)+
+    ' · generated with the Solvix On-Call Rotation Planner. Figures are derived from the entries above; '+
+    'check them before you rely on them.</p>');
+  host.innerHTML=h.join('');
+}
+function cell(k,v){return '<div><b>'+esc(k)+'</b><span>'+esc(v||'—')+'</span></div>';}
+
+/* ══ exports ══════════════════════════════════════════════════════ */
+function dl(name,mime,text,bom){
+  try{
+    var blob=new Blob([(bom?'\ufeff':'')+text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){toast('Could not create the file in this browser.',true);}
+}
+function csvCell(v){
+  v=(v==null?'':String(v));
+  return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;
+}
+function csv(rows){
+  var out=[];
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i],line=[];
+    for(var j=0;j<r.length;j++)line.push(csvCell(r[j]));
+    out.push(line.join(','));
+  }
+  return out.join('\r\n')+'\r\n';
+}
+function fname(kind,ext){
+  return 'on-call-'+kind+'-'+slug(S.org.team||S.org.business||'rota')+'-'+
+    (S.rot.start||'undated')+'.'+ext;
+}
+function exportScheduleCsv(){
+  var rows=[['On-call rota',S.org.team||''],['Organisation',S.org.business||''],
+    ['Rota owner',S.org.contact||''],['Escalation',S.org.esc||''],
+    ['First handover',(M.startDT?fmtDT(M.startDT):'')],['Shift length (days)',M.step],
+    ['Shifts',M.shifts.length],['Time zone',S.rot.tz||'local'],
+    ['Allocation',S.rot.mode==='balanced'?'Balanced round-robin':'Strict round-robin'],
+    ['Weekend days',WKLABEL[S.rot.wknd]],['Exported',fmtD(new Date())+' '+fmtT(new Date())],[],
+    ['Shift','Start date','Start time','End date','End time','Days','Weekend days',
+     'Public holiday days','Holiday names','On call','Contact','Source','Auto pick']];
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+    rows.push([s.no,s.startISO,fmtT(s.start),s.endISO,fmtT(s.end),s.days.length,s.wkd,s.hold,
+      s.holNames.join('; '),r?r.name:'NOT COVERED',r?r.contact:'',
+      s.src==='manual'?'Manual / swap':'Round-robin',
+      s.base>=0?nameOf(M,s.base):'nobody available']);
+  }
+  dl(fname('schedule','csv'),'text/csv;charset=utf-8',csv(rows),true);
+  toast('Schedule CSV downloaded.');
+}
+function exportFairCsv(){
+  var rows=[['On-call fairness report',S.org.team||''],
+    ['Period',(M.startDT?fmtD(M.startDT):'')+' to '+(M.shifts.length?fmtD(M.shifts[M.shifts.length-1].end):'')],
+    ['Shifts generated',M.shifts.length],['Shifts allocated',M.totShifts],
+    ['Even split would be',(Math.round(M.target*100)/100).toFixed(2)],
+    ['Shift spread',M.spread],['Weekend-day spread',M.wspread],['Holiday-day spread',M.hspread],[],
+    ['Person','Contact','On rota','Shifts','Days on call','Weekend days','Public holiday days',
+     'Blackout days','Share of allocated shifts %']];
+  for(var i=0;i<M.mem.length;i++){
+    var r=M.mem[i];
+    rows.push([r.name,r.contact,r.onRota?'Yes':'No',r.onRota?r.shifts:'',r.onRota?r.days:'',
+      r.onRota?r.wkd:'',r.onRota?r.hold:'',r.blackCount,
+      (r.onRota&&M.totShifts)?((r.shifts/M.totShifts)*100).toFixed(1):'']);
+  }
+  dl(fname('fairness','csv'),'text/csv;charset=utf-8',csv(rows),true);
+  toast('Fairness CSV downloaded.');
+}
+function icsEsc(s){
+  return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/;/g,'\\;')
+    .replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+}
+function fold(line){
+  var out='',s=line;
+  while(s.length>70){out+=s.slice(0,70)+'\r\n ';s=s.slice(70);}
+  return out+s;
+}
+function icsStamp(d){
+  return d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+'T'+
+    p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds())+'Z';
+}
+function icsLocal(d){
+  return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'T'+
+    p2(d.getHours())+p2(d.getMinutes())+'00';
+}
+function exportIcs(){
+  if(!M.shifts.length||!M.rota.length){toast('Nothing to export yet — build a rota first.',true);return;}
+  var L=[],stamp=icsStamp(new Date()),sl=slug(S.org.team||'rota');
+  L.push('BEGIN:VCALENDAR','VERSION:2.0',
+    'PRODID:-//Solvix Toolkit//On-Call Rotation Planner//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    'X-WR-CALNAME:'+icsEsc((S.org.team||'On-call rota')+(S.org.business?' — '+S.org.business:'')));
+  if(S.rot.tz)L.push('X-WR-TIMEZONE:'+icsEsc(S.rot.tz));
+  for(var i=0;i<M.shifts.length;i++){
+    var s=M.shifts[i],r=s.fin>=0?M.rota[s.fin]:null;
+    var desc='Shift '+s.no+' of '+M.shifts.length+'.\n'+
+      'On call: '+(r?r.name:'NOT COVERED')+(r&&r.contact?' ('+r.contact+')':'')+'\n'+
+      'From '+fmtDT(s.start)+' to '+fmtDT(s.end)+(S.rot.tz?' '+S.rot.tz:'')+'.\n'+
+      s.days.length+' days, '+s.wkd+' weekend days, '+s.hold+' public-holiday days'+
+      (s.holNames.length?' ('+s.holNames.join('; ')+')':'')+'.\n'+
+      (s.src==='manual'?'Assigned or swapped by hand.\n':'Allocated by round-robin.\n')+
+      (S.org.esc?'Escalation: '+S.org.esc+'\n':'')+
+      (S.org.contact?'Rota owner: '+S.org.contact+'\n':'');
+    L.push('BEGIN:VEVENT',
+      'UID:oncall-'+sl+'-'+s.startISO.replace(/-/g,'')+'-'+s.no+'@solvix.tools',
+      'DTSTAMP:'+stamp,'DTSTART:'+icsLocal(s.start),'DTEND:'+icsLocal(s.end),
+      'SUMMARY:'+icsEsc('On call: '+(r?r.name:'NOT COVERED')+(S.org.team?' — '+S.org.team:'')),
+      'DESCRIPTION:'+icsEsc(desc),
+      'CATEGORIES:ON-CALL','TRANSP:TRANSPARENT','STATUS:CONFIRMED','SEQUENCE:0',
+      'END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  var out=[];
+  for(var k=0;k<L.length;k++)out.push(fold(L[k]));
+  dl(fname('rota','ics'),'text/calendar;charset=utf-8',out.join('\r\n')+'\r\n',false);
+  toast('Calendar file (.ics) downloaded — '+M.shifts.length+' events.');
+}
+function exportJson(){
+  dl(fname('rota','json'),'application/json',JSON.stringify(S,null,2),false);
+  toast('JSON saved — import it here to restore everything.');
+}
+function importJson(file){
+  if(!file)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      S=normalise(o);
+      renderTeam();fillForm();renderAll();
+      toast('Imported '+S.members.length+' people and '+S.swaps.length+' log entries.');
+    }catch(e){toast('That file could not be read as a saved rota.',true);}
+  };
+  fr.onerror=function(){toast('That file could not be read.',true);};
+  fr.readAsText(file);
+}
+function toast(msg,bad){
+  var el=$('#swapMsg');
+  el.textContent=msg;
+  el.style.color=bad?'var(--bad)':'';
+  el.style.background=bad?'var(--bad-wash)':'';
+  clearTimeout(toast._t);
+  toast._t=setTimeout(function(){el.textContent='';},6000);
+}
+
+/* ══ form <-> state ═══════════════════════════════════════════════ */
+function fillForm(){
+  $('#iOrg').value=S.org.business;$('#iTeam').value=S.org.team;
+  $('#iContact').value=S.org.contact;$('#iEsc').value=S.org.esc;
+  $('#iStart').value=S.rot.start;$('#iTime').value=S.rot.time;
+  $('#iCad').value=S.rot.cad;$('#iStep').value=S.rot.step;
+  $('#iPeriods').value=S.rot.periods;$('#iTz').value=S.rot.tz;
+  $('#iMode').value=S.rot.mode;$('#iWknd').value=S.rot.wknd;
+  $('#iB2B').checked=!!S.rot.b2b;
+  $('#iHol').value=S.hol;
+  $('#iAsAt').value=S.asAt||'';
+  $('#stepWrap').hidden=(S.rot.cad!=='custom');
+}
+function touched(){if(S.sample){S.sample=false;$('#sampleBanner').hidden=true;}}
+
+function bind(sel,ev,fn){
+  var el=$(sel);
+  el.addEventListener(ev,function(){fn(el);touched();renderAll();});
+}
+bind('#iOrg','input',function(e){S.org.business=e.value;});
+bind('#iTeam','input',function(e){S.org.team=e.value;});
+bind('#iContact','input',function(e){S.org.contact=e.value;});
+bind('#iEsc','input',function(e){S.org.esc=e.value;});
+bind('#iStart','input',function(e){S.rot.start=e.value;});
+bind('#iTime','input',function(e){S.rot.time=e.value;});
+bind('#iTz','input',function(e){S.rot.tz=e.value;});
+bind('#iPeriods','input',function(e){S.rot.periods=intv(e.value,S.rot.periods);});
+bind('#iStep','input',function(e){S.rot.step=intv(e.value,S.rot.step);});
+bind('#iMode','change',function(e){S.rot.mode=e.value;});
+bind('#iWknd','change',function(e){S.rot.wknd=e.value;});
+bind('#iB2B','change',function(e){S.rot.b2b=e.checked;});
+bind('#iHol','input',function(e){S.hol=e.value;});
+bind('#iCad','change',function(e){
+  S.rot.cad=e.value;
+  if(e.value!=='custom')S.rot.step=CAD[e.value];
+  else if(!(S.rot.step>=1))S.rot.step=3;
+  $('#stepWrap').hidden=(e.value!=='custom');
+  $('#iStep').value=S.rot.step;
+});
+$('#iAsAt').addEventListener('input',function(){S.asAt=$('#iAsAt').value;renderAll();});
+$('#btnNow').addEventListener('click',function(){S.asAt='';$('#iAsAt').value='';renderAll();});
+
+/* team table */
+$('#memBody').addEventListener('input',function(ev){
+  var t=ev.target,i=intv(t.getAttribute('data-i'),-1);
+  if(i<0||!S.members[i])return;
+  if(t.classList.contains('mname'))S.members[i].name=t.value;
+  else if(t.classList.contains('mcontact'))S.members[i].contact=t.value;
+  else if(t.classList.contains('mblack'))S.members[i].black=t.value;
+  else return;
+  touched();renderAll();
+});
+$('#memBody').addEventListener('change',function(ev){
+  var t=ev.target,i=intv(t.getAttribute('data-i'),-1);
+  if(i<0||!S.members[i]||!t.classList.contains('mactive'))return;
+  S.members[i].active=t.checked;touched();renderAll();
+});
+$('#memBody').addEventListener('click',function(ev){
+  var t=ev.target,i=intv(t.getAttribute('data-i'),-1);
+  if(i<0||!S.members[i])return;
+  if(t.classList.contains('mrm')){
+    if(S.members.length<=1){S.members[0]={id:uid(),name:'',contact:'',black:'',active:true};}
+    else S.members.splice(i,1);
+  }else if(t.classList.contains('mup')){
+    if(i===0)return;
+    var a=S.members[i-1];S.members[i-1]=S.members[i];S.members[i]=a;
+  }else if(t.classList.contains('mdn')){
+    if(i>=S.members.length-1)return;
+    var b=S.members[i+1];S.members[i+1]=S.members[i];S.members[i]=b;
+  }else return;
+  touched();renderTeam();renderAll();
+});
+$('#btnAddMem').addEventListener('click',function(){
+  if(S.members.length>=40){toast('Forty people is the limit for one rota.',true);return;}
+  S.members.push({id:uid(),name:'',contact:'',black:'',active:true});
+  touched();renderTeam();renderAll();
+  var el=document.getElementById('mn-'+(S.members.length-1));
+  if(el)el.focus();
+});
+
+/* per-shift assignment */
+$('#schedBody').addEventListener('change',function(ev){
+  var sel=ev.target;
+  if(!sel.classList||!sel.classList.contains('asg'))return;
+  var i=intv(sel.getAttribute('data-shift'),-1);
+  if(i<0||!M.shifts[i])return;
+  var sh=M.shifts[i];
+  var before=sh.fin>=0?nameOf(M,sh.fin):'';
+  var v=sel.value;
+  if(v==='')delete S.ov[sh.startISO];else S.ov[sh.startISO]=v;
+  touched();renderAll();
+  var sh2=M.shifts[i];
+  if(!sh2)return;
+  var after=sh2.fin>=0?nameOf(M,sh2.fin):'';
+  if(after!==before){
+    logEntry('cover',[{date:sh2.startISO,no:sh2.no,
+      label:'Shift '+sh2.no+' — '+fmtDshort(sh2.start),from:before,to:after}],'');
+    renderSwaps();buildPrintDoc();save();
+    toast('Cover recorded: shift '+sh2.no+' '+(before||'not covered')+' → '+(after||'not covered')+'.');
+  }
+});
+
+function logEntry(type,legs,note){
+  var d=new Date();
+  S.swaps.unshift({ts:fmtD(d)+' '+fmtT(d),type:type,legs:legs,note:note||''});
+  if(S.swaps.length>400)S.swaps.length=400;
+}
+
+/* swap panel */
+$('#btnSwap').addEventListener('click',function(){
+  var ia=intv($('#iSwapA').value,-1),ib=intv($('#iSwapB').value,-1);
+  if(ia<0||ib<0||!M.shifts[ia]||!M.shifts[ib]){
+    setErr($('#eSwap'),'Pick two shifts to swap.');return;}
+  if(ia===ib){setErr($('#eSwap'),'Pick two different shifts — a shift cannot swap with itself.');return;}
+  setErr($('#eSwap'),'');
+  var sa=M.shifts[ia],sb=M.shifts[ib];
+  var ra=sa.fin>=0?M.rota[sa.fin]:null, rb=sb.fin>=0?M.rota[sb.fin]:null;
+  if(!ra&&!rb){setErr($('#eSwap'),'Neither shift has anyone on it — nothing to swap.');return;}
+  var na=ra?ra.name:'',nb=rb?rb.name:'';
+  S.ov[sa.startISO]=rb?rb.id:'-';
+  S.ov[sb.startISO]=ra?ra.id:'-';
+  logEntry('swap',[
+    {date:sa.startISO,no:sa.no,label:'Shift '+sa.no+' — '+fmtDshort(sa.start),from:na,to:nb},
+    {date:sb.startISO,no:sb.no,label:'Shift '+sb.no+' — '+fmtDshort(sb.start),from:nb,to:na}
+  ],$('#iSwapNote').value.trim());
+  $('#iSwapNote').value='';
+  touched();renderAll();
+  toast('Swap recorded: '+(na||'nobody')+' (shift '+sa.no+') ⇄ '+(nb||'nobody')+' (shift '+sb.no+').');
+});
+$('#swapBody').addEventListener('click',function(ev){
+  var t=ev.target;
+  if(!t.classList||!t.classList.contains('rmswap'))return;
+  var i=intv(t.getAttribute('data-i'),-1);
+  if(i<0||!S.swaps[i])return;
+  S.swaps.splice(i,1);renderSwaps();buildPrintDoc();save();
+  toast('Log entry deleted. The assignment itself was not changed.');
+});
+$('#btnResetOv').addEventListener('click',function(){
+  if(!Object.keys(S.ov).length&&!S.swaps.length){toast('There are no manual changes to reset.');return;}
+  if(!window.confirm('Remove every manual assignment and swap, and rebuild the rota purely by round-robin?\n\nThe swap log will also be cleared. This cannot be undone.'))return;
+  S.ov={};S.swaps=[];renderAll();toast('Rota rebuilt from the round-robin allocation.');
+});
+
+/* toolbar */
+$('#btnPrint').addEventListener('click',function(){buildPrintDoc();window.print();});
+$('#btnCsv').addEventListener('click',exportScheduleCsv);
+$('#btnCsvFair').addEventListener('click',exportFairCsv);
+$('#btnIcs').addEventListener('click',exportIcs);
+$('#btnJson').addEventListener('click',exportJson);
+$('#btnImport').addEventListener('click',function(){$('#fileIn').click();});
+$('#fileIn').addEventListener('change',function(){
+  importJson($('#fileIn').files&&$('#fileIn').files[0]);
+  $('#fileIn').value='';
+});
+$('#btnClear').addEventListener('click',function(){
+  if(!window.confirm('Clear all data?\n\nThe team, the rota settings, every manual assignment and the whole swap log will be deleted from this browser. This cannot be undone.'))return;
+  try{localStorage.removeItem(KEY);}catch(e){}
+  S=blankState();renderTeam();fillForm();renderAll();
+  toast('All data cleared. Enter your own team to start.');
+});
+$('#btnSample').addEventListener('click',function(){
+  if(!window.confirm('Replace what is on screen with the sample rota?'))return;
+  S=sampleState();renderTeam();fillForm();renderAll();
+  toast('Sample rota loaded.');
+});
+$('#btnBlank').addEventListener('click',function(){
+  S=blankState();renderTeam();fillForm();renderAll();
+  toast('Blank rota ready — add your team.');
+});
+
+/* ══ start ════════════════════════════════════════════════════════ */
+S=load();
+if(!S){S=sampleState();}
+renderTeam();fillForm();renderAll({noSave:true});
+save();
+setInterval(function(){if(!S.asAt&&M)paintNow();},30000);
+window.addEventListener('beforeprint',function(){buildPrintDoc();});
+})();
+</script>
+</body>
+</html>

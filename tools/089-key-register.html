@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Key &amp; Access Register — issue log, outstanding keys, audit &amp; lost-key procedure</title>
+<meta name="description" content="Track every key or access card, who holds each copy and for how long, record returns with condition and deposit refunded, flag lost keys with every door affected and whether a lock change is needed, and audit all copies of a key at a glance. Saves in your browser and prints issue receipts and a full audit register.">
+<meta name="theme-color" content="#7A5C1E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237A5C1E'/%3E%3Ccircle cx='12.5' cy='19.5' r='5.5' fill='none' stroke='%23fff' stroke-width='2.1'/%3E%3Cpath d='M16.5 15.5L25.5 6.5M22 10l2.2 2.2M25 7l2.2 2.2' stroke='%23fff' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#7A5C1E;--accent-ink:#5E4717;--accent-wash:#F6F0DF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--accent:#D8B355;--accent-ink:#EBCE84;--accent-wash:#2A2311;--on-accent:#1B1608}}
+:root[data-theme="dark"]{--accent:#D8B355;--accent-ink:#EBCE84;--accent-wash:#2A2311;--on-accent:#1B1608}
+.app{padding-top:14px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:-1px;padding:0;border:0}
+.tw{position:relative}
+.screenonly{display:contents}
+.stack-lg{display:flex;flex-direction:column;gap:14px;min-width:0}
+.stack-lg>*{min-width:0}
+.split>*{min-width:0}
+.mini{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.gap12{margin-top:12px}
+.f.wide{flex:1 1 100%}
+.stat.hero .v{font-size:32px}
+.stat.hero.isbad{border-color:var(--bad);background:var(--bad-wash)}
+.stat.hero.isbad .v{color:var(--bad)}
+.stat .s{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:5px}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ministats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.ministats .stat .v{font-size:17px}
+.ministats .stat.bad .v{color:var(--bad)}
+.curwrap{display:flex;gap:6px}
+.curwrap select{flex:1 1 auto}
+.curwrap input{width:74px;flex:none}
+.xbtn{background:none;border:1px solid transparent;border-radius:4px;color:var(--muted);cursor:pointer;
+  font:16px/1 var(--mono);width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center}
+.xbtn:hover{color:var(--bad);border-color:var(--bad);background:var(--bad-wash)}
+.rowerr td{color:var(--bad);font-size:11.5px;padding:2px 6px 8px;border-bottom:1px solid var(--line)}
+table td.cn{white-space:nowrap}
+#keyTable td select,#keyTable td input{min-width:70px}
+#issueTable input,#issueTable select{min-width:88px}
+#issueTable td.hn{min-width:130px}
+#issueTable select[data-f="condition"]{min-width:140px}
+.copybadge{font:700 12px var(--mono);color:var(--muted)}
+.lostbox{border:1px solid var(--bad);background:var(--bad-wash);border-radius:4px;padding:11px 13px;margin-top:10px}
+.lostbox:first-child{margin-top:0}
+.lostbox h3{color:var(--bad);margin-bottom:6px}
+.lostbox ul{margin:6px 0 0;padding-left:18px}
+.lostbox .lostft{margin-top:9px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.lostbox.resolved{border-color:var(--ok);background:var(--ok-wash)}
+.lostbox.resolved h3{color:var(--ok)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
+  padding:9px 16px;border-radius:6px;font-size:13.5px;box-shadow:var(--sh);z-index:80}
+#toast.bad{background:var(--bad)}
+
+/* print document */
+#prDoc{color:#000}
+.doc-h{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:2px solid #000;
+  padding-bottom:6px;margin-bottom:6mm}
+.doc-h .co-name{font:700 15pt/1.2 var(--sans);letter-spacing:-.01em}
+.doc-h .co-sub{font-size:9pt;line-height:1.4;color:#333}
+.doc-h .rr{text-align:right;font-size:9.5pt;line-height:1.5;white-space:nowrap}
+.doc-h .rr h1{font-size:16pt;letter-spacing:.02em;margin-bottom:3px}
+.docmeta{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 12px;font-size:9.5pt;margin-bottom:8mm}
+.docmeta div{border-bottom:1px solid #ddd;padding:2px 0}
+.docmeta b{display:block;font:700 7.4pt/1.4 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:#555}
+.psec{margin-top:6mm}
+.psec h2{font-size:11.5pt;border-bottom:1px solid #000;padding-bottom:2px;margin-bottom:4px}
+.prtable{width:100%;border-collapse:collapse;font-size:8.6pt}
+.prtable th,.prtable td{border:1px solid #999;padding:3px 4px;vertical-align:top;text-align:left}
+.prtable th{background:#eee;font:700 7.2pt/1.3 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:#333;white-space:normal}
+.prtable td.n,.prtable th.n{font-family:var(--mono);text-align:right;white-space:nowrap}
+.wobox{border:1px solid #999;padding:3.5mm;margin-bottom:4mm;break-inside:avoid}
+.wobox .wo-h{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #000;padding-bottom:2px;margin-bottom:3px}
+.wobox .wo-h b{font-size:10.5pt}
+.wobox .wo-chip{font:700 7.4pt/1.6 var(--sans);letter-spacing:.05em;text-transform:uppercase;border:1px solid #000;padding:1px 5px;white-space:nowrap}
+.wo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px 10px;font-size:8.6pt;margin-bottom:3mm}
+.wo-grid b{display:block;font:700 7pt/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:#555}
+.wo-fill{display:grid;grid-template-columns:1fr 1fr;gap:4mm;font-size:8.6pt}
+.wo-fill .ln{border-bottom:1px solid #000;height:5mm;margin-top:2px}
+.wo-fill .full{grid-column:1/-1}
+.pnote{border:1px solid #666;border-left:4px solid #000;padding:2.5mm 3mm;font-size:8.6pt;line-height:1.45;margin-top:5mm}
+footer{color:var(--muted);font-size:12px;line-height:1.55;margin-top:22px;padding-top:12px;border-top:1px solid var(--line)}
+@media print{
+  .screenonly{display:none!important}
+  #toast{display:none!important}
+  .psec,.wobox{break-inside:avoid}
+  .prtable tr{break-inside:avoid}
+  footer{font-size:8pt;margin-top:5mm;border-top:1px solid #bbb;padding-top:3mm;color:#333}
+}
+@media(max-width:900px){
+  #sumWrap{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:560px){
+  .appbar .sub{display:none}
+  .stat.hero .v{font-size:26px}
+  .note{font-size:12.8px;padding:9px 11px}
+  .appbar .btn{font-size:12.5px;padding:8px 10px}
+  .docmeta{grid-template-columns:repeat(2,1fr)}
+  .wo-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<main class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">KR</div>
+    <div style="min-width:0">
+      <h1>Key &amp; Access Register</h1>
+      <div class="sub">ISSUE · OUTSTANDING · LOST-KEY · AUDIT</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">Export JSON</button>
+    <button type="button" class="btn" id="bImp">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fileImp" accept="application/json,.json" class="sr" aria-label="Import register JSON file">
+  </div>
+</div>
+
+<div class="printonly" id="prDoc"></div>
+
+<div class="note warn" id="disc" style="margin:14px 0">
+  <strong>This register is only as accurate as what is entered.</strong>
+  It tracks who a key was issued to and computes days held, overdue and lost status from the dates you type in — it
+  does not verify physical possession, does not detect unauthorised copies, and is not a substitute for a periodic
+  physical key audit. Where a master key or a key to a controlled or high-security area is lost, treat the affected
+  locks as compromised and get a locksmith's assessment before relying on this record alone.
+</div>
+
+<div class="screenonly">
+<div class="split">
+
+  <div class="stack-lg">
+
+    <section class="card" aria-labelledby="setTitle">
+      <div class="hd"><h2 id="setTitle">Register settings</h2></div>
+      <div class="bd">
+        <div class="note noprint" id="sampleNote" style="margin-bottom:12px">
+          <strong>Sample register loaded.</strong> Three key types with issue history — including an overdue
+          contractor key and one reported lost — so you can see how outstanding keys, the audit view and the
+          lost-key procedure work.
+          <button type="button" class="btn sm" id="bBlank" style="margin-left:6px">Start blank</button>
+        </div>
+        <div class="grid cols-3">
+          <div class="f"><label for="s_cur">Currency</label>
+            <div class="curwrap">
+              <select id="s_cur">
+                <option value="GBP|£">GBP £</option><option value="USD|$">USD $</option><option value="EUR|€">EUR €</option>
+                <option value="AUD|A$">AUD A$</option><option value="CAD|C$">CAD C$</option><option value="NZD|NZ$">NZD NZ$</option>
+                <option value="ZAR|R">ZAR R</option><option value="CUSTOM|¤">Custom…</option>
+              </select>
+              <input type="text" id="s_cursym" maxlength="4" placeholder="Sym" hidden aria-label="Custom currency symbol">
+            </div>
+          </div>
+        </div>
+        <fieldset class="gap12">
+          <legend>Business / site (printed at the head of the document)</legend>
+          <div class="grid cols-3">
+            <div class="f"><label for="c_name">Business name</label><input id="c_name" autocomplete="organization"></div>
+            <div class="f"><label for="c_site">Site / property</label><input id="c_site" autocomplete="off"></div>
+            <div class="f wide"><label for="c_addr">Address</label><input id="c_addr" autocomplete="street-address"></div>
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="sumWrap">
+    <section class="card sticky" id="sumCard" aria-labelledby="smTitle">
+      <div class="hd"><h2 id="smTitle">Register status</h2></div>
+      <div class="bd">
+        <div class="stat hero" id="heroStat">
+          <div class="k">Keys currently out</div>
+          <div class="v" id="heroV">—</div>
+          <div class="s" id="heroS">&nbsp;</div>
+        </div>
+        <div class="chiprow" id="chips"></div>
+        <div class="ministats">
+          <div class="stat"><div class="k">Key types</div><div class="v" id="stTypesV">—</div></div>
+          <div class="stat"><div class="k">Total copies</div><div class="v" id="stCopiesV">—</div></div>
+          <div class="stat"><div class="k">Copies in store</div><div class="v" id="stStoreV">—</div></div>
+          <div class="stat"><div class="k">Deposits held</div><div class="v" id="stDepV">—</div></div>
+        </div>
+      </div>
+      <div class="ft"><span class="mini" id="sumFoot">—</span></div>
+    </section>
+  </div>
+
+</div>
+
+<div class="stack-lg" style="margin-top:14px">
+
+  <section class="card" aria-labelledby="keyTitle">
+    <div class="hd">
+      <h2 id="keyTitle">Key register</h2>
+      <span class="mini" id="keyMini"></span>
+      <button type="button" class="btn sm pri" id="bAddKey">+ Add key</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table id="keyTable">
+          <caption class="sr">Key types with description, door or area covered, number of copies cut and default deposit</caption>
+          <thead><tr>
+            <th scope="col">Key no.</th><th scope="col">Description</th><th scope="col">Door / area covered</th>
+            <th scope="col" class="r">Copies</th><th scope="col" class="r">Deposit</th><th scope="col"><span class="sr">Remove</span></th>
+          </tr></thead>
+          <tbody id="keyBody"></tbody>
+        </table>
+      </div>
+      <div id="keyEmpty" class="empty" hidden>No keys yet — add a key to start the register.</div>
+    </div>
+    <div class="ft"><span class="mini">Separate multiple doors or areas covered by one key with commas — used by the lost-key procedure below.</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="issTitle">
+    <div class="hd">
+      <h2 id="issTitle">Issue &amp; return log</h2>
+      <span class="mini" id="issMini"></span>
+      <button type="button" class="btn sm pri" id="bAddIssue">+ Issue a key</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table id="issueTable">
+          <caption class="sr">Every key issued: holder, dates, deposit, and return with condition and deposit refunded</caption>
+          <thead><tr>
+            <th scope="col">Key</th><th scope="col" class="r">Copy</th><th scope="col">Holder</th>
+            <th scope="col">Issued</th><th scope="col">Expected<br>return</th><th scope="col" class="r">Deposit<br>taken</th>
+            <th scope="col">Return /<br>lost date</th><th scope="col">Condition</th><th scope="col" class="r">Deposit<br>refunded</th>
+            <th scope="col">Status</th><th scope="col"><span class="sr">Remove</span></th>
+          </tr></thead>
+          <tbody id="issueBody"></tbody>
+        </table>
+      </div>
+      <div id="issueEmpty" class="empty" hidden>No keys issued yet.</div>
+    </div>
+    <div class="ft"><span class="mini">Copy number is assigned automatically from the key's spare copies. Leave expected return blank for a key held indefinitely (e.g. a staff master key). Set condition to record a return, or to "Lost" to trigger the lost-key procedure.</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="outTitle">
+    <div class="hd"><h2 id="outTitle">Outstanding keys — by holder</h2><span class="mini" id="outMini"></span></div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table>
+          <caption class="sr">Keys currently out, sorted by days held, longest first</caption>
+          <thead><tr>
+            <th scope="col">Holder</th><th scope="col">Key</th><th scope="col">Door / area</th>
+            <th scope="col" class="r">Copy</th><th scope="col">Issued</th><th scope="col">Expected return</th>
+            <th scope="col" class="r">Days held</th><th scope="col" class="r">Deposit held</th><th scope="col">Status</th>
+          </tr></thead>
+          <tbody id="outBody"></tbody>
+        </table>
+      </div>
+      <div id="outEmpty" class="empty" hidden>No keys are currently outstanding.</div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="lostTitle" id="lostCard" hidden>
+    <div class="hd"><h2 id="lostTitle">Lost-key procedure</h2><span class="mini" id="lostMini"></span></div>
+    <div class="bd" id="lostBody"></div>
+  </section>
+
+  <section class="card" aria-labelledby="auditTitle">
+    <div class="hd"><h2 id="auditTitle">Audit — every copy, every key</h2><span class="mini" id="auditMini"></span></div>
+    <div class="bd" style="padding:0">
+      <div class="tw">
+        <table>
+          <caption class="sr">Every physical copy of every key with its current status and holder</caption>
+          <thead><tr>
+            <th scope="col">Key no.</th><th scope="col" class="r">Copy</th><th scope="col">Door / area</th>
+            <th scope="col">Status</th><th scope="col">Holder / location</th><th scope="col">Since</th>
+          </tr></thead>
+          <tbody id="auditBody"></tbody>
+        </table>
+      </div>
+      <div id="auditEmpty" class="empty" hidden>Add a key to see its copies here.</div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<footer>
+  Days held and overdue status are calculated from the issue and expected-return dates you enter, using today's
+  date. Copy numbers are assigned automatically from each key's spare copies and do not represent a serial number
+  stamped on the physical key. Solvix Key &amp; Access Register — works offline, saves to this browser only.
+</footer>
+
+</main>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+'use strict';
+/* ── helpers ─────────────────────────────────────────────────────── */
+function numOf(v){if(v===''||v==null)return NaN;var n=Number(v);return Number.isFinite(n)?n:NaN;}
+function nz(v,d){var n=numOf(v);return Number.isFinite(n)?n:(d||0);}
+function fix(n){return Object.is(n,-0)?0:n;}
+function r2(v){return Number.isFinite(v)?Math.round((fix(v)+Number.EPSILON)*100)/100:NaN;}
+function newId(p){return (p||'x')+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function today(){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+function iso(d){if(!(d instanceof Date)||isNaN(d))return '';
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function pd(s){if(!s)return null;var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s));if(!m)return null;
+ var d=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(d)?null:d;}
+function addDays(d,n){var x=new Date(d.getTime());x.setDate(x.getDate()+n);return x;}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(d){if(!(d instanceof Date)||isNaN(d))return '—';return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear();}
+function daysBetween(a,b){return Math.round((b.getTime()-a.getTime())/86400000);}
+function money(n){var v=r2(n);return Number.isFinite(v)?state.currency.sym+v.toFixed(2):'—';}
+function moneyOrDash(n){return Number.isFinite(numOf(n))?money(numOf(n)):'—';}
+
+/* ── sample / blank data ────────────────────────────────────────── */
+function buildSample(){
+ var t=today();
+ return {
+  sample:true,
+  currency:{code:'GBP',sym:'£'},
+  co:{name:'Northgate Property Management',site:'Mill Court Apartments',addr:'14 Mill Court, Bristol BS1 4RG'},
+  keys:[
+   {id:'k1',keyNo:'F-01',desc:'Front entrance & bin store',doorArea:'Main entrance, Bin store',copies:5,deposit:20,lockChanged:false},
+   {id:'k2',keyNo:'U-12',desc:'Flat 12 entrance door',doorArea:'Flat 12',copies:3,deposit:15,lockChanged:false},
+   {id:'k3',keyNo:'M-ALL',desc:'Master key — all flats & communal store',doorArea:'Flat 1, Flat 2, Flat 3, Flat 4, Communal store',copies:2,deposit:50,lockChanged:false}
+  ],
+  issues:[
+   {id:'i1',keyId:'k1',copyNo:1,holder:'J. Whitfield — Caretaker',issueDate:iso(addDays(t,-20)),dueDate:'',depositTaken:0,returnDate:'',condition:'',depositRefunded:''},
+   {id:'i2',keyId:'k2',copyNo:1,holder:'M. Chen — Tenant, Flat 12',issueDate:iso(addDays(t,-10)),dueDate:'',depositTaken:15,returnDate:'',condition:'',depositRefunded:''},
+   {id:'i3',keyId:'k1',copyNo:2,holder:'ABC Cleaning Services',issueDate:iso(addDays(t,-45)),dueDate:iso(addDays(t,-15)),depositTaken:20,returnDate:'',condition:'',depositRefunded:''},
+   {id:'i4',keyId:'k3',copyNo:1,holder:'R. Osei — Site Manager',issueDate:iso(addDays(t,-200)),dueDate:'',depositTaken:0,returnDate:'',condition:'',depositRefunded:''},
+   {id:'i5',keyId:'k2',copyNo:2,holder:'S. Patel — Previous tenant',issueDate:iso(addDays(t,-60)),dueDate:iso(addDays(t,-30)),depositTaken:15,returnDate:iso(addDays(t,-5)),condition:'good',depositRefunded:15},
+   {id:'i6',keyId:'k3',copyNo:2,holder:'D. Field — Contractor',issueDate:iso(addDays(t,-90)),dueDate:iso(addDays(t,-60)),depositTaken:50,returnDate:iso(addDays(t,-40)),condition:'lost',depositRefunded:0}
+  ]
+ };
+}
+function blankState(){
+ return {sample:false,currency:{code:'GBP',sym:'£'},co:{name:'',site:'',addr:''},keys:[],issues:[]};
+}
+
+/* ── state & persistence ─────────────────────────────────────────── */
+var KEY='solvix.key-register.v1';
+var state=null;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function load(){
+ try{
+  var raw=localStorage.getItem(KEY);
+  if(raw){var d=JSON.parse(raw);if(d&&typeof d==='object'&&Array.isArray(d.keys)&&Array.isArray(d.issues)){normalize(d);return d;}}
+ }catch(e){}
+ return buildSample();
+}
+function normalize(d){
+ if(!d.co)d.co={name:'',site:'',addr:''};
+ if(!d.currency||!d.currency.sym)d.currency={code:'GBP',sym:'£'};
+ d.keys.forEach(function(k){
+  if(!k.id)k.id=newId('k');
+  if(!Number.isFinite(numOf(k.copies))||k.copies<1)k.copies=1;
+  k.copies=Math.max(1,Math.round(numOf(k.copies)));
+  if(!Number.isFinite(numOf(k.deposit))||k.deposit<0)k.deposit=0;
+  k.lockChanged=!!k.lockChanged;
+ });
+ d.issues.forEach(function(is){
+  if(!is.id)is.id=newId('i');
+  if(!Number.isFinite(numOf(is.copyNo))||is.copyNo<1)is.copyNo=1;
+  if(!Number.isFinite(numOf(is.depositTaken))||is.depositTaken<0)is.depositTaken=0;
+  if(is.condition!=='good'&&is.condition!=='damaged'&&is.condition!=='lost')is.condition='';
+ });
+}
+
+/* ── key / copy logic ───────────────────────────────────────────── */
+function findKey(id){return state.keys.find(function(k){return k.id===id;});}
+function findIssue(id){return state.issues.find(function(is){return is.id===id;});}
+function isOpenIssue(is){return is.condition!=='good'&&is.condition!=='damaged';} /* out, overdue or lost — occupies the copy */
+function nextCopy(keyId,excludeId){
+ var key=findKey(keyId); if(!key)return 1;
+ var used={};
+ state.issues.forEach(function(is){
+  if(is.id===excludeId||is.keyId!==keyId)return;
+  if(isOpenIssue(is))used[is.copyNo]=true;
+ });
+ for(var n=1;n<=key.copies;n++){ if(!used[n])return n; }
+ return key.copies+1;
+}
+function issueStatus(is){
+ if(is.condition==='lost')return {code:'lost',label:'Lost'};
+ if(is.returnDate){
+  var lbl='Returned'+(is.condition==='good'?' — good':is.condition==='damaged'?' — damaged':'');
+  return {code:'returned',label:lbl};
+ }
+ var due=pd(is.dueDate), t=today();
+ if(due&&t.getTime()>due.getTime()){
+  var d=daysBetween(due,t);
+  return {code:'overdue',label:'Overdue '+d+'d',daysOverdue:d};
+ }
+ return {code:'out',label:'Out'};
+}
+function daysHeld(is){
+ var start=pd(is.issueDate); if(!start)return NaN;
+ var end=is.returnDate?pd(is.returnDate):today();
+ if(!end)end=today();
+ return daysBetween(start,end);
+}
+function keyLabel(k){return k?(k.keyNo+' — '+k.desc):'—';}
+function splitAreas(s){return String(s||'').split(/[,;]+/).map(function(x){return x.trim();}).filter(Boolean);}
+
+/* ── computed views ─────────────────────────────────────────────── */
+function outstandingList(){
+ return state.issues.filter(function(is){var s=issueStatus(is);return s.code==='out'||s.code==='overdue';})
+  .map(function(is){return {is:is,key:findKey(is.keyId),status:issueStatus(is),held:daysHeld(is)};})
+  .sort(function(a,b){return b.held-a.held;});
+}
+function lostList(){
+ var byKey={};
+ state.issues.forEach(function(is){
+  if(is.condition!=='lost')return;
+  if(!byKey[is.keyId])byKey[is.keyId]=[];
+  byKey[is.keyId].push(is);
+ });
+ return Object.keys(byKey).map(function(kid){
+  var key=findKey(kid); if(!key)return null;
+  var otherOpen=state.issues.filter(function(is){
+   if(is.keyId!==kid)return false;
+   var s=issueStatus(is); return s.code==='out'||s.code==='overdue';
+  });
+  return {key:key,lostIssues:byKey[kid],otherOpen:otherOpen};
+ }).filter(Boolean);
+}
+function auditRows(){
+ var rows=[];
+ state.keys.forEach(function(k){
+  for(var c=1;c<=k.copies;c++){
+   var hist=state.issues.filter(function(is){return is.keyId===k.id&&is.copyNo===c;})
+    .sort(function(a,b){return (pd(a.issueDate)?pd(a.issueDate).getTime():0)-(pd(b.issueDate)?pd(b.issueDate).getTime():0);});
+   var latest=hist.length?hist[hist.length-1]:null;
+   var row={key:k,copy:c};
+   if(!latest){ row.state='store'; row.who='In store (spare)'; row.since=null; }
+   else {
+    var s=issueStatus(latest);
+    if(s.code==='out'||s.code==='overdue'){ row.state=s.code; row.who=latest.holder||'—'; row.since=pd(latest.issueDate); }
+    else if(s.code==='lost'){ row.state='lost'; row.who='LOST — was '+(latest.holder||'—'); row.since=pd(latest.returnDate)||pd(latest.issueDate); }
+    else { row.state='store'; row.who='In store (returned)'; row.since=pd(latest.returnDate); }
+   }
+   rows.push(row);
+  }
+ });
+ return rows;
+}
+function totals(){
+ var out=outstandingList();
+ var overdue=out.filter(function(r){return r.status.code==='overdue';});
+ var lost=lostList();
+ var unresolvedLost=lost.filter(function(l){return !l.key.lockChanged;});
+ var totalCopies=state.keys.reduce(function(a,k){return a+k.copies;},0);
+ var audit=auditRows();
+ var inStore=audit.filter(function(r){return r.state==='store';}).length;
+ var depositsHeld=out.reduce(function(a,r){return a+nz(r.is.depositTaken,0);},0);
+ return {out:out,overdue:overdue,lost:lost,unresolvedLost:unresolvedLost,totalTypes:state.keys.length,
+  totalCopies:totalCopies,inStore:inStore,depositsHeld:depositsHeld};
+}
+
+/* ── render: summary ─────────────────────────────────────────────── */
+function renderSummary(){
+ var T=totals();
+ $('heroV').textContent=String(T.out.length);
+ var hero=$('heroStat');
+ var bad=T.overdue.length>0||T.unresolvedLost.length>0;
+ hero.classList.toggle('isbad',bad);
+ var bits=[];
+ if(T.overdue.length)bits.push(T.overdue.length+' overdue');
+ if(T.unresolvedLost.length)bits.push(T.unresolvedLost.length+' lost key'+(T.unresolvedLost.length===1?'':'s')+' — lock change needed');
+ $('heroS').innerHTML=bits.length?bits.join(' · '):(T.out.length?'All within expected return':'Nothing currently outstanding');
+ var chips=[];
+ if(T.overdue.length)chips.push('<span class="chip bad">'+T.overdue.length+' overdue</span>');
+ if(T.unresolvedLost.length)chips.push('<span class="chip bad">'+T.unresolvedLost.length+' lost — action needed</span>');
+ if(!T.overdue.length&&!T.unresolvedLost.length)chips.push('<span class="chip ok">Register clear</span>');
+ $('chips').innerHTML=chips.join('');
+ $('stTypesV').textContent=String(T.totalTypes);
+ $('stCopiesV').textContent=String(T.totalCopies);
+ $('stStoreV').textContent=String(T.inStore);
+ $('stDepV').textContent=money(T.depositsHeld);
+ $('sumFoot').textContent=T.totalTypes?(T.totalCopies+' cop'+(T.totalCopies===1?'y':'ies')+' across '+T.totalTypes+' key type'+(T.totalTypes===1?'':'s')):'Add a key to begin';
+}
+
+/* ── render: keys table ──────────────────────────────────────────── */
+function renderKeys(){
+ var body=$('keyBody'); body.innerHTML='';
+ $('keyEmpty').hidden=state.keys.length>0;
+ $('keyMini').textContent=state.keys.length?(state.keys.length+' key type'+(state.keys.length===1?'':'s')):'';
+ state.keys.forEach(function(k){
+  var tr=document.createElement('tr'); tr.setAttribute('data-id',k.id);
+  tr.innerHTML=
+   '<td><input type="text" data-f="keyNo" data-id="'+k.id+'" value="'+esc(k.keyNo)+'" aria-label="Key number"></td>'+
+   '<td><input type="text" data-f="desc" data-id="'+k.id+'" value="'+esc(k.desc)+'" aria-label="Description"></td>'+
+   '<td><input type="text" data-f="doorArea" data-id="'+k.id+'" value="'+esc(k.doorArea)+'" aria-label="Door or area covered"></td>'+
+   '<td class="r"><input type="number" min="1" step="1" inputmode="numeric" data-f="copies" data-id="'+k.id+'" value="'+k.copies+'" aria-label="Number of copies" style="width:64px"></td>'+
+   '<td class="r"><input type="number" min="0" step="0.01" inputmode="decimal" data-f="deposit" data-id="'+k.id+'" value="'+k.deposit+'" aria-label="Default deposit" style="width:80px"></td>'+
+   '<td><button type="button" class="xbtn" data-removekey="'+k.id+'" aria-label="Remove key '+esc(k.keyNo)+'">×</button></td>';
+  body.appendChild(tr);
+ });
+}
+
+/* ── render: issue log ───────────────────────────────────────────── */
+function keyOptions(selId){
+ return state.keys.map(function(k){
+  return '<option value="'+k.id+'"'+(k.id===selId?' selected':'')+'>'+esc(k.keyNo)+'</option>';
+ }).join('');
+}
+function statusChip(s){
+ var cls=s.code==='overdue'||s.code==='lost'?'bad':(s.code==='out'?'warn':'ok');
+ return '<span class="chip '+cls+'">'+esc(s.label)+'</span>';
+}
+function renderIssues(){
+ var body=$('issueBody'); body.innerHTML='';
+ $('issueEmpty').hidden=state.issues.length>0;
+ $('issMini').textContent=state.issues.length?(state.issues.length+' record'+(state.issues.length===1?'':'s')):'';
+ $('bAddIssue').disabled=state.keys.length===0;
+ state.issues.slice().sort(function(a,b){
+  var da=pd(a.issueDate),db=pd(b.issueDate);
+  return (db?db.getTime():0)-(da?da.getTime():0);
+ }).forEach(function(is){
+  var key=findKey(is.keyId);
+  var s=issueStatus(is);
+  var tr=document.createElement('tr'); tr.setAttribute('data-id',is.id);
+  tr.innerHTML=
+   '<td><select data-f="keyId" data-id="'+is.id+'" aria-label="Key">'+keyOptions(is.keyId)+'</select></td>'+
+   '<td class="r cn"><span class="copybadge">#'+is.copyNo+'</span></td>'+
+   '<td class="hn"><input type="text" data-f="holder" data-id="'+is.id+'" value="'+esc(is.holder)+'" aria-label="Holder"></td>'+
+   '<td><input type="date" data-f="issueDate" data-id="'+is.id+'" value="'+esc(is.issueDate)+'" aria-label="Issue date"></td>'+
+   '<td><input type="date" data-f="dueDate" data-id="'+is.id+'" value="'+esc(is.dueDate)+'" aria-label="Expected return date"></td>'+
+   '<td class="r"><input type="number" min="0" step="0.01" inputmode="decimal" data-f="depositTaken" data-id="'+is.id+'" value="'+is.depositTaken+'" aria-label="Deposit taken" style="width:80px"></td>'+
+   '<td><input type="date" data-f="returnDate" data-id="'+is.id+'" value="'+esc(is.returnDate)+'" aria-label="Return or lost date"></td>'+
+   '<td><select data-f="condition" data-id="'+is.id+'" aria-label="Condition">'+
+     '<option value=""'+(is.condition===''?' selected':'')+'>Still out</option>'+
+     '<option value="good"'+(is.condition==='good'?' selected':'')+'>Returned — good</option>'+
+     '<option value="damaged"'+(is.condition==='damaged'?' selected':'')+'>Returned — damaged</option>'+
+     '<option value="lost"'+(is.condition==='lost'?' selected':'')+'>Lost</option>'+
+    '</select></td>'+
+   '<td class="r"><input type="number" min="0" step="0.01" inputmode="decimal" data-f="depositRefunded" data-id="'+is.id+'" value="'+esc(is.depositRefunded)+'" aria-label="Deposit refunded" style="width:80px"></td>'+
+   '<td>'+statusChip(s)+'</td>'+
+   '<td><button type="button" class="xbtn" data-removeissue="'+is.id+'" aria-label="Remove this record">×</button></td>';
+  body.appendChild(tr);
+ });
+}
+
+/* ── render: outstanding ─────────────────────────────────────────── */
+function renderOutstanding(){
+ var list=outstandingList();
+ var body=$('outBody'); body.innerHTML='';
+ $('outEmpty').hidden=list.length>0;
+ $('outMini').textContent=list.length?(list.length+' key'+(list.length===1?'':'s')+' out'):'';
+ list.forEach(function(r){
+  var tr=document.createElement('tr');
+  tr.innerHTML=
+   '<td>'+esc(r.is.holder||'—')+'</td>'+
+   '<td>'+esc(r.key?r.key.keyNo:'—')+'</td>'+
+   '<td>'+esc(r.key?r.key.doorArea:'—')+'</td>'+
+   '<td class="r">#'+r.is.copyNo+'</td>'+
+   '<td>'+fmtDate(pd(r.is.issueDate))+'</td>'+
+   '<td>'+(r.is.dueDate?fmtDate(pd(r.is.dueDate)):'—')+'</td>'+
+   '<td class="r">'+(Number.isFinite(r.held)?r.held:'—')+'</td>'+
+   '<td class="r">'+moneyOrDash(r.is.depositTaken)+'</td>'+
+   '<td>'+statusChip(r.status)+'</td>';
+  body.appendChild(tr);
+ });
+}
+
+/* ── render: audit ───────────────────────────────────────────────── */
+function renderAudit(){
+ var rows=auditRows();
+ var body=$('auditBody'); body.innerHTML='';
+ $('auditEmpty').hidden=rows.length>0;
+ $('auditMini').textContent=rows.length?(rows.length+' cop'+(rows.length===1?'y':'ies')):'';
+ rows.forEach(function(r){
+  var cls=r.state==='store'?'ok':(r.state==='lost'?'bad':(r.state==='overdue'?'bad':'warn'));
+  var label=r.state==='store'?'In store':(r.state==='lost'?'Lost':(r.state==='overdue'?'Overdue':'Out'));
+  var tr=document.createElement('tr');
+  tr.innerHTML=
+   '<td>'+esc(r.key.keyNo)+'</td>'+
+   '<td class="r">#'+r.copy+'</td>'+
+   '<td>'+esc(r.key.doorArea)+'</td>'+
+   '<td><span class="chip '+cls+'">'+label+'</span></td>'+
+   '<td>'+esc(r.who)+'</td>'+
+   '<td>'+(r.since?fmtDate(r.since):'—')+'</td>';
+  body.appendChild(tr);
+ });
+}
+
+/* ── render: lost-key procedure ──────────────────────────────────── */
+function renderLost(){
+ var list=lostList();
+ $('lostCard').hidden=list.length===0;
+ $('lostMini').textContent=list.length?(list.length+' key type'+(list.length===1?'':'s')+' affected'):'';
+ var h='';
+ list.forEach(function(l){
+  var areas=splitAreas(l.key.doorArea);
+  var resolved=l.key.lockChanged;
+  h+='<div class="lostbox'+(resolved?' resolved':'')+'">'+
+   '<h3>'+esc(l.key.keyNo)+' — '+esc(l.key.desc)+'</h3>'+
+   '<div><strong>'+l.lostIssues.length+' cop'+(l.lostIssues.length===1?'y':'ies')+' reported lost:</strong> '+
+    l.lostIssues.map(function(is){return esc(is.holder||'—')+' (copy #'+is.copyNo+(is.returnDate?', reported '+fmtDate(pd(is.returnDate)):'')+')';}).join('; ')+'</div>'+
+   '<div style="margin-top:6px"><strong>Doors / areas affected — treat as compromised:</strong><ul>'+
+    areas.map(function(a){return '<li>'+esc(a)+'</li>';}).join('')+'</ul></div>'+
+   (l.otherOpen.length?'<div class="hint" style="color:var(--bad);margin-top:4px">'+l.otherOpen.length+' other cop'+(l.otherOpen.length===1?'y is':'ies are')+' still out for this key — recall recommended before assuming the risk is contained.</div>':'')+
+   '<div class="lostft">'+
+    '<label class="check"><input type="checkbox" data-lockchanged="'+l.key.id+'"'+(resolved?' checked':'')+'> Lock(s) changed / re-cored — risk resolved</label>'+
+    (resolved?'<span class="chip ok">Lock changed</span>':'<span class="chip bad">Lock change needed</span>')+
+   '</div>'+
+  '</div>';
+ });
+ $('lostBody').innerHTML=h;
+}
+
+/* ── settings binding ────────────────────────────────────────────── */
+function bindSettings(){
+ $('c_name').value=state.co.name||'';
+ $('c_site').value=state.co.site||'';
+ $('c_addr').value=state.co.addr||'';
+ var code=state.currency.code, sel=$('s_cur'), found=false;
+ Array.prototype.forEach.call(sel.options,function(o){if(o.value.split('|')[0]===code){sel.value=o.value;found=true;}});
+ if(!found)sel.value='CUSTOM|¤';
+ var custom=sel.value.split('|')[0]==='CUSTOM';
+ $('s_cursym').hidden=!custom; $('s_cursym').value=state.currency.sym;
+
+ ['c_name','c_site','c_addr'].forEach(function(id){
+  $(id).addEventListener('input',function(){
+   state.co[id.slice(2)]=this.value; save(); buildPrintDoc();
+   state.sample=false; $('sampleNote').hidden=true;
+  });
+ });
+ $('s_cur').addEventListener('change',function(){
+  var parts=this.value.split('|'), c=parts[0];
+  if(c==='CUSTOM'){ $('s_cursym').hidden=false; state.currency={code:c,sym:$('s_cursym').value||'¤'}; }
+  else { $('s_cursym').hidden=true; state.currency={code:c,sym:parts[1]}; $('s_cursym').value=parts[1]; }
+  save(); renderAll();
+ });
+ $('s_cursym').addEventListener('input',function(){
+  state.currency={code:'CUSTOM',sym:this.value||'¤'}; save(); renderAll();
+ });
+}
+
+/* ── keys table interactions ─────────────────────────────────────── */
+function bindKeyTable(){
+ var body=$('keyBody');
+ body.addEventListener('input',function(e){
+  var el=e.target, id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
+  if(!id||!f)return;
+  var k=findKey(id); if(!k)return;
+  markDirty();
+  if(f==='keyNo'||f==='desc'||f==='doorArea'){ k[f]=el.value; }
+  else if(f==='copies'){ var v=numOf(el.value); k.copies=(Number.isFinite(v)&&v>=1)?Math.round(v):k.copies; el.classList.toggle('inv',!(v>=1)); }
+  else if(f==='deposit'){ var v2=numOf(el.value); k.deposit=(Number.isFinite(v2)&&v2>=0)?v2:0; el.classList.toggle('inv',!(v2>=0)); }
+  save(); renderAll();
+ });
+ body.addEventListener('click',function(e){
+  var b=e.target.closest('[data-removekey]'); if(!b)return;
+  var id=b.getAttribute('data-removekey');
+  var used=state.issues.some(function(is){return is.keyId===id;});
+  if(used){ toast('Remove this key’s issue records first',true); return; }
+  state.keys=state.keys.filter(function(k){return k.id!==id;});
+  markDirty(); save(); renderAll();
+ });
+}
+function bindIssueTable(){
+ var body=$('issueBody');
+ body.addEventListener('input',function(e){
+  var el=e.target, id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
+  if(!id||!f)return;
+  var is=findIssue(id); if(!is)return;
+  markDirty();
+  if(f==='holder'){ is.holder=el.value; }
+  else if(f==='issueDate'){ is.issueDate=el.value; }
+  else if(f==='dueDate'){ is.dueDate=el.value; }
+  else if(f==='returnDate'){ is.returnDate=el.value; }
+  else if(f==='depositTaken'){ var v=numOf(el.value); is.depositTaken=(Number.isFinite(v)&&v>=0)?v:0; el.classList.toggle('inv',!(v>=0)); }
+  else if(f==='depositRefunded'){ is.depositRefunded=el.value===''?'':numOf(el.value); }
+  save(); renderSummary(); renderOutstanding(); renderAudit(); renderLost(); buildPrintDoc();
+  var row=el.closest('tr'); var s=issueStatus(is); var chipCell=row.querySelector('td:nth-last-child(2)');
+  if(chipCell)chipCell.innerHTML=statusChip(s);
+ });
+ body.addEventListener('change',function(e){
+  var el=e.target, id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
+  if(!id||!f)return;
+  var is=findIssue(id); if(!is)return;
+  markDirty();
+  if(f==='keyId'){ is.keyId=el.value; is.copyNo=nextCopy(el.value,is.id); }
+  else if(f==='condition'){
+   is.condition=el.value;
+   if((el.value==='good'||el.value==='damaged'||el.value==='lost')&&!is.returnDate)is.returnDate=iso(today());
+   if(el.value===''){ /* reopened */ }
+   if(el.value==='good')is.depositRefunded=is.depositTaken;
+   else if(el.value==='damaged')is.depositRefunded=r2(is.depositTaken/2);
+   else if(el.value==='lost')is.depositRefunded=0;
+  }
+  save(); renderAll();
+ });
+ body.addEventListener('click',function(e){
+  var b=e.target.closest('[data-removeissue]'); if(!b)return;
+  state.issues=state.issues.filter(function(is){return is.id!==b.getAttribute('data-removeissue');});
+  markDirty(); save(); renderAll();
+ });
+}
+function bindLost(){
+ $('lostBody').addEventListener('change',function(e){
+  var cb=e.target.closest('[data-lockchanged]'); if(!cb)return;
+  var k=findKey(cb.getAttribute('data-lockchanged')); if(!k)return;
+  k.lockChanged=cb.checked;
+  save(); renderSummary(); renderLost(); buildPrintDoc();
+ });
+}
+function markDirty(){ if(state.sample){ state.sample=false; $('sampleNote').hidden=true; } }
+
+/* ── add rows ────────────────────────────────────────────────────── */
+$('bAddKey').addEventListener('click',function(){
+ markDirty();
+ state.keys.push({id:newId('k'),keyNo:'',desc:'',doorArea:'',copies:1,deposit:0,lockChanged:false});
+ save(); renderAll();
+ var last=$('keyBody').querySelector('tr:last-child input'); if(last)last.focus();
+});
+$('bAddIssue').addEventListener('click',function(){
+ if(!state.keys.length)return;
+ markDirty();
+ var kid=state.keys[0].id;
+ state.issues.push({id:newId('i'),keyId:kid,copyNo:nextCopy(kid,null),holder:'',issueDate:iso(today()),dueDate:'',depositTaken:state.keys[0].deposit||0,returnDate:'',condition:'',depositRefunded:''});
+ save(); renderAll();
+ var last=$('issueBody').querySelector('tr:last-child input'); if(last)last.focus();
+});
+
+/* ── full render ─────────────────────────────────────────────────── */
+function renderAll(){
+ renderSummary(); renderKeys(); renderIssues(); renderOutstanding(); renderAudit(); renderLost(); buildPrintDoc();
+}
+
+/* ── print document ──────────────────────────────────────────────── */
+function buildPrintDoc(){
+ var T=totals();
+ var h='';
+ h+='<div class="doc-h"><div><div class="co-name">'+esc(state.co.name||'Your business name')+'</div>'+
+   '<div class="co-sub">'+esc(state.co.site||'')+(state.co.site&&state.co.addr?' — ':'')+esc(state.co.addr||'')+'</div></div>'+
+   '<div class="rr"><h1>Key &amp; Access Register</h1>Generated '+fmtDate(today())+'<br>'+T.totalTypes+' key type'+(T.totalTypes===1?'':'s')+', '+T.totalCopies+' cop'+(T.totalCopies===1?'y':'ies')+'</div></div>';
+
+ h+='<div class="docmeta">'+
+   '<div><b>Currently out</b>'+T.out.length+'</div>'+
+   '<div><b>Overdue</b>'+T.overdue.length+'</div>'+
+   '<div><b>Lost — unresolved</b>'+T.unresolvedLost.length+'</div>'+
+   '<div><b>Deposits held</b>'+money(T.depositsHeld)+'</div>'+
+  '</div>';
+
+ h+='<div class="psec"><h2>Key register</h2><table class="prtable"><thead><tr>'+
+   '<th>Key no.</th><th>Description</th><th>Door / area</th><th class="n">Copies</th><th class="n">Deposit</th></tr></thead><tbody>';
+ if(!state.keys.length)h+='<tr><td colspan="5">No keys recorded.</td></tr>';
+ state.keys.forEach(function(k){
+  h+='<tr><td>'+esc(k.keyNo)+'</td><td>'+esc(k.desc)+'</td><td>'+esc(k.doorArea)+'</td><td class="n">'+k.copies+'</td><td class="n">'+money(k.deposit)+'</td></tr>';
+ });
+ h+='</tbody></table></div>';
+
+ h+='<div class="psec"><h2>Outstanding keys — by days held</h2><table class="prtable"><thead><tr>'+
+   '<th>Holder</th><th>Key</th><th>Door / area</th><th class="n">Copy</th><th>Issued</th><th>Expected return</th><th class="n">Days held</th><th class="n">Deposit held</th><th>Status</th></tr></thead><tbody>';
+ if(!T.out.length)h+='<tr><td colspan="9">No keys are currently outstanding.</td></tr>';
+ T.out.forEach(function(r){
+  h+='<tr><td>'+esc(r.is.holder||'—')+'</td><td>'+esc(r.key?r.key.keyNo:'—')+'</td><td>'+esc(r.key?r.key.doorArea:'—')+'</td>'+
+   '<td class="n">'+r.is.copyNo+'</td><td>'+fmtDate(pd(r.is.issueDate))+'</td><td>'+(r.is.dueDate?fmtDate(pd(r.is.dueDate)):'—')+'</td>'+
+   '<td class="n">'+(Number.isFinite(r.held)?r.held:'—')+'</td><td class="n">'+moneyOrDash(r.is.depositTaken)+'</td><td>'+esc(r.status.label)+'</td></tr>';
+ });
+ h+='</tbody></table></div>';
+
+ h+='<div class="psec"><h2>Audit — every copy of every key</h2><table class="prtable"><thead><tr>'+
+   '<th>Key no.</th><th class="n">Copy</th><th>Door / area</th><th>Status</th><th>Holder / location</th><th>Since</th></tr></thead><tbody>';
+ var audit=auditRows();
+ if(!audit.length)h+='<tr><td colspan="6">No keys recorded.</td></tr>';
+ audit.forEach(function(r){
+  var label=r.state==='store'?'In store':(r.state==='lost'?'Lost':(r.state==='overdue'?'Overdue':'Out'));
+  h+='<tr><td>'+esc(r.key.keyNo)+'</td><td class="n">'+r.copy+'</td><td>'+esc(r.key.doorArea)+'</td><td>'+label+'</td><td>'+esc(r.who)+'</td><td>'+(r.since?fmtDate(r.since):'—')+'</td></tr>';
+ });
+ h+='</tbody></table></div>';
+
+ if(T.lost.length){
+  h+='<div class="psec"><h2>Lost-key procedure</h2>';
+  T.lost.forEach(function(l){
+   var areas=splitAreas(l.key.doorArea);
+   h+='<div style="border:1px solid #999;padding:2.5mm 3mm;margin-bottom:3mm">'+
+     '<b>'+esc(l.key.keyNo)+' — '+esc(l.key.desc)+'</b> — '+
+     l.lostIssues.length+' cop'+(l.lostIssues.length===1?'y':'ies')+' lost ('+
+     l.lostIssues.map(function(is){return esc(is.holder||'—');}).join(', ')+'). '+
+     'Lock status: '+(l.key.lockChanged?'Changed':'NOT yet changed')+'.'+
+     (l.otherOpen.length?' '+l.otherOpen.length+' other cop'+(l.otherOpen.length===1?'y':'ies')+' still out.':'')+
+     '<div style="margin-top:2mm;font-size:8.4pt">Doors / areas affected: '+areas.map(esc).join(', ')+'</div>'+
+    '</div>';
+  });
+  h+='</div>';
+ }
+
+ h+='<div class="psec"><h2>Issue receipts — keys currently out</h2>';
+ if(!T.out.length){
+  h+='<p style="font-size:9.5pt">No keys are currently out.</p>';
+ } else {
+  T.out.forEach(function(r){
+   h+='<div class="wobox"><div class="wo-h"><b>'+esc(r.key?r.key.keyNo:'—')+' — '+esc(r.key?r.key.desc:'')+'</b><span class="wo-chip">'+esc(r.status.label)+'</span></div>'+
+    '<div class="wo-grid">'+
+     '<div><b>Holder</b>'+esc(r.is.holder||'—')+'</div>'+
+     '<div><b>Copy no.</b>#'+r.is.copyNo+'</div>'+
+     '<div><b>Issued</b>'+fmtDate(pd(r.is.issueDate))+'</div>'+
+     '<div><b>Expected return</b>'+(r.is.dueDate?fmtDate(pd(r.is.dueDate)):'Indefinite')+'</div>'+
+     '<div><b>Deposit taken</b>'+moneyOrDash(r.is.depositTaken)+'</div>'+
+     '<div><b>Door / area</b>'+esc(r.key?r.key.doorArea:'—')+'</div>'+
+    '</div>'+
+    '<div class="wo-fill">'+
+     '<div>Received by (signature): <div class="ln"></div></div>'+
+     '<div>Date received: <div class="ln"></div></div>'+
+     '<div>Returned by (signature): <div class="ln"></div></div>'+
+     '<div>Date returned: <div class="ln"></div></div>'+
+     '<div>Condition on return: &nbsp;Good &#9744;&nbsp;&nbsp; Damaged &#9744;&nbsp;&nbsp; Lost &#9744;</div>'+
+     '<div>Deposit refunded: <div class="ln"></div></div>'+
+    '</div></div>';
+  });
+ }
+ h+='</div>';
+
+ h+='<div class="pnote">This register reflects only what has been entered above. It does not verify physical '+
+   'possession of any key, does not detect unauthorised duplicates, and is not a substitute for a periodic '+
+   'physical key audit. Where a lost key affects a master, communal or high-security door, treat the lock as '+
+   'compromised and obtain a locksmith’s assessment before relying on this record alone.</div>';
+
+ $('prDoc').innerHTML=h;
+}
+
+/* ══ CSV / JSON export ═══════════════════════════════════════════════ */
+function csvField(s){
+ s=String(s==null?'':s);
+ if(/[",\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+ return s;
+}
+function buildCSV(){
+ var rows=[];
+ rows.push(['Key & Access Register — generated '+iso(today())]);
+ rows.push([]);
+ rows.push(['Key register']);
+ rows.push(['Key no.','Description','Door / area','Copies','Deposit']);
+ state.keys.forEach(function(k){ rows.push([k.keyNo,k.desc,k.doorArea,String(k.copies),r2(k.deposit).toFixed(2)]); });
+ rows.push([]);
+ rows.push(['Issue & return log']);
+ rows.push(['Key no.','Copy','Holder','Issue date','Expected return','Deposit taken','Return / lost date','Condition','Deposit refunded','Status','Days held']);
+ state.issues.forEach(function(is){
+  var key=findKey(is.keyId), s=issueStatus(is), held=daysHeld(is);
+  rows.push([key?key.keyNo:'',String(is.copyNo),is.holder||'',is.issueDate||'',is.dueDate||'',
+   r2(nz(is.depositTaken,0)).toFixed(2),is.returnDate||'',is.condition||'',
+   is.depositRefunded===''||is.depositRefunded==null?'':r2(numOf(is.depositRefunded)).toFixed(2),
+   s.label,Number.isFinite(held)?String(held):'']);
+ });
+ rows.push([]);
+ rows.push(['Audit — every copy']);
+ rows.push(['Key no.','Copy','Door / area','Status','Holder / location','Since']);
+ auditRows().forEach(function(r){
+  var label=r.state==='store'?'In store':(r.state==='lost'?'Lost':(r.state==='overdue'?'Overdue':'Out'));
+  rows.push([r.key.keyNo,String(r.copy),r.key.doorArea,label,r.who,r.since?iso(r.since):'']);
+ });
+ return rows.map(function(r){return r.map(csvField).join(',');}).join('\r\n');
+}
+function downloadBlob(content,mime,filename){
+ var blob=new Blob([content],{type:mime});
+ var url=URL.createObjectURL(blob);
+ var a=document.createElement('a');
+ a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+ setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},250);
+}
+function exportCSV(){
+ var bom='﻿';
+ downloadBlob(bom+buildCSV(),'text/csv;charset=utf-8','key-register-'+iso(today())+'.csv');
+ toast('CSV exported');
+}
+function exportJSON(){
+ downloadBlob(JSON.stringify(state,null,2),'application/json','key-register-'+iso(today())+'.json');
+ toast('JSON exported');
+}
+function importJSON(file){
+ var reader=new FileReader();
+ reader.onload=function(){
+  try{
+   var d=JSON.parse(String(reader.result));
+   if(!d||typeof d!=='object'||!Array.isArray(d.keys)||!Array.isArray(d.issues))throw new Error('bad shape');
+   normalize(d); d.sample=false; state=d;
+   save(); renderAll(); $('sampleNote').hidden=true;
+   toast('Register imported');
+  }catch(e){ toast('Could not read that file — not a valid register export',true); }
+ };
+ reader.onerror=function(){ toast('Could not read that file',true); };
+ reader.readAsText(file);
+}
+
+/* ── toast ───────────────────────────────────────────────────────── */
+var toastTimer=null;
+function toast(msg,bad){
+ var el=$('toast');
+ el.textContent=msg; el.className=bad?'bad':''; el.hidden=false;
+ clearTimeout(toastTimer);
+ toastTimer=setTimeout(function(){el.hidden=true;},3200);
+}
+
+/* ══ wire up & boot ═══════════════════════════════════════════════ */
+state=load();
+bindSettings(); bindKeyTable(); bindIssueTable(); bindLost();
+$('sampleNote').hidden=!state.sample;
+renderAll();
+
+$('bPrint').addEventListener('click',function(){window.print();});
+$('bCsv').addEventListener('click',exportCSV);
+$('bJson').addEventListener('click',exportJSON);
+$('bImp').addEventListener('click',function(){$('fileImp').click();});
+$('fileImp').addEventListener('change',function(){
+ if(this.files&&this.files[0])importJSON(this.files[0]);
+ this.value='';
+});
+$('bClear').addEventListener('click',function(){
+ if(!confirm('Clear all keys and issue records? This cannot be undone.'))return;
+ try{localStorage.removeItem(KEY);}catch(e){}
+ state=blankState(); save();
+ $('sampleNote').hidden=true;
+ bindSettings(); renderAll();
+ toast('All data cleared');
+});
+$('bBlank').addEventListener('click',function(){
+ state=blankState(); save();
+ $('sampleNote').hidden=true;
+ bindSettings(); renderAll();
+ toast('Starting blank');
+});
+</script>
+</body>
+</html>

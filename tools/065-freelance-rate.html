@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Freelance Rate Calculator — hourly, day and week rate from a take-home target</title>
+<meta name="description" content="Offline freelance and contractor pricing calculator. Works backwards from the take-home pay you want: grosses up for income tax and national insurance / self-employment tax, adds pension and annual business costs, then divides by the hours you can genuinely bill after holiday, sick leave, training and a realistic utilisation percentage. Shows the hourly, day and week rate you must charge, the gap between the naive 100%-utilisation rate and the real one, a utilisation sensitivity table, and a reverse check on the rate you charge today. Saves to the browser, prints a rate calculation document and exports CSV and JSON.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EFR%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B;--accent-ink:#145C39;--accent-wash:#E3F2EA;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#43C685;--accent-ink:#77DBA9;--accent-wash:#10261B;--on-accent:#06110B}}
+:root[data-theme="dark"]{--accent:#43C685;--accent-ink:#77DBA9;--accent-wash:#10261B;--on-accent:#06110B}
+
+.appbar{margin:0;display:block;padding:11px clamp(10px,2vw,22px)}
+.appbar-in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+@media(max-width:620px){.hidesm{display:none}}
+@media(max-width:900px){.colB{order:-1}.sticky{position:static}}
+.colA,.colB{min-width:0}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:360px){.statgrid{grid-template-columns:1fr}}
+.stat.hero .v{font-size:33px}
+.stat .d{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:3px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.fgrid.two{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.f .u2{display:flex;gap:6px}
+.f .u2 select{width:auto;flex:none}
+input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--accent);height:22px}
+.costd{text-align:left!important;font-family:var(--sans)!important}
+#costTable{min-width:552px}
+.barwrap{background:var(--sunk);border:1px solid var(--line);border-radius:4px;height:14px;overflow:hidden}
+.barwrap>div{height:100%;background:var(--accent)}
+.barwrap.alt>div{background:var(--line-hard)}
+.barrow{display:grid;grid-template-columns:118px 1fr 92px;gap:9px;align-items:center;font-size:12.5px}
+.barrow b{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;font-weight:650}
+@media(max-width:420px){.barrow{grid-template-columns:1fr 78px}.barrow .barwrap{grid-column:1/-1}}
+tr.hi td{background:var(--accent-wash)}
+tr.hi td:first-child{font-weight:650}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:3px 0}
+.kv b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650}
+.foot{margin-top:16px;font:12px/1.55 var(--sans);color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.sr{display:inline-block;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;vertical-align:top}
+
+/* the printed document */
+.printdoc{display:none;background:var(--surface);color:var(--ink)}
+body.previewing .screenonly{display:none}
+body.previewing .printdoc{display:block;border:1px solid var(--line);border-radius:var(--r);
+  padding:24px;margin-top:14px;box-shadow:var(--sh);max-width:820px;margin-left:auto;margin-right:auto}
+@media print{.screenonly{display:none!important}.printdoc{display:block!important;padding:0;border:0;box-shadow:none}}
+.pd-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;
+  border-bottom:2px solid var(--ink);padding-bottom:9px;margin-bottom:12px}
+.pd-biz{font:700 19px/1.2 var(--sans);letter-spacing:-.015em}
+.pd-kicker{font:600 10px/1.3 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.pd-doc{text-align:right;font:600 13px/1.35 var(--sans)}
+.pd-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 20px;margin-bottom:14px}
+.pd-meta span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.pd-meta div{font-size:13px}
+.pd-hero{border:2px solid var(--ink);padding:12px 14px;margin-bottom:14px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 16px}
+.pd-hero span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.pd-hero b{display:block;font:700 25px/1.15 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.pd-hero small{display:block;font-size:11px;color:var(--muted)}
+.printdoc h3{margin:15px 0 6px;font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.printdoc table{margin-bottom:2px}
+.printdoc td,.printdoc th{padding:6px 9px}
+.pd-note{border:1px solid var(--ink);padding:10px 12px;font-size:11.5px;line-height:1.5;margin-top:14px}
+.pd-note b{display:block;margin-bottom:3px}
+.pd-sign{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:18px;font-size:11px;color:var(--muted)}
+.pd-sign div{border-top:1px solid var(--line-hard);padding-top:5px}
+.pd-foot{margin-top:14px;font-size:10.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:7px}
+@media print{.pd-hero,.pd-note{border-color:#000}}
+</style>
+</head>
+<body>
+<header class="appbar noprint">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">FR</div>
+    <div style="min-width:0">
+      <h1>Freelance Rate Calculator</h1>
+      <div class="sub">take-home &rarr; hourly &middot; day &middot; week</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="btnPrev">Preview<span class="hidesm"> document</span></button>
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn" id="btnImport">Import<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn dgr" id="btnClear">Clear<span class="hidesm"> all data</span></button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+<div class="screenonly">
+
+  <div class="note" id="sampleNote" style="margin-top:14px">
+    <strong>Sample data loaded</strong> — a solo brand &amp; web designer working a 44-week year.
+    Type over any figure; everything saves in this browser automatically.
+    <button type="button" class="btn sm" id="btnBlank" style="margin-left:6px">Start blank</button>
+  </div>
+
+  <div class="split" style="margin-top:14px">
+    <!-- ── inputs ─────────────────────────────────────────── -->
+    <div class="colA stack">
+
+      <section class="card">
+        <div class="hd"><h2>1 &middot; Income you want to keep</h2></div>
+        <div class="bd stack">
+          <div class="fgrid two">
+            <div class="f">
+              <label for="cur">Currency</label>
+              <div class="u2">
+                <select id="cur" data-k="cur">
+                  <option value="£">£ GBP</option><option value="$">$ USD</option>
+                  <option value="€">€ EUR</option><option value="custom">Custom…</option>
+                </select>
+                <input id="curCustom" data-k="curCustom" type="text" maxlength="4" aria-label="Custom currency symbol" placeholder="R" style="width:64px;text-align:center" hidden>
+              </div>
+            </div>
+            <div class="f">
+              <label for="takeHome">Target take-home per year</label>
+              <input id="takeHome" data-k="takeHome" type="number" min="0" step="500" inputmode="decimal">
+              <div class="err" id="e_takeHome"></div>
+              <div class="hint">Money in your pocket after tax and pension.</div>
+            </div>
+            <div class="f">
+              <label for="taxRate">Tax + NI / self-employment tax</label>
+              <div class="u2"><input id="taxRate" data-k="taxRate" type="number" min="0" max="99" step="0.5" inputmode="decimal"><span class="btn sm" aria-hidden="true" style="pointer-events:none">%</span></div>
+              <div class="err" id="e_taxRate"></div>
+              <div class="hint">Your effective rate on profit, not your top band.</div>
+            </div>
+          </div>
+          <fieldset>
+            <legend>Pension</legend>
+            <div class="fgrid two">
+              <div class="f">
+                <label for="pensionAmt">Contribution</label>
+                <input id="pensionAmt" data-k="pensionAmt" type="number" min="0" step="10" inputmode="decimal">
+                <div class="err" id="e_pensionAmt"></div>
+              </div>
+              <div class="f">
+                <label for="pensionBasis">Basis</label>
+                <select id="pensionBasis" data-k="pensionBasis">
+                  <option value="mo">per month</option><option value="yr">per year</option>
+                  <option value="pct">% of take-home</option>
+                </select>
+              </div>
+              <div class="f">
+                <label for="pensionPre">Paid from</label>
+                <select id="pensionPre" data-k="pensionPre">
+                  <option value="0">Take-home (after tax)</option>
+                  <option value="1">Profit before tax (relieved)</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>2 &middot; Business costs</h2>
+          <span class="chip" id="chipCosts">—</span>
+          <button type="button" class="btn sm noprint" id="btnAdd">+ Add cost</button>
+        </div>
+        <div class="tw">
+          <table id="costTable">
+            <caption class="sr">Annual business costs</caption>
+            <thead><tr>
+              <th scope="col" style="min-width:176px">Cost</th>
+              <th scope="col" class="n" style="width:100px">Amount</th>
+              <th scope="col" style="width:126px">Frequency</th>
+              <th scope="col" class="n" style="width:108px">Per year</th>
+              <th scope="col" class="noprint" style="width:40px"><span class="sr">Remove</span></th>
+            </tr></thead>
+            <tbody id="costBody"></tbody>
+            <tfoot><tr>
+              <td colspan="3">Total business costs</td>
+              <td class="n" id="oCosts">—</td><td class="noprint"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft"><span class="hint">Software, insurance, kit, accountant, workspace, phone, marketing, bank fees — everything the business pays for before you do.</span></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>3 &middot; Working year &amp; utilisation</h2><span class="chip" id="chipHours">—</span></div>
+        <div class="bd stack">
+          <div class="fgrid">
+            <div class="f"><label for="holiday">Holiday weeks</label>
+              <input id="holiday" data-k="holiday" type="number" min="0" max="52" step="0.5" inputmode="decimal"></div>
+            <div class="f"><label for="sick">Sick / other weeks</label>
+              <input id="sick" data-k="sick" type="number" min="0" max="52" step="0.5" inputmode="decimal"></div>
+            <div class="f"><label for="training">Training weeks</label>
+              <input id="training" data-k="training" type="number" min="0" max="52" step="0.5" inputmode="decimal"></div>
+          </div>
+          <div class="err" id="e_weeks"></div>
+          <div class="fgrid">
+            <div class="f"><label for="daysWk">Days per week</label>
+              <input id="daysWk" data-k="daysWk" type="number" min="0.5" max="7" step="0.5" inputmode="decimal">
+              <div class="err" id="e_daysWk"></div></div>
+            <div class="f"><label for="hrsDay">Working hours per day</label>
+              <input id="hrsDay" data-k="hrsDay" type="number" min="0.5" max="24" step="0.25" inputmode="decimal">
+              <div class="err" id="e_hrsDay"></div></div>
+            <div class="f"><label for="roundTo">Round rate up to nearest</label>
+              <select id="roundTo" data-k="roundTo">
+                <option value="1">1</option><option value="5">5</option>
+                <option value="10">10</option><option value="25">25</option><option value="50">50</option>
+              </select></div>
+          </div>
+          <div class="f">
+            <label for="util">Utilisation — share of working hours you can actually bill</label>
+            <div class="u2">
+              <input id="utilRange" type="range" min="10" max="100" step="1" aria-label="Utilisation slider">
+              <input id="util" data-k="util" type="number" min="1" max="100" step="1" inputmode="decimal" style="width:82px;flex:none">
+            </div>
+            <div class="err" id="e_util"></div>
+            <div class="hint">Sales calls, quotes, invoicing, admin, marketing and dead time are unbilled. 60–75% is normal for a solo freelancer; 85%+ only happens on long retained contracts.</div>
+          </div>
+        </div>
+        <div class="ft"><span class="hint" id="hoursLine">—</span></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>4 &middot; Check a rate you already charge</h2></div>
+        <div class="bd stack">
+          <div class="fgrid two">
+            <div class="f"><label for="currentRate">Your current hourly rate</label>
+              <input id="currentRate" data-k="currentRate" type="number" min="0" step="1" inputmode="decimal">
+              <div class="err" id="e_currentRate"></div></div>
+            <div class="stat"><div class="k">Take-home it actually delivers</div>
+              <div class="v" id="oBackTake">—</div><div class="d" id="oBackGap">—</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>5 &middot; Document details</h2><span class="hint">Printed on the summary</span></div>
+        <div class="bd stack">
+          <div class="fgrid two">
+            <div class="f"><label for="biz">Business / trading name</label><input id="biz" data-k="biz" type="text"></div>
+            <div class="f"><label for="by">Prepared by</label><input id="by" data-k="by" type="text"></div>
+            <div class="f"><label for="forWho">Reference</label><input id="forWho" data-k="forWho" type="text"></div>
+            <div class="f"><label for="date">Date</label><input id="date" data-k="date" type="date" style="text-align:left"></div>
+          </div>
+          <div class="f"><label for="note">Notes / assumptions</label><textarea id="note" data-k="note"></textarea></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── results ────────────────────────────────────────── -->
+    <div class="colB">
+      <section class="card sticky" id="results">
+        <div class="hd"><h2>Charge at least</h2><span class="chip" id="chipUtil">—</span></div>
+        <div class="bd stack">
+          <div class="stat hero">
+            <div class="k">Required hourly rate</div>
+            <div class="v" id="oHour">—</div>
+            <div class="u" id="oHourSub">excludes VAT / sales tax</div>
+          </div>
+          <div class="statgrid">
+            <div class="stat"><div class="k">Day rate</div><div class="v" id="oDay">—</div><div class="d" id="oDaySub">—</div></div>
+            <div class="stat"><div class="k">Week rate</div><div class="v" id="oWeek">—</div><div class="d" id="oWeekSub">—</div></div>
+          </div>
+          <div class="statgrid">
+            <div class="stat"><div class="k">Rounded up to quote</div><div class="v" id="oRound">—</div><div class="d" id="oRoundSub">—</div></div>
+            <div class="stat"><div class="k">Billable hours / year</div><div class="v" id="oBill">—</div><div class="d" id="oBillSub">—</div></div>
+          </div>
+          <div id="probBox"></div>
+          <div class="note warn">
+            <strong>Not tax advice.</strong> This is a pricing tool. It applies one flat effective
+            tax rate that you enter to your profit. Real income tax and national insurance /
+            self-employment tax are banded and depend on allowances, reliefs and your whole
+            financial position, and VAT / sales tax is excluded here entirely. Check the numbers
+            with a qualified accountant before you rely on them.
+          </div>
+        </div>
+        <div class="ft">
+          <span class="hint" style="margin-right:auto">Fee income you must invoice</span>
+          <strong class="mono" id="oRev">—</strong>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:14px;align-items:start">
+    <section class="card">
+      <div class="hd"><h2>How the rate is built</h2></div>
+      <div class="tw">
+        <table id="buildTable">
+          <caption class="sr">Build-up from take-home to required fee income</caption>
+          <thead><tr><th scope="col">Step</th><th scope="col" class="n">Per year</th><th scope="col" class="n">Per month</th></tr></thead>
+          <tbody id="buildBody"></tbody>
+        </table>
+      </div>
+      <div class="ft"><span class="hint">Tax is grossed up, not deducted: take-home &divide; (1 &minus; rate).</span></div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>What utilisation does to the number</h2></div>
+      <div class="bd stack">
+        <div class="stack" id="gapBars"></div>
+        <div class="note" id="gapNote">—</div>
+      </div>
+      <div class="tw">
+        <table id="sensTable">
+          <caption class="sr">Rate sensitivity to utilisation</caption>
+          <thead><tr>
+            <th scope="col">Utilisation</th><th scope="col" class="n">Billable h</th>
+            <th scope="col" class="n">Hourly</th><th scope="col" class="n">Day</th><th scope="col" class="n">Week</th>
+          </tr></thead>
+          <tbody id="sensBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot">
+    Assumes a flat effective tax rate applied to profit after business costs, a 52-week year less
+    the weeks you enter, and that non-billable time is already inside the utilisation percentage.
+    Excludes VAT / sales tax, corporation tax, payroll for staff, bad debt and late payment.
+    All money rounded to 2 decimal places; hours to 1. Everything is stored only in this browser.
+  </div>
+</div>
+
+<section class="printdoc" id="printdoc"></section>
+<div class="row noprint" id="prevBar" style="display:none;margin-top:14px;justify-content:center">
+  <button type="button" class="btn" id="btnBack">&larr; Back to calculator</button>
+  <button type="button" class="btn pri" id="btnPrint2">Print / PDF</button>
+</div>
+</main>
+
+<script>
+"use strict";
+(function(){
+var KEY='solvix.freelance-rate.v1';
+var $=function(s){return document.querySelector(s);};
+var FREQ={yr:1,qtr:4,mo:12,wk:52};
+var FREQL={yr:'per year',qtr:'per quarter',mo:'per month',wk:'per week'};
+
+function today(){var d=new Date();var p=function(n){return (n<10?'0':'')+n;};
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+
+function defaults(){return{
+  sample:true, cur:'£', curCustom:'',
+  biz:'Marlow & Co. Design', by:'Alex Marlow', forWho:'2026 rate review', date:today(),
+  note:'Solo brand & web designer. Home-based with a shared desk two days a week. Rate excludes VAT.',
+  takeHome:45000, taxRate:27, pensionAmt:300, pensionBasis:'mo', pensionPre:false,
+  costs:[
+    {d:'Accountant & bookkeeping', a:900, f:'yr'},
+    {d:'Software & subscriptions', a:45, f:'mo'},
+    {d:'Professional indemnity insurance', a:320, f:'yr'},
+    {d:'Equipment & hardware', a:1200, f:'yr'},
+    {d:'Coworking desk', a:180, f:'mo'},
+    {d:'Phone & internet', a:40, f:'mo'},
+    {d:'Training & books', a:400, f:'yr'},
+    {d:'Marketing & website', a:300, f:'yr'},
+    {d:'Bank & payment fees', a:25, f:'mo'}
+  ],
+  holiday:5, sick:1, training:2, daysWk:5, hrsDay:7.5, util:70, roundTo:5,
+  currentRate:45
+};}
+function blank(){var s=defaults();
+  s.sample=false; s.biz=''; s.by=''; s.forWho=''; s.note='';
+  s.takeHome=null; s.taxRate=null; s.pensionAmt=null; s.currentRate=null;
+  s.costs=[{d:'',a:null,f:'yr'}];
+  return s;}
+
+var st=defaults();
+
+/* ── helpers ─────────────────────────────────────────── */
+function n0(v){var x=parseFloat(v);return isFinite(x)?x:null;}
+function fin(v){return typeof v==='number'&&isFinite(v);}
+function sym(){return st.cur==='custom'?(st.curCustom||''):st.cur;}
+function grp(v,dp){
+  if(!isFinite(v))return '—';
+  if(Object.is(v,-0))v=0;
+  return v.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+}
+function money(v,dp){
+  if(!isFinite(v))return '—';
+  if(dp===undefined)dp=2;
+  if(Object.is(v,-0))v=0;
+  var neg=v<0;
+  return (neg?'-':'')+sym()+grp(Math.abs(v),dp);
+}
+function hrs(v){return isFinite(v)?grp(v,1)+' h':'—';}
+function pct(v,dp){return isFinite(v)?grp(v,dp===undefined?1:dp)+'%':'—';}
+function setT(sel,txt){var e=$(sel);if(e)e.textContent=txt;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+/* ── the maths ───────────────────────────────────────── */
+function calc(){
+  var p=[];
+  var takeHome=fin(st.takeHome)?st.takeHome:null;
+  if(takeHome===null)p.push('Enter the take-home income you want.');
+  else if(takeHome<0)p.push('Take-home income cannot be negative.');
+  var t=fin(st.taxRate)?st.taxRate:null;
+  if(t===null)p.push('Enter your effective tax + NI rate.');
+  else if(t<0||t>=100)p.push('Tax rate must be between 0% and 99%.');
+
+  var costs=0,anyCost=false;
+  for(var i=0;i<st.costs.length;i++){
+    var c=st.costs[i];
+    if(fin(c.a)){costs+=c.a*(FREQ[c.f]||1);anyCost=true;}
+  }
+  if(!anyCost)costs=0;
+
+  var pension=0;
+  if(fin(st.pensionAmt)&&st.pensionAmt>0){
+    if(st.pensionBasis==='pct')pension=(takeHome||0)*st.pensionAmt/100;
+    else pension=st.pensionAmt*(st.pensionBasis==='mo'?12:1);
+  }
+
+  var weeksOff=(fin(st.holiday)?st.holiday:0)+(fin(st.sick)?st.sick:0)+(fin(st.training)?st.training:0);
+  var weeks=52-weeksOff;
+  if(weeks<=0)p.push('Weeks off add up to 52 or more — no working weeks left.');
+  var days=fin(st.daysWk)?st.daysWk:null;
+  if(days===null||days<=0||days>7)p.push('Days per week must be between 0.5 and 7.');
+  var hpd=fin(st.hrsDay)?st.hrsDay:null;
+  if(hpd===null||hpd<=0||hpd>24)p.push('Working hours per day must be between 0.5 and 24.');
+  var u=fin(st.util)?st.util:null;
+  if(u===null||u<=0||u>100)p.push('Utilisation must be between 1% and 100%.');
+
+  var r={problems:p,costs:costs,pension:pension,weeks:weeks>0?weeks:null,
+    capacity:null,billable:null,util:u,taxRate:t,
+    profit:null,tax:null,revenue:null,hourly:null,day:null,week:null,
+    naive:null,rounded:null,ok:false};
+
+  if(weeks>0&&days&&hpd){r.capacity=weeks*days*hpd;}
+  if(r.capacity!==null&&u){r.billable=r.capacity*u/100;}
+
+  if(p.length===0&&r.billable>0){
+    var f=1-t/100;
+    var profit=st.pensionPre?(takeHome/f+pension):((takeHome+pension)/f);
+    var taxable=st.pensionPre?(profit-pension):profit;
+    var tax=taxable*(t/100);
+    var revenue=profit+costs;
+    r.profit=profit; r.tax=tax; r.taxable=taxable; r.revenue=revenue;
+    r.hourly=revenue/r.billable;
+    r.day=r.hourly*hpd;
+    r.week=r.day*days;
+    r.naive=revenue/r.capacity;
+    var inc=fin(st.roundTo)&&st.roundTo>0?st.roundTo:1;
+    r.rounded=Math.ceil(r.hourly/inc)*inc;
+    r.monthly=revenue/12;
+    r.ok=true;
+    /* reverse: what does the rate you charge today actually deliver? */
+    if(fin(st.currentRate)&&st.currentRate>=0){
+      var rev2=st.currentRate*r.billable;
+      var profit2=rev2-costs;
+      var th2=st.pensionPre?((profit2-pension)*f):(profit2*f-pension);
+      r.backRev=rev2; r.backTake=th2; r.backGap=th2-takeHome;
+    }
+  }
+  return r;
+}
+function rateAtUtil(r,u){
+  if(!r.ok||!r.capacity)return null;
+  var b=r.capacity*u/100;
+  if(!(b>0))return null;
+  return r.revenue/b;
+}
+
+/* ── rendering ───────────────────────────────────────── */
+function fillInputs(){
+  var ids=['takeHome','taxRate','pensionAmt','holiday','sick','training','daysWk','hrsDay','util',
+           'currentRate','biz','by','forWho','date','note','curCustom'];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    if(el)el.value=(st[ids[i]]===null||st[ids[i]]===undefined)?'':st[ids[i]];
+  }
+  $('#cur').value=st.cur;
+  $('#pensionBasis').value=st.pensionBasis;
+  $('#pensionPre').value=st.pensionPre?'1':'0';
+  $('#roundTo').value=String(st.roundTo);
+  $('#utilRange').value=fin(st.util)?st.util:70;
+  $('#curCustom').hidden=(st.cur!=='custom');
+  $('#sampleNote').style.display=st.sample?'':'none';
+  renderCosts();
+}
+function renderCosts(){
+  var b=$('#costBody'),h='';
+  for(var i=0;i<st.costs.length;i++){
+    var c=st.costs[i];
+    var per=fin(c.a)?c.a*(FREQ[c.f]||1):null;
+    h+='<tr><td><input class="costd" type="text" data-i="'+i+'" data-f="d" value="'+esc(c.d)+'" aria-label="Cost description row '+(i+1)+'" placeholder="Cost name"></td>'
+      +'<td><input type="number" min="0" step="1" inputmode="decimal" data-i="'+i+'" data-f="a" value="'+(c.a===null||c.a===undefined?'':c.a)+'" aria-label="Amount row '+(i+1)+'"></td>'
+      +'<td><select data-i="'+i+'" data-f="f" aria-label="Frequency row '+(i+1)+'">'
+      +'<option value="yr"'+(c.f==='yr'?' selected':'')+'>per year</option>'
+      +'<option value="qtr"'+(c.f==='qtr'?' selected':'')+'>per quarter</option>'
+      +'<option value="mo"'+(c.f==='mo'?' selected':'')+'>per month</option>'
+      +'<option value="wk"'+(c.f==='wk'?' selected':'')+'>per week</option>'
+      +'</select></td>'
+      +'<td class="n">'+(per===null?'—':money(per))+'</td>'
+      +'<td class="noprint"><button type="button" class="btn ico sm dgr" data-rm="'+i+'" aria-label="Remove cost row '+(i+1)+'">&times;</button></td></tr>';
+  }
+  if(!st.costs.length)h='<tr><td colspan="5" class="empty">No business costs yet — add one.</td></tr>';
+  b.innerHTML=h;
+}
+
+function render(){
+  var r=calc();
+
+  /* hero + stats */
+  setT('#oHour',r.ok?money(r.hourly)+' /h':'—');
+  setT('#oDay',r.ok?money(r.day):'—');
+  setT('#oWeek',r.ok?money(r.week):'—');
+  setT('#oRound',r.ok?money(r.rounded,0)+' /h':'—');
+  setT('#oBill',r.billable!==null?grp(r.billable,0):'—');
+  setT('#oRev',r.ok?money(r.revenue)+' / yr':'—');
+  setT('#oDaySub',r.ok?grp(st.hrsDay,2).replace(/\.00$/,'')+' billed hours':'—');
+  setT('#oWeekSub',r.ok?grp(st.daysWk,2).replace(/\.00$/,'')+' days at the day rate':'—');
+  setT('#oRoundSub',r.ok?('nearest '+sym()+grp(st.roundTo,0)+' up · '+money(r.rounded*st.hrsDay,0)+'/day'):'—');
+  setT('#oBillSub',r.capacity!==null?(grp(r.capacity,0)+' worked, '+grp(r.capacity-r.billable,0)+' unbilled'):'—');
+  setT('#chipUtil',fin(st.util)?grp(st.util,0)+'% utilisation':'—');
+  setT('#chipCosts',money(r.costs)+' / yr');
+  setT('#oCosts',money(r.costs));
+  setT('#chipHours',r.billable!==null?grp(r.billable,0)+' billable h':'—');
+  setT('#hoursLine',r.weeks?(grp(r.weeks,1)+' working weeks × '+grp(st.daysWk,1)+' days × '+grp(st.hrsDay,2).replace(/\.00$/,'')
+      +' h = '+grp(r.capacity,0)+' worked hours, of which '+grp(r.billable,0)+' are billable.'):'—');
+
+  /* reverse check */
+  if(r.backTake!==undefined&&isFinite(r.backTake)){
+    setT('#oBackTake',money(r.backTake));
+    var g=r.backGap;
+    var word=g<-0.5?('short of target by '+money(-g)):(g>0.5?('ahead of target by '+money(g)):'exactly on target');
+    setT('#oBackGap',money(st.currentRate,2)+'/h × '+grp(r.billable,0)+' h = '+money(r.backRev)+' invoiced — '+word+'.');
+  }else{setT('#oBackTake','—');setT('#oBackGap','Enter a rate to test it.');}
+
+  /* problems */
+  var pb=$('#probBox');
+  if(r.problems.length){
+    pb.innerHTML='<div class="note bad"><strong>Can’t calculate yet</strong><ul style="margin:5px 0 0;padding-left:18px">'
+      +r.problems.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+  }else pb.innerHTML='';
+
+  /* build-up table */
+  var rows=[];
+  if(r.ok){
+    rows.push(['Target take-home (yours to keep)',st.takeHome,'']);
+    if(r.pension>0)rows.push([st.pensionPre?'Pension (from pre-tax profit)':'Pension (from take-home)',r.pension,'']);
+    rows.push(['Tax + NI at '+pct(st.taxRate)+' of '+money(r.taxable),r.tax,'']);
+    rows.push(['= Profit required before tax',r.profit,'sum']);
+    rows.push(['Business costs',r.costs,'']);
+    rows.push(['= Fee income to invoice (excl. VAT / sales tax)',r.revenue,'sum']);
+  }
+  $('#buildBody').innerHTML=rows.length?rows.map(function(x){
+    return '<tr'+(x[2]==='sum'?' class="hi"':'')+'><td>'+esc(x[0])+'</td><td class="n">'+money(x[1])
+      +'</td><td class="n">'+money(x[1]/12)+'</td></tr>';
+  }).join(''):'<tr><td colspan="3" class="empty">Fill in the income target to see the build-up.</td></tr>';
+
+  /* utilisation gap */
+  var bars=$('#gapBars');
+  if(r.ok){
+    var mx=Math.max(r.hourly,r.naive)||1;
+    bars.innerHTML=
+      barRow('At '+grp(st.util,0)+'% utilisation',r.hourly,mx,'')+
+      barRow('If you assumed 100%',r.naive,mx,'alt');
+    var upl=r.naive>0?(r.hourly/r.naive):null;
+    setT('#gapNote','Most people divide the money they need by every hour they work. That gives '
+      +money(r.naive)+' an hour. The hours you can actually invoice are only '+grp(r.billable,0)
+      +' of '+grp(r.capacity,0)+', so the real rate is '+money(r.hourly)+' — '
+      +(upl?grp(upl,2)+'× higher, '+money(r.hourly-r.naive)+' more per hour':'—')
+      +'. Undercharging by that margin costs about '+money((r.hourly-r.naive)*r.billable)+' a year.');
+  }else{bars.innerHTML='';setT('#gapNote','—');}
+
+  /* sensitivity */
+  var us=[50,60,70,80,90,100];
+  if(fin(st.util)&&us.indexOf(Math.round(st.util))<0&&st.util>0&&st.util<=100)us.push(Math.round(st.util));
+  us.sort(function(a,b){return a-b;});
+  $('#sensBody').innerHTML=r.ok?us.map(function(u){
+    var hr=rateAtUtil(r,u),b=r.capacity*u/100;
+    var here=Math.abs(u-st.util)<0.5;
+    return '<tr'+(here?' class="hi"':'')+'><th scope="row" style="font-weight:'+(here?650:400)
+      +';text-transform:none;letter-spacing:0;font-size:14px;background:transparent;border-bottom:1px solid var(--line);color:var(--ink)">'
+      +grp(u,0)+'%'+(here?' — yours':'')+'</th>'
+      +'<td class="n">'+grp(b,0)+'</td><td class="n">'+money(hr)+'</td>'
+      +'<td class="n">'+money(hr*st.hrsDay)+'</td><td class="n">'+money(hr*st.hrsDay*st.daysWk)+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" class="empty">No figures yet.</td></tr>';
+
+  buildDoc(r);
+  save();
+}
+function barRow(label,v,mx,cls){
+  var w=mx>0?Math.max(2,Math.min(100,v/mx*100)):0;
+  return '<div class="barrow"><span>'+esc(label)+'</span>'
+    +'<div class="barwrap '+cls+'"><div style="width:'+grp(w,1)+'%"></div></div>'
+    +'<b>'+money(v)+'</b></div>';
+}
+
+/* ── printed document ────────────────────────────────── */
+function buildDoc(r){
+  var d=$('#printdoc');
+  var dt=st.date?new Date(st.date+'T00:00:00'):null;
+  var dstr=dt&&!isNaN(dt)?dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):(st.date||'—');
+  var h='';
+  h+='<div class="pd-head"><div><div class="pd-kicker">Rate calculation</div>'
+    +'<div class="pd-biz">'+esc(st.biz||'Freelance rate calculation')+'</div></div>'
+    +'<div class="pd-doc">Freelance Rate Calculator<br><span style="font-weight:400;color:var(--muted)">Prepared '+esc(dstr)+'</span></div></div>';
+  h+='<div class="pd-meta">'
+    +'<div><span>Prepared by</span>'+esc(st.by||'—')+'</div>'
+    +'<div><span>Reference</span>'+esc(st.forWho||'—')+'</div>'
+    +'<div><span>Currency</span>'+esc(sym()||'—')+'</div>'
+    +'<div><span>Utilisation used</span>'+(fin(st.util)?grp(st.util,0)+'%':'—')+'</div></div>';
+  h+='<div class="pd-hero">'
+    +'<div><span>Required hourly rate</span><b>'+(r.ok?money(r.hourly):'—')+'</b><small>excl. VAT / sales tax</small></div>'
+    +'<div><span>Day rate</span><b>'+(r.ok?money(r.day):'—')+'</b><small>'+(r.ok?grp(st.hrsDay,2).replace(/\.00$/,'')+' billed hours':'')+'</small></div>'
+    +'<div><span>Week rate</span><b>'+(r.ok?money(r.week):'—')+'</b><small>'+(r.ok?grp(st.daysWk,1)+' days':'')+'</small></div>'
+    +'<div><span>Quote at</span><b>'+(r.ok?money(r.rounded,0):'—')+'</b><small>rounded up to '+sym()+grp(st.roundTo,0)+'</small></div>'
+    +'</div>';
+
+  h+='<h3>Income build-up</h3><table><tbody>';
+  if(r.ok){
+    h+=drow('Target take-home per year',st.takeHome);
+    if(r.pension>0)h+=drow('Pension contributions ('+(st.pensionPre?'pre-tax':'from take-home')+')',r.pension);
+    h+=drow('Tax + NI / self-employment tax at '+pct(st.taxRate),r.tax);
+    h+=drow('Profit required before tax',r.profit,1);
+    h+=drow('Business costs (see below)',r.costs);
+    h+=drow('Fee income to invoice per year',r.revenue,1);
+    h+=drow('Fee income per month',r.monthly);
+  }else h+='<tr><td colspan="2">Incomplete — see the calculator.</td></tr>';
+  h+='</tbody></table>';
+
+  h+='<h3>Business costs</h3><table><thead><tr><th scope="col">Cost</th><th scope="col" class="n">Amount</th>'
+    +'<th scope="col">Frequency</th><th scope="col" class="n">Per year</th></tr></thead><tbody>';
+  var any=false;
+  for(var i=0;i<st.costs.length;i++){var c=st.costs[i];
+    if(!c.d&&!fin(c.a))continue; any=true;
+    h+='<tr><td>'+esc(c.d||'—')+'</td><td class="n">'+(fin(c.a)?money(c.a):'—')+'</td><td>'+FREQL[c.f]
+      +'</td><td class="n">'+(fin(c.a)?money(c.a*(FREQ[c.f]||1)):'—')+'</td></tr>';}
+  if(!any)h+='<tr><td colspan="4">None recorded.</td></tr>';
+  h+='</tbody><tfoot><tr><td colspan="3">Total per year</td><td class="n">'+money(r.costs)+'</td></tr></tfoot></table>';
+
+  h+='<h3>Available hours</h3><table><tbody>';
+  h+=drow2('Weeks in the year',grp(52,0));
+  h+=drow2('Less holiday / sick / training',grp((fin(st.holiday)?st.holiday:0)+(fin(st.sick)?st.sick:0)+(fin(st.training)?st.training:0),1)+' weeks');
+  h+=drow2('Working weeks',r.weeks!==null?grp(r.weeks,1):'—',1);
+  h+=drow2('Days per week × hours per day',grp(st.daysWk,1)+' × '+grp(st.hrsDay,2).replace(/\.00$/,''));
+  h+=drow2('Hours worked per year',r.capacity!==null?hrs(r.capacity):'—');
+  h+=drow2('Utilisation (billable share)',fin(st.util)?grp(st.util,0)+'%':'—');
+  h+=drow2('Billable hours per year',r.billable!==null?hrs(r.billable):'—',1);
+  h+=drow2('Unbilled hours (admin, sales, quotes)',r.billable!==null?hrs(r.capacity-r.billable):'—');
+  h+='</tbody></table>';
+
+  if(r.ok){
+    h+='<h3>Sensitivity to utilisation</h3><table><thead><tr><th scope="col">Utilisation</th>'
+      +'<th scope="col" class="n">Billable hours</th><th scope="col" class="n">Hourly</th>'
+      +'<th scope="col" class="n">Day rate</th><th scope="col" class="n">Week rate</th></tr></thead><tbody>';
+    var us=[50,60,70,80,90,100];
+    if(fin(st.util)&&us.indexOf(Math.round(st.util))<0)us.push(Math.round(st.util));
+    us.sort(function(a,b){return a-b;});
+    for(var j=0;j<us.length;j++){var u=us[j],hr=rateAtUtil(r,u),bb=r.capacity*u/100;
+      var here=Math.abs(u-st.util)<0.5;
+      h+='<tr'+(here?' style="font-weight:650"':'')+'><td>'+grp(u,0)+'%'+(here?' (used)':'')+'</td>'
+        +'<td class="n">'+grp(bb,0)+'</td><td class="n">'+money(hr)+'</td><td class="n">'+money(hr*st.hrsDay)
+        +'</td><td class="n">'+money(hr*st.hrsDay*st.daysWk)+'</td></tr>';}
+    h+='</tbody></table>';
+    if(isFinite(r.backTake)){
+      h+='<h3>Check on the current rate</h3><table><tbody>'
+        +drow('Current rate per hour',st.currentRate)
+        +drow('Fee income it produces',r.backRev)
+        +drow('Take-home it leaves',r.backTake,1)
+        +drow((r.backGap<0?'Shortfall against target':'Surplus against target'),Math.abs(r.backGap))
+        +'</tbody></table>';
+    }
+  }
+  if(st.note)h+='<h3>Notes &amp; assumptions</h3><div style="font-size:12px">'+esc(st.note).replace(/\n/g,'<br>')+'</div>';
+
+  h+='<div class="pd-note"><b>Important — this is a pricing estimate, not tax advice.</b>'
+    +'It applies one flat effective tax rate ('+(fin(st.taxRate)?pct(st.taxRate):'—')
+    +') entered by the user to profit after business costs. Real income tax and national insurance / '
+    +'self-employment tax are charged in bands and depend on allowances, reliefs, other income and your '
+    +'personal circumstances. VAT / sales tax, corporation tax, employee payroll, bad debt and late '
+    +'payment are all excluded. Rates shown are the minimum needed to hit the stated take-home at the '
+    +'stated utilisation — they are not a market price. Have the figures checked by a qualified '
+    +'accountant before relying on them.</div>';
+  h+='<div class="pd-sign"><div>Prepared by — signature</div><div>Date</div></div>';
+  h+='<div class="pd-foot">Generated with the Solvix Freelance Rate Calculator. '
+    +'Figures rounded to 2 decimal places; hours to 1. All data stays in the browser that produced this page.</div>';
+  d.innerHTML=h;
+}
+function drow(label,v,strong){
+  return '<tr'+(strong?' style="font-weight:700;background:var(--sunk)"':'')+'><td>'+esc(label)
+    +'</td><td class="n" style="width:150px">'+money(v)+'</td></tr>';
+}
+function drow2(label,v,strong){
+  return '<tr'+(strong?' style="font-weight:700;background:var(--sunk)"':'')+'><td>'+esc(label)
+    +'</td><td class="n" style="width:150px">'+esc(v)+'</td></tr>';
+}
+
+/* ── validation on blur ──────────────────────────────── */
+var RULES={
+  takeHome:{min:0,max:1e9,msg:'Enter an amount between 0 and 1,000,000,000.'},
+  taxRate:{min:0,max:99,msg:'Tax rate must be between 0 and 99%.'},
+  pensionAmt:{min:0,max:1e8,msg:'Pension contribution cannot be negative.'},
+  daysWk:{min:0.5,max:7,msg:'Days per week must be between 0.5 and 7.'},
+  hrsDay:{min:0.5,max:24,msg:'Hours per day must be between 0.5 and 24.'},
+  util:{min:1,max:100,msg:'Utilisation must be between 1 and 100%.'},
+  currentRate:{min:0,max:1e6,msg:'Rate cannot be negative.'}
+};
+function validate(k,el){
+  var box=document.getElementById('e_'+k);
+  var rule=RULES[k];
+  if(!rule||!box)return;
+  var v=st[k];
+  var bad=(el.value!==''&&(!fin(v)||v<rule.min||v>rule.max));
+  box.textContent=bad?rule.msg:'';
+  el.classList.toggle('inv',bad);
+}
+function validateWeeks(){
+  var box=$('#e_weeks');
+  var s=(fin(st.holiday)?st.holiday:0)+(fin(st.sick)?st.sick:0)+(fin(st.training)?st.training:0);
+  var bad=s<0||s>=52;
+  box.textContent=bad?'Holiday, sick and training weeks must add up to less than 52.':'';
+  ['holiday','sick','training'].forEach(function(k){
+    var el=document.getElementById(k);if(el)el.classList.toggle('inv',bad);});
+}
+
+/* ── storage ─────────────────────────────────────────── */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return false;
+    st=merge(defaults(),o);
+    return true;
+  }catch(e){return false;}
+}
+function merge(base,o){
+  var out=base;
+  for(var k in base){if(Object.prototype.hasOwnProperty.call(o,k)&&o[k]!==undefined)out[k]=o[k];}
+  if(!Array.isArray(out.costs))out.costs=[];
+  out.costs=out.costs.map(function(c){
+    return {d:String((c&&c.d)||''),a:(c&&fin(parseFloat(c.a)))?parseFloat(c.a):null,
+            f:(c&&FREQ[c.f])?c.f:'yr'};});
+  out.pensionPre=!!out.pensionPre;
+  out.sample=!!out.sample;
+  return out;
+}
+
+/* ── exports ─────────────────────────────────────────── */
+function dl(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+  }catch(e){}
+}
+function slug(s){return (String(s||'freelance-rate').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+  .replace(/^-+|-+$/g,'')||'freelance-rate').slice(0,40);}
+function q(v){
+  var s=String(v==null?'':v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvRows(){
+  var r=calc(),R=[];
+  var cs=sym();
+  R.push(['Section','Item','Detail','Value ('+cs+' unless stated)']);
+  R.push(['Document','Business',st.biz,'']);
+  R.push(['Document','Prepared by',st.by,'']);
+  R.push(['Document','Reference',st.forWho,'']);
+  R.push(['Document','Date',st.date,'']);
+  R.push(['Rate','Required hourly rate','per billable hour',r.ok?r.hourly.toFixed(2):'']);
+  R.push(['Rate','Day rate',grp(st.hrsDay,2)+' h',r.ok?r.day.toFixed(2):'']);
+  R.push(['Rate','Week rate',grp(st.daysWk,1)+' days',r.ok?r.week.toFixed(2):'']);
+  R.push(['Rate','Rounded quoting rate','up to nearest '+grp(st.roundTo,0),r.ok?r.rounded.toFixed(2):'']);
+  R.push(['Rate','Rate at 100% utilisation','naive assumption',r.ok?r.naive.toFixed(2):'']);
+  R.push(['Income','Target take-home','per year',fin(st.takeHome)?st.takeHome.toFixed(2):'']);
+  R.push(['Income','Pension','per year',r.pension.toFixed(2)]);
+  R.push(['Income','Pension treatment',st.pensionPre?'from pre-tax profit':'from take-home','']);
+  R.push(['Income','Tax + NI rate','effective %',fin(st.taxRate)?st.taxRate.toFixed(2):'']);
+  R.push(['Income','Tax + NI','per year',r.ok?r.tax.toFixed(2):'']);
+  R.push(['Income','Profit required before tax','per year',r.ok?r.profit.toFixed(2):'']);
+  R.push(['Income','Business costs','per year',r.costs.toFixed(2)]);
+  R.push(['Income','Fee income to invoice','per year',r.ok?r.revenue.toFixed(2):'']);
+  R.push(['Income','Fee income to invoice','per month',r.ok?(r.revenue/12).toFixed(2):'']);
+  for(var i=0;i<st.costs.length;i++){var c=st.costs[i];
+    if(!c.d&&!fin(c.a))continue;
+    R.push(['Business cost',c.d,FREQL[c.f]+' '+(fin(c.a)?c.a:''),fin(c.a)?(c.a*(FREQ[c.f]||1)).toFixed(2):'']);}
+  R.push(['Hours','Working weeks','52 less time off',r.weeks!==null?grp(r.weeks,1):'']);
+  R.push(['Hours','Days per week','',fin(st.daysWk)?grp(st.daysWk,1):'']);
+  R.push(['Hours','Hours per day','',fin(st.hrsDay)?grp(st.hrsDay,2):'']);
+  R.push(['Hours','Hours worked per year','',r.capacity!==null?r.capacity.toFixed(1):'']);
+  R.push(['Hours','Utilisation','%',fin(st.util)?grp(st.util,0):'']);
+  R.push(['Hours','Billable hours per year','',r.billable!==null?r.billable.toFixed(1):'']);
+  R.push(['Hours','Unbilled hours per year','',r.billable!==null?(r.capacity-r.billable).toFixed(1):'']);
+  if(r.ok){
+    var us=[50,60,70,80,90,100];
+    if(fin(st.util)&&us.indexOf(Math.round(st.util))<0)us.push(Math.round(st.util));
+    us.sort(function(a,b){return a-b;});
+    for(var j=0;j<us.length;j++){var u=us[j],hr=rateAtUtil(r,u);
+      R.push(['Sensitivity',u+'% utilisation',(r.capacity*u/100).toFixed(1)+' billable h',hr.toFixed(2)]);}
+  }
+  if(isFinite(r.backTake)){
+    R.push(['Rate check','Current rate','per hour',fin(st.currentRate)?st.currentRate.toFixed(2):'']);
+    R.push(['Rate check','Fee income produced','per year',r.backRev.toFixed(2)]);
+    R.push(['Rate check','Take-home produced','per year',r.backTake.toFixed(2)]);
+    R.push(['Rate check',r.backGap<0?'Shortfall vs target':'Surplus vs target','per year',Math.abs(r.backGap).toFixed(2)]);
+  }
+  R.push(['Notice','Disclaimer','Pricing estimate only — not tax advice. Flat effective tax rate; VAT / sales tax excluded. Consult an accountant.','']);
+  return R;
+}
+function doCsv(){
+  var rows=csvRows().map(function(r){return r.map(q).join(',');}).join('\r\n');
+  dl(slug(st.biz)+'-rate-'+(st.date||today())+'.csv','text/csv;charset=utf-8','﻿'+rows+'\r\n');
+}
+function doJson(){
+  var payload={tool:'solvix.freelance-rate',version:1,exported:new Date().toISOString(),state:st};
+  dl(slug(st.biz)+'-rate-'+(st.date||today())+'.json','application/json',JSON.stringify(payload,null,2));
+}
+
+/* ── events ──────────────────────────────────────────── */
+function touched(){if(st.sample){st.sample=false;$('#sampleNote').style.display='none';}}
+
+document.addEventListener('input',function(e){
+  var el=e.target;
+  if(el.id==='utilRange'){st.util=n0(el.value);$('#util').value=el.value;touched();render();return;}
+  var k=el.getAttribute('data-k');
+  if(k){
+    if(el.type==='number')st[k]=n0(el.value);
+    else if(k==='pensionPre')st[k]=el.value==='1';
+    else if(k==='roundTo')st[k]=n0(el.value)||1;
+    else st[k]=el.value;
+    if(k==='cur'){$('#curCustom').hidden=(st.cur!=='custom');}
+    if(k==='util'){$('#utilRange').value=fin(st.util)?Math.max(10,Math.min(100,st.util)):70;}
+    touched();
+    if(['holiday','sick','training'].indexOf(k)>=0)validateWeeks();
+    render();
+    return;
+  }
+  var i=el.getAttribute('data-i');
+  if(i!==null&&i!==undefined&&el.getAttribute('data-f')){
+    var idx=parseInt(i,10),f=el.getAttribute('data-f');
+    if(st.costs[idx]){
+      st.costs[idx][f]=(f==='a')?n0(el.value):el.value;
+      touched();
+      var row=el.closest('tr');
+      if(row){var cell=row.children[3];var c=st.costs[idx];
+        cell.textContent=fin(c.a)?money(c.a*(FREQ[c.f]||1)):'—';}
+      render();
+    }
+  }
+},false);
+
+document.addEventListener('change',function(e){
+  var el=e.target;
+  if(el.tagName==='SELECT'&&el.getAttribute('data-f')==='f'){renderCosts();render();}
+},false);
+
+document.addEventListener('focusout',function(e){
+  var k=e.target.getAttribute&&e.target.getAttribute('data-k');
+  if(k&&RULES[k])validate(k,e.target);
+},true);
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('button'):null;
+  if(!b)return;
+  var rm=b.getAttribute('data-rm');
+  if(rm!==null&&rm!==undefined){
+    st.costs.splice(parseInt(rm,10),1);touched();renderCosts();render();return;
+  }
+  switch(b.id){
+    case 'btnAdd':
+      st.costs.push({d:'',a:null,f:'yr'});touched();renderCosts();render();
+      var last=$('#costBody').querySelector('tr:last-child input');if(last)last.focus();
+      break;
+    case 'btnPrint': case 'btnPrint2': window.print(); break;
+    case 'btnCsv': doCsv(); break;
+    case 'btnJson': doJson(); break;
+    case 'btnImport': $('#fileIn').click(); break;
+    case 'btnPrev':
+      document.body.classList.add('previewing');$('#prevBar').style.display='flex';
+      window.scrollTo(0,0);break;
+    case 'btnBack':
+      document.body.classList.remove('previewing');$('#prevBar').style.display='none';break;
+    case 'btnBlank':
+      st=blank();fillInputs();render();break;
+    case 'btnClear':
+      if(window.confirm('Clear every figure and delete the saved copy in this browser? This cannot be undone.')){
+        try{localStorage.removeItem(KEY);}catch(err){}
+        st=blank();fillInputs();
+        ['takeHome','taxRate','pensionAmt','daysWk','hrsDay','util','currentRate'].forEach(function(k){
+          var el=document.getElementById(k);if(el){el.classList.remove('inv');}
+          var bx=document.getElementById('e_'+k);if(bx)bx.textContent='';});
+        $('#e_weeks').textContent='';
+        render();
+      }
+      break;
+  }
+},false);
+
+$('#fileIn').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];
+  if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      var s=(o&&o.state)?o.state:o;
+      if(!s||typeof s!=='object')throw new Error('bad');
+      st=merge(defaults(),s);
+      st.sample=false;
+      fillInputs();render();
+      $('#probBox').insertAdjacentHTML('afterbegin','<div class="note" id="impOk"><strong>Imported.</strong> '+esc(f.name)+' restored.</div>');
+      setTimeout(function(){var n=$('#impOk');if(n)n.remove();},4000);
+    }catch(err){
+      $('#probBox').insertAdjacentHTML('afterbegin','<div class="note bad" id="impBad"><strong>Could not read that file.</strong> It is not a Freelance Rate Calculator export.</div>');
+      setTimeout(function(){var n=$('#impBad');if(n)n.remove();},6000);
+    }
+    e.target.value='';
+  };
+  fr.readAsText(f);
+});
+
+/* ── boot ────────────────────────────────────────────── */
+load();
+fillInputs();
+validateWeeks();
+render();
+})();
+</script>
+</body>
+</html>

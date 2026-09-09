@@ -1,0 +1,1187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plumbing Pipe Sizing — WSFU &amp; DFU Calculator</title>
+<meta name="description" content="Size water supply pipe from water supply fixture units using Hunter's curve and velocity limits, and size sanitary drains and vents from drainage fixture units. Printable sizing record, CSV and JSON export, works offline.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23B45309'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%23fff'/%3E%3Crect x='8' y='9' width='4' height='14' fill='%23fff'/%3E%3Crect x='20' y='9' width='4' height='14' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#B45309;--accent-ink:#8F4207;--accent-wash:#FBF0DC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E8944A;--accent-ink:#F4B478;--accent-wash:#3A2410;--on-accent:#1A1005}}
+:root[data-theme="dark"]{--accent:#E8944A;--accent-ink:#F4B478;--accent-wash:#3A2410;--on-accent:#1A1005}
+
+.app{max-width:1280px}
+.appbar{margin:0;padding-left:0;padding-right:0}
+.appbar>.barin{width:100%;max-width:1280px;margin:0 auto;padding:0 clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.topnote{margin:14px 0 0}
+.tw{max-width:100%;position:relative}
+.split{grid-template-columns:minmax(0,1.16fr) minmax(320px,.84fr)}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.sticky{position:static}.results{order:-1}}
+.herowrap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.herowrap{grid-template-columns:1fr}}
+.stat.hero .v{font-size:29px}
+.stat .v small{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:0}
+.stat.hero .v small{color:var(--accent-ink);opacity:.8}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
+.mini .stat{padding:8px 10px}
+.mini .stat .v{font-size:17px;margin-top:2px}
+.sect{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  margin:2px 0 -2px;display:flex;align-items:center;gap:8px}
+.sect::after{content:"";flex:1;height:1px;background:var(--line)}
+.rt td,.rt th{padding:6px 8px;font-size:13px}
+.rt th{font-size:9.5px}
+tr.hit td{background:var(--accent-wash);font-weight:650}
+td.n,th.n{white-space:nowrap}
+.mini{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:400px){.mini{grid-template-columns:1fr}}
+.fx input[type=number]::-webkit-outer-spin-button,.fx input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.fx input[type=number]{-moz-appearance:textfield}
+tbody tr.hit:hover td{background:var(--accent-wash)}
+.fx td,.fx th{padding:5px 6px}
+.fx th{letter-spacing:.04em}
+.fx td:first-child{min-width:214px}
+.fx input[type=number]{max-width:60px;padding-right:6px}
+.fx .qty{max-width:52px}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12px/1 var(--sans);padding:7px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.foot{max-width:1280px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 34px;color:var(--muted);font-size:12px;line-height:1.55}
+.badge{font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);
+  background:var(--accent-wash);border:1px solid var(--accent);border-radius:3px;padding:4px 6px}
+.rowerr{margin-top:6px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+@media(max-width:560px){
+  .appbar .btn.sm{padding:6px 8px;font-size:11.5px}
+  .appbar>.barin{gap:7px 8px}
+  .stat.hero .v{font-size:26px}
+}
+@media print{
+  tbody tr:hover{background:transparent!important}
+  .foot{max-width:none;padding:0;margin-top:7mm;border-top:1px solid #999;padding-top:3mm;font-size:8pt;color:#333}
+}
+
+/* printed document */
+.doc{color:#000}
+.doc .dhd{display:flex;justify-content:space-between;gap:16px;border-bottom:2.5px solid #000;padding-bottom:8px;margin-bottom:12px}
+.doc .dhd h2{font-size:17pt;letter-spacing:-.01em}
+.doc .dhd .dsub{font-size:9.5pt;color:#333;margin-top:3px}
+.doc .dhd .dmeta{text-align:right;font-size:9pt;line-height:1.5;white-space:nowrap}
+.doc .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 18px;margin-bottom:12px}
+.doc .kv div{border-bottom:1px solid #ccc;padding-bottom:3px}
+.doc .kv b{display:block;font:600 7.5pt/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#555}
+.doc .kv span{font-size:10.5pt}
+.doc h3{font-size:10pt;letter-spacing:.05em;text-transform:uppercase;margin:11px 0 5px;border-bottom:1px solid #999;padding-bottom:3px}
+.doc table{margin-bottom:4px}
+.doc .ans{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.doc .ans div{border:1.5px solid #000;padding:7px 9px}
+.doc .ans b{display:block;font:600 7.5pt/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:#333}
+.doc .ans span{font:700 15pt/1.15 var(--mono);display:block;margin-top:2px}
+.doc .ans em{font-style:normal;font-size:8pt;color:#444}
+.doc .dis{border:1.5px solid #000;padding:9px 11px;font-size:8.8pt;line-height:1.45;margin-top:10px}
+.doc .sig{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:16px;font-size:9pt}
+.doc .sig div{border-top:1px solid #000;padding-top:4px}
+.doc .dfoot{margin-top:12px;border-top:1px solid #999;padding-top:5px;font-size:8pt;color:#444;display:flex;justify-content:space-between;gap:12px}
+@media print{
+  .screenonly{display:none!important}
+  .doc table{width:100%}
+  .doc .ans div,.doc table,.doc .dis{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+ <div class="barin">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PS</div>
+    <div style="min-width:0">
+      <h1>Plumbing Pipe Sizing</h1>
+      <div class="sub">WSFU · HUNTER · DFU · VENT</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn sm" id="bSample">Load sample</button>
+    <button type="button" class="btn sm" id="bJson">JSON</button>
+    <button type="button" class="btn sm" id="bImport">Import</button>
+    <button type="button" class="btn sm" id="bCsv">CSV</button>
+    <button type="button" class="btn sm pri" id="bPrint">Print record</button>
+    <button type="button" class="btn sm dgr" id="bClear">Clear all data</button>
+  </div>
+  <input type="file" id="fImport" accept="application/json,.json" class="sr" aria-hidden="true" tabindex="-1">
+ </div>
+</header>
+
+<main class="app">
+
+  <div class="note warn topnote noprint" id="disclaimer">
+    <strong>Local plumbing code governs — this is a design aid, not an approval.</strong>
+    Sizes come from the fixture-unit method: Hunter's curve for supply demand and the IPC capacity tables for
+    drainage and venting. Your authority may adopt the UPC, NSPC or a local amendment with different values and
+    minimum sizes, and this tool does not cover water heaters, pumps and boosters, fire service, gas or storm
+    drainage. Have every design checked by a licensed plumber or engineer before you order material or cut pipe.
+    The full basis and limitations are printed on the sizing record.
+  </div>
+
+  <div class="screenonly">
+
+  <div class="row noprint" id="sampleBar" style="margin:12px 0 0">
+    <span class="badge">Sample data</span>
+    <span class="hint">Pre-filled with a 2-bathroom dwelling so you can see the output straight away. Edit any figure, or clear it and start blank.</span>
+    <button type="button" class="btn sm" id="bBlank">Start blank</button>
+  </div>
+
+  <div class="split" style="margin-top:14px">
+
+    <!-- ══ LEFT: inputs ══ -->
+    <div class="stack">
+
+      <section class="card">
+        <div class="hd"><h2>Job details</h2><span class="hint">Printed on the sizing record</span></div>
+        <div class="bd grid cols-3" style="gap:12px">
+          <div class="f"><label for="jName">Project / job</label><input id="jName" data-job="name" autocomplete="off"></div>
+          <div class="f"><label for="jRef">Reference no.</label><input id="jRef" data-job="ref" autocomplete="off"></div>
+          <div class="f"><label for="jDate">Date</label><input id="jDate" type="date" data-job="date"></div>
+          <div class="f" style="grid-column:span 2"><label for="jAddr">Site address</label><input id="jAddr" data-job="address" autocomplete="off"></div>
+          <div class="f"><label for="jClient">Client</label><input id="jClient" data-job="client" autocomplete="off"></div>
+          <div class="f"><label for="jBy">Prepared by</label><input id="jBy" data-job="by" autocomplete="off"></div>
+          <div class="f"><label for="jCo">Company</label><input id="jCo" data-job="co" autocomplete="off"></div>
+          <div class="f"><label for="jLic">Licence / reg. no.</label><input id="jLic" data-job="lic" autocomplete="off"></div>
+          <div class="f" style="grid-column:1/-1"><label for="jNotes">Notes on the record</label><textarea id="jNotes" data-job="notes" rows="2"></textarea></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd">
+          <h2>Fixture schedule</h2>
+          <span class="hint" id="fxCount">—</span>
+          <button type="button" class="btn sm noprint" id="bAdd">+ Add fixture</button>
+        </div>
+        <div class="tw">
+          <table class="fx">
+            <caption class="sr">Fixture schedule with water supply fixture units and drainage fixture units</caption>
+            <thead><tr>
+              <th scope="col">Fixture type</th>
+              <th scope="col" class="n">Qty</th>
+              <th scope="col" class="n" title="Total water supply fixture units per fixture">WSFU</th>
+              <th scope="col" class="n" title="Cold water supply fixture units per fixture">Cold</th>
+              <th scope="col" class="n" title="Hot water supply fixture units per fixture">Hot</th>
+              <th scope="col" class="n" title="Drainage fixture units per fixture">DFU</th>
+              <th scope="col" class="n" id="thTrap">Trap</th>
+              <th scope="col" class="n">Σ WSFU</th>
+              <th scope="col" class="n">Σ DFU</th>
+              <th scope="col"><span class="sr">Remove</span></th>
+            </tr></thead>
+            <tbody id="fxBody"></tbody>
+            <tfoot><tr>
+              <td>Totals</td>
+              <td class="n" id="tQty">—</td>
+              <td colspan="5" class="n" style="color:var(--muted);font-weight:400">cold <span class="mono" id="tCold">—</span> · hot <span class="mono" id="tHot">—</span></td>
+              <td class="n" id="tWsfu">—</td>
+              <td class="n" id="tDfu">—</td>
+              <td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft">
+          <span class="hint">Values default to the standard table (IPC Appendix E Table E103.3(2) supply, Table 709.1 drainage — private use). Overwrite any cell for a manufacturer's figure or a local amendment.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Design basis</h2>
+          <div class="seg" role="group" aria-label="Unit system">
+            <button type="button" id="uImp" aria-pressed="true">Imperial</button>
+            <button type="button" id="uMet" aria-pressed="false">Metric</button>
+          </div>
+        </div>
+        <div class="bd grid cols-3" style="gap:12px">
+          <div class="f">
+            <label for="sMat">Supply pipe material</label>
+            <select id="sMat" data-sys="material">
+              <option value="copperL">Type L copper (ASTM B88)</option>
+              <option value="copperM">Type M copper (ASTM B88)</option>
+              <option value="pex">PEX SDR-9 (ASTM F876)</option>
+              <option value="cpvc">CPVC SDR-11 CTS (ASTM D2846)</option>
+              <option value="pvc40">PVC Schedule 40 (IPS)</option>
+              <option value="steel40">Galvanized steel Sch 40</option>
+            </select>
+          </div>
+          <div class="f">
+            <label for="sCurve">Hunter demand curve</label>
+            <select id="sCurve" data-sys="curve">
+              <option value="tank">Predominantly flush tanks</option>
+              <option value="fv">Predominantly flushometer valves</option>
+            </select>
+          </div>
+          <div class="f">
+            <label for="sSlope">Building drain slope</label>
+            <select id="sSlope" data-sys="slope">
+              <option value="0.125">1/8 in per ft (1.0%)</option>
+              <option value="0.25">1/4 in per ft (2.1%)</option>
+              <option value="0.5">1/2 in per ft (4.2%)</option>
+            </select>
+          </div>
+          <div class="f">
+            <label for="sVc">Cold velocity limit <span class="uL" data-u="vel"></span></label>
+            <input id="sVc" type="number" min="1" max="20" step="0.1" data-sys="vCold" data-unit="vel">
+            <span class="err" id="e-sVc" hidden></span>
+          </div>
+          <div class="f">
+            <label for="sVh">Hot velocity limit <span class="uL" data-u="vel"></span></label>
+            <input id="sVh" type="number" min="1" max="20" step="0.1" data-sys="vHot" data-unit="vel">
+            <span class="err" id="e-sVh" hidden></span>
+          </div>
+          <div class="f" style="justify-content:flex-end">
+            <label class="check" style="margin-bottom:8px"><input type="checkbox" id="sFrost" data-sys="frost"><span>Roof subject to frost closure (vent through roof min 3 in)</span></label>
+          </div>
+        </div>
+        <div class="ft"><span class="hint">Velocity limits default to 8 ft/s cold and 5 ft/s hot — the erosion limits normally applied to copper. Hot water above 140&nbsp;°F is often limited further; check the pipe maker's data.</span></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Pressure check — service &amp; cold main</h2><span class="chip" id="pChip">—</span></div>
+        <div class="bd grid cols-3" style="gap:12px">
+          <div class="f"><label for="pSup">Static supply pressure <span class="uL" data-u="prs"></span></label>
+            <input id="pSup" type="number" min="0" step="1" data-sys="psiSupply" data-unit="prs"><span class="err" id="e-pSup" hidden></span></div>
+          <div class="f"><label for="pMet">Meter &amp; service loss <span class="uL" data-u="prs"></span></label>
+            <input id="pMet" type="number" min="0" step="1" data-sys="meterLoss" data-unit="prs"></div>
+          <div class="f"><label for="pRes">Residual needed at highest fixture <span class="uL" data-u="prs"></span></label>
+            <input id="pRes" type="number" min="0" step="1" data-sys="residual" data-unit="prs"></div>
+          <div class="f"><label for="pLen">Developed length of run <span class="uL" data-u="len"></span></label>
+            <input id="pLen" type="number" min="0" step="1" data-sys="devLen" data-unit="len"><span class="err" id="e-pLen" hidden></span></div>
+          <div class="f"><label for="pFit">Fittings allowance (%)</label>
+            <input id="pFit" type="number" min="0" max="200" step="5" data-sys="fitPct"></div>
+          <div class="f"><label for="pElev">Rise to highest fixture <span class="uL" data-u="len"></span></label>
+            <input id="pElev" type="number" min="0" step="1" data-sys="elev" data-unit="len"></div>
+        </div>
+        <div class="tw"><table class="rt">
+          <caption class="sr">Pressure budget</caption>
+          <thead><tr><th scope="col">Pressure budget</th><th scope="col" class="n">Value</th><th scope="col">Basis</th></tr></thead>
+          <tbody id="pBody"></tbody>
+        </table></div>
+      </section>
+
+    </div>
+
+    <!-- ══ RIGHT: live results ══ -->
+    <div class="stack sticky results">
+
+      <section class="card">
+        <div class="hd"><h2>Required sizes</h2><span class="chip" id="vChip">—</span></div>
+        <div class="bd stack" style="gap:12px">
+
+          <div class="herowrap">
+            <div class="stat hero">
+              <div class="k">Water service &amp; cold main</div>
+              <div class="v" id="hSvc">—</div>
+              <div class="u" id="hSvcU">—</div>
+            </div>
+            <div class="stat hero">
+              <div class="k">Building drain</div>
+              <div class="v" id="hDrn">—</div>
+              <div class="u" id="hDrnU">—</div>
+            </div>
+          </div>
+
+          <div class="mini">
+            <div class="stat"><div class="k">Hot water main</div><div class="v" id="mHot">—</div><div class="u" id="mHotU">—</div></div>
+            <div class="stat"><div class="k">Vent stack</div><div class="v" id="mVent">—</div><div class="u" id="mVentU">—</div></div>
+            <div class="stat"><div class="k">Peak demand</div><div class="v" id="mGpm">—</div><div class="u" id="mGpmU">—</div></div>
+            <div class="stat"><div class="k">Total WSFU / DFU</div><div class="v" id="mFu">—</div><div class="u">supply / drainage units</div></div>
+          </div>
+
+          <div class="sect">Supply sizing</div>
+          <div class="tw"><table class="rt">
+            <caption class="sr">Supply line sizing by fixture unit demand</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="n">WSFU</th><th scope="col" class="n">Demand</th>
+              <th scope="col" class="n">Min ID</th><th scope="col" class="n">Size</th><th scope="col" class="n">Velocity</th></tr></thead>
+            <tbody id="supBody"></tbody>
+          </table></div>
+
+          <div class="sect">Drainage capacity</div>
+          <div class="tw"><table class="rt">
+            <caption class="sr">Maximum drainage fixture units by pipe size</caption>
+            <thead><tr><th scope="col">Nominal</th><th scope="col" class="n">Max DFU horiz. branch</th>
+              <th scope="col" class="n">Max DFU building drain</th><th scope="col" class="n">Min vent</th></tr></thead>
+            <tbody id="drnBody"></tbody>
+          </table></div>
+          <p class="hint" id="drnNote">—</p>
+        </div>
+        <div class="ft">
+          <span class="hint">Materials round <strong>up</strong> to the next stocked size. Velocity is checked at the selected size, never at the calculated bore.</span>
+        </div>
+      </section>
+
+    </div>
+  </div>
+  </div><!-- /screenonly -->
+
+  <!-- ══ printed document ══ -->
+  <div class="printonly doc" id="doc"></div>
+
+</main>
+
+<footer class="foot">
+  <p><strong>What this implements.</strong> Water supply fixture units per fixture from IPC Appendix E Table E103.3(2)
+  (private use); total WSFU converted to peak demand in gpm by linear interpolation of Hunter's probability curve
+  (IPC Table E103.3(3), flush-tank and flushometer-valve columns); pipe bore from
+  <span class="mono">d = √(0.4085·Q ÷ v)</span> with v the erosion velocity limit, rounded up to the next stocked
+  nominal size using published internal diameters; friction loss by Hazen–Williams
+  <span class="mono">h = 4.52·Q^1.852 ÷ (C^1.852·d^4.8655)</span> psi/ft; static head at 0.4335 psi per foot of rise.
+  Drainage fixture units per IPC Table 709.1 (private use); horizontal fixture branch capacity per IPC Table 710.1(2)
+  (1½ in = 3 DFU, 2 in = 6, 2½ in = 12, 3 in = 20, 4 in = 160, 5 in = 360, 6 in = 620); building drain and sewer
+  capacity by slope per IPC Table 710.1(1); a 3 in minimum wherever a water closet discharges. Vents sized at not
+  less than half the diameter of the drain served and never less than 1¼ in (IPC 903.1 / 916.2), with a 3 in minimum
+  through the roof where frost closure applies. Assumes cold potable water near 60&nbsp;°F, a single building, no
+  booster or pressure-reducing valve unless you enter its loss, and no simultaneous continuous-flow demand.
+  Local code, not this tool, governs. Everything is stored in this browser only — nothing is uploaded.</p>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var KEY="solvix.pipe-sizing-calculator.v1";
+
+/* ── standard tables ─────────────────────────────────────────────── */
+// IPC Appendix E Table E103.3(2) water supply fixture units (private use)
+// + IPC Table 709.1 drainage fixture units and minimum trap size.
+var FIX={
+  wc_tank   :{n:"Water closet — flush tank, 1.6 gpf", wsfu:2.2, cold:2.2, hot:0,   dfu:3,   trap:3},
+  wc_fv     :{n:"Water closet — flushometer valve",   wsfu:5.0, cold:5.0, hot:0,   dfu:3,   trap:3},
+  bathgrp   :{n:"Bathroom group — WC flush tank",     wsfu:3.6, cold:2.7, hot:1.5, dfu:5,   trap:3},
+  lav       :{n:"Lavatory (basin)",                   wsfu:0.7, cold:0.5, hot:0.5, dfu:1,   trap:1.25},
+  shower    :{n:"Shower — single head",               wsfu:1.4, cold:1.0, hot:1.0, dfu:2,   trap:2},
+  bath      :{n:"Bathtub (with or without shower)",   wsfu:1.4, cold:1.0, hot:1.0, dfu:2,   trap:1.5},
+  ksink     :{n:"Kitchen sink — domestic",            wsfu:1.4, cold:1.0, hot:1.0, dfu:2,   trap:1.5},
+  dish      :{n:"Dishwasher — domestic",              wsfu:1.4, cold:0,   hot:1.4, dfu:2,   trap:1.5},
+  washer    :{n:"Clothes washer standpipe",           wsfu:1.4, cold:1.0, hot:1.0, dfu:2,   trap:2},
+  laundry   :{n:"Laundry tub / tray",                 wsfu:1.4, cold:1.0, hot:1.0, dfu:2,   trap:1.5},
+  hosebib   :{n:"Hose bibb / sillcock",               wsfu:2.5, cold:2.5, hot:0,   dfu:0,   trap:0},
+  urinal    :{n:"Urinal — flushometer, 1.0 gpf",      wsfu:5.0, cold:5.0, hot:0,   dfu:4,   trap:2},
+  fountain  :{n:"Drinking fountain",                  wsfu:0.25,cold:0.25,hot:0,   dfu:0.5, trap:1.25},
+  floordrain:{n:"Floor drain (no supply)",            wsfu:0,   cold:0,   hot:0,   dfu:2,   trap:2},
+  custom    :{n:"Custom / other — enter values",      wsfu:1.0, cold:1.0, hot:0,   dfu:1,   trap:1.5}
+};
+
+// Hunter's curve, IPC Table E103.3(3): [total WSFU, demand gpm]
+var CURVE={
+ tank:[[1,3],[2,5],[3,6.5],[4,8],[5,9.4],[6,10.7],[7,11.8],[8,12.8],[9,13.7],[10,14.6],[12,16],[14,17],
+  [16,18],[18,18.8],[20,19.6],[25,21.5],[30,23.3],[35,24.9],[40,26.3],[45,27.7],[50,29.1],[60,32],[70,35],
+  [80,38],[90,41],[100,43.5],[120,48],[140,52.5],[160,57],[180,61],[200,65],[225,70],[250,75],[275,80],
+  [300,85],[400,105],[500,124],[750,170],[1000,208],[1250,239],[1500,269],[1750,297],[2000,325],[2500,380],[3000,433]],
+ fv:[[5,15],[6,17.4],[7,19.8],[8,22.2],[9,24.6],[10,27],[12,28.6],[14,30.2],[16,31.8],[18,33.4],[20,35],
+  [25,38],[30,41],[35,43.8],[40,46.5],[45,49],[50,51.5],[60,55],[70,58.5],[80,62],[90,64.8],[100,67.5],
+  [120,72.5],[140,77.5],[160,82.5],[180,87],[200,91.5],[225,97],[250,101],[275,105.5],[300,110],[400,126],
+  [500,142],[750,178],[1000,208],[1250,239],[1500,269],[1750,297],[2000,325],[2500,380],[3000,433]]
+};
+
+// published internal diameters, inches, and Hazen-Williams C
+var MAT={
+ copperL:{n:"Type L copper",C:140,id:{0.5:0.545,0.75:0.785,1:1.025,1.25:1.265,1.5:1.505,2:1.985,2.5:2.465,3:2.945,4:3.905}},
+ copperM:{n:"Type M copper",C:140,id:{0.5:0.569,0.75:0.811,1:1.055,1.25:1.291,1.5:1.527,2:2.009,2.5:2.495,3:2.981,4:3.935}},
+ pex    :{n:"PEX SDR-9",   C:150,id:{0.375:0.35,0.5:0.475,0.75:0.671,1:0.863,1.25:1.053,1.5:1.243,2:1.629}},
+ cpvc   :{n:"CPVC SDR-11", C:150,id:{0.5:0.485,0.75:0.715,1:0.925,1.25:1.125,1.5:1.335,2:1.755}},
+ pvc40  :{n:"PVC Sch 40",  C:150,id:{0.5:0.622,0.75:0.824,1:1.049,1.25:1.38,1.5:1.61,2:2.067,2.5:2.469,3:3.068,4:4.026}},
+ steel40:{n:"Galv. steel Sch 40",C:100,id:{0.5:0.622,0.75:0.824,1:1.049,1.25:1.38,1.5:1.61,2:2.067,2.5:2.469,3:3.068,4:4.026}}
+};
+
+var BRANCH={1.5:3,2:6,2.5:12,3:20,4:160,5:360,6:620};              // IPC Table 710.1(2)
+var BLDG={                                                          // IPC Table 710.1(1) by slope in/ft
+ 2  :{0.125:null,0.25:21,  0.5:26},
+ 2.5:{0.125:null,0.25:24,  0.5:31},
+ 3  :{0.125:36,  0.25:42,  0.5:50},
+ 4  :{0.125:180, 0.25:216, 0.5:250},
+ 5  :{0.125:390, 0.25:480, 0.5:575},
+ 6  :{0.125:700, 0.25:840, 0.5:1000},
+ 8  :{0.125:1600,0.25:1920,0.5:2300}
+};
+var DRAIN_SIZES=[1.25,1.5,2,2.5,3,4,5,6,8];
+var FRAC={0.375:"3/8",0.5:"1/2",0.75:"3/4",1:"1",1.25:"1-1/4",1.5:"1-1/2",2:"2",2.5:"2-1/2",3:"3",4:"4",5:"5",6:"6",8:"8"};
+var DN  ={0.375:10,0.5:15,0.75:20,1:25,1.25:32,1.5:40,2:50,2.5:65,3:80,4:100,5:125,6:150,8:200};
+
+/* ── units ───────────────────────────────────────────────────────── */
+var U={flow:{imp:["gpm",1,1],met:["L/s",0.0630902,2]},
+       vel :{imp:["ft/s",1,2],met:["m/s",0.3048,2]},
+       dia :{imp:["in",1,3],met:["mm",25.4,1]},
+       len :{imp:["ft",1,0],met:["m",0.3048,1]},
+       prs :{imp:["psi",1,1],met:["kPa",6.894757,0]}};
+function uf(k){return U[k][S.sys.units]||U[k].imp;}
+function un(k){return uf(k)[0];}
+function toD(k,v){return v*uf(k)[1];}
+function frD(k,v){var f=uf(k)[1];return f?v/f:v;}
+function dp(k){return uf(k)[2];}
+
+/* ── helpers ─────────────────────────────────────────────────────── */
+function $(id){return document.getElementById(id);}
+function num(v){var x=parseFloat(v);return isFinite(x)?x:0;}
+function fin(x){return typeof x==="number"&&isFinite(x);}
+function f(x,d){
+  if(!fin(x))return "—";
+  if(Object.is(x,-0)||Math.abs(x)<5e-10)x=0;
+  return x.toFixed(d==null?2:d);
+}
+function fu(k,x,forceDp){ return f(fin(x)?toD(k,x):NaN, forceDp==null?dp(k):forceDp); }
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function sizeLbl(v){ if(!fin(v))return "—";
+  return S.sys.units==="met" ? ("DN"+(DN[v]||Math.round(v*25.4))) : (FRAC[v]||String(v))+" in"; }
+function sizeBoth(v){ if(!fin(v))return "—"; return (FRAC[v]||String(v))+" in (DN"+(DN[v]||Math.round(v*25.4))+")"; }
+function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function niceDate(iso){
+  if(!iso)return "—";
+  var p=String(iso).split("-"); if(p.length!==3)return iso;
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var mi=parseInt(p[1],10); if(!(mi>=1&&mi<=12))return iso;
+  return parseInt(p[2],10)+" "+M[mi-1]+" "+p[0];
+}
+
+/* ── state ───────────────────────────────────────────────────────── */
+var uid=1;
+function row(type,qty){var d=FIX[type]||FIX.custom;
+  return {id:uid++,type:type,qty:qty,wsfu:d.wsfu,cold:d.cold,hot:d.hot,dfu:d.dfu};}
+function sample(){
+  uid=1;
+  return {
+   v:1, sample:true,
+   job:{name:"Maple Row — Plot 4, new dwelling",ref:"PS-2041",address:"4 Maple Row, Bicester OX26",
+        client:"Harding Homes Ltd",by:"",co:"",lic:"",date:todayISO(),
+        notes:"Two-bath dwelling, single storey rise to first floor. Cold feed from 25 mm MDPE service."},
+   sys:{units:"imp",material:"copperL",curve:"tank",vCold:8,vHot:5,slope:0.25,frost:true,
+        psiSupply:55,meterLoss:8,residual:15,devLen:120,fitPct:50,elev:12},
+   rows:[row("wc_tank",3),row("lav",3),row("shower",2),row("bath",1),row("ksink",1),
+         row("dish",1),row("washer",1),row("hosebib",2)]
+  };
+}
+function blank(){
+  var s=sample();
+  s.sample=false;
+  s.job={name:"",ref:"",address:"",client:"",by:"",co:"",lic:"",date:todayISO(),notes:""};
+  uid=1; s.rows=[row("wc_tank",1),row("lav",1),row("ksink",1)];
+  return s;
+}
+var S=sample();
+
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw)return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=="object"||!Array.isArray(o.rows))return false;
+    S=merge(o); return true;
+  }catch(e){ return false; }
+}
+function merge(o){
+  var base=sample(), s={v:1,sample:!!o.sample,job:{},sys:{},rows:[]};
+  var k;
+  for(k in base.job) s.job[k]= (o.job&&typeof o.job[k]==="string")?o.job[k]:base.job[k];
+  for(k in base.sys){
+    var bv=base.sys[k], ov=o.sys?o.sys[k]:undefined;
+    if(typeof bv==="number") s.sys[k]= (typeof ov==="number"&&isFinite(ov))?ov:bv;
+    else if(typeof bv==="boolean") s.sys[k]= (typeof ov==="boolean")?ov:bv;
+    else s.sys[k]= (typeof ov==="string"&&ov)?ov:bv;
+  }
+  if(!MAT[s.sys.material]) s.sys.material="copperL";
+  if(!CURVE[s.sys.curve]) s.sys.curve="tank";
+  if(s.sys.units!=="met") s.sys.units="imp";
+  if([0.125,0.25,0.5].indexOf(s.sys.slope)<0) s.sys.slope=0.25;
+  uid=1;
+  (o.rows||[]).forEach(function(r){
+    if(!r||typeof r!=="object")return;
+    var t=FIX[r.type]?r.type:"custom";
+    s.rows.push({id:uid++,type:t,
+      qty:fin(+r.qty)?+r.qty:0, wsfu:fin(+r.wsfu)?+r.wsfu:FIX[t].wsfu,
+      cold:fin(+r.cold)?+r.cold:FIX[t].cold, hot:fin(+r.hot)?+r.hot:FIX[t].hot,
+      dfu:fin(+r.dfu)?+r.dfu:FIX[t].dfu});
+  });
+  if(!s.rows.length) s.rows.push(row("wc_tank",1));
+  return s;
+}
+
+/* ── engineering ─────────────────────────────────────────────────── */
+function hunter(w,curve){
+  var t=CURVE[curve]||CURVE.tank;
+  if(!fin(w)||w<=0)return 0;
+  if(w<=t[0][0]) return t[0][1]*w/t[0][0];
+  for(var i=1;i<t.length;i++){
+    if(w<=t[i][0]){
+      var x0=t[i-1][0],y0=t[i-1][1],x1=t[i][0],y1=t[i][1];
+      if(x1===x0)return y1;
+      return y0+(y1-y0)*(w-x0)/(x1-x0);
+    }
+  }
+  return t[t.length-1][1];
+}
+function reqBore(q,v){ if(!fin(q)||!fin(v)||v<=0||q<=0)return 0; return Math.sqrt(0.4085*q/v); }
+function pickSup(d,mat){
+  var ids=MAT[mat].id, keys=Object.keys(ids).map(Number).sort(function(a,b){return a-b;});
+  for(var i=0;i<keys.length;i++) if(ids[keys[i]]>=d) return keys[i];
+  return null;
+}
+function vel(q,id){ if(!fin(q)||!fin(id)||id<=0)return NaN; return 0.4085*q/(id*id); }
+function hazen(q,id,C){
+  if(!fin(q)||q<=0||!fin(id)||id<=0||!fin(C)||C<=0)return NaN;
+  return 4.52*Math.pow(q,1.852)/(Math.pow(C,1.852)*Math.pow(id,4.8655)); // psi per foot
+}
+function ventFor(d){
+  if(!fin(d)||d<=0)return NaN;
+  var want=Math.max(1.25,d/2);
+  for(var i=0;i<DRAIN_SIZES.length;i++) if(DRAIN_SIZES[i]>=want-1e-9) return DRAIN_SIZES[i];
+  return DRAIN_SIZES[DRAIN_SIZES.length-1];
+}
+
+function compute(){
+  var sys=S.sys, mat=MAT[sys.material]||MAT.copperL;
+  var wT=0,wC=0,wH=0,dfu=0,qty=0,hasWC=false,maxTrap=0;
+  var rows=S.rows.map(function(r){
+    var q=Math.max(0,Math.floor(num(r.qty)));
+    var t=Math.max(0,num(r.wsfu)), c=Math.max(0,num(r.cold)), h=Math.max(0,num(r.hot)), d=Math.max(0,num(r.dfu));
+    var trap=(FIX[r.type]||FIX.custom).trap;
+    wT+=t*q; wC+=c*q; wH+=h*q; dfu+=d*q; qty+=q;
+    if(q>0){ if(trap>=3)hasWC=true; if(trap>maxTrap)maxTrap=trap; }
+    return {r:r,q:q,t:t,c:c,h:h,d:d,trap:trap,sw:t*q,sd:d*q};
+  });
+
+  var gT=hunter(wT,sys.curve), gC=hunter(wC,sys.curve), gH=hunter(wH,sys.curve);
+  function line(name,w,g,v){
+    var bore=reqBore(g,v);
+    var s=g>0?pickSup(bore,sys.material):null;
+    var id=s!=null?mat.id[s]:NaN;
+    return {name:name,w:w,g:g,v:v,bore:bore,size:s,id:id,vel:s!=null?vel(g,id):NaN,over:(g>0&&s===null)};
+  }
+  var svc=line("Water service / cold main (total demand)",wT,gT,sys.vCold);
+  var cold=line("Cold water distribution",wC,gC,sys.vCold);
+  var hot=line("Hot water distribution",wH,gH,sys.vHot);
+
+  // drainage
+  var slope=sys.slope, drain=null, drainCap=null;
+  for(var i=0;i<DRAIN_SIZES.length;i++){
+    var sz=DRAIN_SIZES[i], cap=(BLDG[sz]||{})[slope];
+    if(cap!=null && dfu<=cap){ drain=sz; drainCap=cap; break; }
+  }
+  if(dfu<=0) { drain=null; drainCap=null; }
+  var drainRaw=drain, wcForced=false;
+  if(drain!=null && hasWC && drain<3){ drain=3; drainCap=(BLDG[3]||{})[slope]; wcForced=true; }
+  var branch=null;
+  var bk=Object.keys(BRANCH).map(Number).sort(function(a,b){return a-b;});
+  for(var j=0;j<bk.length;j++){ if(dfu>0 && dfu<=BRANCH[bk[j]]){ branch=bk[j]; break; } }
+  if(branch!=null && hasWC && branch<3) branch=3;
+  var vs=drain!=null?ventFor(drain):NaN;
+  var vtr=fin(vs)?(sys.frost?Math.max(vs,3):vs):NaN;
+
+  // pressure budget on the service size
+  var eqLen=Math.max(0,num(sys.devLen))*(1+Math.max(0,num(sys.fitPct))/100);
+  var hf=svc.size!=null?hazen(svc.g,svc.id,mat.C):NaN;
+  var fric=fin(hf)?hf*eqLen:NaN;
+  var stat=Math.max(0,num(sys.elev))*0.4335;
+  var avail=fin(fric)?(num(sys.psiSupply)-num(sys.meterLoss)-stat-fric):NaN;
+  var margin=fin(avail)?(avail-num(sys.residual)):NaN;
+
+  return {rows:rows,wT:wT,wC:wC,wH:wH,dfu:dfu,qty:qty,hasWC:hasWC,maxTrap:maxTrap,
+    gT:gT,gC:gC,gH:gH,svc:svc,cold:cold,hot:hot,mat:mat,
+    drain:drain,drainRaw:drainRaw,drainCap:drainCap,wcForced:wcForced,branch:branch,vs:vs,vtr:vtr,
+    slope:slope,eqLen:eqLen,hf100:fin(hf)?hf*100:NaN,fric:fric,stat:stat,avail:avail,margin:margin};
+}
+
+/* ── rendering ───────────────────────────────────────────────────── */
+var optHTML="";
+Object.keys(FIX).forEach(function(k){ optHTML+='<option value="'+k+'">'+esc(FIX[k].n)+'</option>'; });
+
+function renderRows(){
+  var tb=$("fxBody"); tb.innerHTML="";
+  S.rows.forEach(function(r){
+    var tr=document.createElement("tr");
+    tr.dataset.id=r.id;
+    tr.innerHTML=
+      '<td><label class="sr" for="ft'+r.id+'">Fixture type</label>'+
+        '<select id="ft'+r.id+'" data-k="type">'+optHTML+'</select></td>'+
+      '<td class="n"><label class="sr" for="fq'+r.id+'">Quantity</label>'+
+        '<input class="qty" id="fq'+r.id+'" type="number" min="0" max="9999" step="1" data-k="qty"></td>'+
+      '<td class="n"><input type="number" min="0" step="0.1" data-k="wsfu" aria-label="Water supply fixture units each"></td>'+
+      '<td class="n"><input type="number" min="0" step="0.1" data-k="cold" aria-label="Cold water supply fixture units each"></td>'+
+      '<td class="n"><input type="number" min="0" step="0.1" data-k="hot" aria-label="Hot water supply fixture units each"></td>'+
+      '<td class="n"><input type="number" min="0" step="0.5" data-k="dfu" aria-label="Drainage fixture units each"></td>'+
+      '<td class="n" data-c="trap">—</td>'+
+      '<td class="n" data-c="sw">—</td>'+
+      '<td class="n" data-c="sd">—</td>'+
+      '<td class="noprint"><button type="button" class="btn ico sm" data-del="'+r.id+'" aria-label="Remove fixture row">✕</button></td>';
+    tb.appendChild(tr);
+    tr.querySelector('[data-k=type]').value=r.type;
+    ["qty","wsfu","cold","hot","dfu"].forEach(function(k){
+      tr.querySelector('[data-k='+k+']').value=r[k];
+    });
+  });
+  refresh();
+}
+
+function syncInputs(){
+  document.querySelectorAll("[data-job]").forEach(function(el){ el.value=S.job[el.dataset.job]||""; });
+  document.querySelectorAll("[data-sys]").forEach(function(el){
+    var k=el.dataset.sys, v=S.sys[k];
+    if(el.type==="checkbox"){ el.checked=!!v; return; }
+    if(el.dataset.unit){ el.value=f(toD(el.dataset.unit,v), el.dataset.unit==="prs"?0:(el.dataset.unit==="len"?(S.sys.units==="met"?1:0):2)); return; }
+    el.value=v;
+  });
+  document.querySelectorAll(".uL").forEach(function(el){ el.textContent="("+un(el.dataset.u)+")"; });
+  $("uImp").setAttribute("aria-pressed",S.sys.units==="imp");
+  $("uMet").setAttribute("aria-pressed",S.sys.units==="met");
+  $("sSlope").value=String(S.sys.slope);
+  $("thTrap").textContent = S.sys.units==="met" ? "Trap DN" : "Trap in";
+}
+
+function refresh(){
+  var c=compute();
+
+  // fixture table live cells
+  c.rows.forEach(function(x){
+    var tr=$("fxBody").querySelector('tr[data-id="'+x.r.id+'"]'); if(!tr)return;
+    tr.querySelector('[data-c=trap]').textContent = x.trap>0 ? (S.sys.units==="met"?String(DN[x.trap]||Math.round(x.trap*25.4)):(FRAC[x.trap]||String(x.trap))) : "—";
+    tr.querySelector('[data-c=sw]').textContent = x.q>0 ? f(x.sw,2) : "—";
+    tr.querySelector('[data-c=sd]').textContent = x.q>0 ? f(x.sd,1) : "—";
+  });
+  $("tQty").textContent=c.qty>0?String(c.qty):"—";
+  $("tWsfu").textContent=c.wT>0?f(c.wT,2):"—";
+  $("tDfu").textContent=c.dfu>0?f(c.dfu,1):"—";
+  $("tCold").textContent=c.wC>0?f(c.wC,2):"—";
+  $("tHot").textContent=c.wH>0?f(c.wH,2):"—";
+  $("fxCount").textContent=c.qty>0?(c.qty+" fixture"+(c.qty===1?"":"s")+" · "+S.rows.length+" line"+(S.rows.length===1?"":"s")):"no fixtures entered";
+
+  // heroes
+  $("hSvc").innerHTML = c.svc.size!=null ? esc(sizeLbl(c.svc.size))+' <small>'+esc(c.mat.n)+'</small>'
+                        : (c.svc.over?'<small style="font-size:15px">exceeds table</small>':"—");
+  $("hSvcU").textContent = c.svc.size!=null
+    ? fu("flow",c.svc.g)+" "+un("flow")+" peak at "+fu("vel",c.svc.vel)+" "+un("vel")+" · "+f(c.wT,1)+" WSFU"
+    : (c.svc.over?"Demand exceeds the largest listed size for this material":"Add fixtures to size the service");
+  $("hDrn").innerHTML = c.drain!=null ? esc(sizeLbl(c.drain))+' <small>drain</small>' : "—";
+  $("hDrnU").textContent = c.drain!=null
+    ? f(c.dfu,1)+" DFU of "+(c.drainCap!=null?c.drainCap:"—")+" allowed at "+slopeLbl(c.slope)+(c.wcForced?" · 3 in min. for water closets":"")
+    : "Add drained fixtures to size the drain";
+
+  $("mHot").innerHTML = c.hot.size!=null ? esc(sizeLbl(c.hot.size)) : "—";
+  $("mHotU").textContent = c.hot.size!=null ? fu("flow",c.hot.g)+" "+un("flow")+" at "+fu("vel",c.hot.vel)+" "+un("vel") : "no hot demand";
+  $("mVent").innerHTML = fin(c.vtr) ? esc(sizeLbl(c.vtr)) : "—";
+  $("mVentU").textContent = fin(c.vs) ? ("stack "+sizeLbl(c.vs)+(S.sys.frost&&c.vtr>c.vs?" · 3 in through roof":"")) : "no drain sized";
+  $("mGpm").innerHTML = c.wT>0 ? esc(fu("flow",c.gT))+' <small>'+esc(un("flow"))+'</small>' : "—";
+  $("mGpmU").textContent = c.wT>0 ? ("Hunter "+(S.sys.curve==="fv"?"flushometer":"flush-tank")+" curve") : "—";
+  $("mFu").innerHTML = (c.wT>0||c.dfu>0) ? esc(f(c.wT,1))+' <small>/</small> '+esc(f(c.dfu,1)) : "—";
+
+  // velocity chip
+  var vchip=$("vChip"), worst=null;
+  [c.svc,c.cold,c.hot].forEach(function(l){ if(l.size!=null&&fin(l.vel)){ var m=l.vel/l.v; if(worst===null||m>worst)worst=m; } });
+  if(worst===null){ vchip.className="chip"; vchip.textContent="awaiting input"; }
+  else if(worst<=1.0001){ vchip.className="chip ok"; vchip.textContent="Velocity within limit"; }
+  else { vchip.className="chip bad"; vchip.textContent="Velocity over limit"; }
+
+  // supply table
+  var sb=$("supBody"); sb.innerHTML="";
+  [c.svc,c.cold,c.hot].forEach(function(l){
+    var tr=document.createElement("tr");
+    var ok=l.size!=null&&fin(l.vel)&&l.vel<=l.v+1e-9;
+    tr.innerHTML='<td>'+esc(l.name)+'</td>'+
+      '<td class="n">'+(l.w>0?f(l.w,1):"—")+'</td>'+
+      '<td class="n">'+(l.g>0?fu("flow",l.g):"—")+'</td>'+
+      '<td class="n">'+(l.bore>0?fu("dia",l.bore):"—")+'</td>'+
+      '<td class="n"><strong>'+(l.size!=null?esc(sizeLbl(l.size)):(l.over?"over":"—"))+'</strong></td>'+
+      '<td class="n"'+(l.size!=null&&!ok?' style="color:var(--bad);font-weight:650"':'')+'>'+(l.size!=null?fu("vel",l.vel):"—")+'</td>';
+    sb.appendChild(tr);
+  });
+
+  // drainage table
+  var db=$("drnBody"); db.innerHTML="";
+  DRAIN_SIZES.forEach(function(sz){
+    var br=BRANCH[sz], bd=(BLDG[sz]||{})[S.sys.slope];
+    var tr=document.createElement("tr");
+    if(c.drain===sz) tr.className="hit";
+    tr.innerHTML='<th scope="row" style="font-size:13px;text-transform:none;letter-spacing:0;background:transparent;border-bottom:1px solid var(--line);color:var(--ink);font-weight:600">'+esc(sizeLbl(sz))+'</th>'+
+      '<td class="n">'+(br!=null?br:"—")+'</td>'+
+      '<td class="n">'+(bd!=null?bd:"not permitted")+'</td>'+
+      '<td class="n">'+esc(sizeLbl(ventFor(sz)))+'</td>';
+    db.appendChild(tr);
+  });
+  $("drnNote").textContent = c.dfu>0
+    ? ("Total "+f(c.dfu,1)+" DFU. Largest horizontal fixture branch that all of this load may share: "+
+       (c.branch!=null?sizeLbl(c.branch):"exceeds the branch table")+
+       ". Vent stack at least half the drain diameter and never under 1-1/4 in"+
+       (S.sys.frost?"; 3 in minimum where it passes through the roof.":"."))
+    : "Enter drained fixtures to size the drain and vent.";
+
+  // pressure table
+  var pb=$("pBody"); pb.innerHTML="";
+  function prow(k,v,basis,strong,bad){
+    var tr=document.createElement("tr");
+    tr.innerHTML='<td'+(strong?' style="font-weight:650"':'')+'>'+esc(k)+'</td>'+
+      '<td class="n"'+(bad?' style="color:var(--bad);font-weight:650"':(strong?' style="font-weight:650"':''))+'>'+esc(v)+'</td>'+
+      '<td style="color:var(--muted)">'+esc(basis)+'</td>';
+    pb.appendChild(tr);
+  }
+  var pu=un("prs");
+  prow("Static supply pressure","+"+fu("prs",num(S.sys.psiSupply))+" "+pu,"as measured at the tap");
+  prow("Meter, backflow & service loss","−"+fu("prs",num(S.sys.meterLoss))+" "+pu,"entered allowance");
+  prow("Static head to highest fixture","−"+fu("prs",c.stat)+" "+pu, f(toD("len",num(S.sys.elev)),S.sys.units==="met"?1:0)+" "+un("len")+" rise × 0.4335 psi/ft");
+  prow("Friction loss in service/cold main", fin(c.fric)?("−"+fu("prs",c.fric)+" "+pu):"—",
+       fin(c.hf100)?(f(toD("prs",c.hf100),1)+" "+pu+" per 100 ft × "+f(c.eqLen,0)+" ft equivalent, Hazen–Williams C="+c.mat.C):"size the main first");
+  prow("Pressure available at highest fixture", fin(c.avail)?(fu("prs",c.avail)+" "+pu):"—","supply less losses",true);
+  prow("Residual required","−"+fu("prs",num(S.sys.residual))+" "+pu,"fixture flow pressure");
+  prow("Margin", fin(c.margin)?((c.margin>=0?"+":"−")+fu("prs",Math.abs(c.margin))+" "+pu):"—",
+       fin(c.margin)?(c.margin>=0?"sufficient":"insufficient — increase pipe size or boost"):"—",true,fin(c.margin)&&c.margin<0);
+  var pc=$("pChip");
+  if(!fin(c.margin)){ pc.className="chip"; pc.textContent="awaiting input"; }
+  else if(c.margin>=0){ pc.className="chip ok"; pc.textContent="Margin "+fu("prs",c.margin)+" "+pu; }
+  else { pc.className="chip bad"; pc.textContent="Short by "+fu("prs",Math.abs(c.margin))+" "+pu; }
+
+  $("thTrap").textContent = S.sys.units==="met" ? "Trap DN" : "Trap in";
+  $("sampleBar").hidden=!S.sample;
+  buildDoc(c);
+  return c;
+}
+function slopeLbl(s){ return s===0.125?"1/8 in/ft":s===0.5?"1/2 in/ft":"1/4 in/ft"; }
+
+/* ── printed document ────────────────────────────────────────────── */
+function buildDoc(c){
+  var j=S.job, sys=S.sys;
+  function kv(k,v){ return '<div><b>'+esc(k)+'</b><span>'+esc(v||"—")+'</span></div>'; }
+  function ans(k,v,e){ return '<div><b>'+esc(k)+'</b><span>'+esc(v)+'</span><em>'+esc(e)+'</em></div>'; }
+
+  var fxRows=c.rows.map(function(x){
+    return '<tr><td>'+esc((FIX[x.r.type]||FIX.custom).n)+'</td><td class="n">'+x.q+'</td>'+
+      '<td class="n">'+f(x.t,2)+'</td><td class="n">'+f(x.c,2)+'</td><td class="n">'+f(x.h,2)+'</td>'+
+      '<td class="n">'+f(x.d,1)+'</td><td class="n">'+(x.trap>0?esc(sizeBoth(x.trap)):"—")+'</td>'+
+      '<td class="n">'+f(x.sw,2)+'</td><td class="n">'+f(x.sd,1)+'</td></tr>';
+  }).join("");
+
+  var supRows=[c.svc,c.cold,c.hot].map(function(l){
+    return '<tr><td>'+esc(l.name)+'</td><td class="n">'+(l.w>0?f(l.w,1):"—")+'</td>'+
+      '<td class="n">'+(l.g>0?f(l.g,1)+" gpm":"—")+'</td>'+
+      '<td class="n">'+(l.bore>0?f(l.bore,3)+" in":"—")+'</td>'+
+      '<td class="n">'+(l.size!=null?esc(sizeBoth(l.size)):"—")+'</td>'+
+      '<td class="n">'+(l.size!=null?f(l.id,3)+" in":"—")+'</td>'+
+      '<td class="n">'+(l.size!=null?f(l.vel,2)+" ft/s":"—")+'</td>'+
+      '<td class="n">'+f(l.v,1)+' ft/s</td></tr>';
+  }).join("");
+
+  var pRows=
+    '<tr><td>Static supply pressure</td><td class="n">+'+f(num(sys.psiSupply),1)+' psi</td></tr>'+
+    '<tr><td>Meter, backflow &amp; service loss</td><td class="n">−'+f(num(sys.meterLoss),1)+' psi</td></tr>'+
+    '<tr><td>Static head, '+f(num(sys.elev),0)+' ft rise @ 0.4335 psi/ft</td><td class="n">−'+f(c.stat,1)+' psi</td></tr>'+
+    '<tr><td>Friction, '+f(c.eqLen,0)+' ft equivalent @ '+(fin(c.hf100)?f(c.hf100,2):"—")+' psi/100 ft (C='+c.mat.C+')</td><td class="n">'+(fin(c.fric)?"−"+f(c.fric,1):"—")+' psi</td></tr>'+
+    '<tr><td><strong>Available at highest fixture</strong></td><td class="n"><strong>'+(fin(c.avail)?f(c.avail,1):"—")+' psi</strong></td></tr>'+
+    '<tr><td>Residual required at highest fixture</td><td class="n">−'+f(num(sys.residual),1)+' psi</td></tr>'+
+    '<tr><td><strong>Margin</strong></td><td class="n"><strong>'+(fin(c.margin)?(c.margin>=0?"+":"−")+f(Math.abs(c.margin),1):"—")+' psi '+(fin(c.margin)?(c.margin>=0?"— sufficient":"— INSUFFICIENT"):"")+'</strong></td></tr>';
+
+  $("doc").innerHTML=
+   '<div class="dhd">'+
+     '<div><h2>Plumbing Pipe Sizing Record</h2>'+
+       '<div class="dsub">Water supply and sanitary drainage sized by the fixture-unit method '+
+       '(Hunter’s curve, IPC Appendix E and Tables 709.1 / 710.1)</div></div>'+
+     '<div class="dmeta"><strong>'+esc(j.co||j.by||"—")+'</strong><br>'+
+       (j.lic?esc("Licence "+j.lic)+"<br>":"")+
+       'Ref: '+esc(j.ref||"—")+'<br>Date: '+esc(niceDate(j.date))+'</div>'+
+   '</div>'+
+   '<div class="kv">'+kv("Project / job",j.name)+kv("Site address",j.address)+kv("Client",j.client)+
+     kv("Prepared by",j.by)+kv("Pipe material",c.mat.n)+kv("Demand curve",sys.curve==="fv"?"Predominantly flushometer valves":"Predominantly flush tanks")+'</div>'+
+
+   '<h3>Result</h3>'+
+   '<div class="ans">'+
+     ans("Water service / cold main", c.svc.size!=null?sizeBoth(c.svc.size):"—", c.mat.n+" · "+f(c.gT,1)+" gpm")+
+     ans("Hot water main", c.hot.size!=null?sizeBoth(c.hot.size):"—", c.hot.size!=null?f(c.hot.g,1)+" gpm at "+f(c.hot.vel,2)+" ft/s":"no hot demand")+
+     ans("Building drain", c.drain!=null?sizeBoth(c.drain):"—", f(c.dfu,1)+" DFU at "+slopeLbl(c.slope))+
+     ans("Vent stack / through roof", fin(c.vs)?sizeBoth(c.vs):"—", fin(c.vtr)?("through roof "+sizeBoth(c.vtr)):"—")+
+   '</div>'+
+
+   '<h3>Fixture schedule</h3>'+
+   '<table><thead><tr><th scope="col">Fixture</th><th scope="col" class="n">Qty</th><th scope="col" class="n">WSFU ea</th>'+
+     '<th scope="col" class="n">Cold ea</th><th scope="col" class="n">Hot ea</th><th scope="col" class="n">DFU ea</th>'+
+     '<th scope="col" class="n">Min trap</th><th scope="col" class="n">&Sigma; WSFU</th><th scope="col" class="n">&Sigma; DFU</th></tr></thead>'+
+     '<tbody>'+(fxRows||'<tr><td colspan="9">No fixtures scheduled.</td></tr>')+'</tbody>'+
+     '<tfoot><tr><td>Totals</td><td class="n">'+c.qty+'</td><td class="n" colspan="4">cold '+f(c.wC,2)+' / hot '+f(c.wH,2)+' WSFU</td>'+
+     '<td class="n"></td><td class="n">'+f(c.wT,2)+'</td><td class="n">'+f(c.dfu,1)+'</td></tr></tfoot></table>'+
+
+   '<h3>Water supply sizing</h3>'+
+   '<table><thead><tr><th scope="col">Line</th><th scope="col" class="n">WSFU</th><th scope="col" class="n">Peak demand</th>'+
+     '<th scope="col" class="n">Min bore</th><th scope="col" class="n">Size specified</th><th scope="col" class="n">Actual ID</th>'+
+     '<th scope="col" class="n">Velocity</th><th scope="col" class="n">Limit</th></tr></thead><tbody>'+supRows+'</tbody></table>'+
+   '<p style="font-size:8.5pt;color:#444;margin-top:3px">Demand from Hunter’s curve by interpolation; bore from d = &radic;(0.4085 &middot; Q &divide; v); '+
+     'size rounded <strong>up</strong> to the next stocked nominal diameter using published internal diameters.</p>'+
+
+   '<h3>Sanitary drainage and venting</h3>'+
+   '<table><thead><tr><th scope="col">Item</th><th scope="col">Size</th><th scope="col">Basis</th></tr></thead><tbody>'+
+     '<tr><td>Total drainage fixture units</td><td class="n">'+f(c.dfu,1)+' DFU</td><td>IPC Table 709.1, private use</td></tr>'+
+     '<tr><td>Building drain / sewer</td><td class="n">'+(c.drain!=null?esc(sizeBoth(c.drain)):"—")+'</td><td>IPC Table 710.1(1) at '+slopeLbl(c.slope)+', capacity '+(c.drainCap!=null?c.drainCap:"—")+' DFU'+(c.wcForced?"; raised to 3 in because a water closet discharges to it":"")+'</td></tr>'+
+     '<tr><td>Horizontal fixture branch carrying the whole load</td><td class="n">'+(c.branch!=null?esc(sizeBoth(c.branch)):"exceeds table")+'</td><td>IPC Table 710.1(2)</td></tr>'+
+     '<tr><td>Vent stack / stack vent</td><td class="n">'+(fin(c.vs)?esc(sizeBoth(c.vs)):"—")+'</td><td>Not less than one-half the drain diameter, minimum 1-1/4 in (IPC 903.1 / 916.2)</td></tr>'+
+     '<tr><td>Vent through roof</td><td class="n">'+(fin(c.vtr)?esc(sizeBoth(c.vtr)):"—")+'</td><td>'+(sys.frost?"3 in minimum — roof declared subject to frost closure":"As vent stack — frost closure not declared")+'</td></tr>'+
+   '</tbody></table>'+
+
+   '<h3>Pressure check on the service and cold main</h3>'+
+   '<table><thead><tr><th scope="col">Item</th><th scope="col" class="n">Pressure</th></tr></thead><tbody>'+pRows+'</tbody></table>'+
+
+   (j.notes?'<h3>Notes</h3><p style="font-size:9.5pt;white-space:pre-wrap">'+esc(j.notes)+'</p>':'')+
+
+   '<div class="dis"><strong>IMPORTANT — LOCAL PLUMBING CODE GOVERNS.</strong> This record is a design aid produced by '+
+   'the fixture-unit method. It applies Hunter’s probability curve and the IPC capacity tables named above to the '+
+   'fixture schedule entered on it. It is not a code approval, not a certificate, and not a substitute for design by a '+
+   'licensed plumber or engineer. The authority having jurisdiction may adopt the UPC, NSPC or a local amendment with '+
+   'different fixture-unit values, capacities, minimum sizes or pressure requirements. Not modelled here: water heater '+
+   'and recirculation sizing, pumps, boosters and pressure-reducing valves beyond the loss you enter, expansion, '+
+   'water hammer, thermal and freeze protection, backflow prevention, fire service, gas piping, storm drainage, '+
+   'grease and special waste, offsets and branch-interval limits on stacks, and simultaneous continuous-flow demands. '+
+   'Verify every size against the adopted code and the manufacturer’s data before ordering material or installing pipe.</div>'+
+
+   '<div class="sig"><div>Prepared by — signature and date</div><div>Checked / approved by — signature and date</div></div>'+
+   '<div class="dfoot"><span>Plumbing Pipe Sizing Record'+(j.ref?" · "+esc(j.ref):"")+'</span><span>Generated '+esc(niceDate(todayISO()))+'</span></div>';
+}
+
+/* ── validation ──────────────────────────────────────────────────── */
+function setErr(id,msg){
+  var el=$(id), e=$("e-"+id);
+  if(!el)return;
+  if(msg){ el.classList.add("inv"); if(e){e.textContent=msg;e.hidden=false;} }
+  else { el.classList.remove("inv"); if(e){e.textContent="";e.hidden=true;} }
+}
+function validate(){
+  var vc=S.sys.vCold, vh=S.sys.vHot;
+  setErr("sVc", (vc>0&&vc<=20)?"":"Enter a velocity between 0 and 20 ft/s.");
+  setErr("sVh", (vh>0&&vh<=20)?"":"Enter a velocity between 0 and 20 ft/s.");
+  setErr("pSup", S.sys.psiSupply>=0?"":"Pressure cannot be negative.");
+  setErr("pLen", S.sys.devLen>=0?"":"Length cannot be negative.");
+}
+
+/* ── events ──────────────────────────────────────────────────────── */
+function dirty(){ if(S.sample){ S.sample=false; $("sampleBar").hidden=true; } }
+function commit(){ validate(); refresh(); save(); }
+
+document.querySelectorAll("[data-job]").forEach(function(el){
+  el.addEventListener("input",function(){ S.job[el.dataset.job]=el.value; dirty(); refresh(); save(); });
+});
+document.querySelectorAll("[data-sys]").forEach(function(el){
+  el.addEventListener("input",function(){
+    var k=el.dataset.sys;
+    if(el.type==="checkbox"){ S.sys[k]=el.checked; }
+    else if(el.dataset.unit){ var v=parseFloat(el.value); S.sys[k]=isFinite(v)?Math.round(frD(el.dataset.unit,v)*1e6)/1e6:0; }
+    else if(el.tagName==="SELECT"){ S.sys[k]=(k==="slope")?parseFloat(el.value):el.value; }
+    else { var n2=parseFloat(el.value); S.sys[k]=isFinite(n2)?n2:0; }
+    dirty(); commit();
+  });
+  el.addEventListener("change",function(){ if(el.tagName==="SELECT"||el.type==="checkbox"){ dirty(); commit(); } });
+  el.addEventListener("blur",validate);
+});
+
+$("fxBody").addEventListener("input",function(ev){
+  var el=ev.target, k=el.dataset&&el.dataset.k; if(!k)return;
+  var tr=el.closest("tr"); if(!tr)return;
+  var r=S.rows.filter(function(x){return String(x.id)===tr.dataset.id;})[0]; if(!r)return;
+  if(k==="type"){
+    r.type=el.value;
+    var d=FIX[r.type]||FIX.custom;
+    r.wsfu=d.wsfu; r.cold=d.cold; r.hot=d.hot; r.dfu=d.dfu;
+    ["wsfu","cold","hot","dfu"].forEach(function(kk){ tr.querySelector('[data-k='+kk+']').value=r[kk]; });
+  } else {
+    var v=parseFloat(el.value);
+    v=isFinite(v)?v:0;
+    if(v<0){ v=0; }
+    r[k]= k==="qty" ? Math.min(9999,Math.floor(v)) : v;
+    el.classList.toggle("inv", el.value!=="" && !isFinite(parseFloat(el.value)));
+  }
+  dirty(); refresh(); save();
+});
+$("fxBody").addEventListener("change",function(ev){
+  if(ev.target.dataset&&ev.target.dataset.k==="type"){ dirty(); refresh(); save(); }
+});
+$("fxBody").addEventListener("click",function(ev){
+  var b=ev.target.closest("[data-del]"); if(!b)return;
+  var id=b.getAttribute("data-del");
+  if(S.rows.length<=1){ S.rows=[row("custom",0)]; }
+  else { S.rows=S.rows.filter(function(x){return String(x.id)!==String(id);}); }
+  dirty(); renderRows(); save();
+});
+$("bAdd").addEventListener("click",function(){
+  S.rows.push(row("lav",1)); dirty(); renderRows(); save();
+  var tb=$("fxBody"), last=tb.lastElementChild;
+  if(last){ var sel=last.querySelector("select"); if(sel)sel.focus(); }
+});
+
+function setUnits(u){ S.sys.units=u; syncInputs(); refresh(); save(); }
+$("uImp").addEventListener("click",function(){ setUnits("imp"); });
+$("uMet").addEventListener("click",function(){ setUnits("met"); });
+
+$("bSample").addEventListener("click",function(){
+  if(!confirm("Replace everything on screen with the sample 2-bathroom dwelling?"))return;
+  S=sample(); syncInputs(); renderRows(); save();
+});
+$("bBlank").addEventListener("click",function(){
+  S=blank(); syncInputs(); renderRows(); save();
+});
+$("bClear").addEventListener("click",function(){
+  if(!confirm("Clear all data? The job details, fixture schedule and saved copy in this browser will be erased. This cannot be undone."))return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S=blank(); syncInputs(); renderRows(); save();
+});
+$("bPrint").addEventListener("click",function(){ window.print(); });
+
+/* ── export ──────────────────────────────────────────────────────── */
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download=name; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+  }catch(e){}
+}
+function q(s){ s=(s==null?"":String(s)); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function csvName(ext){
+  var base=(S.job.ref||S.job.name||"pipe-sizing").toString().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+  return (base||"pipe-sizing")+"-sizing."+ext;
+}
+$("bCsv").addEventListener("click",function(){
+  var c=compute(), L=[];
+  function line(){ L.push(Array.prototype.slice.call(arguments).map(q).join(",")); }
+  line("Plumbing Pipe Sizing Record");
+  line("Generated",niceDate(todayISO()));
+  line("");
+  line("Project",S.job.name); line("Reference",S.job.ref); line("Site address",S.job.address);
+  line("Client",S.job.client); line("Prepared by",S.job.by); line("Company",S.job.co);
+  line("Licence",S.job.lic); line("Date",S.job.date); line("Notes",S.job.notes);
+  line("");
+  line("Design basis");
+  line("Pipe material",c.mat.n); line("Hazen-Williams C",c.mat.C);
+  line("Demand curve",S.sys.curve==="fv"?"Predominantly flushometer valves":"Predominantly flush tanks");
+  line("Cold velocity limit (ft/s)",f(S.sys.vCold,2)); line("Hot velocity limit (ft/s)",f(S.sys.vHot,2));
+  line("Building drain slope (in/ft)",slopeLbl(S.sys.slope));
+  line("Frost closure at roof",S.sys.frost?"Yes":"No");
+  line("");
+  line("Fixture schedule");
+  line("Fixture","Qty","WSFU each","Cold WSFU each","Hot WSFU each","DFU each","Min trap (in)","Total WSFU","Total DFU");
+  c.rows.forEach(function(x){
+    line((FIX[x.r.type]||FIX.custom).n,x.q,f(x.t,2),f(x.c,2),f(x.h,2),f(x.d,1),x.trap>0?f(x.trap,2):"",f(x.sw,2),f(x.sd,1));
+  });
+  line("TOTALS",c.qty,"","","","","",f(c.wT,2),f(c.dfu,1));
+  line("Cold WSFU total",f(c.wC,2)); line("Hot WSFU total",f(c.wH,2));
+  line("");
+  line("Water supply sizing");
+  line("Line","WSFU","Peak demand (gpm)","Min bore (in)","Nominal size (in)","Actual ID (in)","Velocity (ft/s)","Velocity limit (ft/s)");
+  [c.svc,c.cold,c.hot].forEach(function(l){
+    line(l.name,f(l.w,2),f(l.g,2),l.bore>0?f(l.bore,4):"",l.size!=null?FRAC[l.size]:"",l.size!=null?f(l.id,3):"",
+         l.size!=null?f(l.vel,3):"",f(l.v,2));
+  });
+  line("");
+  line("Sanitary drainage and venting");
+  line("Total DFU",f(c.dfu,1));
+  line("Building drain",c.drain!=null?FRAC[c.drain]+" in":"", "capacity "+(c.drainCap!=null?c.drainCap:"-")+" DFU at "+slopeLbl(c.slope));
+  line("Horizontal fixture branch",c.branch!=null?FRAC[c.branch]+" in":"exceeds table");
+  line("Vent stack",fin(c.vs)?FRAC[c.vs]+" in":"");
+  line("Vent through roof",fin(c.vtr)?FRAC[c.vtr]+" in":"");
+  line("");
+  line("Pressure check (psi)");
+  line("Static supply",f(num(S.sys.psiSupply),2));
+  line("Meter and service loss",f(num(S.sys.meterLoss),2));
+  line("Static head",f(c.stat,2),f(num(S.sys.elev),1)+" ft rise");
+  line("Friction loss",fin(c.fric)?f(c.fric,2):"", f(c.eqLen,1)+" ft equivalent at "+(fin(c.hf100)?f(c.hf100,3):"-")+" psi/100ft");
+  line("Available at highest fixture",fin(c.avail)?f(c.avail,2):"");
+  line("Residual required",f(num(S.sys.residual),2));
+  line("Margin",fin(c.margin)?f(c.margin,2):"", fin(c.margin)?(c.margin>=0?"sufficient":"insufficient"):"");
+  line("");
+  line("Local plumbing code governs. This record is a design aid produced by the fixture-unit method (Hunter's curve, IPC Appendix E and Tables 709.1 / 710.1). It is not a code approval. Have it checked by a licensed plumber or engineer and confirmed with the authority having jurisdiction.");
+  dl(csvName("csv"),"﻿"+L.join("\r\n"),"text/csv;charset=utf-8;");
+});
+
+$("bJson").addEventListener("click",function(){
+  dl(csvName("json"),JSON.stringify(S,null,2),"application/json;charset=utf-8;");
+});
+$("bImport").addEventListener("click",function(){ $("fImport").click(); });
+$("fImport").addEventListener("change",function(){
+  var file=this.files&&this.files[0]; if(!file)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=="object"||!Array.isArray(o.rows)) throw new Error("bad");
+      S=merge(o); syncInputs(); renderRows(); save();
+      $("impErr")&&($("impErr").hidden=true);
+    }catch(e){
+      var d=$("disclaimer");
+      var w=document.createElement("div"); w.className="note bad noprint"; w.style.marginTop="8px";
+      w.textContent="That file could not be read as a saved Plumbing Pipe Sizing file. Nothing was changed.";
+      d.parentNode.insertBefore(w,d.nextSibling);
+      setTimeout(function(){ w.parentNode&&w.parentNode.removeChild(w); },6000);
+    }
+  };
+  fr.readAsText(file);
+  this.value="";
+});
+
+/* ── boot ────────────────────────────────────────────────────────── */
+if(!load()){ S=sample(); }
+syncInputs();
+renderRows();
+save();
+})();
+</script>
+</body>
+</html>
