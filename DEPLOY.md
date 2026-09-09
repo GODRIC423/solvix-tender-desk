@@ -129,6 +129,21 @@ not in that list, the fix is:
 If the project *is* listed and it still fails, the account's role in the
 organization is below Administrator. Have an Owner raise it.
 
+#### Troubleshooting: "password authentication failed for user "postgres""
+
+`supabase link` succeeded (the token is fine) but the database refused the
+password. `SUPABASE_DB_PASSWORD` is not the project's current database
+password. Nobody can read the current one back — it can only be reset:
+
+1. <https://supabase.com/dashboard/project/afwwwprqpnkbmtwmasmm/settings/database>
+   -> **Reset database password**. Copy the new value before leaving the page.
+2. Replace the `SUPABASE_DB_PASSWORD` repository secret with it.
+3. Re-run the workflow.
+
+Resetting invalidates the old password everywhere. Nothing else in this
+project connects with it — the app uses the anon key and the ingest function
+uses the service role key — so there is nothing to update afterwards.
+
 ### Doing all of that without the CLI
 
 Everything above can be done from the Supabase dashboard instead, which is worth

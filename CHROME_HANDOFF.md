@@ -1,6 +1,33 @@
 # Paste this into Claude in Chrome
 
-## One-time: let GitHub Actions update the database
+## Fix the database password (short task)
+
+---
+
+The access token is working. One secret is still wrong: the database
+password. You are going to reset it and save the new one into GitHub.
+
+**Never report the password value back in the chat.** Copy it straight into
+GitHub and then forget it.
+
+1. Go to https://supabase.com/dashboard/project/afwwwprqpnkbmtwmasmm/settings/database
+2. Find **Database password** and click **Reset database password**. If
+   there is a "Generate a password" option, use it. Copy the new password
+   *before leaving the page* — it is shown once.
+   - If the button is greyed out or you get a permissions error, stop and
+     report that: the signed-in Supabase account is not an Owner/Admin of
+     this project.
+3. Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions
+4. Find the secret named `SUPABASE_DB_PASSWORD`, click its edit (pencil)
+   icon, paste the new password, and **Update secret**. Do not create a
+   second secret — update the existing one.
+5. Report back: whether the reset succeeded and whether the secret was
+   updated. No values.
+
+---
+---
+
+## Reference — the full one-time setup (token part already done)
 
 ---
 
