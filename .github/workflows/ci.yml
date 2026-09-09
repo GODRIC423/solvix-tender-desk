@@ -94,6 +94,34 @@ jobs:
             exit 1
           fi
 
+          # The password itself is never printed. Its length and whether it
+          # carries stray whitespace are — a trailing newline from a paste is
+          # the classic reason a freshly reset password still fails.
+          LEN=${#SUPABASE_DB_PASSWORD}
+          if [[ "$SUPABASE_DB_PASSWORD" =~ ^[[:space:]] || "$SUPABASE_DB_PASSWORD" =~ [[:space:]]$ ]]; then
+            echo "::error::SUPABASE_DB_PASSWORD has leading or trailing whitespace ($LEN characters). Edit the secret and re-save it with nothing before or after the password."
+            exit 1
+          fi
+          echo "SUPABASE_DB_PASSWORD: $LEN characters, no surrounding whitespace"
+
+          # Try the password directly against the project's connection pooler
+          # before anything depends on it, so a bad password fails here with a
+          # one-line answer instead of three steps later.
+          echo "--- database password ---"
+          if command -v psql >/dev/null; then
+            if PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
+                 "host=aws-0-us-west-2.pooler.supabase.com port=5432 dbname=postgres user=postgres.$SUPABASE_PROJECT_REF sslmode=require connect_timeout=15" \
+                 -Atc "select 'database password accepted'" 2>/tmp/psql.err; then
+              :
+            else
+              cat /tmp/psql.err
+              echo "::error::The database rejected SUPABASE_DB_PASSWORD. Reset it at https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/settings/database, copy the new value, and update the existing SUPABASE_DB_PASSWORD secret. If you just reset it, wait a minute and re-run. See DEPLOY.md, 'Troubleshooting'."
+              exit 1
+            fi
+          else
+            echo "(psql not available on this runner; skipping the direct check)"
+          fi
+
       - name: Apply database migrations
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
