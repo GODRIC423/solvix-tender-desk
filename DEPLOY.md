@@ -74,11 +74,37 @@ a default board view from **Settings → Who sees which loads**. The check-call
 team, for example, sees only booked loads. Each person can narrow their own
 view further from the switches on the load board.
 
-### Applying later migrations
+### Later migrations apply themselves
 
-Anything added after the first setup — migration `20260101000007` onward —
-applies the same way: `supabase db push` if the project is linked, or paste
-the file into the SQL Editor. Migrations are numbered and must run in order.
+Anything under `supabase/migrations/` that the hosted project has not run yet
+is applied by GitHub Actions on every push to `main`, **before** the site is
+deployed — so the site can never run ahead of the database. The ingest
+function is redeployed in the same run. Nobody pastes SQL into a dashboard.
+
+That needs two more repository secrets (Settings -> Secrets and variables
+-> Actions):
+
+| Secret | Where it comes from |
+|---|---|
+| `SUPABASE_ACCESS_TOKEN` | <https://supabase.com/dashboard/account/tokens> -> Generate new token |
+| `SUPABASE_DB_PASSWORD` | Project Settings -> Database -> Reset database password |
+
+Treat the access token like a root password: it can do anything to every
+project on the account. It lives only in GitHub secrets.
+
+> **Baseline note.** Migrations `0000`–`0007` were applied by hand in the SQL
+> editor before this step existed, so the hosted project has no record of
+> running them. The workflow marks exactly those eight as applied
+> (`supabase migration repair`) before pushing; that call is idempotent.
+> Anything numbered after `0007` is applied for real. If you ever recreate the
+> project from scratch, delete that `repair` line and `db push` will run all
+> of them.
+
+To see what the hosted project has applied:
+
+```bash
+supabase migration list --linked
+```
 
 ### Doing all of that without the CLI
 
