@@ -1,115 +1,79 @@
-# Paste this into Claude in Chrome
+# Claude in Chrome handoffs
 
-## Fix the database password (short task)
+## Nothing to do right now
 
----
+Setup is complete. GitHub Actions holds working Supabase credentials and, on
+every merge to `main`, applies any new database migration, redeploys the
+ingest function, and publishes the site — in that order.
 
-The access token is working. One secret is still wrong: the database
-password. You are going to reset it and save the new one into GitHub.
-
-**Never report the password value back in the chat.** Copy it straight into
-GitHub and then forget it.
-
-1. Go to https://supabase.com/dashboard/project/afwwwprqpnkbmtwmasmm/settings/database
-2. Find **Database password** and click **Reset database password**. If
-   there is a "Generate a password" option, use it. Copy the new password
-   *before leaving the page* — it is shown once.
-   - If the button is greyed out or you get a permissions error, stop and
-     report that: the signed-in Supabase account is not an Owner/Admin of
-     this project.
-3. Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions
-4. Find the secret named `SUPABASE_DB_PASSWORD`, click its edit (pencil)
-   icon, paste the new password, and **Update secret**. Do not create a
-   second secret — update the existing one.
-5. Report back: whether the reset succeeded and whether the secret was
-   updated. No values.
+The sections below are kept as the record of what was done and as paste-ready
+prompts if a credential ever has to be replaced.
 
 ---
 ---
 
-## Reference — the full one-time setup (token part already done)
+## If a credential ever needs replacing
 
----
+<details>
+<summary>Replace the Supabase access token</summary>
 
-You're doing a one-time setup so that a code repository can update its own
-Supabase database and deploy its own function automatically. After this,
-nobody has to paste SQL into the dashboard again.
+Paste into Claude in Chrome:
 
-**Never report either secret value back in the chat.** Copy each one straight
-into GitHub and then forget it. If you lose one before it's saved, generate
-or reset it again — do not go looking for it in history.
+> You're replacing one secret. **Never report the value back in the chat.**
+>
+> 1. Go to https://supabase.com/dashboard/projects and confirm this account's
+>    list shows the project with ref `afwwwprqpnkbmtwmasmm`. If it doesn't,
+>    sign out and sign in the other way (GitHub vs email are separate
+>    accounts) until it does.
+> 2. In that session go to https://supabase.com/dashboard/account/tokens.
+>    Delete any token named `GitHub Actions`, then **Generate new token** with
+>    that name and all permissions. Copy it.
+> 3. Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions,
+>    edit the existing `SUPABASE_ACCESS_TOKEN`, paste, **Update secret**.
+> 4. Go to https://github.com/GODRIC423/solvix-tender-desk/actions/workflows/ci.yml
+>    and **Run workflow** on `main`. Report whether it goes green.
 
-**Supabase project ref:** `afwwwprqpnkbmtwmasmm`
-**GitHub repo:** https://github.com/GODRIC423/solvix-tender-desk
+</details>
 
-## Step 0 — Make sure you are in the right Supabase account
+<details>
+<summary>Replace the database password</summary>
 
-Supabase treats "sign in with GitHub" and "sign in with email" as two
-different accounts. The token has to come from the one that owns the project.
+Paste into Claude in Chrome:
 
-1. Go to https://supabase.com/dashboard/projects
-2. Confirm the list shows a project whose ref is `afwwwprqpnkbmtwmasmm`
-   (open it and check the URL contains that ref).
-3. If it does not, sign out and sign in the other way until it does. Do not
-   continue until you are looking at that project from this account.
+> You're replacing one secret. **Never report the value back in the chat.**
+>
+> 1. Go to https://supabase.com/dashboard/project/afwwwprqpnkbmtwmasmm/settings/database
+>    and click **Reset database password**. Copy the new value before leaving
+>    the page. If the button is unavailable, stop and report that — the
+>    signed-in account is not an Owner/Admin of this project.
+> 2. Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions,
+>    edit the existing `SUPABASE_DB_PASSWORD`, paste with nothing before or
+>    after it, **Update secret**.
+> 3. Wait two minutes (the reset takes a moment to reach the connection
+>    pooler), then go to
+>    https://github.com/GODRIC423/solvix-tender-desk/actions/workflows/ci.yml
+>    and **Run workflow** on `main`. Report whether it goes green.
 
-## Step 1 — Create a Supabase access token
-
-1. In that same signed-in session, go to https://supabase.com/dashboard/account/tokens
-2. If a token named `GitHub Actions` already exists, delete it first.
-3. **Generate new token**. Name it `GitHub Actions`. Copy the token.
-
-## Step 2 — Get the database password
-
-1. Go to https://supabase.com/dashboard/project/afwwwprqpnkbmtwmasmm/settings/database
-2. Find **Database password** and click **Reset database password**. Copy the
-   new password *before leaving the page* — it is shown once.
-   (Resetting is safe: nothing else uses this password yet.)
-
-## Step 3 — Put both into GitHub
-
-Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions
-and add two **repository secrets**, names exactly as written:
-
-| Name | Value |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | the token from Step 1 |
-| `SUPABASE_DB_PASSWORD` | the password from Step 2 |
-
-## Step 4 — Run the pipeline
-
-1. Go to https://github.com/GODRIC423/solvix-tender-desk/actions/workflows/ci.yml
-2. Open the most recent run on `main` and click **Re-run all jobs**.
-3. Wait for it to finish (2–3 minutes).
-
-## Step 5 — Report back
-
-- Whether the run is green
-- If any step failed, its name and the last ~15 lines of its log
-- Confirm both secrets are saved (names only — never the values)
-
----
-
-## After Chrome finishes
-
-Nothing. From now on, merging a pull request applies any new database
-migration, redeploys the ingest function, and publishes the site — in that
-order, so the site never runs ahead of the database.
+</details>
 
 ---
 ---
 
-## Reference — earlier one-time steps (already done)
+## Record — one-time steps already done
 
 <details>
 <summary>Original project setup</summary>
 
-1. **SQL Editor** — migrations `20260101000000` through `20260101000006`
-   run by hand. Verified `metros = 154`, `metro_zip_map = 491`.
+1. **SQL Editor** — migrations `20260101000000` through `20260101000007`
+   run by hand. Verified `metros = 154`, `metro_zip_map = 491`, and for
+   Phase 2: `10 · 3 · 72 · true · 6`.
 2. **Edge Functions → Secrets** — `INGEST_TOKEN` set.
-3. **Edge Functions** — `ingest-load` deployed from the editor with
-   Verify JWT off. (Now redeployed by CI on every merge.)
+3. **Edge Functions** — `ingest-load` deployed with Verify JWT off. (Now
+   redeployed by CI on every merge.)
 4. **Authentication → Users** — `Setups@adeulintelligence.com` created and
    promoted to admin.
+5. **GitHub secrets** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+   `VITE_INGEST_ENDPOINT`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+   `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`.
 
 </details>
