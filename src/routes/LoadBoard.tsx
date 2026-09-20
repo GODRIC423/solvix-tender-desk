@@ -7,6 +7,7 @@ import { useSaveMyPreferences } from '@/hooks/useProfiles'
 import { urgencyFor, relativeTime, type UrgencyResult } from '@/lib/urgency'
 import { BAND_DOT_CLASS, BAND_SEVERITY, bandFor } from '@/lib/qc-bands'
 import { BandDot, BandPill } from '@/components/BandPill'
+import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
 import Toggle from '@/components/Toggle'
 import type { LoadBoardRow } from '@/types/db'
 
@@ -215,19 +216,20 @@ export default function LoadBoard() {
               <th className="th">Rate</th>
               <th className="th">QC</th>
               <th className="th">Waiting</th>
+              <th className="th w-10" />
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td className="td text-slate-400" colSpan={10}>
+                <td className="td text-slate-400" colSpan={11}>
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && decorated.length === 0 && (
               <tr>
-                <td className="td text-slate-400" colSpan={10}>
+                <td className="td text-slate-400" colSpan={11}>
                   {hiddenCount > 0
                     ? 'Every load is hidden by your view switches.'
                     : can('create_loads')
@@ -261,13 +263,15 @@ function BoardRow({
   qcBands?: Parameters<typeof bandFor>[1]
 }) {
   const qcBand = bandFor(row.qc_score, qcBands)
+  const href = `/loads/${row.id}`
+  const link = useRowLink(href)
   return (
-    <tr className="border-b border-ink-800 transition hover:bg-ink-850">
+    <tr {...link} className={ROW_LINK_CLASS}>
       <td className="td">
         <BandDot band={urgency.band} title={urgency.reason} />
       </td>
       <td className="td">
-        <Link to={`/loads/${row.id}`} className="font-medium text-accent hover:underline">
+        <Link to={href} className="font-medium text-accent hover:underline">
           {row.load_number}
         </Link>
         {row.is_test && (
@@ -285,7 +289,15 @@ function BoardRow({
           {row.stage_label}
         </span>
       </td>
-      <td className="td">{row.customer_name ?? <span className="text-slate-500">—</span>}</td>
+      <td className="td">
+        {row.customer_name && row.customer_id ? (
+          <Link to={`/customers/${row.customer_id}`} className="hover:text-accent hover:underline">
+            {row.customer_name}
+          </Link>
+        ) : (
+          (row.customer_name ?? <span className="text-slate-500">—</span>)
+        )}
+      </td>
       <td className="td text-sm">
         {row.origin_city ? (
           <span>
@@ -302,7 +314,15 @@ function BoardRow({
       <td className="td">
         {row.carrier_name ? (
           <div>
-            <div className="text-sm">{row.carrier_name}</div>
+            <div className="text-sm">
+              {row.carrier_id ? (
+                <Link to={`/carriers/${row.carrier_id}`} className="hover:text-accent hover:underline">
+                  {row.carrier_name}
+                </Link>
+              ) : (
+                row.carrier_name
+              )}
+            </div>
             {row.carrier_dot_number && (
               <div className="text-xs text-slate-500">DOT {row.carrier_dot_number}</div>
             )}
@@ -339,6 +359,9 @@ function BoardRow({
         ) : (
           <span className="text-xs text-slate-500">—</span>
         )}
+      </td>
+      <td className="td text-right">
+        <OpenInNewTab href={href} what="load" />
       </td>
     </tr>
   )

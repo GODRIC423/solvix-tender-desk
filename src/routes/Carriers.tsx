@@ -1,9 +1,21 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchAllCarriers, useCarrierSearch, useImportCarriers, useSaveCarrier } from '@/hooks/useCarriers'
+import {
+  fetchAllCarriers,
+  useCarrierSearch,
+  useDueCarrierFollowUps,
+  useImportCarriers,
+  useSaveCarrier,
+} from '@/hooks/useCarriers'
+import { useCarrierListSignals, type CarrierListSignal } from '@/hooks/useCarrierPerformance'
 import { useAuth } from '@/hooks/useAuth'
+import { useSettings } from '@/hooks/useSettings'
 import CsvImport, { exportRows, type CsvColumn } from '@/components/CsvImport'
+import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
+import { PhoneLink } from '@/components/Contact'
 import { todayStamp } from '@/lib/csv'
+import { relativeTime } from '@/lib/urgency'
+import type { Carrier } from '@/types/db'
 
 /**
  * The template's columns. This list IS the template: the download, the
@@ -51,8 +63,13 @@ export default function Carriers() {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const { data: carriers, isLoading } = useCarrierSearch(search)
+  const { data: signals } = useCarrierListSignals()
+  const { data: due } = useDueCarrierFollowUps()
+  const { data: settings } = useSettings()
   const { can } = useAuth()
   const importCarriers = useImportCarriers()
+
+  const quietDays = settings?.interactionAging.recent_days ?? 30
 
   async function onExport() {
     setExporting(true)
@@ -99,6 +116,28 @@ export default function Carriers() {
 
       {exportError && <div className="mb-3 text-xs text-red-300">{exportError}</div>}
 
+      {/* Follow-ups that are due — "call them back Tuesday about the rate". */}
+      {(due ?? []).length > 0 && (
+        <div className="card mb-3 border-band-yellow/40 bg-band-yellow/10 p-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+            Follow-ups due
+          </div>
+          <ul className="space-y-1 text-sm">
+            {(due ?? []).slice(0, 6).map((f) => (
+              <li key={f.id} className="flex flex-wrap items-baseline gap-2">
+                <Link to={`/carriers/${f.carrier_id}`} className="text-accent hover:underline">
+                  {f.carrier_name}
+                </Link>
+                <span className="text-slate-300">{f.body}</span>
+                <span className="text-xs text-slate-500">
+                  {f.interaction_type_label} · due {relativeTime(f.follow_up_at ?? f.created_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {showImport && (
         <div className="mb-3">
           <CsvImport
@@ -123,46 +162,125 @@ export default function Carriers() {
               <th className="th">MC #</th>
               <th className="th">Location</th>
               <th className="th">Equipment</th>
+              <th className="th">Loads</th>
+              <th className="th">Last activity</th>
               <th className="th">Status</th>
+              <th className="th w-10" />
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td className="td text-slate-400" colSpan={6}>
+                <td className="td text-slate-400" colSpan={9}>
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && (carriers ?? []).length === 0 && (
               <tr>
-                <td className="td text-slate-400" colSpan={6}>
+                <td className="td text-slate-400" colSpan={9}>
                   No carriers yet.{can('import_carriers') ? ' Import a spreadsheet or add one.' : ''}
                 </td>
               </tr>
             )}
             {(carriers ?? []).map((c) => (
-              <tr key={c.id} className="border-b border-ink-800 hover:bg-ink-850">
-                <td className="td">
-                  <Link to={`/carriers/${c.id}`} className="font-medium text-accent hover:underline">
-                    {c.name}
-                  </Link>
-                </td>
-                <td className="td font-mono text-sm">{c.dot_number ?? '—'}</td>
-                <td className="td font-mono text-sm">{c.mc_number ?? '—'}</td>
-                <td className="td text-sm">
-                  {c.city ? `${c.city}, ${c.state ?? ''}` : <span className="text-slate-500">—</span>}
-                </td>
-                <td className="td text-sm">{c.equipment_types?.join(', ') || '—'}</td>
-                <td className="td">
-                  <StatusPill status={c.status} />
-                </td>
-              </tr>
+              <CarrierRow key={c.id} carrier={c} signal={signals?.[c.id]} quietDays={quietDays} />
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+function latestOf(...dates: Array<string | null | undefined>): string | null {
+  let best: string | null = null
+  for (const d of dates) {
+    if (d && (!best || Date.parse(d) > Date.parse(best))) best = d
+  }
+  return best
+}
+
+/**
+ * One carrier in the list. The whole row opens the profile; the name link,
+ * the phone number and the ↗ keep their own behaviour inside it.
+ */
+function CarrierRow({
+  carrier: c,
+  signal,
+  quietDays,
+}: {
+  carrier: Carrier
+  signal?: CarrierListSignal
+  quietDays: number
+}) {
+  const href = `/carriers/${c.id}`
+  const link = useRowLink(href)
+
+  const lastActivity = latestOf(signal?.last_interaction_at, signal?.last_delivered_at)
+  const quiet =
+    c.status === 'active' &&
+    (!lastActivity || Date.now() - Date.parse(lastActivity) > quietDays * 86_400_000)
+  const loadsTotal = Number(signal?.loads_total) || 0
+  const trouble = (Number(signal?.service_failures) || 0) + (Number(signal?.fell_off_loads) || 0)
+
+  return (
+    <tr {...link} className={ROW_LINK_CLASS}>
+      <td className="td">
+        <Link to={href} className="font-medium text-accent hover:underline">
+          {c.name}
+        </Link>
+        {(c.dispatch_contact_name || c.dispatch_contact_phone) && (
+          <div className="text-xs text-slate-500">
+            {c.dispatch_contact_name}
+            {c.dispatch_contact_name && c.dispatch_contact_phone && ' · '}
+            <PhoneLink phone={c.dispatch_contact_phone} />
+          </div>
+        )}
+      </td>
+      <td className="td font-mono text-sm">{c.dot_number ?? '—'}</td>
+      <td className="td font-mono text-sm">{c.mc_number ?? '—'}</td>
+      <td className="td text-sm">
+        {c.city ? `${c.city}, ${c.state ?? ''}` : <span className="text-slate-500">—</span>}
+      </td>
+      <td className="td text-sm">{c.equipment_types?.join(', ') || '—'}</td>
+      <td className="td text-sm">
+        {signal ? (
+          <>
+            {loadsTotal}
+            {trouble > 0 && (
+              <span
+                className="ml-1.5 rounded bg-band-red/15 px-1 text-[10px] uppercase text-red-300"
+                title={`${trouble} service failure(s) or dropped load(s) on record`}
+              >
+                {trouble} issue{trouble === 1 ? '' : 's'}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-slate-500">—</span>
+        )}
+      </td>
+      <td className="td text-sm">
+        <span className={quiet ? 'text-slate-500' : 'text-slate-200'}>
+          {lastActivity ? relativeTime(lastActivity) : 'never'}
+        </span>
+        {quiet && (
+          <span
+            className="ml-1.5 rounded bg-band-yellow/15 px-1 text-[10px] uppercase text-amber-300"
+            title={`Nothing logged or delivered in ${quietDays} days`}
+          >
+            quiet
+          </span>
+        )}
+      </td>
+      <td className="td">
+        <StatusPill status={c.status} />
+      </td>
+      <td className="td text-right">
+        <OpenInNewTab href={href} what="carrier" />
+      </td>
+    </tr>
   )
 }
 

@@ -58,3 +58,40 @@ export function useCarrierPerformance(carrierId: string | undefined) {
     },
   })
 }
+
+/** The few columns the carrier list shows per row. */
+export type CarrierListSignal = Pick<
+  CarrierPerformanceRow,
+  | 'carrier_id'
+  | 'loads_total'
+  | 'loads_delivered'
+  | 'last_delivered_at'
+  | 'last_interaction_at'
+  | 'service_failures'
+  | 'fell_off_loads'
+>
+
+/**
+ * Last activity and load counts for every carrier at once, keyed by id, so
+ * the list can show "quiet since March" and "14 loads" without a query per
+ * row. Shares the ['carrier_performance'] prefix so logging a note
+ * refreshes it along with the scorecard.
+ */
+export function useCarrierListSignals() {
+  return useQuery<Record<string, CarrierListSignal>>({
+    queryKey: ['carrier_performance', 'list'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_carrier_performance')
+        .select(
+          'carrier_id,loads_total,loads_delivered,last_delivered_at,last_interaction_at,service_failures,fell_off_loads',
+        )
+        .limit(2000)
+      if (error) throw error
+      const byId: Record<string, CarrierListSignal> = {}
+      for (const row of (data ?? []) as CarrierListSignal[]) byId[row.carrier_id] = row
+      return byId
+    },
+  })
+}

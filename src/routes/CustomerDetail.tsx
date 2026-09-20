@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   useAddCustomerInteraction,
@@ -9,10 +9,15 @@ import {
   useSaveCustomer,
 } from '@/hooks/useCustomers'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useCustomerInteractionTypes } from '@/hooks/useSettings'
+import { useStageEventsForLoads } from '@/hooks/useRecordHistory'
+import { useCustomerInteractionTypes, usePipelineStages } from '@/hooks/useSettings'
 import { useAuth } from '@/hooks/useAuth'
+import { buildTimeline, type TimelineItem } from '@/lib/timeline'
 import { relativeTime } from '@/lib/urgency'
-import type { Customer, CustomerInteractionView, LoadBoardRow, QuickLink } from '@/types/db'
+import RecordTimeline from '@/components/RecordTimeline'
+import { ContactChips } from '@/components/Contact'
+import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
+import type { Customer, LoadBoardRow, QuickLink } from '@/types/db'
 
 type Tab = 'overview' | 'activity' | 'loads' | 'locations'
 
@@ -26,8 +31,25 @@ export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>()
   const { data: customer, isLoading } = useCustomer(id)
   const { data: interactions } = useCustomerInteractions(id)
-  const { data: loads } = useLoadsForCustomer(id)
+  const { data: loadRows } = useLoadsForCustomer(id)
+  const { data: stages } = usePipelineStages()
+  const { data: profiles } = useProfiles()
   const [tab, setTab] = useState<Tab>('overview')
+
+  const loads = useMemo(() => (loadRows ?? []) as LoadBoardRow[], [loadRows])
+  const loadIds = useMemo(() => loads.map((l) => l.id), [loads])
+  const { data: stageEvents } = useStageEventsForLoads(loadIds)
+  const timeline = useMemo(
+    () =>
+      buildTimeline({
+        notes: interactions ?? [],
+        stageEvents: stageEvents ?? [],
+        loads,
+        stages: stages ?? [],
+        profiles: profiles ?? [],
+      }),
+    [interactions, stageEvents, loads, stages, profiles],
+  )
 
   if (isLoading) return <div className="p-6 text-sm text-slate-400">Loading customer…</div>
   if (!customer) return <div className="p-6 text-sm text-red-300">Customer not found.</div>
@@ -74,6 +96,20 @@ export default function CustomerDetail() {
         </div>
       )}
 
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <ContactChips
+          role="Main contact"
+          name={customer.main_contact_name}
+          phone={customer.main_contact_phone}
+          email={customer.main_contact_email}
+        />
+        {customer.city && (
+          <span className="text-sm text-slate-400">
+            {customer.city}, {customer.state}
+          </span>
+        )}
+      </div>
+
       <div className="mb-3 flex items-center gap-1">
         <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
           Overview
@@ -95,8 +131,8 @@ export default function CustomerDetail() {
       </div>
 
       {tab === 'overview' && <Overview customer={customer} />}
-      {tab === 'activity' && <Activity customerId={customer.id} interactions={interactions ?? []} loads={(loads ?? []) as LoadBoardRow[]} />}
-      {tab === 'loads' && <LoadsTab loads={(loads ?? []) as LoadBoardRow[]} />}
+      {tab === 'activity' && <Activity customerId={customer.id} timeline={timeline} loads={loads} />}
+      {tab === 'loads' && <LoadsTab loads={loads} />}
       {tab === 'locations' && <LocationsTab customerId={customer.id} />}
     </div>
   )
@@ -312,11 +348,11 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function Activity({
   customerId,
-  interactions,
+  timeline,
   loads,
 }: {
   customerId: string
-  interactions: CustomerInteractionView[]
+  timeline: TimelineItem[]
   loads: LoadBoardRow[]
 }) {
   const { data: types } = useCustomerInteractionTypes()
@@ -351,36 +387,10 @@ function Activity({
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <section className="card p-3">
-          <h2 className="mb-2 text-sm font-semibold text-slate-200">Activity</h2>
-          {interactions.length === 0 && (
-            <p className="text-xs text-slate-500">
-              Nothing logged yet. Calls, emails, quotes — log them here so the next person knows
-              where things stand.
-            </p>
-          )}
-          <ul className="space-y-2">
-            {interactions.map((i) => (
-              <li key={i.id} className="border-l-2 border-ink-600 pl-3 text-sm">
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-medium text-slate-200">{i.interaction_type_label}</span>
-                  {i.load_number && (
-                    <Link to={`/loads/${i.load_id}`} className="text-xs text-accent hover:underline">
-                      {i.load_number}
-                    </Link>
-                  )}
-                  <span className="ml-auto text-xs text-slate-500">
-                    {i.created_by_name ?? 'someone'} · {relativeTime(i.created_at)}
-                  </span>
-                </div>
-                <div className="text-slate-300">{i.body}</div>
-                {i.follow_up_at && (
-                  <div className="text-xs text-amber-300">Follow up {relativeTime(i.follow_up_at)}</div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <RecordTimeline
+          items={timeline}
+          emptyText="Nothing yet. Calls, emails and quotes you log, and every stage their loads move through, will show up here so the next person knows where things stand."
+        />
       </div>
 
       {can('edit_loads') && (
@@ -435,37 +445,57 @@ function LoadsTab({ loads }: { loads: LoadBoardRow[] }) {
             <th className="th">Carrier</th>
             <th className="th">Rate</th>
             <th className="th">Stage</th>
+            <th className="th w-10" />
           </tr>
         </thead>
         <tbody>
           {loads.length === 0 && (
             <tr>
-              <td className="td text-slate-400" colSpan={6}>
+              <td className="td text-slate-400" colSpan={7}>
                 No loads for this customer yet.
               </td>
             </tr>
           )}
           {loads.map((l) => (
-            <tr key={l.id} className="border-b border-ink-800 hover:bg-ink-850">
-              <td className="td">
-                <Link to={`/loads/${l.id}`} className="text-accent hover:underline">
-                  {l.load_number}
-                </Link>
-              </td>
-              <td className="td text-sm">
-                {l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}
-              </td>
-              <td className="td text-sm">{relativeTime(l.first_pickup_at)}</td>
-              <td className="td text-sm">{l.carrier_name ?? '—'}</td>
-              <td className="td text-sm">
-                {l.customer_rate !== null ? `$${l.customer_rate.toLocaleString('en-US')}` : '—'}
-              </td>
-              <td className="td text-sm">{l.stage_label}</td>
-            </tr>
+            <CustomerLoadRow key={l.id} load={l} />
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+function CustomerLoadRow({ load: l }: { load: LoadBoardRow }) {
+  const href = `/loads/${l.id}`
+  const link = useRowLink(href)
+  return (
+    <tr {...link} className={ROW_LINK_CLASS}>
+      <td className="td">
+        <Link to={href} className="text-accent hover:underline">
+          {l.load_number}
+        </Link>
+      </td>
+      <td className="td text-sm">
+        {l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}
+      </td>
+      <td className="td text-sm">{relativeTime(l.first_pickup_at)}</td>
+      <td className="td text-sm">
+        {l.carrier_name && l.carrier_id ? (
+          <Link to={`/carriers/${l.carrier_id}`} className="hover:text-accent hover:underline">
+            {l.carrier_name}
+          </Link>
+        ) : (
+          (l.carrier_name ?? '—')
+        )}
+      </td>
+      <td className="td text-sm">
+        {l.customer_rate !== null ? `$${l.customer_rate.toLocaleString('en-US')}` : '—'}
+      </td>
+      <td className="td text-sm">{l.stage_label}</td>
+      <td className="td text-right">
+        <OpenInNewTab href={href} what="load" />
+      </td>
+    </tr>
   )
 }
 
