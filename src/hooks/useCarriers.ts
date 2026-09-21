@@ -94,17 +94,57 @@ export function useCarrierInteractions(carrierId: string | undefined) {
 export function useAddCarrierInteraction(carrierId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { interactionTypeId: string; body: string; loadId?: string }) => {
+    mutationFn: async (input: {
+      interactionTypeId: string
+      body: string
+      loadId?: string | null
+      followUpAt?: string | null
+    }) => {
       const { error } = await supabase.from('carrier_interactions').insert({
         carrier_id: carrierId,
         interaction_type_id: input.interactionTypeId,
         body: input.body,
         load_id: input.loadId ?? null,
+        follow_up_at: input.followUpAt ?? null,
       })
       if (error) throw error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['carrier_interactions', carrierId] })
+      // The scorecard's behaviour counts and the list's "last activity".
+      qc.invalidateQueries({ queryKey: ['carrier_performance'] })
+      qc.invalidateQueries({ queryKey: ['carrier_followups_due'] })
+    },
+  })
+}
+
+export type DueCarrierFollowUp = CarrierInteractionView & { carrier_name: string }
+
+/** Follow-ups that are due, across every carrier — the list's reminder strip. */
+export function useDueCarrierFollowUps() {
+  return useQuery<DueCarrierFollowUp[]>({
+    queryKey: ['carrier_followups_due'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_carrier_recent_interactions')
+        .select('*')
+        .not('follow_up_at', 'is', null)
+        .lte('follow_up_at', new Date(Date.now() + 86_400_000).toISOString())
+        .order('follow_up_at', { ascending: true })
+        .limit(50)
+      if (error) throw error
+      const rows = (data ?? []) as CarrierInteractionView[]
+      if (rows.length === 0) return []
+
+      // The view has no carrier name; one lookup covers every due row.
+      const ids = [...new Set(rows.map((r) => r.carrier_id))]
+      const names = await supabase.from('carriers').select('id,name').in('id', ids)
+      if (names.error) throw names.error
+      const byId = new Map(
+        ((names.data ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
+      )
+      return rows.map((r) => ({ ...r, carrier_name: byId.get(r.carrier_id) ?? 'Carrier' }))
     },
   })
 }

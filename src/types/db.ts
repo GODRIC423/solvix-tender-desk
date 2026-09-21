@@ -375,6 +375,7 @@ export interface CarrierInteraction {
   load_id: string | null
   interaction_type_id: string
   body: string
+  follow_up_at: string | null
   created_by: string | null
   created_at: string
 }
