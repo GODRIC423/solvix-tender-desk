@@ -1,0 +1,2704 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dose — the family medicine record and 2am dosing instrument</title>
+<meta name="description" content="A dark-adapted dosing instrument and permanent health record for every child in the house: weight-based volumes tied to the concentration on your bottle, dose timing, growth curves, immunisations, illness history and one-tap printouts for the GP and the annual school form.">
+<meta name="theme-color" content="#05060A">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%2305060A'/%3E%3Cpath d='M13 46a21 21 0 1 1 38 0' fill='none' stroke='%23FFAE2B' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='35' r='5.5' fill='%23EFEAE1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* DOSE — instrument face. Custom-property scheme: --gauge-* */
+:root{
+--gauge-void:#05060A;
+--gauge-deck:#0A0C11;
+--gauge-bezel:#101319;
+--gauge-bezel-hi:#161A22;
+--gauge-etch:rgba(239,234,225,.105);
+--gauge-etch-hi:rgba(239,234,225,.26);
+--gauge-ivory:#EFEAE1;
+--gauge-dim:#A8A49B;
+--gauge-faint:#8B877F;
+--gauge-sodium:#FFAE2B;
+--gauge-sodium-deep:#B8760C;
+--gauge-steel:#93BBDE;
+--gauge-steel-deep:#4E7A9E;
+--gauge-alarm:#FF6152;
+--gauge-clear:#6FD495;
+--gauge-glow:rgba(255,174,43,.32);
+--gauge-figure:clamp(5.6rem,23vw,12.4rem);
+--gauge-mark:clamp(2.1rem,5.4vw,3.4rem);
+--gauge-silk:.66rem;
+--gauge-notch:2px;
+--gauge-pad:clamp(18px,4.4vw,44px);
+--gauge-lane:1180px;
+--gauge-mono:"Share Tech Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+--gauge-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+--gauge-slab:"Anton","Barlow Condensed",Impact,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+margin:0;padding:0;
+background:
+radial-gradient(120% 78% at 50% 4%,#0D1017 0%,#08090E 46%,var(--gauge-void) 100%);
+background-attachment:fixed;
+color:var(--gauge-ivory);
+font-family:var(--gauge-body);
+font-size:16px;line-height:1.55;
+overflow-x:hidden;
+-webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,p,ul,ol,figure,dl,dd{margin:0}
+ul,ol{padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+a{color:var(--gauge-sodium)}
+:focus-visible{outline:2px solid var(--gauge-sodium);outline-offset:2px;border-radius:1px}
+.hushed{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.jumpcut{position:absolute;left:8px;top:-60px;z-index:99;background:var(--gauge-sodium);color:#0A0700;padding:9px 16px;font-weight:600;transition:top .16s}
+.jumpcut:focus{top:8px}
+/* bypass-blocks list: off-screen until a keyboard user reaches it, never visible chrome */
+.jumplist{position:absolute;left:8px;top:-240px;z-index:98;display:flex;flex-wrap:wrap;gap:5px;
+background:var(--gauge-bezel-hi);border:1px solid var(--gauge-sodium);padding:7px;transition:top .16s;max-width:calc(100vw - 16px)}
+.jumplist:focus-within{top:46px}
+.jumplist a{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+color:var(--gauge-ivory);text-decoration:none;padding:6px 10px;border:1px solid var(--gauge-etch)}
+.jumplist a:focus-visible{background:var(--gauge-sodium);color:#150C00;border-color:var(--gauge-sodium)}
+/* silkscreen labels (panel printing) */
+.silk{
+font-family:var(--gauge-body);font-weight:600;
+font-size:var(--gauge-silk);letter-spacing:.3em;text-transform:uppercase;
+color:var(--gauge-faint);
+}
+.figure{font-family:var(--gauge-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+/* top plate: identity + subject */
+.nameplate{
+max-width:var(--gauge-lane);margin:0 auto;
+padding:clamp(13px,2.6vw,22px) var(--gauge-pad) 0;
+display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap;
+}
+.stamp{display:flex;align-items:baseline;gap:10px;min-width:0}
+.stamp b{
+font-family:var(--gauge-slab);font-weight:400;font-size:1.32rem;letter-spacing:.045em;
+color:var(--gauge-ivory);text-transform:uppercase;line-height:1;
+}
+.stamp i{font-style:normal;color:var(--gauge-faint);font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;font-weight:600}
+.plateside{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tag{
+font-family:var(--gauge-mono);font-size:.68rem;letter-spacing:.09em;
+color:var(--gauge-faint);border:1px solid var(--gauge-etch);
+padding:4px 9px;border-radius:var(--gauge-notch);white-space:nowrap;
+}
+.tag[data-sample="1"]{color:var(--gauge-sodium);border-color:rgba(255,174,43,.4)}
+.miniswitch{
+font-family:var(--gauge-body);font-weight:600;font-size:.63rem;letter-spacing:.2em;text-transform:uppercase;
+color:var(--gauge-dim);border:1px solid var(--gauge-etch);background:rgba(255,255,255,.015);
+padding:6px 11px;border-radius:var(--gauge-notch);transition:color .15s,border-color .15s,background .15s;
+}
+.miniswitch:hover{color:var(--gauge-ivory);border-color:var(--gauge-etch-hi);background:rgba(255,255,255,.05)}
+/* subject rail (which child) */
+.subjectrail{
+max-width:var(--gauge-lane);margin:0 auto;
+padding:clamp(12px,2.4vw,18px) var(--gauge-pad) 0;
+display:flex;gap:0;align-items:stretch;flex-wrap:nowrap;
+overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+border-bottom:1px solid var(--gauge-etch);
+}
+.subjectrail::-webkit-scrollbar{display:none}
+.subject{
+position:relative;display:flex;flex-direction:column;gap:2px;flex:0 0 auto;white-space:nowrap;
+padding:9px 18px 12px 0;margin-right:18px;
+color:var(--gauge-faint);text-align:left;transition:color .16s;
+}
+.subject::after{content:"";position:absolute;left:0;right:18px;bottom:-1px;height:2px;background:transparent;transition:background .16s}
+.subject:hover{color:var(--gauge-dim)}
+.subject[aria-pressed="true"]{color:var(--gauge-ivory)}
+.subject[aria-pressed="true"]::after{background:var(--gauge-sodium)}
+.subject u{
+text-decoration:none;font-family:var(--gauge-slab);font-weight:400;font-size:1.12rem;
+letter-spacing:.03em;text-transform:uppercase;line-height:1.05;
+}
+.subject s{text-decoration:none;font-family:var(--gauge-mono);font-size:.66rem;letter-spacing:.06em;opacity:.82}
+/* the face */
+.face{
+max-width:var(--gauge-lane);margin:0 auto;
+padding:clamp(16px,3vw,30px) var(--gauge-pad) clamp(26px,4vw,44px);
+}
+.channelbank{display:flex;gap:10px;margin:0 0 clamp(14px,2.6vw,22px)}
+.channel{
+flex:1 1 0;min-width:0;position:relative;
+border:1px solid var(--gauge-etch);background:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,0));
+padding:11px 14px 12px;border-radius:var(--gauge-notch);
+display:flex;flex-direction:column;gap:3px;text-align:left;
+transition:border-color .18s,background .18s,transform .12s;
+}
+.channel:active{transform:translateY(1px)}
+.channel u{
+text-decoration:none;font-family:var(--gauge-slab);font-weight:400;font-size:clamp(1rem,2.6vw,1.28rem);
+letter-spacing:.035em;text-transform:uppercase;color:var(--gauge-dim);line-height:1.06;transition:color .18s;
+}
+.channel s{text-decoration:none;font-family:var(--gauge-mono);font-size:.66rem;color:var(--gauge-faint);letter-spacing:.04em}
+.channel .pip{position:absolute;top:10px;right:12px;width:7px;height:7px;border-radius:50%;background:var(--gauge-etch-hi);transition:background .2s,box-shadow .2s}
+.channel[aria-pressed="true"]{background:linear-gradient(180deg,rgba(255,174,43,.11),rgba(255,174,43,.015));border-color:rgba(255,174,43,.42)}
+.channel[aria-pressed="true"] u{color:var(--gauge-sodium)}
+.channel[aria-pressed="true"] .pip{background:var(--gauge-sodium);box-shadow:0 0 10px 2px var(--gauge-glow)}
+.channel[data-ch="ibu"][aria-pressed="true"]{background:linear-gradient(180deg,rgba(147,187,222,.12),rgba(147,187,222,.015));border-color:rgba(147,187,222,.45)}
+.channel[data-ch="ibu"][aria-pressed="true"] u{color:var(--gauge-steel)}
+.channel[data-ch="ibu"][aria-pressed="true"] .pip{background:var(--gauge-steel);box-shadow:0 0 10px 2px rgba(147,187,222,.34)}
+/* dial + core readout */
+.instrument{position:relative;display:grid;place-items:center;margin:0 auto;width:100%;max-width:560px}
+.dialwrap{position:relative;width:100%;aspect-ratio:1/.9;touch-action:none}
+.dialwrap svg{display:block;width:100%;height:100%;overflow:visible}
+.gring{cursor:grab}
+.gring:active{cursor:grabbing}
+.core{
+position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+pointer-events:none;padding-bottom:5%;
+}
+.corelabel{font-size:var(--gauge-silk);letter-spacing:.3em;text-transform:uppercase;font-weight:600;color:var(--gauge-faint);margin-bottom:2px}
+.corefig{
+font-family:var(--gauge-mono);font-size:var(--gauge-figure);line-height:.8;
+color:var(--gauge-sodium);text-shadow:0 0 34px var(--gauge-glow),0 0 3px rgba(255,174,43,.3);
+font-variant-numeric:tabular-nums;letter-spacing:-.035em;display:block;
+}
+/* the readout never outgrows the bezel: long strings step down */
+.corefig[data-len="4"]{font-size:calc(var(--gauge-figure) * .77)}
+.corefig[data-len="5"]{font-size:calc(var(--gauge-figure) * .62)}
+.corefig.held{color:var(--gauge-alarm);text-shadow:0 0 30px rgba(255,97,82,.28)}
+.corefig.chsteel{color:var(--gauge-steel);text-shadow:0 0 30px rgba(147,187,222,.26)}
+.coreunit{
+font-family:var(--gauge-slab);font-weight:400;font-size:clamp(1.3rem,3.6vw,2rem);
+letter-spacing:.04em;text-transform:lowercase;color:var(--gauge-dim);margin-top:6px;
+}
+.coresub{
+font-family:var(--gauge-mono);font-size:clamp(.74rem,1.9vw,.88rem);color:var(--gauge-dim);
+text-align:center;letter-spacing:.02em;line-height:1.5;margin:10px auto 0;max-width:58ch;
+padding:0 6px;
+}
+.coresub span + span::before{content:"  ·  "}
+@media (max-width:620px){
+.coresub span + span{display:block}
+.coresub span + span::before{content:""}
+.plateside{flex:1 1 100%;justify-content:flex-start}
+}
+.wtcuff{
+position:absolute;left:50%;transform:translateX(-50%);bottom:1%;
+display:flex;align-items:center;gap:8px;pointer-events:auto;
+}
+.wtcuff input{
+width:4.6em;background:var(--gauge-void);border:1px solid var(--gauge-etch-hi);
+color:var(--gauge-ivory);font-family:var(--gauge-mono);font-size:1.02rem;text-align:center;
+padding:6px 4px;border-radius:var(--gauge-notch);appearance:textfield;-moz-appearance:textfield;
+}
+.wtcuff input::-webkit-outer-spin-button,.wtcuff input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.wtcuff input:focus{border-color:var(--gauge-sodium)}
+.wtcuff span{font-family:var(--gauge-mono);font-size:.74rem;color:var(--gauge-faint);letter-spacing:.06em}
+/* last-given annunciator: the two-parent question */
+.lastgiven{margin-top:clamp(15px,2.4vw,22px)}
+.lgtitle{display:block;padding:0 0 7px}
+.lgrow{display:flex;align-items:center;gap:9px 12px;padding:11px 0;border-top:1px solid var(--gauge-etch);flex-wrap:wrap}
+.lgrow .lamp2{width:7px;height:7px;border-radius:50%;background:var(--gauge-sodium);flex:0 0 auto;box-shadow:0 0 8px 1px var(--gauge-glow)}
+.lgrow[data-ch="ibu"] .lamp2{background:var(--gauge-steel);box-shadow:0 0 8px 1px rgba(147,187,222,.3)}
+.lgrow[data-empty="1"] .lamp2{background:var(--gauge-etch-hi);box-shadow:none}
+.lgrow b{font-size:.63rem;letter-spacing:.19em;text-transform:uppercase;font-weight:600;color:var(--gauge-dim);flex:0 0 auto}
+.lgrow .when{font-family:var(--gauge-mono);font-size:1.02rem;color:var(--gauge-ivory);flex:0 0 auto;letter-spacing:.01em}
+.lgrow .what{font-family:var(--gauge-mono);font-size:.75rem;color:var(--gauge-faint);flex:1 1 150px;min-width:0}
+.lgrow .cnt2{font-family:var(--gauge-mono);font-size:.72rem;color:var(--gauge-dim);flex:0 0 auto;white-space:nowrap}
+/* concentration plate: the safety object */
+.concplate{
+margin:clamp(14px,2.6vw,20px) 0 0;border:1px solid rgba(255,174,43,.34);
+background:linear-gradient(180deg,rgba(255,174,43,.075),rgba(255,174,43,.012));
+border-radius:var(--gauge-notch);padding:13px 15px 14px;
+}
+.concplate[data-ch="ibu"]{border-color:rgba(147,187,222,.36);background:linear-gradient(180deg,rgba(147,187,222,.08),rgba(147,187,222,.012))}
+.conctop{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px}
+.conctop .silk{color:var(--gauge-sodium)}
+.concplate[data-ch="ibu"] .conctop .silk{color:var(--gauge-steel)}
+.concpick{display:flex;gap:7px;flex-wrap:wrap}
+.concopt{
+font-family:var(--gauge-mono);font-size:.82rem;letter-spacing:.02em;
+border:1px solid var(--gauge-etch);background:rgba(255,255,255,.02);color:var(--gauge-dim);
+padding:8px 11px;border-radius:var(--gauge-notch);transition:all .15s;line-height:1.15;text-align:left;
+}
+.concopt:hover{border-color:var(--gauge-etch-hi);color:var(--gauge-ivory)}
+.concopt[aria-pressed="true"]{background:var(--gauge-sodium);border-color:var(--gauge-sodium);color:#150C00;font-weight:400}
+.concplate[data-ch="ibu"] .concopt[aria-pressed="true"]{background:var(--gauge-steel);border-color:var(--gauge-steel);color:#06121C}
+.concopt small{display:block;font-size:.66rem;opacity:.72;letter-spacing:.04em}
+.confirmline{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
+.checkbottle{
+display:inline-flex;align-items:center;gap:9px;border:1px solid var(--gauge-etch-hi);
+padding:8px 13px;border-radius:var(--gauge-notch);font-size:.76rem;font-weight:600;
+letter-spacing:.12em;text-transform:uppercase;color:var(--gauge-dim);transition:all .16s;
+}
+.checkbottle .box{width:15px;height:15px;border:1.5px solid var(--gauge-faint);display:grid;place-items:center;border-radius:1px}
+.checkbottle .box::after{content:"";width:8px;height:8px;background:transparent;transition:background .14s}
+.checkbottle[aria-pressed="true"]{color:var(--gauge-clear);border-color:rgba(111,212,149,.45)}
+.checkbottle[aria-pressed="true"] .box{border-color:var(--gauge-clear)}
+.checkbottle[aria-pressed="true"] .box::after{background:var(--gauge-clear)}
+/* gate ribbon */
+.gate{
+display:grid;grid-template-columns:repeat(3,1fr);
+border-top:1px solid var(--gauge-etch);border-bottom:1px solid var(--gauge-etch);
+margin:clamp(16px,3vw,24px) 0 0;
+}
+.gatecell{padding:13px 4px 14px;border-left:1px solid var(--gauge-etch);display:flex;flex-direction:column;gap:5px}
+.gatecell:first-child{border-left:0;padding-left:0}
+.gatecell:not(:first-child){padding-left:16px}
+.gateval{font-family:var(--gauge-mono);font-size:clamp(1.15rem,3.4vw,1.62rem);line-height:1;color:var(--gauge-ivory);letter-spacing:-.01em}
+.gateval.ok{color:var(--gauge-clear)}
+.gateval.warn{color:var(--gauge-sodium)}
+.gateval.bad{color:var(--gauge-alarm)}
+.gatenote{font-family:var(--gauge-mono);font-size:.68rem;color:var(--gauge-faint);letter-spacing:.03em}
+.meter{height:3px;background:rgba(239,234,225,.09);position:relative;overflow:hidden;margin-top:2px}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--gauge-sodium);transition:width .3s ease}
+.meter i.bad{background:var(--gauge-alarm)}
+/* record button (thumb zone) */
+.actbank{display:flex;gap:10px;margin-top:clamp(16px,3vw,22px);flex-wrap:wrap}
+.logbtn{
+flex:1 1 260px;position:relative;overflow:hidden;
+background:var(--gauge-sodium);color:#150C00;border-radius:var(--gauge-notch);
+padding:18px 18px;font-weight:700;font-size:.94rem;letter-spacing:.18em;text-transform:uppercase;
+transition:background .18s,transform .1s,box-shadow .2s;box-shadow:0 0 0 0 var(--gauge-glow);
+}
+.logbtn:hover{box-shadow:0 6px 34px -8px var(--gauge-glow)}
+.logbtn:active{transform:translateY(1px)}
+.logbtn small{display:block;font-family:var(--gauge-mono);font-weight:400;font-size:.68rem;letter-spacing:.06em;text-transform:none;opacity:.72;margin-top:3px}
+.logbtn[data-ch="ibu"]{background:var(--gauge-steel);color:#06121C}
+.logbtn[data-state="held"]{background:var(--gauge-alarm);color:#1A0400}
+.logbtn[data-state="armed"]{background:#FFF;color:#100}
+.logbtn[disabled]{background:rgba(239,234,225,.13);color:var(--gauge-faint);cursor:not-allowed;box-shadow:none}
+.ghostbtn{
+flex:0 1 auto;border:1px solid var(--gauge-etch-hi);border-radius:var(--gauge-notch);
+padding:18px 20px;font-weight:600;font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gauge-dim);
+transition:all .16s;
+}
+.ghostbtn:hover{color:var(--gauge-ivory);border-color:var(--gauge-ivory);background:rgba(255,255,255,.04)}
+/* interleave strip */
+.interleave{margin-top:clamp(18px,3.2vw,26px)}
+.ilhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.ilrail{position:relative;height:126px;border-bottom:1px solid var(--gauge-etch);overflow:hidden}
+.ilrail .now{position:absolute;top:0;bottom:0;width:1px;background:var(--gauge-etch-hi)}
+.ilslot{position:absolute;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:5px;white-space:nowrap}
+.ilslot .dot{width:9px;height:9px;border-radius:50%;background:var(--gauge-sodium);box-shadow:0 0 10px 1px var(--gauge-glow)}
+.ilslot[data-ch="ibu"] .dot{background:var(--gauge-steel);box-shadow:0 0 10px 1px rgba(147,187,222,.3)}
+.ilslot .stem{width:1px;height:14px;background:var(--gauge-etch-hi)}
+.ilslot[data-lane="1"]{padding-bottom:22px}
+.ilslot[data-lane="1"] .stem{height:36px}
+.ilslot .stem{height:22px}
+.ilslot .t{font-family:var(--gauge-mono);font-size:.7rem;color:var(--gauge-dim);padding-bottom:5px}
+.ilslot .d{font-size:.56rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--gauge-faint)}
+/* alarm rail (always visible) */
+.flagrail{
+position:fixed;left:0;right:0;bottom:0;z-index:40;
+background:linear-gradient(180deg,rgba(10,4,2,.9),rgba(8,3,1,.98));
+backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+border-top:1px solid rgba(255,97,82,.5);
+padding-bottom:env(safe-area-inset-bottom);
+}
+.flagrail::before{
+content:"";display:block;height:3px;
+background:repeating-linear-gradient(115deg,var(--gauge-alarm) 0 9px,#2A0703 9px 18px);opacity:.72;
+}
+.flagtoggle{
+width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;
+padding:11px clamp(14px,4vw,32px);text-align:left;
+}
+.flagtoggle b{
+font-family:var(--gauge-body);font-weight:700;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;
+color:var(--gauge-alarm);display:flex;align-items:center;gap:9px;
+}
+.flagtoggle span{font-family:var(--gauge-mono);font-size:.7rem;color:var(--gauge-dim);letter-spacing:.03em}
+.flagtoggle em{font-style:normal;font-family:var(--gauge-mono);font-size:.68rem;color:var(--gauge-faint);white-space:nowrap}
+.flagdraw{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.flagrail[data-open="1"] .flagdraw{max-height:64vh;overflow-y:auto}
+.flaglist{padding:2px clamp(14px,4vw,32px) 18px;display:grid;gap:8px;grid-template-columns:1fr}
+.flaglist li{display:flex;gap:11px;font-size:.86rem;line-height:1.4;color:#FFD9D3}
+.flaglist li b{color:var(--gauge-alarm);font-family:var(--gauge-mono);font-size:.78rem;flex:0 0 auto;padding-top:2px}
+.flagfoot{padding:0 clamp(14px,4vw,32px) 16px;font-size:.78rem;color:var(--gauge-dim)}
+.railpad{height:58px}
+@media (max-width:470px){
+.flagtoggle{padding:10px 14px}
+.flagtoggle b{font-size:.6rem;letter-spacing:.1em}
+.flagtoggle em{display:none}
+.railpad{height:44px}
+}
+/* section rules (panel silkscreen) */
+.deck{max-width:var(--gauge-lane);margin:0 auto;padding:0 var(--gauge-pad)}
+.rule{
+display:flex;align-items:center;gap:14px;
+margin:clamp(38px,6vw,64px) 0 clamp(16px,2.6vw,24px);
+}
+.rule .no{font-family:var(--gauge-slab);font-weight:400;font-size:clamp(2rem,5vw,2.9rem);line-height:.8;color:var(--gauge-bezel-hi);letter-spacing:.02em;-webkit-text-stroke:1px rgba(239,234,225,.2)}
+.rule h2{font-family:var(--gauge-slab);font-weight:400;font-size:var(--gauge-mark);line-height:.95;letter-spacing:.025em;text-transform:uppercase;color:var(--gauge-ivory)}
+.rule .bar{flex:1;height:1px;background:var(--gauge-etch)}
+.rule p{flex:0 1 300px;font-size:.82rem;color:var(--gauge-faint);line-height:1.4}
+@media (max-width:720px){.rule p{flex:1 1 100%;order:3}}
+/* handoff card */
+.handoff{
+border:1px solid var(--gauge-etch-hi);border-radius:var(--gauge-notch);
+background:linear-gradient(158deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 62%);
+padding:clamp(18px,3.4vw,28px);position:relative;overflow:hidden;
+}
+.handoff::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border:1px solid var(--gauge-etch);border-radius:50%;pointer-events:none}
+.hotop{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:clamp(14px,2.4vw,20px)}
+.honame{font-family:var(--gauge-slab);font-weight:400;font-size:clamp(1.5rem,4vw,2.2rem);letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.hogrid{display:grid;gap:1px;background:var(--gauge-etch);grid-template-columns:repeat(auto-fit,minmax(148px,1fr));border:1px solid var(--gauge-etch)}
+.hocell{background:var(--gauge-deck);padding:13px 14px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.hocell dt{font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;font-weight:600;color:var(--gauge-faint)}
+.hocell dd{font-family:var(--gauge-mono);font-size:1.02rem;color:var(--gauge-ivory);word-break:break-word;line-height:1.25}
+.hocell dd small{display:block;font-size:.7rem;color:var(--gauge-dim);letter-spacing:.02em}
+.hocell.sodium dd{color:var(--gauge-sodium)}
+.hocell.steel dd{color:var(--gauge-steel)}
+.hoacts{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+/* generic instrument buttons */
+.press{
+border:1px solid var(--gauge-etch-hi);border-radius:var(--gauge-notch);background:rgba(255,255,255,.028);
+padding:11px 16px;font-weight:600;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gauge-dim);
+transition:all .16s;
+}
+.press:hover{color:var(--gauge-ivory);border-color:var(--gauge-ivory);background:rgba(255,255,255,.07)}
+.press.lit{background:var(--gauge-sodium);border-color:var(--gauge-sodium);color:#150C00}
+.press.lit:hover{background:#FFC257;border-color:#FFC257;color:#150C00}
+.press.danger{color:#FFA79E;border-color:rgba(255,97,82,.4)}
+.press.danger:hover{background:var(--gauge-alarm);border-color:var(--gauge-alarm);color:#1A0400}
+.press.tiny{padding:6px 10px;font-size:.62rem;letter-spacing:.12em}
+/* tape (the running log) */
+.tapehead{display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.epipick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.thermo{width:100%;border:1px solid var(--gauge-etch);border-radius:var(--gauge-notch);background:rgba(255,255,255,.014);padding:12px 12px 6px}
+.thermo canvas{display:block;width:100%;height:190px}
+.tapelist{margin-top:16px;border-top:1px solid var(--gauge-etch)}
+.tick{
+display:grid;grid-template-columns:70px 12px 1fr auto;gap:0 12px;align-items:start;
+padding:12px 0 13px;border-bottom:1px solid var(--gauge-etch);
+}
+.tick .t{font-family:var(--gauge-mono);font-size:.82rem;color:var(--gauge-dim);letter-spacing:.02em;padding-top:1px}
+.tick .t small{display:block;font-size:.64rem;color:var(--gauge-faint)}
+.tick .lamp{width:9px;height:9px;border-radius:50%;margin-top:6px;background:var(--gauge-faint)}
+.tick[data-kind="dose"] .lamp{background:var(--gauge-sodium);box-shadow:0 0 8px 1px var(--gauge-glow)}
+.tick[data-kind="dose"][data-ch="ibu"] .lamp{background:var(--gauge-steel);box-shadow:0 0 8px 1px rgba(147,187,222,.3)}
+.tick[data-kind="temp"] .lamp{background:var(--gauge-alarm)}
+.tick[data-kind="symptom"] .lamp{background:var(--gauge-clear)}
+.tick .body b{display:block;font-weight:600;font-size:.94rem;color:var(--gauge-ivory);line-height:1.3}
+.tick .body span{font-family:var(--gauge-mono);font-size:.76rem;color:var(--gauge-dim);letter-spacing:.02em;display:block;margin-top:2px}
+.tick .body span.conc{color:var(--gauge-sodium)}
+.tick[data-ch="ibu"] .body span.conc{color:var(--gauge-steel)}
+.tick .kill{opacity:0;transition:opacity .15s;color:var(--gauge-faint);font-family:var(--gauge-mono);font-size:.9rem;padding:2px 8px;line-height:1.2}
+.tick:hover .kill,.tick:focus-within .kill{opacity:1}
+.tick .kill:hover{color:var(--gauge-alarm)}
+.emptytape{padding:26px 0;color:var(--gauge-faint);font-size:.88rem}
+/* forms / inputs */
+.jotter{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:16px}
+.cuff{display:flex;flex-direction:column;gap:5px;flex:1 1 120px;min-width:0}
+.cuff > span{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;font-weight:600;color:var(--gauge-faint)}
+.cuff input,.cuff select,.cuff textarea{
+background:var(--gauge-void);border:1px solid var(--gauge-etch);color:var(--gauge-ivory);
+padding:10px 11px;border-radius:var(--gauge-notch);width:100%;font-size:.9rem;
+}
+.cuff input[type=number],.cuff input[type=time],.cuff input[type=date]{font-family:var(--gauge-mono)}
+.cuff input:focus,.cuff select:focus,.cuff textarea:focus{border-color:var(--gauge-sodium);outline:none}
+.cuff select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--gauge-faint) 50%),linear-gradient(135deg,var(--gauge-faint) 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px}
+.cuff.wide{flex:2 1 220px}
+/* growth */
+.growthbox{border:1px solid var(--gauge-etch);border-radius:var(--gauge-notch);padding:12px 12px 8px;background:rgba(255,255,255,.014)}
+.growthbox canvas{display:block;width:100%;height:300px}
+.gtabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.centileline{display:flex;gap:clamp(14px,3vw,34px);flex-wrap:wrap;margin-top:14px}
+.centile{display:flex;flex-direction:column;gap:3px}
+.centile b{font-family:var(--gauge-mono);font-size:clamp(1.3rem,3.6vw,1.85rem);color:var(--gauge-sodium);line-height:1}
+.centile span{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;font-weight:600;color:var(--gauge-faint)}
+/* record drawers */
+.drawer{border-bottom:1px solid var(--gauge-etch)}
+.drawer > summary{
+list-style:none;cursor:pointer;padding:16px 0;display:flex;align-items:center;gap:14px;
+font-family:var(--gauge-slab);font-weight:400;font-size:clamp(1.02rem,2.6vw,1.28rem);letter-spacing:.035em;
+text-transform:uppercase;color:var(--gauge-dim);transition:color .16s;
+}
+.drawer > summary::-webkit-details-marker{display:none}
+.drawer > summary:hover{color:var(--gauge-ivory)}
+.drawer[open] > summary{color:var(--gauge-ivory)}
+.drawer > summary .cnt{font-family:var(--gauge-mono);font-size:.74rem;color:var(--gauge-faint);letter-spacing:.04em;margin-left:auto;text-transform:none}
+.drawer > summary .arrow{font-family:var(--gauge-mono);font-size:.8rem;color:var(--gauge-faint);transition:transform .2s;display:inline-block}
+.drawer[open] > summary .arrow{transform:rotate(90deg)}
+.drawerbody{padding:2px 0 26px}
+.linelist li{
+display:flex;gap:12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--gauge-etch);flex-wrap:wrap;
+}
+.linelist li:first-child{border-top:0}
+.linelist .k{font-family:var(--gauge-mono);font-size:.78rem;color:var(--gauge-faint);flex:0 0 96px;letter-spacing:.02em}
+.linelist .v{flex:1 1 200px;font-size:.92rem;min-width:0}
+.linelist .v em{font-style:normal;color:var(--gauge-dim);font-size:.82rem;display:block}
+.linelist .kill{opacity:.35;transition:opacity .15s,color .15s;color:var(--gauge-faint);font-family:var(--gauge-mono);padding:0 6px}
+.linelist li:hover .kill{opacity:1}
+.linelist .kill:hover{color:var(--gauge-alarm)}
+.sev{font-family:var(--gauge-mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:1px;border:1px solid currentColor}
+.sev[data-s="severe"]{color:var(--gauge-alarm)}
+.sev[data-s="moderate"]{color:var(--gauge-sodium)}
+.sev[data-s="mild"]{color:var(--gauge-dim)}
+/* print launcher */
+.printbank{display:grid;gap:1px;background:var(--gauge-etch);grid-template-columns:repeat(auto-fit,minmax(240px,1fr));border:1px solid var(--gauge-etch)}
+.printcard{
+background:var(--gauge-deck);padding:clamp(18px,3vw,26px);text-align:left;display:flex;flex-direction:column;gap:8px;
+transition:background .18s;min-width:0;
+}
+.printcard:hover{background:var(--gauge-bezel-hi)}
+.printcard b{font-family:var(--gauge-slab);font-weight:400;font-size:1.22rem;letter-spacing:.03em;text-transform:uppercase;color:var(--gauge-ivory);line-height:1.05}
+.printcard span{font-size:.84rem;color:var(--gauge-dim);line-height:1.45}
+.printcard u{text-decoration:none;font-family:var(--gauge-mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gauge-sodium);margin-top:4px}
+/* setup (explicitly off the 2am path) */
+.setupwarn{
+border-left:2px solid var(--gauge-alarm);padding:10px 0 10px 14px;margin-bottom:20px;
+font-size:.88rem;color:var(--gauge-dim);max-width:62ch;
+}
+.presetbank{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.spectable{width:100%;border-collapse:collapse;font-family:var(--gauge-mono);font-size:.8rem;margin-top:6px}
+.spectable th{text-align:left;font-family:var(--gauge-body);font-weight:600;font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gauge-faint);padding:0 12px 8px 0;border-bottom:1px solid var(--gauge-etch);white-space:nowrap}
+.spectable td{padding:9px 12px 9px 0;border-bottom:1px solid var(--gauge-etch);color:var(--gauge-dim);white-space:nowrap}
+.spectable td:first-child{color:var(--gauge-ivory)}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* toast */
+.toastdock{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:min(92vw,460px)}
+.toast{
+background:var(--gauge-bezel-hi);border:1px solid var(--gauge-etch-hi);border-left:2px solid var(--gauge-sodium);
+padding:11px 16px;font-size:.86rem;color:var(--gauge-ivory);border-radius:var(--gauge-notch);
+box-shadow:0 16px 44px -18px #000;animation:toastin .22s ease both;max-width:100%;
+}
+@keyframes toastin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+/* footer */
+.colophon{max-width:var(--gauge-lane);margin:0 auto;padding:clamp(34px,5vw,56px) var(--gauge-pad) clamp(20px,4vw,34px)}
+.warnslab{border:1px solid rgba(255,97,82,.42);background:rgba(255,97,82,.05);padding:clamp(16px,3vw,22px);border-radius:var(--gauge-notch)}
+.warnslab b{display:block;font-family:var(--gauge-slab);font-weight:400;font-size:1.1rem;letter-spacing:.05em;text-transform:uppercase;color:var(--gauge-alarm);margin-bottom:8px}
+.warnslab p{font-size:.92rem;line-height:1.6;color:#F3DAD6;max-width:76ch}
+.smallprint{margin-top:18px;font-size:.76rem;color:var(--gauge-faint);line-height:1.6;max-width:76ch}
+/* print sheets */
+.sheet{display:none}
+@media screen{.sheet{display:none !important}}
+/* responsive */
+@media (min-width:900px){
+.face{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);gap:clamp(26px,3.4vw,52px) clamp(28px,4vw,56px);align-items:start}
+.facel{grid-column:1;grid-row:1/span 2}
+.facec{grid-column:2;grid-row:1}
+.facer{grid-column:2;grid-row:2}
+.instrument{max-width:none}
+.channelbank{margin-bottom:18px}
+.concplate{margin-top:0}
+.gate{margin-top:0}
+.flaglist{grid-template-columns:1fr 1fr;gap:8px 26px}
+}
+@media (max-width:899px){ .facec .concplate{margin-top:clamp(14px,2.6vw,20px)} }
+@media (max-width:620px){
+.lgrow{display:grid;grid-template-columns:9px auto 1fr;column-gap:10px;row-gap:3px;align-items:center;padding:12px 0}
+.lgrow .lamp2{grid-column:1;grid-row:1}
+.lgrow b{grid-column:2;grid-row:1}
+.lgrow .when{grid-column:3;grid-row:1;justify-self:end}
+.lgrow .what{grid-column:2 / 4;grid-row:2}
+.lgrow .cnt2{grid-column:2 / 4;grid-row:3;color:var(--gauge-faint)}
+}
+@media (max-width:420px){
+.miniswitch{padding:5px 8px;letter-spacing:.13em}
+.tag{padding:4px 7px;font-size:.64rem}
+.plateside{gap:5px}
+}
+@media (max-width:520px){
+.gate{grid-template-columns:1fr 1fr}
+.gatecell:nth-child(3){grid-column:1/-1;border-left:0;padding-left:0;border-top:1px solid var(--gauge-etch)}
+.tick{grid-template-columns:62px 10px 1fr auto;gap:0 9px}
+.linelist .k{flex:0 0 100%}
+}
+@media (prefers-reduced-motion:reduce){
+*,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
+}
+/* PRINT — the page the parent actually wanted */
+@page{size:A4 portrait;margin:14mm}
+@media print{
+html,body{background:#fff !important;color:#000 !important}
+body{font-size:10.5pt;line-height:1.42}
+.nameplate,.subjectrail,main,.flagrail,.colophon,.toastdock,.railpad,.jumpcut{display:none !important}
+.sheet{display:none !important}
+.sheet[data-active="1"]{display:block !important}
+.pgtop{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2.5pt solid #000;padding-bottom:5pt;margin-bottom:12pt}
+.pgtop h1{font-family:var(--gauge-slab);font-weight:400;font-size:23pt;letter-spacing:.02em;text-transform:uppercase;line-height:.95;color:#000}
+.pgtop .who{text-align:right;font-family:var(--gauge-mono);font-size:9pt;line-height:1.4}
+.pgtop .who b{display:block;font-family:var(--gauge-body);font-weight:700;font-size:13pt;letter-spacing:.01em}
+.pblk{margin:0 0 11pt;break-inside:avoid}
+.pblk > h2{
+font-family:var(--gauge-body);font-weight:700;font-size:8pt;letter-spacing:.2em;text-transform:uppercase;
+border-bottom:.6pt solid #000;padding-bottom:2.5pt;margin-bottom:6pt;color:#000;
+}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7pt 12pt}
+.pgrid.two{grid-template-columns:repeat(2,1fr)}
+.pgrid.three{grid-template-columns:repeat(3,1fr)}
+.pfact{break-inside:avoid}
+.pfact dt{font-size:7pt;letter-spacing:.14em;text-transform:uppercase;color:#555;font-weight:700}
+.pfact dd{font-family:var(--gauge-mono);font-size:11pt;color:#000;margin-top:1pt;line-height:1.25}
+.pfact dd small{display:block;font-size:8pt;color:#444}
+table.ptab{width:100%;border-collapse:collapse;font-size:9pt;margin-top:4pt}
+table.ptab th{text-align:left;font-family:var(--gauge-body);font-weight:700;font-size:7.5pt;letter-spacing:.13em;text-transform:uppercase;border-bottom:1pt solid #000;padding:0 6pt 3pt 0;color:#000}
+table.ptab td{padding:3.4pt 6pt 3.4pt 0;border-bottom:.4pt solid #BBB;vertical-align:top;font-family:var(--gauge-mono);font-size:9pt;color:#000}
+table.ptab td.txt{font-family:var(--gauge-body);font-size:9.5pt}
+table.ptab tr{break-inside:avoid}
+.pchart{width:100%;height:auto;border:.5pt solid #999;margin-top:3pt;background:#fff}
+.pflags{border:1.4pt solid #000;padding:7pt 9pt;break-inside:avoid}
+.pflags h3{font-family:var(--gauge-body);font-weight:700;font-size:9pt;letter-spacing:.13em;text-transform:uppercase;margin-bottom:4pt}
+.pflags ul{columns:2;column-gap:16pt;font-size:9pt;line-height:1.35}
+.pflags li{break-inside:avoid;margin-bottom:2.5pt;padding-left:9pt;text-indent:-9pt}
+.pflags li::before{content:"▸ ";font-weight:700}
+.pnote{font-size:8pt;color:#333;line-height:1.4;margin-top:4pt}
+.pdisc{border:1.4pt solid #000;padding:7pt 9pt;margin-top:11pt;font-size:8.6pt;line-height:1.4;break-inside:avoid}
+.pdisc b{display:block;font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:8pt;margin-bottom:3pt}
+.psign{display:grid;grid-template-columns:1fr 1fr;gap:10pt 22pt;margin-top:8pt}
+.psign div{border-top:.8pt solid #000;padding-top:3pt;font-size:7.5pt;letter-spacing:.1em;text-transform:uppercase;color:#444;margin-top:26pt}
+.pcut{border:1.6pt dashed #000;padding:11pt 13pt;break-inside:avoid;margin-bottom:9pt}
+.pcut .big{font-family:var(--gauge-mono);font-size:30pt;line-height:1;letter-spacing:-.02em}
+.pcut .lbl{font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase;color:#444;font-weight:700}
+.pfoot{margin-top:9pt;font-size:7.6pt;color:#444;border-top:.5pt solid #999;padding-top:4pt;display:flex;justify-content:space-between;gap:10pt}
+.pbreak{break-before:page}
+}
+</style>
+</head>
+<body>
+<a class="jumpcut" href="#face">Skip to the dosing instrument</a>
+
+<nav class="jumplist" aria-label="Jump to a section">
+  <a href="#face">Instrument</a> <a href="#handoff">Handoff</a> <a href="#tape">Illness log</a>
+  <a href="#growth">Growth</a> <a href="#record">Record</a> <a href="#sheets">Printouts</a> <a href="#setup">Setup</a>
+</nav>
+
+<header class="nameplate">
+  <div class="stamp">
+    <b>Dose</b>
+    <i>Family medicine record</i>
+  </div>
+  <div class="plateside">
+    <span class="tag" id="regionTag">Preset —</span>
+    <span class="tag" id="sampleTag" data-sample="1" hidden>Sample family</span>
+    <button type="button" class="miniswitch" id="clearSampleBtn" hidden>Clear</button>
+    <button type="button" class="miniswitch" id="toSetupBtn">Setup</button>
+  </div>
+</header>
+
+<div class="subjectrail" id="subjectRail" role="group" aria-label="Choose which child"></div>
+
+<main>
+  <h1 class="hushed">Dose — weight-based child medicine record, dosing instrument and printable clinical summary</h1>
+
+  <!-- ============ 01 · THE FACE ============ -->
+  <section class="face" id="face" aria-labelledby="faceH">
+    <h2 class="hushed" id="faceH">Dosing instrument</h2>
+
+    <div class="facel">
+      <div class="channelbank" role="group" aria-label="Which medicine">
+        <button type="button" class="channel" data-ch="par" id="chPar" aria-pressed="true">
+          <span class="pip" aria-hidden="true"></span>
+          <u>Paracetamol</u><s id="chParSpec">—</s>
+        </button>
+        <button type="button" class="channel" data-ch="ibu" id="chIbu" aria-pressed="false">
+          <span class="pip" aria-hidden="true"></span>
+          <u>Ibuprofen</u><s id="chIbuSpec">—</s>
+        </button>
+      </div>
+
+      <div class="instrument">
+        <div class="dialwrap" id="dialWrap">
+          <svg viewBox="0 0 400 372" id="dialSvg" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="knobGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFF0D0"/><stop offset="1" stop-color="#C88A16"/>
+              </linearGradient>
+              <linearGradient id="knobGradB" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#E8F3FF"/><stop offset="1" stop-color="#4E7A9E"/>
+              </linearGradient>
+              <filter id="arcGlow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="7" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <g id="tickRing"></g>
+            <path id="arcTrack" fill="none" stroke="rgba(239,234,225,.11)" stroke-width="12" stroke-linecap="round"/>
+            <path id="arcLive" fill="none" stroke="#FFAE2B" stroke-width="12" stroke-linecap="round" filter="url(#arcGlow)"/>
+            <g id="tickLabels"></g>
+            <circle id="knob" cx="200" cy="200" r="15" fill="url(#knobGrad)" stroke="#05060A" stroke-width="3"/>
+            <path id="hitRing" fill="none" stroke="transparent" stroke-width="54" stroke-linecap="round" style="pointer-events:stroke"/>
+          </svg>
+          <div class="gring" id="dialHandle" role="slider" tabindex="0"
+               aria-label="Child weight in kilograms — drag or use arrow keys"
+               aria-valuemin="2" aria-valuemax="60" aria-valuenow="18.4" aria-valuetext="18.4 kilograms"
+               style="position:absolute;inset:0"></div>
+          <div class="core">
+            <span class="corelabel" id="coreLabel">Dose to give</span>
+            <span class="corefig figure" id="coreFig">—</span>
+            <span class="coreunit" id="coreUnit">millilitres</span>
+          </div>
+          <div class="wtcuff">
+            <label class="hushed" for="wtInput">Child weight in kilograms</label>
+            <input id="wtInput" type="number" min="2" max="60" step="0.1" inputmode="decimal" value="18.4">
+            <span>kg</span>
+            <button type="button" class="press tiny" id="saveWtBtn">Save</button>
+          </div>
+        </div>
+        <p class="coresub" id="coreSub">—</p>
+      </div>
+
+      <section class="lastgiven" id="lastGiven" aria-labelledby="lgH">
+        <h3 class="silk lgtitle" id="lgH">Already given · rolling 24 hours</h3>
+      </section>
+    </div>
+
+    <div class="facec">
+      <div class="concplate" id="concPlate" data-ch="par">
+        <div class="conctop">
+          <span class="silk" id="concSilk">Concentration on your bottle</span>
+          <span class="tag" id="concEcho">—</span>
+        </div>
+        <div class="concpick" id="concPick" role="group" aria-label="Concentration printed on the bottle"></div>
+        <div class="confirmline">
+          <button type="button" class="checkbottle" id="checkBottle" aria-pressed="false">
+            <span class="box" aria-hidden="true"></span>
+            <span id="checkBottleTxt">I have checked the bottle</span>
+          </button>
+          <span class="gatenote" style="flex:1 1 180px">Different bottles of the same medicine differ two-fold or more. The volume above is only correct for the strength selected here.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="facer">
+      <div class="gate" id="gateRibbon">
+        <div class="gatecell">
+          <span class="silk">Next dose safe</span>
+          <span class="gateval figure" id="gNext">—</span>
+          <span class="gatenote" id="gNextNote">—</span>
+        </div>
+        <div class="gatecell">
+          <span class="silk">Doses in 24 h</span>
+          <span class="gateval figure" id="gCount">—</span>
+          <span class="gatenote" id="gCountNote">—</span>
+        </div>
+        <div class="gatecell">
+          <span class="silk">24 h total</span>
+          <span class="gateval figure" id="gTotal">—</span>
+          <div class="meter"><i id="gMeter" style="width:0%"></i></div>
+          <span class="gatenote" id="gTotalNote">—</span>
+        </div>
+      </div>
+
+      <div class="actbank">
+        <button type="button" class="logbtn" id="logBtn" data-ch="par">
+          Record dose given
+          <small id="logBtnSub">—</small>
+        </button>
+        <button type="button" class="ghostbtn" id="tempBtn">Log temp</button>
+      </div>
+      <p class="gatenote" id="logHint" style="margin-top:10px;max-width:52ch;line-height:1.5">Dose records what you gave. It does not prescribe. Always read the bottle.</p>
+
+      <div class="interleave">
+        <div class="ilhead">
+          <span class="silk">Alternating timetable · next 18 hours</span>
+          <button type="button" class="press tiny" id="ilTableBtn">Full table</button>
+        </div>
+        <div class="ilrail" id="ilRail"></div>
+        <p class="gatenote" style="margin-top:9px" id="ilNote">—</p>
+        <div id="ilTableBox" hidden style="margin-top:14px" class="scrollx"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02 · HANDOFF ============ -->
+  <section class="deck" id="handoff" aria-labelledby="handoffH">
+    <div class="rule"><span class="no">02</span><h2 id="handoffH">Handoff card</h2><span class="bar"></span><p>Leave it by the bottle, or text it. This is the answer to “did you already give her something?”</p></div>
+    <div class="handoff">
+      <div class="hotop">
+        <span class="honame" id="hoName">—</span>
+        <span class="tag figure" id="hoStamp">—</span>
+      </div>
+      <dl class="hogrid" id="hoGrid"></dl>
+      <div class="hoacts">
+        <button type="button" class="press lit" id="copyHandoffBtn">Copy as text message</button>
+        <button type="button" class="press" id="printHandoffBtn">Print card</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 03 · TAPE ============ -->
+  <section class="deck" id="tape" aria-labelledby="tapeH">
+    <div class="rule"><span class="no">03</span><h2 id="tapeH">This illness</h2><span class="bar"></span><p>Every dose, every temperature, every symptom — the tape a clinician can read in ten seconds.</p></div>
+    <div class="tapehead">
+      <div class="epipick">
+        <label class="cuff" style="flex:0 1 260px"><span>Episode</span>
+          <select id="epiSelect"></select>
+        </label>
+        <button type="button" class="press" id="newEpiBtn">New illness</button>
+        <button type="button" class="press" id="endEpiBtn">Mark ended</button>
+      </div>
+      <button type="button" class="press lit" id="printClinicBtn">Print for the GP</button>
+    </div>
+    <div class="thermo">
+      <canvas id="tempCanvas" role="img" aria-label="Temperature over the course of this illness, with dose markers"></canvas>
+    </div>
+    <form class="jotter" id="jotForm" autocomplete="off">
+      <label class="cuff" style="flex:0 1 128px"><span>When</span><input type="time" id="jotTime" required></label>
+      <label class="cuff" style="flex:0 1 150px"><span>Temp °C</span><input type="number" id="jotTemp" step="0.1" min="30" max="43" inputmode="decimal" placeholder="38.4"></label>
+      <label class="cuff wide"><span>Symptom or note</span><input type="text" id="jotNote" maxlength="140" placeholder="Pulling at right ear, off food"></label>
+      <button type="submit" class="press lit" style="padding:11px 20px">Add to tape</button>
+    </form>
+    <div class="tapelist" id="tapeList"></div>
+  </section>
+
+  <!-- ============ 04 · GROWTH ============ -->
+  <section class="deck" id="growth" aria-labelledby="growthH">
+    <div class="rule"><span class="no">04</span><h2 id="growthH">Growth</h2><span class="bar"></span><p>The dial already needs a weight. Logging it once a month builds the chart you will still want in ten years.</p></div>
+    <div class="gtabs" role="group" aria-label="Growth measure">
+      <button type="button" class="press lit" id="gwWeight" aria-pressed="true">Weight</button>
+      <button type="button" class="press" id="gwHeight" aria-pressed="false">Height</button>
+    </div>
+    <div class="growthbox">
+      <canvas id="growthCanvas" role="img" aria-label="Growth curve against reference centiles"></canvas>
+    </div>
+    <div class="centileline" id="centileLine"></div>
+    <form class="jotter" id="measForm" autocomplete="off">
+      <label class="cuff" style="flex:0 1 165px"><span>Date</span><input type="date" id="measDate" required></label>
+      <label class="cuff" style="flex:0 1 130px"><span>Weight kg</span><input type="number" id="measKg" step="0.1" min="1" max="150" inputmode="decimal"></label>
+      <label class="cuff" style="flex:0 1 130px"><span>Height cm</span><input type="number" id="measCm" step="0.1" min="30" max="220" inputmode="decimal"></label>
+      <button type="submit" class="press lit" style="padding:11px 20px">Add measurement</button>
+    </form>
+    <details class="drawer" style="margin-top:14px"><summary><span class="arrow" aria-hidden="true">›</span>All measurements<span class="cnt" id="measCnt"></span></summary>
+      <div class="drawerbody"><ul class="linelist" id="measList"></ul></div>
+    </details>
+  </section>
+
+  <!-- ============ 05 · RECORD ============ -->
+  <section class="deck" id="record" aria-labelledby="recordH">
+    <div class="rule"><span class="no">05</span><h2 id="recordH">The record</h2><span class="bar"></span><p>Allergies, immunisations, regular medicines, contacts and every illness since birth — kept in one file, per child.</p></div>
+    <details class="drawer" open><summary><span class="arrow" aria-hidden="true">›</span>Allergies &amp; reactions<span class="cnt" id="algCnt"></span></summary>
+      <div class="drawerbody">
+        <ul class="linelist" id="algList"></ul>
+        <form class="jotter" id="algForm" autocomplete="off">
+          <label class="cuff"><span>Allergen</span><input type="text" id="algWhat" maxlength="60" required placeholder="Amoxicillin"></label>
+          <label class="cuff wide"><span>Reaction</span><input type="text" id="algHow" maxlength="90" placeholder="Widespread rash, day 3"></label>
+          <label class="cuff" style="flex:0 1 140px"><span>Severity</span><select id="algSev"><option>mild</option><option>moderate</option><option>severe</option></select></label>
+          <button type="submit" class="press">Add</button>
+        </form>
+      </div>
+    </details>
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Immunisations<span class="cnt" id="immCnt"></span></summary>
+      <div class="drawerbody">
+        <ul class="linelist" id="immList"></ul>
+        <form class="jotter" id="immForm" autocomplete="off">
+          <label class="cuff wide"><span>Vaccine</span><input type="text" id="immWhat" maxlength="70" required placeholder="MMR — second dose"></label>
+          <label class="cuff" style="flex:0 1 165px"><span>Date given</span><input type="date" id="immDate" required></label>
+          <label class="cuff" style="flex:0 1 170px"><span>Where / batch</span><input type="text" id="immWho" maxlength="60" placeholder="Elm Row Surgery"></label>
+          <button type="submit" class="press">Add</button>
+        </form>
+      </div>
+    </details>
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Regular medicines<span class="cnt" id="medCnt"></span></summary>
+      <div class="drawerbody">
+        <ul class="linelist" id="medList"></ul>
+        <form class="jotter" id="medForm" autocomplete="off">
+          <label class="cuff"><span>Medicine</span><input type="text" id="medWhat" maxlength="60" required placeholder="Salbutamol inhaler"></label>
+          <label class="cuff wide"><span>Dose &amp; when</span><input type="text" id="medHow" maxlength="90" placeholder="2 puffs via spacer, as needed"></label>
+          <button type="submit" class="press">Add</button>
+        </form>
+      </div>
+    </details>
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Illness history<span class="cnt" id="hisCnt"></span></summary>
+      <div class="drawerbody"><ul class="linelist" id="hisList"></ul>
+        <p class="gatenote" style="margin-top:12px">Answers “how many ear infections has he had?” and “when did she last have that rash?” — the two questions every GP asks and no notes app survives.</p>
+      </div>
+    </details>
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Contacts &amp; cover<span class="cnt">household</span></summary>
+      <div class="drawerbody">
+        <form class="jotter" id="conForm" autocomplete="off">
+          <label class="cuff"><span>GP / practice</span><input type="text" id="conGp" maxlength="70"></label>
+          <label class="cuff" style="flex:0 1 170px"><span>Practice phone</span><input type="tel" id="conGpTel" maxlength="30"></label>
+          <label class="cuff"><span>Insurer / scheme</span><input type="text" id="conIns" maxlength="70"></label>
+          <label class="cuff" style="flex:0 1 190px"><span>Policy / NHS number</span><input type="text" id="conPol" maxlength="40"></label>
+          <label class="cuff"><span>Emergency contact</span><input type="text" id="conEm" maxlength="70"></label>
+          <label class="cuff" style="flex:0 1 170px"><span>Their phone</span><input type="tel" id="conEmTel" maxlength="30"></label>
+          <button type="submit" class="press lit">Save contacts</button>
+        </form>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ 06 · SHEETS ============ -->
+  <section class="deck" id="sheets" aria-labelledby="sheetsH">
+    <div class="rule"><span class="no">06</span><h2 id="sheetsH">Printouts</h2><span class="bar"></span><p>August, every year, per child: the form. Ten seconds instead of an evening of hunting through the red book.</p></div>
+    <div class="printbank">
+      <button type="button" class="printcard" id="pcClinic"><b>For the GP</b><span>This illness on one page: temperature curve, every dose with its volume and concentration, symptoms and running 24-hour totals.</span><u>Print →</u></button>
+      <button type="button" class="printcard" id="pcForms"><b>Annual form</b><span>School, nursery, camp, sports and travel: details, allergies, medicines, immunisation table, contacts and an authorisation block to sign.</span><u>Print →</u></button>
+      <button type="button" class="printcard" id="pcHandoff"><b>Fridge card</b><span>Last dose, volume, strength and the exact time the next one is safe — cut out and leave beside the bottle.</span><u>Print →</u></button>
+    </div>
+  </section>
+
+  <!-- ============ 07 · SETUP ============ -->
+  <section class="deck" id="setup" aria-labelledby="setupH">
+    <div class="rule"><span class="no">07</span><h2 id="setupH">Setup</h2><span class="bar"></span><p>Set once, in daylight, by someone awake.</p></div>
+    <p class="setupwarn">Intervals and daily ceilings are fixed by the preset you choose here. They are deliberately <b>not</b> adjustable from the instrument face — a safety ceiling is not something a half-asleep parent should be able to raise at 3am. Choose the preset that matches the country your medicine was bought in, then leave it alone.</p>
+    <div class="presetbank" id="presetBank" role="group" aria-label="Country preset"></div>
+    <div class="scrollx"><table class="spectable" id="specTable"><caption class="hushed">Dosing rules for the selected preset</caption></table></div>
+
+    <details class="drawer" style="margin-top:26px"><summary><span class="arrow" aria-hidden="true">›</span>Unusual preparations<span class="cnt">advanced</span></summary>
+      <div class="drawerbody">
+        <p class="gatenote" style="max-width:64ch;margin-bottom:14px;line-height:1.55">If your pharmacy supplied a strength that is not listed, add it here. It then appears on the instrument face like any other bottle, and the volume is computed from it. Everything else — interval, dose count, daily ceiling — stays governed by the preset above.</p>
+        <form class="jotter" id="concForm" autocomplete="off">
+          <label class="cuff" style="flex:0 1 190px"><span>Medicine</span><select id="ccDrug"><option value="par">Paracetamol</option><option value="ibu">Ibuprofen</option></select></label>
+          <label class="cuff" style="flex:0 1 130px"><span>mg</span><input type="number" id="ccMg" step="1" min="1" max="1000" inputmode="decimal" placeholder="250"></label>
+          <label class="cuff" style="flex:0 1 130px"><span>per mL</span><input type="number" id="ccMl" step="0.1" min="0.1" max="100" inputmode="decimal" placeholder="5"></label>
+          <label class="cuff"><span>Label it</span><input type="text" id="ccName" maxlength="40" placeholder="Compounded 250/5"></label>
+          <button type="submit" class="press">Add strength</button>
+        </form>
+        <ul class="linelist" id="ccList" style="margin-top:14px"></ul>
+        <label class="cuff" style="max-width:260px;margin-top:18px"><span>Syringe graduation</span>
+          <select id="stepSel"><option value="0.1">0.1 mL (standard oral syringe)</option><option value="0.25">0.25 mL</option><option value="0.5">0.5 mL (medicine spoon)</option></select>
+        </label>
+      </div>
+    </details>
+
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Children<span class="cnt" id="kidCnt"></span></summary>
+      <div class="drawerbody">
+        <ul class="linelist" id="kidList"></ul>
+        <form class="jotter" id="kidForm" autocomplete="off">
+          <label class="cuff"><span>Name</span><input type="text" id="kidName" maxlength="40" required placeholder="Ada"></label>
+          <label class="cuff" style="flex:0 1 175px"><span>Date of birth</span><input type="date" id="kidDob" required></label>
+          <label class="cuff" style="flex:0 1 140px"><span>Sex at birth</span><select id="kidSex"><option value="F">Female</option><option value="M">Male</option></select></label>
+          <button type="submit" class="press lit">Add child</button>
+        </form>
+      </div>
+    </details>
+
+    <details class="drawer"><summary><span class="arrow" aria-hidden="true">›</span>Your data<span class="cnt">offline, on this device</span></summary>
+      <div class="drawerbody">
+        <p class="gatenote" style="max-width:64ch;margin-bottom:14px;line-height:1.55">Everything lives in this file and in this browser. Nothing is sent anywhere. To put it on the other parent’s phone: export the JSON, send them the file, and import it there.</p>
+        <div class="jotter" style="align-items:center">
+          <button type="button" class="press" id="csvBtn">Export CSV</button>
+          <button type="button" class="press" id="jsonBtn">Export JSON</button>
+          <button type="button" class="press" id="importBtn">Import JSON</button>
+          <input type="file" id="importFile" accept="application/json,.json" class="hushed" aria-label="Choose a Dose JSON export to import" tabindex="-1">
+          <button type="button" class="press danger" id="wipeBtn">Erase everything</button>
+        </div>
+        <p class="gatenote" id="storeNote" style="margin-top:12px"></p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<footer class="colophon">
+  <div class="warnslab">
+    <b>Read this every time</b>
+    <p><b>Not medical advice and not a substitute for the label on your bottle.</b> Always check the concentration and dose printed on the packaging, and follow your clinician or pharmacist. Seek urgent medical help for any red-flag symptom.</p>
+  </div>
+  <p class="smallprint">Dose computes volumes from the weight and the bottle strength <em>you</em> enter, and records what you tell it you gave. Reference growth curves are approximations of published WHO and CDC data, shown for context only — your clinician’s chart is the definitive one. Under 3 months old, any fever is a reason to be seen the same day; do not use a calculator instead of a phone call.</p>
+</footer>
+
+<div class="railpad" aria-hidden="true"></div>
+
+<aside class="flagrail" id="flagRail" data-open="0" aria-label="Red flag symptoms">
+  <button type="button" class="flagtoggle" id="flagToggle" aria-expanded="false" aria-controls="flagDraw">
+    <b><span aria-hidden="true">▲</span> Red flags — stop and get urgent help</b>
+    <em id="flagHint">Show the list</em>
+  </button>
+  <div class="flagdraw" id="flagDraw">
+    <ul class="flaglist" id="flagList"></ul>
+    <p class="flagfoot">If any of these are true, stop using this tool and phone your emergency number or go to urgent care now.</p>
+  </div>
+</aside>
+
+<div class="toastdock" id="toastDock" role="status" aria-live="polite"></div>
+
+<div class="sheet" id="sheetClinic"></div>
+<div class="sheet" id="sheetForms"></div>
+<div class="sheet" id="sheetHandoff"></div>
+
+<script>
+"use strict";
+(function(){
+/* 0 · CONSTANTS — presets, bottles, reference curves */
+var STORE_KEY = "dose.instrument.v3";
+
+/* Locked country presets. Chosen once in Setup; never editable on the face. */
+var PRESETS = {
+  UK: { label:"United Kingdom", short:"UK preset", drugs:{
+    par:{ name:"Paracetamol", mgPerKg:15, minH:4, maxPerDay:4, mgPerKgDay:60, doseCeil:1000, dayCeil:4000 },
+    ibu:{ name:"Ibuprofen",   mgPerKg:10, minH:6, maxPerDay:3, mgPerKgDay:30, doseCeil:400,  dayCeil:1200 } } },
+  US: { label:"United States", short:"US preset", drugs:{
+    par:{ name:"Acetaminophen", mgPerKg:15, minH:4, maxPerDay:5, mgPerKgDay:75, doseCeil:1000, dayCeil:4000 },
+    ibu:{ name:"Ibuprofen",     mgPerKg:10, minH:6, maxPerDay:4, mgPerKgDay:40, doseCeil:400,  dayCeil:1200 } } },
+  AU: { label:"Australia / NZ", short:"AU/NZ preset", drugs:{
+    par:{ name:"Paracetamol", mgPerKg:15, minH:4, maxPerDay:4, mgPerKgDay:60, doseCeil:1000, dayCeil:4000 },
+    ibu:{ name:"Ibuprofen",   mgPerKg:10, minH:6, maxPerDay:4, mgPerKgDay:40, doseCeil:400,  dayCeil:1200 } } },
+  EU: { label:"Europe (general)", short:"EU preset", drugs:{
+    par:{ name:"Paracetamol", mgPerKg:15, minH:6, maxPerDay:4, mgPerKgDay:60, doseCeil:1000, dayCeil:4000 },
+    ibu:{ name:"Ibuprofen",   mgPerKg:10, minH:8, maxPerDay:3, mgPerKgDay:30, doseCeil:400,  dayCeil:1200 } } }
+};
+
+/* Stock bottle strengths. mg per mlPer millilitres. */
+var STOCK = {
+  par:[
+    { id:"p120", mg:120, ml:5,   name:"Infant suspension",  note:"120 mg / 5 mL" },
+    { id:"p160", mg:160, ml:5,   name:"Children's (US)",    note:"160 mg / 5 mL" },
+    { id:"p250", mg:250, ml:5,   name:"Six-plus / junior",  note:"250 mg / 5 mL" },
+    { id:"p100", mg:80,  ml:0.8, name:"Infant drops",       note:"80 mg / 0.8 mL" },
+    { id:"p500", mg:500, ml:1,   name:"500 mg tablet",      note:"1 tablet = 500 mg" }
+  ],
+  ibu:[
+    { id:"i100", mg:100, ml:5,    name:"Infant / children's", note:"100 mg / 5 mL" },
+    { id:"i50",  mg:50,  ml:1.25, name:"Infant drops",        note:"50 mg / 1.25 mL" },
+    { id:"i200", mg:200, ml:5,    name:"Junior strength",     note:"200 mg / 5 mL" },
+    { id:"i200t",mg:200, ml:1,    name:"200 mg tablet",       note:"1 tablet = 200 mg" }
+  ]
+};
+
+var RED_FLAG_TEXT = [
+  "A rash that does |not| fade when you press a glass against it",
+  "Breathing hard or fast, grunting, or the skin sucking in |under or between the ribs|",
+  "|Blue, grey, very pale or mottled| lips, tongue or skin",
+  "Floppy, will not wake properly, or |not responding to you normally|",
+  "A |fit or seizure|, or a stiff neck with light hurting the eyes",
+  "|Any fever in a baby under 3 months|, or 39 °C and over between 3 and 6 months",
+  "|No urine for 12 hours|, sunken eyes, no tears",
+  "Constant crying that cannot be soothed, or a weak, |high-pitched cry|",
+  "Fever that has run |past 5 days|, or a child getting worse rather than better",
+  "|You are frightened.| Parental instinct outperforms this list. Call."
+];
+function flagPlain(t){ return t.replace(/\|/g, ""); }
+
+/* Reference LMS by age in months. Approximations of WHO (0–5y) and CDC (5–18y). */
+var LMS = {
+  wt:{
+    M:[[0,0.3487,3.3464,0.14602],[3,0.2297,6.3762,0.12619],[6,0.1738,7.9340,0.12237],[9,0.1553,8.9014,0.12129],
+       [12,0.1477,9.6479,0.12060],[18,0.1355,10.9385,0.12123],[24,0.1276,12.1515,0.12269],[36,0.1100,14.3429,0.12619],
+       [48,0.0946,16.3489,0.13012],[60,0.0800,18.3457,0.13417],[72,-1.20,20.69,0.152],[84,-1.40,22.90,0.163],
+       [96,-1.60,25.53,0.175],[108,-1.70,28.57,0.187],[120,-1.75,32.02,0.198],[132,-1.80,35.86,0.207],
+       [144,-1.80,40.15,0.212],[156,-1.75,45.03,0.212],[168,-1.70,50.42,0.207],[180,-1.60,55.58,0.198],
+       [192,-1.50,60.20,0.187],[204,-1.40,64.00,0.176],[216,-1.30,66.90,0.166]],
+    F:[[0,0.3809,3.2322,0.14171],[3,0.1710,5.8458,0.13068],[6,0.1553,7.2970,0.12619],[9,0.1440,8.2254,0.12451],
+       [12,0.1360,8.9481,0.12386],[18,0.1230,10.2315,0.12409],[24,0.1120,11.4775,0.12523],[36,0.0950,13.8619,0.12938],
+       [48,0.0800,16.0700,0.13435],[60,0.0650,18.2193,0.13898],[72,-1.00,20.71,0.163],[84,-1.20,23.12,0.176],
+       [96,-1.40,25.93,0.190],[108,-1.50,29.29,0.202],[120,-1.60,33.20,0.211],[132,-1.60,37.50,0.216],
+       [144,-1.55,41.90,0.216],[156,-1.50,46.10,0.212],[168,-1.40,49.70,0.205],[180,-1.30,52.50,0.197],
+       [192,-1.20,54.60,0.190],[204,-1.10,56.10,0.185],[216,-1.00,57.20,0.182]]
+  },
+  ht:{
+    M:[[0,1,49.8842,0.03795],[3,1,61.4292,0.03532],[6,1,67.6236,0.03486],[9,1,72.0000,0.03530],[12,1,75.7488,0.03579],
+       [18,1,82.2587,0.03688],[24,1,87.1161,0.03784],[36,1,96.0835,0.03953],[48,1,103.3273,0.04093],[60,1,110.0000,0.04225],
+       [72,1,116.00,0.0430],[84,1,121.70,0.0440],[96,1,127.00,0.0450],[108,1,132.20,0.0452],[120,1,137.50,0.0460],
+       [132,1,143.00,0.0480],[144,1,149.10,0.0500],[156,1,156.00,0.0500],[168,1,163.20,0.0470],[180,1,169.00,0.0430],
+       [192,1,172.90,0.0400],[204,1,175.20,0.0390],[216,1,176.10,0.0380]],
+    F:[[0,1,49.1477,0.03790],[3,1,59.8029,0.03640],[6,1,65.7311,0.03630],[9,1,70.1435,0.03690],[12,1,74.0150,0.03750],
+       [18,1,80.7079,0.03890],[24,1,85.7153,0.03990],[36,1,95.0515,0.04170],[48,1,102.7312,0.04320],[60,1,109.4000,0.04460],
+       [72,1,115.50,0.0450],[84,1,121.10,0.0460],[96,1,126.60,0.0470],[108,1,132.50,0.0480],[120,1,138.60,0.0490],
+       [132,1,144.50,0.0490],[144,1,151.20,0.0470],[156,1,157.10,0.0430],[168,1,160.40,0.0400],[180,1,162.10,0.0380],
+       [192,1,162.90,0.0370],[204,1,163.20,0.0370],[216,1,163.30,0.0370]]
+  }
+};
+
+/* 1 · SMALL HELPERS */
+var DASH = "—";
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, txt){ var n=document.createElement(tag); if(cls) n.className=cls; if(txt!=null) n.textContent=txt; return n; }
+function num(v){ var n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : null; }
+function fix(v, dp){ var n = num(v); return n === null ? DASH : n.toFixed(dp); }
+/* strength denominators read as printed on the bottle: 5, 0.8, 1.25 — never 5.0 */
+function trimN(v){ var n = num(v); return n === null ? DASH : String(Math.round(n*100)/100); }
+function strength(mg, ml){ return fix(mg,0) + " mg / " + trimN(ml) + " mL"; }
+function safeDiv(a, b){ a = num(a); b = num(b); if(a === null || b === null || b === 0) return null; var r = a/b; return isFinite(r) ? r : null; }
+function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+function uid(){ return "x" + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+var MONTH = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function pad2(n){ return (n<10?"0":"") + n; }
+function toDate(v){ if(v instanceof Date) return v; var d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+function hhmm(v){ var d = toDate(v); return d ? pad2(d.getHours()) + ":" + pad2(d.getMinutes()) : DASH; }
+function dayLabel(v){ var d = toDate(v); return d ? pad2(d.getDate()) + " " + MONTH[d.getMonth()] : DASH; }
+function isoDay(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()); }
+function longDay(v){ var d = toDate(v); return d ? (pad2(d.getDate()) + " " + MONTH[d.getMonth()] + " " + d.getFullYear()) : DASH; }
+function parseDay(s){
+  if(!s) return null;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s));
+  if(!m) return toDate(s);
+  var d = new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+/* Exact calendar age, leap-year safe (counts real month/day rollovers). */
+function ageParts(dobStr, atDate){
+  var dob = parseDay(dobStr); if(!dob) return null;
+  var at = atDate || new Date();
+  var y = at.getFullYear() - dob.getFullYear();
+  var m = at.getMonth() - dob.getMonth();
+  var d = at.getDate() - dob.getDate();
+  if(d < 0){ m -= 1; var prev = new Date(at.getFullYear(), at.getMonth(), 0).getDate(); d += prev; }
+  if(m < 0){ y -= 1; m += 12; }
+  return { y:y, m:m, d:d, months: y*12 + m + d/30.4375 };
+}
+function ageText(dobStr, atDate){
+  var a = ageParts(dobStr, atDate); if(!a) return DASH;
+  if(a.y >= 2) return a.y + " y " + a.m + " m";
+  if(a.y === 1) return (a.y*12 + a.m) + " months";
+  if(a.m >= 1) return a.m + " m " + a.d + " d";
+  return a.d + " days";
+}
+function hoursMins(ms){
+  if(ms == null || !isFinite(ms)) return DASH;
+  var neg = ms < 0; ms = Math.abs(ms);
+  var mins = Math.floor(ms/60000);
+  var h = Math.floor(mins/60), m = mins % 60;
+  return (neg?"-":"") + (h > 0 ? h + " h " + pad2(m) + " m" : m + " m");
+}
+function clockShort(ms){
+  if(ms == null || !isFinite(ms)) return DASH;
+  var mins = Math.max(0, Math.floor(ms/60000));
+  return Math.floor(mins/60) + ":" + pad2(mins % 60);
+}
+/* Abramowitz-Stegun normal CDF — for centiles. */
+function normCdf(z){
+  if(!isFinite(z)) return z > 0 ? 1 : 0;
+  var t = 1/(1 + 0.2316419*Math.abs(z));
+  var d = 0.3989422804014327*Math.exp(-z*z/2);
+  var p = d*t*(0.319381530 + t*(-0.356563782 + t*(1.781477937 + t*(-1.821255978 + t*1.330274429))));
+  return z > 0 ? 1 - p : p;
+}
+function lmsAt(kind, sex, months){
+  var tbl = (LMS[kind] && LMS[kind][sex === "M" ? "M" : "F"]) || null;
+  if(!tbl || !isFinite(months)) return null;
+  var mo = clamp(months, tbl[0][0], tbl[tbl.length-1][0]);
+  for(var i=0;i<tbl.length-1;i++){
+    if(mo >= tbl[i][0] && mo <= tbl[i+1][0]){
+      var span = tbl[i+1][0] - tbl[i][0];
+      var f = span === 0 ? 0 : (mo - tbl[i][0]) / span;
+      return { L: tbl[i][1] + f*(tbl[i+1][1]-tbl[i][1]),
+               M: tbl[i][2] + f*(tbl[i+1][2]-tbl[i][2]),
+               S: tbl[i][3] + f*(tbl[i+1][3]-tbl[i][3]) };
+    }
+  }
+  var last = tbl[tbl.length-1];
+  return { L:last[1], M:last[2], S:last[3] };
+}
+function zScore(kind, sex, months, x){
+  var p = lmsAt(kind, sex, months); if(!p || !(x > 0)) return null;
+  var z;
+  if(Math.abs(p.L) < 1e-7) z = safeDiv(Math.log(x/p.M), p.S);
+  else {
+    var pow = Math.pow(x/p.M, p.L);
+    z = safeDiv(pow - 1, p.L * p.S);
+  }
+  return (z === null || !isFinite(z)) ? null : z;
+}
+function centile(kind, sex, months, x){
+  var z = zScore(kind, sex, months, x); if(z === null) return null;
+  return clamp(normCdf(z) * 100, 0.05, 99.95);
+}
+function valueAtZ(kind, sex, months, z){
+  var p = lmsAt(kind, sex, months); if(!p) return null;
+  if(Math.abs(p.L) < 1e-7) return p.M * Math.exp(p.S * z);
+  var base = 1 + p.L * p.S * z;
+  if(base <= 0) return null;
+  return p.M * Math.pow(base, 1/p.L);
+}
+function ordinal(n){
+  var v = Math.round(n), s = ["th","st","nd","rd"], k = v % 100;
+  return v + (s[(k-20)%10] || s[k] || s[0]);
+}
+
+/* 2 · STATE + STORAGE */
+var state = null;
+var storageOk = true;
+
+function blankState(){
+  return { v:3, sample:false, region:"UK", step:0.1, kids:[], active:null, customConc:[] };
+}
+function loadState(){
+  try{
+    var raw = window.localStorage.getItem(STORE_KEY);
+    if(!raw) return null;
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object" || !Array.isArray(o.kids)) return null;
+    return o;
+  }catch(e){ storageOk = false; return null; }
+}
+function saveState(){
+  try{ window.localStorage.setItem(STORE_KEY, JSON.stringify(state)); storageOk = true; }
+  catch(e){ storageOk = false; }
+  var n = $("storeNote");
+  if(n) n.textContent = storageOk
+    ? "Saved in this browser. " + (state.kids.length) + " child record" + (state.kids.length===1?"":"s") + " held locally."
+    : "This browser is blocking local storage, so changes will not survive a reload. Export the JSON to keep them.";
+}
+
+/* sample family, anchored to right now so it always looks live */
+function h(n){ return n * 3600000; }
+function sampleState(){
+  var now = new Date(); now.setSeconds(0,0);
+  var T = now.getTime();
+  var s = blankState();
+  s.sample = true; s.region = "UK"; s.active = "k-maya";
+
+  var maya = {
+    id:"k-maya", name:"Maya", sex:"F", dob:"2021-04-11",
+    bottle:{ par:"p250", ibu:"i100" },
+    measures:[
+      {d:"2023-09-14", kg:13.9, cm:95.2},{d:"2024-02-02", kg:14.6, cm:98.1},
+      {d:"2024-08-19", kg:15.4, cm:101.0},{d:"2025-01-28", kg:16.3, cm:103.4},
+      {d:"2025-08-04", kg:17.2, cm:105.8},{d:"2026-02-16", kg:17.9, cm:107.1},
+      {d:"2026-08-11", kg:18.4, cm:108.6}
+    ],
+    allergies:[{id:uid(), what:"Amoxicillin", how:"Widespread blotchy rash on day 3 of the course", sev:"moderate"}],
+    imm:[
+      {id:uid(), what:"6-in-1 — three doses", date:"2021-08-14", who:"Elm Row Surgery"},
+      {id:uid(), what:"MenB — two doses + booster", date:"2022-04-19", who:"Elm Row Surgery"},
+      {id:uid(), what:"MMR — first dose", date:"2022-05-03", who:"Elm Row Surgery"},
+      {id:uid(), what:"MMR — second dose", date:"2024-06-11", who:"Elm Row Surgery"},
+      {id:uid(), what:"Pre-school booster (4-in-1)", date:"2024-06-11", who:"Elm Row Surgery"},
+      {id:uid(), what:"Flu nasal spray 2025/26", date:"2025-10-09", who:"School programme"}
+    ],
+    meds:[],
+    contacts:{ gp:"Elm Row Surgery — Dr Nandi", gpTel:"0131 555 0148", ins:"NHS Lothian", pol:"NHS 486 227 3391", em:"Grandma Ruth", emTel:"07700 900 411" },
+    episodes:[
+      {id:"e-m1", name:"Chickenpox", start:"2024-03-06", end:"2024-03-17"},
+      {id:"e-m2", name:"Right ear infection", start:"2025-01-19", end:"2025-01-25"},
+      {id:"e-m3", name:"Tonsillitis — antibiotics", start:"2025-11-02", end:"2025-11-09"},
+      {id:"e-m4", name:"Fever & sore throat", start:isoDay(new Date(T - h(17))), end:"" }
+    ],
+    events:[]
+  };
+  var E = maya.events, ep = "e-m4";
+  function ev(hoursAgo, o){ o.id = uid(); o.t = T - h(hoursAgo); o.ep = ep; E.push(o); }
+  ev(15.6, {kind:"temp", tempC:38.9});
+  ev(15.5, {kind:"symptom", text:"Woke crying, hot, would not settle"});
+  ev(15.33,{kind:"dose", drug:"par", mg:275, ml:5.5, cid:"p250", cmg:250, cml:5, kg:18.4});
+  ev(13.0, {kind:"temp", tempC:38.1});
+  ev(11.0, {kind:"symptom", text:"Off food, wanting to be held, drinking water"});
+  ev(10.0, {kind:"temp", tempC:38.6});
+  ev(9.5,  {kind:"dose", drug:"ibu", mg:184, ml:9.2, cid:"i100", cmg:100, cml:5, kg:18.4});
+  ev(7.0,  {kind:"temp", tempC:37.6});
+  ev(6.9,  {kind:"symptom", text:"Slept four hours straight"});
+  ev(4.6,  {kind:"temp", tempC:38.7});
+  ev(4.35, {kind:"dose", drug:"par", mg:275, ml:5.5, cid:"p250", cmg:250, cml:5, kg:18.4});
+  ev(2.0,  {kind:"temp", tempC:38.2});
+  ev(1.2,  {kind:"dose", drug:"ibu", mg:184, ml:9.2, cid:"i100", cmg:100, cml:5, kg:18.4});
+  ev(0.7,  {kind:"temp", tempC:37.9});
+  ev(0.6,  {kind:"symptom", text:"Sore throat, swallowing fine, no rash"});
+
+  var theo = {
+    id:"k-theo", name:"Theo", sex:"M", dob:"2018-09-22",
+    bottle:{ par:"p250", ibu:"i200" },
+    measures:[
+      {d:"2023-10-02", kg:19.1, cm:110.4},{d:"2024-04-15", kg:20.6, cm:113.9},
+      {d:"2024-11-09", kg:22.0, cm:117.2},{d:"2025-05-21", kg:23.4, cm:120.0},
+      {d:"2025-12-03", kg:24.9, cm:123.1},{d:"2026-07-28", kg:26.6, cm:126.4}
+    ],
+    allergies:[{id:uid(), what:"Grass pollen", how:"Streaming eyes and sneezing, May to July", sev:"mild"}],
+    imm:[
+      {id:uid(), what:"6-in-1 — three doses", date:"2019-01-30", who:"Elm Row Surgery"},
+      {id:uid(), what:"MMR — first dose", date:"2019-10-08", who:"Elm Row Surgery"},
+      {id:uid(), what:"MMR — second dose", date:"2021-11-16", who:"Elm Row Surgery"},
+      {id:uid(), what:"Pre-school booster (4-in-1)", date:"2021-11-16", who:"Elm Row Surgery"},
+      {id:uid(), what:"Flu nasal spray 2025/26", date:"2025-10-09", who:"School programme"}
+    ],
+    meds:[
+      {id:uid(), what:"Salbutamol inhaler (blue)", how:"2 puffs via spacer, as needed; 10 puffs if wheezy — then phone"},
+      {id:uid(), what:"Clenil beclometasone (brown)", how:"1 puff twice daily, every day, autumn to spring"}
+    ],
+    contacts:{ gp:"Elm Row Surgery — Dr Nandi", gpTel:"0131 555 0148", ins:"NHS Lothian", pol:"NHS 486 227 4102", em:"Grandma Ruth", emTel:"07700 900 411" },
+    episodes:[
+      {id:"e-t1", name:"Viral wheeze — nebuliser at A&E", start:"2024-11-22", end:"2024-11-27"},
+      {id:"e-t2", name:"Hand, foot and mouth", start:"2025-06-14", end:"2025-06-21"},
+      {id:"e-t3", name:"Chest infection — amoxicillin", start:"2026-01-08", end:"2026-01-19"}
+    ],
+    events:[]
+  };
+
+  var ivy = {
+    id:"k-ivy", name:"Ivy", sex:"F", dob:"2025-11-30",
+    bottle:{ par:"p120", ibu:"i100" },
+    measures:[
+      {d:"2025-12-04", kg:3.4, cm:50.5},{d:"2026-01-06", kg:4.3, cm:54.1},
+      {d:"2026-02-11", kg:5.2, cm:57.3},{d:"2026-04-08", kg:6.5, cm:61.0},
+      {d:"2026-06-17", kg:7.4, cm:65.2},{d:"2026-08-25", kg:8.3, cm:68.4}
+    ],
+    allergies:[],
+    imm:[
+      {id:uid(), what:"6-in-1 — first dose", date:"2026-01-29", who:"Elm Row Surgery"},
+      {id:uid(), what:"Rotavirus — first dose", date:"2026-01-29", who:"Elm Row Surgery"},
+      {id:uid(), what:"6-in-1 — second dose", date:"2026-02-26", who:"Elm Row Surgery"},
+      {id:uid(), what:"MenB — first dose", date:"2026-01-29", who:"Elm Row Surgery"}
+    ],
+    meds:[],
+    contacts:{ gp:"Elm Row Surgery — Dr Nandi", gpTel:"0131 555 0148", ins:"NHS Lothian", pol:"NHS 486 227 5566", em:"Grandma Ruth", emTel:"07700 900 411" },
+    episodes:[
+      {id:"e-i1", name:"Post-jab fever", start:"2026-02-26", end:"2026-02-28"},
+      {id:"e-i2", name:"First cold", start:"2026-05-02", end:"2026-05-09"}
+    ],
+    events:[]
+  };
+
+  s.kids = [maya, theo, ivy];
+  return s;
+}
+
+/* 3 · THE DOSING ENGINE */
+function preset(){ return PRESETS[state.region] || PRESETS.UK; }
+function spec(drug){ return preset().drugs[drug]; }
+function bottlesFor(drug){
+  var custom = (state.customConc || []).filter(function(c){ return c.drug === drug; });
+  return STOCK[drug].concat(custom);
+}
+function bottleById(drug, id){
+  var list = bottlesFor(drug);
+  for(var i=0;i<list.length;i++) if(list[i].id === id) return list[i];
+  return list[0] || null;
+}
+function isTablet(b){ return !!b && /tablet/i.test(b.name); }
+function stepFor(b){ return isTablet(b) ? 0.5 : (num(state.step) || 0.1); }
+function unitFor(b){ return isTablet(b) ? "tablet" : "mL"; }
+
+/* mg → volume, using ONLY the strength on the selected bottle. */
+function computeDose(kg, drug, bottle){
+  var sp = spec(drug);
+  var w = num(kg);
+  if(!sp || !bottle || w === null || w <= 0) return null;
+  var mgTarget = Math.min(w * sp.mgPerKg, sp.doseCeil);
+  var mgPerMl = safeDiv(bottle.mg, bottle.ml);
+  if(mgPerMl === null || mgPerMl <= 0) return null;
+  var exact = safeDiv(mgTarget, mgPerMl);
+  if(exact === null) return null;
+  var st = stepFor(bottle);
+  var vol = Math.floor((exact + 1e-9) / st) * st;
+  vol = Math.round(vol * 1000) / 1000;
+  var mgActual = Math.round(vol * mgPerMl * 10) / 10;
+  return {
+    mgTarget: Math.round(mgTarget * 10) / 10,
+    mgPerMl: mgPerMl,
+    exactMl: exact,
+    vol: vol,
+    mg: mgActual,
+    unit: unitFor(bottle),
+    step: st,
+    capped: (w * sp.mgPerKg) > sp.doseCeil,
+    tooSmall: vol < st
+  };
+}
+
+function dosesOf(kid, drug){
+  return (kid.events || []).filter(function(e){ return e.kind === "dose" && e.drug === drug; })
+    .sort(function(a,b){ return a.t - b.t; });
+}
+
+/* All three ceilings, and the exact clock time each releases. */
+function gateFor(kid, drug, kg, mgNext, nowMs){
+  var sp = spec(drug);
+  var all = dosesOf(kid, drug);
+  var win = all.filter(function(d){ return d.t > nowMs - 86400000; });
+  var last = all.length ? all[all.length-1] : null;
+
+  var gInterval = last ? last.t + sp.minH * 3600000 : null;
+
+  var gCount = null;
+  if(win.length >= sp.maxPerDay){
+    var idx = win.length - sp.maxPerDay;
+    gCount = win[idx].t + 86400000;
+  }
+
+  var w = num(kg);
+  var cap = Math.min((w === null ? 0 : w) * sp.mgPerKgDay, sp.dayCeil);
+  var sum = win.reduce(function(a,d){ return a + (num(d.mg) || 0); }, 0);
+  sum = Math.round(sum * 10) / 10;
+
+  var gMg = null;
+  var need = (num(mgNext) || 0);
+  if(sum + need > cap + 1e-6){
+    var rest = sum;
+    for(var i=0;i<win.length;i++){
+      rest -= (num(win[i].mg) || 0);
+      if(rest + need <= cap + 1e-6){ gMg = win[i].t + 86400000; break; }
+    }
+    if(gMg === null && win.length) gMg = win[win.length-1].t + 86400000;
+  }
+
+  var gates = [];
+  if(gInterval) gates.push({ t:gInterval, why:"the " + sp.minH + "-hour gap between doses" });
+  if(gCount)    gates.push({ t:gCount,    why:"the limit of " + sp.maxPerDay + " doses in 24 hours" });
+  if(gMg)       gates.push({ t:gMg,       why:"the 24-hour ceiling of " + Math.round(cap) + " mg" });
+
+  var binding = null;
+  for(var j=0;j<gates.length;j++){ if(!binding || gates[j].t > binding.t) binding = gates[j]; }
+
+  var nextSafe = binding ? binding.t : nowMs;
+  return {
+    nextSafe: nextSafe,
+    held: nextSafe > nowMs,
+    why: binding ? binding.why : null,
+    waitMs: Math.max(0, nextSafe - nowMs),
+    count: win.length, maxCount: sp.maxPerDay,
+    sum: sum, cap: Math.round(cap * 10) / 10,
+    pct: cap > 0 ? clamp((sum / cap) * 100, 0, 100) : 0,
+    last: last, minH: sp.minH
+  };
+}
+
+/* Interleave the two drugs forward, each keeping its own interval and cap. */
+function timetable(kid, kg, nowMs, horizonH){
+  var shadow = { events: (kid.events || []).slice() };
+  var out = [];
+  var horizon = nowMs + horizonH * 3600000;
+  for(var n=0; n<10; n++){
+    var best = null;
+    ["par","ibu"].forEach(function(drug){
+      var b = bottleById(drug, (kid.bottle||{})[drug]);
+      var d = computeDose(kg, drug, b);
+      if(!d || d.vol <= 0) return;
+      var g = gateFor(shadow, drug, kg, d.mg, nowMs);
+      var t = Math.max(g.nextSafe, nowMs);
+      if(t > horizon) return;
+      if(!best || t < best.t) best = { t:t, drug:drug, dose:d, bottle:b };
+    });
+    if(!best) break;
+    out.push(best);
+    shadow.events = shadow.events.concat([{ kind:"dose", drug:best.drug, t:best.t, mg:best.dose.mg }]);
+  }
+  return out;
+}
+
+/* 4 · SESSION (what is on the face right now) */
+var ui = { drug:"par", kg:18.4, confirmed:false, armed:false, growthMode:"wt", tick:null };
+
+function kid(){
+  if(!state.kids.length) return null;
+  var k = state.kids.filter(function(c){ return c.id === state.active; })[0];
+  return k || state.kids[0];
+}
+function latestMeasure(k, field){
+  if(!k || !k.measures || !k.measures.length) return null;
+  var rows = k.measures.filter(function(m){ return num(m[field]) !== null; })
+    .sort(function(a,b){ return (parseDay(a.d)||0) - (parseDay(b.d)||0); });
+  return rows.length ? rows[rows.length-1] : null;
+}
+function activeEpisode(k){
+  if(!k || !k.episodes || !k.episodes.length) return null;
+  var open = k.episodes.filter(function(e){ return !e.end; });
+  if(open.length) return open[open.length-1];
+  return k.episodes[k.episodes.length-1];
+}
+function currentBottle(drug){
+  var k = kid(); if(!k) return bottlesFor(drug)[0];
+  return bottleById(drug, (k.bottle || {})[drug]);
+}
+
+/* 5 · THE DIAL */
+var CX = 200, CY = 196, RAD = 150, A0 = 135, SWEEP = 270;
+function polar(r, deg){ var a = deg * Math.PI/180; return { x: CX + r*Math.cos(a), y: CY + r*Math.sin(a) }; }
+function arcPath(r, d0, d1){
+  var p0 = polar(r, d0), p1 = polar(r, d1);
+  var large = (d1 - d0) > 180 ? 1 : 0;
+  return "M" + p0.x.toFixed(2) + " " + p0.y.toFixed(2) + "A" + r + " " + r + " 0 " + large + " 1 " + p1.x.toFixed(2) + " " + p1.y.toFixed(2);
+}
+function fToW(f){ f = clamp(f,0,1); return f <= 0.55 ? 2 + (f/0.55)*18 : 20 + ((f-0.55)/0.45)*40; }
+function wToF(w){ w = clamp(w,2,60); return w <= 20 ? ((w-2)/18)*0.55 : 0.55 + ((w-20)/40)*0.45; }
+function snapW(w){ return Math.round(clamp(w,2,60) * 10) / 10; }
+
+function buildDial(){
+  var ring = $("tickRing"), labels = $("tickLabels");
+  ring.textContent = ""; labels.textContent = "";
+  var marks = [];
+  for(var w=2; w<=20.0001; w+=0.5) marks.push(w);
+  for(var w2=22; w2<=60.0001; w2+=2) marks.push(w2);
+  var majors = [2,5,10,15,20,30,40,50,60];
+  marks.forEach(function(w){
+    var isMajor = majors.indexOf(Math.round(w*10)/10) >= 0;
+    var deg = A0 + wToF(w) * SWEEP;
+    var a = polar(RAD + 13, deg), b = polar(RAD + (isMajor ? 25 : 19), deg);
+    var ln = document.createElementNS("http://www.w3.org/2000/svg","line");
+    ln.setAttribute("x1", a.x.toFixed(2)); ln.setAttribute("y1", a.y.toFixed(2));
+    ln.setAttribute("x2", b.x.toFixed(2)); ln.setAttribute("y2", b.y.toFixed(2));
+    ln.setAttribute("stroke", isMajor ? "rgba(239,234,225,.5)" : "rgba(239,234,225,.17)");
+    ln.setAttribute("stroke-width", isMajor ? "2" : "1");
+    ring.appendChild(ln);
+    if(isMajor){
+      var p = polar(RAD + 40, deg);
+      var tx = document.createElementNS("http://www.w3.org/2000/svg","text");
+      tx.setAttribute("x", p.x.toFixed(2)); tx.setAttribute("y", (p.y + 4).toFixed(2));
+      tx.setAttribute("text-anchor","middle");
+      tx.setAttribute("fill","rgba(239,234,225,.42)");
+      tx.setAttribute("font-family",'"Share Tech Mono",monospace');
+      tx.setAttribute("font-size","13");
+      tx.textContent = w;
+      labels.appendChild(tx);
+    }
+  });
+  $("arcTrack").setAttribute("d", arcPath(RAD, A0, A0 + SWEEP));
+  $("hitRing").setAttribute("d", arcPath(RAD, A0, A0 + SWEEP));
+}
+
+function paintDial(){
+  var f = wToF(ui.kg);
+  var deg = A0 + f * SWEEP;
+  var live = $("arcLive");
+  live.setAttribute("d", f <= 0.0005 ? "" : arcPath(RAD, A0, deg));
+  live.setAttribute("stroke", ui.drug === "ibu" ? "#93BBDE" : "#FFAE2B");
+  var k = polar(RAD, deg);
+  var knob = $("knob");
+  knob.setAttribute("cx", k.x.toFixed(2)); knob.setAttribute("cy", k.y.toFixed(2));
+  knob.setAttribute("fill", ui.drug === "ibu" ? "url(#knobGradB)" : "url(#knobGrad)");
+  var hnd = $("dialHandle");
+  hnd.setAttribute("aria-valuenow", String(ui.kg));
+  hnd.setAttribute("aria-valuetext", fix(ui.kg,1) + " kilograms");
+  var wi = $("wtInput");
+  if(document.activeElement !== wi) wi.value = fix(ui.kg,1);
+}
+
+function setWeight(w, fromInput){
+  ui.kg = snapW(w);
+  ui.armed = false;
+  paintDial();
+  renderFace();
+  if(!fromInput){ /* keep input synced */ }
+}
+
+function wireDial(){
+  var wrap = $("dialWrap"), svg = $("dialSvg"), handle = $("dialHandle");
+  var dragging = false;
+  function fromPoint(cx, cy){
+    var r = svg.getBoundingClientRect();
+    var sx = (cx - r.left) / r.width * 400;
+    var sy = (cy - r.top) / r.height * 372;
+    var ang = Math.atan2(sy - CY, sx - CX) * 180/Math.PI;
+    if(ang < 0) ang += 360;
+    var rel = ang - A0;
+    if(rel < 0) rel += 360;
+    if(rel > SWEEP){ rel = (rel - SWEEP) < (360 - rel) ? SWEEP : 0; }
+    setWeight(fToW(rel / SWEEP));
+  }
+  function down(e){
+    var r = svg.getBoundingClientRect();
+    var sx = (e.clientX - r.left) / r.width * 400, sy = (e.clientY - r.top) / r.height * 372;
+    var dist = Math.sqrt(Math.pow(sx-CX,2) + Math.pow(sy-CY,2));
+    if(dist < RAD - 42) return;          /* centre readout stays clickable-through */
+    dragging = true;
+    handle.focus();
+    try{ wrap.setPointerCapture(e.pointerId); }catch(err){}
+    fromPoint(e.clientX, e.clientY);
+    e.preventDefault();
+  }
+  wrap.addEventListener("pointerdown", down);
+  wrap.addEventListener("pointermove", function(e){ if(dragging) fromPoint(e.clientX, e.clientY); });
+  wrap.addEventListener("pointerup", function(e){ dragging = false; try{ wrap.releasePointerCapture(e.pointerId); }catch(err){} });
+  wrap.addEventListener("pointercancel", function(){ dragging = false; });
+  handle.addEventListener("keydown", function(e){
+    var big = ui.kg >= 20 ? 1 : 0.5, k = ui.kg, done = true;
+    switch(e.key){
+      case "ArrowRight": case "ArrowUp":   k = ui.kg + 0.1; break;
+      case "ArrowLeft":  case "ArrowDown": k = ui.kg - 0.1; break;
+      case "PageUp":   k = ui.kg + big; break;
+      case "PageDown": k = ui.kg - big; break;
+      case "Home": k = 2; break;
+      case "End":  k = 60; break;
+      default: done = false;
+    }
+    if(done){ e.preventDefault(); setWeight(k); }
+  });
+  $("wtInput").addEventListener("input", function(){
+    var v = num(this.value);
+    if(v === null) return;
+    ui.kg = snapW(v); ui.armed = false; paintDial(); renderFace();
+  });
+  $("wtInput").addEventListener("blur", function(){ this.value = fix(ui.kg,1); });
+}
+
+/* 6 · RENDER — the face */
+function renderSubjects(){
+  var rail = $("subjectRail");
+  rail.textContent = "";
+  state.kids.forEach(function(k){
+    var b = el("button","subject");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(k.id === state.active));
+    var u = el("u", null, k.name);
+    var s = el("s", null, ageText(k.dob) + " · " + (latestMeasure(k,"kg") ? fix(latestMeasure(k,"kg").kg,1) + " kg" : "no weight"));
+    b.appendChild(u); b.appendChild(s);
+    b.addEventListener("click", function(){
+      state.active = k.id;
+      var m = latestMeasure(k,"kg");
+      ui.kg = m ? snapW(m.kg) : ui.kg;
+      ui.confirmed = false; ui.armed = false;
+      saveState(); renderAll();
+    });
+    rail.appendChild(b);
+  });
+  if(!state.kids.length){
+    var p = el("p","gatenote","No children yet — add one in Setup below.");
+    p.style.padding = "14px 0";
+    rail.appendChild(p);
+  }
+}
+
+function renderChannels(){
+  ["par","ibu"].forEach(function(d){
+    var btn = $(d === "par" ? "chPar" : "chIbu");
+    btn.setAttribute("aria-pressed", String(ui.drug === d));
+    var sp = spec(d);
+    $(d === "par" ? "chParSpec" : "chIbuSpec").textContent =
+      sp.mgPerKg + " mg/kg · every " + sp.minH + " h · max " + sp.maxPerDay + "/day";
+    btn.querySelector("u").textContent = sp.name;
+  });
+}
+
+function renderConc(){
+  var plate = $("concPlate"), pick = $("concPick"), k = kid();
+  plate.setAttribute("data-ch", ui.drug);
+  pick.textContent = "";
+  var sel = currentBottle(ui.drug);
+  bottlesFor(ui.drug).forEach(function(b){
+    var btn = el("button","concopt");
+    btn.type = "button";
+    btn.setAttribute("aria-pressed", String(!!sel && b.id === sel.id));
+    btn.appendChild(document.createTextNode(b.note));
+    btn.appendChild(el("small", null, b.name));
+    btn.addEventListener("click", function(){
+      if(k){ k.bottle = k.bottle || {}; k.bottle[ui.drug] = b.id; }
+      ui.confirmed = false; ui.armed = false;
+      saveState(); renderAll();
+    });
+    pick.appendChild(btn);
+  });
+  $("concEcho").textContent = sel ? sel.note : DASH;
+  $("checkBottle").setAttribute("aria-pressed", String(ui.confirmed));
+  $("checkBottleTxt").textContent = ui.confirmed ? "Bottle checked — " + (sel ? sel.note : DASH) : "I have checked the bottle";
+}
+
+function setFig(node, txt){
+  node.textContent = txt;
+  node.setAttribute("data-len", String(clamp(String(txt).length, 1, 5)));
+}
+function subParts(node, a, b){
+  node.textContent = "";
+  node.appendChild(el("span", null, a));
+  if(b) node.appendChild(el("span", null, b));
+}
+function renderFace(){
+  var k = kid();
+  renderChannels(); renderConc();
+  var b = currentBottle(ui.drug);
+  var d = computeDose(ui.kg, ui.drug, b);
+  var sp = spec(ui.drug);
+  var now = Date.now();
+  var g = k ? gateFor(k, ui.drug, ui.kg, d ? d.mg : 0, now) : null;
+  var fig = $("coreFig"), unit = $("coreUnit"), sub = $("coreSub"), lab = $("coreLabel");
+  fig.className = "corefig figure" + (ui.drug === "ibu" ? " chsteel" : "");
+
+  if(!k || !d || !b){
+    setFig(fig, DASH); unit.textContent = "millilitres"; lab.textContent = "Dose to give";
+    subParts(sub, k ? "Enter a weight and pick a bottle strength."
+      : "No child on file. Add one in Setup, then set a weight on the dial.", "");
+  } else if(g && g.held){
+    fig.className = "corefig figure held";
+    lab.textContent = "Hold — not due yet";
+    setFig(fig, clockShort(g.waitMs));
+    unit.textContent = "until safe";
+    subParts(sub, "Held by " + g.why + ". Next safe at " + hhmm(g.nextSafe),
+      "then " + fix(d.vol,1) + " " + d.unit + " of " + b.note);
+  } else {
+    lab.textContent = "Give up to";
+    setFig(fig, fix(d.vol, 1));
+    unit.textContent = d.unit === "tablet" ? (d.vol === 1 ? "tablet" : "tablets") : "millilitres";
+    subParts(sub, fix(d.mg,0) + " mg from " + b.note,
+      fix(ui.kg,1) + " kg × " + sp.mgPerKg + " mg/kg" +
+      (d.capped ? ", capped at the " + sp.doseCeil + " mg ceiling" : ""));
+  }
+
+  /* gate ribbon */
+  if(g){
+    var gn = $("gNext"), nn = $("gNextNote");
+    if(g.held){ gn.textContent = hhmm(g.nextSafe); gn.className = "gateval figure bad"; nn.textContent = "in " + hoursMins(g.waitMs) + " · " + g.why; }
+    else { gn.textContent = "NOW"; gn.className = "gateval figure ok"; nn.textContent = g.last ? "last given " + hoursMins(now - g.last.t) + " ago" : "nothing given yet"; }
+    var gc = $("gCount");
+    gc.textContent = g.count + " / " + g.maxCount;
+    gc.className = "gateval figure" + (g.count >= g.maxCount ? " bad" : (g.count >= g.maxCount-1 ? " warn" : ""));
+    $("gCountNote").textContent = sp.name.toLowerCase() + ", rolling 24 hours";
+    var gt = $("gTotal");
+    gt.textContent = fix(g.sum,0) + " / " + fix(g.cap,0);
+    gt.className = "gateval figure" + (g.pct >= 100 ? " bad" : (g.pct >= 75 ? " warn" : ""));
+    var mt = $("gMeter");
+    mt.style.width = fix(g.pct,1) + "%";
+    mt.className = g.pct >= 100 ? "bad" : "";
+    $("gTotalNote").textContent = "mg · ceiling is " + sp.mgPerKgDay + " mg/kg/day at " + fix(ui.kg,1) + " kg";
+  } else {
+    ["gNext","gCount","gTotal"].forEach(function(id){ $(id).textContent = DASH; $(id).className = "gateval figure"; });
+    $("gNextNote").textContent = DASH; $("gCountNote").textContent = DASH; $("gTotalNote").textContent = DASH;
+    $("gMeter").style.width = "0%";
+  }
+
+  /* record button */
+  var btn = $("logBtn"), subl = $("logBtnSub");
+  btn.setAttribute("data-ch", ui.drug);
+  var blockedNoConfirm = !ui.confirmed;
+  if(!d || !k){
+    btn.disabled = true; btn.removeAttribute("data-state");
+    btn.firstChild.nodeValue = "Record dose given";
+    subl.textContent = "add a child first";
+  } else if(blockedNoConfirm){
+    btn.disabled = true; btn.removeAttribute("data-state");
+    btn.firstChild.nodeValue = "Confirm the bottle first";
+    subl.textContent = "tap “I have checked the bottle” above";
+  } else if(g && g.held && !ui.armed){
+    btn.disabled = false; btn.setAttribute("data-state","held");
+    btn.firstChild.nodeValue = "Held — tap again to record";
+    subl.textContent = "not due for " + hoursMins(g.waitMs) + " · record only if it was actually given";
+  } else if(ui.armed){
+    btn.disabled = false; btn.setAttribute("data-state","armed");
+    btn.firstChild.nodeValue = "Confirm — record " + fix(d.vol,1) + " " + d.unit;
+    subl.textContent = "tap once more";
+  } else {
+    btn.disabled = false; btn.removeAttribute("data-state");
+    btn.firstChild.nodeValue = "Record " + fix(d.vol,1) + " " + d.unit + " given";
+    subl.textContent = b.note + " · " + fix(d.mg,0) + " mg · now";
+  }
+  $("logHint").textContent = d && d.tooSmall
+    ? "That volume is below one graduation on the syringe — check with your pharmacist before giving anything."
+    : "Dose records what you gave; it does not prescribe. The volume above is only true for " + (b ? b.note : DASH) + ".";
+
+  renderLastGiven();
+  renderTimetable();
+  renderHandoff();
+}
+
+/* the two-parent question, answered on the face itself */
+function renderLastGiven(){
+  var host = $("lastGiven"), k = kid();
+  while(host.children.length > 1) host.removeChild(host.lastChild);
+  if(!k) return;
+  var now = Date.now();
+  ["par","ibu"].forEach(function(drug){
+    var g = gateFor(k, drug, ui.kg, 0, now);
+    var row = el("div","lgrow");
+    row.setAttribute("data-ch", drug);
+    if(!g.last) row.setAttribute("data-empty","1");
+    row.appendChild(el("span","lamp2"));
+    row.appendChild(el("b", null, spec(drug).name));
+    row.appendChild(el("span","when", g.last ? hhmm(g.last.t) : DASH));
+    row.appendChild(el("span","what", g.last
+      ? fix(g.last.ml,1) + " " + (g.last.unit || "mL") + " of " + strength(g.last.cmg, g.last.cml) + " · " + hoursMins(now - g.last.t) + " ago"
+      : "nothing in the last 24 hours"));
+    row.appendChild(el("span","cnt2", g.count + " of " + g.maxCount + " · " + fix(g.sum,0) + " mg"));
+    host.appendChild(row);
+  });
+}
+
+/* 7 · RENDER — timetable, handoff */
+function renderTimetable(){
+  var k = kid(), rail = $("ilRail"), box = $("ilTableBox");
+  rail.textContent = ""; box.textContent = "";
+  if(!k){ $("ilNote").textContent = DASH; return; }
+  var now = Date.now(), H = 18;
+  var slots = timetable(k, ui.kg, now, H);
+  var nowLine = el("div","now"); nowLine.style.left = "0%"; rail.appendChild(nowLine);
+  var prevPct = -99, lane = 0;
+  slots.slice(0,7).forEach(function(s){
+    var f = clamp((s.t - now) / (H*3600000), 0, 1);
+    var pct = 4 + f * 92;
+    lane = (pct - prevPct) < 13 && lane === 0 ? 1 : 0;
+    prevPct = pct;
+    var node = el("div","ilslot");
+    node.setAttribute("data-ch", s.drug);
+    node.setAttribute("data-lane", String(lane));
+    node.style.left = pct + "%";
+    node.appendChild(el("span","d", s.drug === "par" ? spec("par").name.slice(0,4) : "IBU"));
+    node.appendChild(el("span","t", hhmm(s.t)));
+    node.appendChild(el("span","stem"));
+    node.appendChild(el("span","dot"));
+    rail.appendChild(node);
+  });
+  if(!slots.length){
+    $("ilNote").textContent = "Both medicines have reached a 24-hour ceiling for this weight. Nothing further is safe today without speaking to a clinician.";
+  } else {
+    var gaps = [];
+    for(var i=1;i<slots.length;i++) gaps.push((slots[i].t - slots[i-1].t)/3600000);
+    var avg = gaps.length ? gaps.reduce(function(a,b){return a+b;},0)/gaps.length : null;
+    $("ilNote").textContent = "Alternating gives something roughly every " + (avg === null ? DASH : fix(avg,1)) +
+      " hours. Each medicine still keeps its own " + spec("par").minH + " h / " + spec("ibu").minH +
+      " h gap and its own 24-hour ceiling — they do not share one.";
+  }
+  var tbl = el("table","spectable");
+  var thead = el("thead");
+  var hr = el("tr");
+  ["Time","Medicine","Volume","Strength","mg"].forEach(function(t){ hr.appendChild(el("th",null,t)); });
+  thead.appendChild(hr); tbl.appendChild(thead);
+  var tb = el("tbody");
+  slots.forEach(function(s){
+    var tr = el("tr");
+    tr.appendChild(el("td",null, hhmm(s.t) + (s.t < now + 60000 ? " (now)" : "")));
+    tr.appendChild(el("td",null, spec(s.drug).name));
+    tr.appendChild(el("td",null, fix(s.dose.vol,1) + " " + s.dose.unit));
+    tr.appendChild(el("td",null, s.bottle.note));
+    tr.appendChild(el("td",null, fix(s.dose.mg,0)));
+    tb.appendChild(tr);
+  });
+  tbl.appendChild(tb);
+  box.appendChild(tbl);
+}
+
+function handoffFacts(){
+  var k = kid(); if(!k) return [];
+  var now = Date.now();
+  return ["par","ibu"].map(function(drug){
+    var b = currentBottle(drug);
+    var d = computeDose(ui.kg, drug, b);
+    var g = gateFor(k, drug, ui.kg, d ? d.mg : 0, now);
+    return { drug:drug, name:spec(drug).name, bottle:b, dose:d, gate:g };
+  });
+}
+function renderHandoff(){
+  var k = kid(), grid = $("hoGrid");
+  grid.textContent = "";
+  $("hoName").textContent = k ? k.name : DASH;
+  $("hoStamp").textContent = k ? (fix(ui.kg,1) + " kg · " + ageText(k.dob) + " · as of " + hhmm(Date.now())) : DASH;
+  if(!k) return;
+  handoffFacts().forEach(function(f){
+    var cell = el("div","hocell" + (f.drug === "par" ? " sodium" : " steel"));
+    cell.appendChild(el("dt", null, "Last " + f.name.toLowerCase()));
+    var dd = el("dd", null, f.gate.last ? hhmm(f.gate.last.t) : "none given");
+    dd.appendChild(el("small", null, f.gate.last
+      ? fix(f.gate.last.ml,1) + " " + (f.gate.last.unit || "mL") + " of " + strength(f.gate.last.cmg, f.gate.last.cml) + " · " + hoursMins(Date.now() - f.gate.last.t) + " ago"
+      : "nothing in the last 24 hours"));
+    cell.appendChild(dd);
+    grid.appendChild(cell);
+
+    var cell2 = el("div","hocell");
+    cell2.appendChild(el("dt", null, f.name + " next safe"));
+    var dd2 = el("dd", null, f.gate.held ? hhmm(f.gate.nextSafe) : "now");
+    dd2.appendChild(el("small", null, (f.dose ? fix(f.dose.vol,1) + " " + f.dose.unit + " of " + f.bottle.note : DASH) +
+      " · " + f.gate.count + "/" + f.gate.maxCount + " doses, " + fix(f.gate.sum,0) + " of " + fix(f.gate.cap,0) + " mg"));
+    cell2.appendChild(dd2);
+    grid.appendChild(cell2);
+  });
+}
+function handoffText(){
+  var k = kid(); if(!k) return "";
+  var L = ["DOSE — " + k.name + ", " + fix(ui.kg,1) + " kg, at " + hhmm(Date.now()) + " " + dayLabel(Date.now())];
+  handoffFacts().forEach(function(f){
+    L.push("");
+    L.push(f.name.toUpperCase());
+    L.push("  last: " + (f.gate.last
+      ? hhmm(f.gate.last.t) + " — " + fix(f.gate.last.ml,1) + " " + (f.gate.last.unit || "mL") + " of " + strength(f.gate.last.cmg, f.gate.last.cml)
+      : "nothing in 24 h"));
+    L.push("  next safe: " + (f.gate.held ? hhmm(f.gate.nextSafe) + " (in " + hoursMins(f.gate.waitMs) + ")" : "now"));
+    L.push("  then give: " + (f.dose ? fix(f.dose.vol,1) + " " + f.dose.unit + " of " + f.bottle.note : DASH));
+    L.push("  24 h so far: " + f.gate.count + "/" + f.gate.maxCount + " doses, " + fix(f.gate.sum,0) + " of " + fix(f.gate.cap,0) + " mg");
+  });
+  L.push("");
+  L.push("Check the bottle strength before giving anything. Red flags = urgent help.");
+  return L.join("\n");
+}
+
+/* 8 · RENDER — the tape + temperature canvas */
+function epEvents(k, epId){
+  return (k.events || []).filter(function(e){ return e.ep === epId; }).sort(function(a,b){ return b.t - a.t; });
+}
+function renderTape(){
+  var k = kid(), sel = $("epiSelect"), list = $("tapeList");
+  sel.textContent = ""; list.textContent = "";
+  if(!k){ list.appendChild(el("p","emptytape","No child selected.")); drawTemp([]); return; }
+  var eps = (k.episodes || []).slice().sort(function(a,b){ return (parseDay(b.start)||0) - (parseDay(a.start)||0); });
+  var act = activeEpisode(k);
+  eps.forEach(function(e){
+    var o = el("option", null, e.name + " · " + longDay(e.start) + (e.end ? " → " + longDay(e.end) : " · open"));
+    o.value = e.id;
+    if(act && e.id === act.id) o.selected = true;
+    sel.appendChild(o);
+  });
+  if(!eps.length){ var o2 = el("option", null, "No illnesses recorded"); o2.value = ""; sel.appendChild(o2); }
+  var rows = act ? epEvents(k, act.id) : [];
+  drawTemp(rows.slice().sort(function(a,b){ return a.t - b.t; }));
+  if(!rows.length){
+    list.appendChild(el("p","emptytape","Nothing on the tape for this illness yet. Add a temperature or a symptom below, or record a dose from the instrument."));
+    return;
+  }
+  rows.forEach(function(e){
+    var row = el("div","tick");
+    row.setAttribute("data-kind", e.kind);
+    if(e.drug) row.setAttribute("data-ch", e.drug);
+    var t = el("div","t", hhmm(e.t));
+    t.appendChild(el("small", null, dayLabel(e.t)));
+    row.appendChild(t);
+    row.appendChild(el("div","lamp"));
+    var body = el("div","body");
+    if(e.kind === "dose"){
+      body.appendChild(el("b", null, spec(e.drug).name + " — " + fix(e.ml,1) + " " + (e.unit || "mL")));
+      body.appendChild(el("span","conc", "from " + strength(e.cmg, e.cml) + "  ·  " + fix(e.mg,0) + " mg  ·  at " + fix(e.kg,1) + " kg"));
+    } else if(e.kind === "temp"){
+      body.appendChild(el("b", null, fix(e.tempC,1) + " °C"));
+      body.appendChild(el("span", null, e.tempC >= 39 ? "high" : (e.tempC >= 38 ? "febrile" : (e.tempC >= 37.5 ? "raised" : "normal range"))));
+    } else {
+      body.appendChild(el("b", null, e.text || "note"));
+    }
+    row.appendChild(body);
+    var kill = el("button","kill","×");
+    kill.type = "button";
+    kill.setAttribute("aria-label","Delete this entry");
+    kill.addEventListener("click", function(){
+      k.events = k.events.filter(function(x){ return x.id !== e.id; });
+      saveState(); renderAll(); toast("Entry removed from the tape.");
+    });
+    row.appendChild(kill);
+    list.appendChild(row);
+  });
+}
+
+function fitCanvas(cv, cssH){
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = cv.clientWidth || 600;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(cssH * dpr);
+  var g = cv.getContext("2d");
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,cssH);
+  return { g:g, w:w, h:cssH };
+}
+function drawTemp(rows){
+  var cv = $("tempCanvas"); if(!cv) return;
+  var c = fitCanvas(cv, 190), g = c.g, W = c.w, H = c.h;
+  var temps = rows.filter(function(e){ return e.kind === "temp" && num(e.tempC) !== null; });
+  var doses = rows.filter(function(e){ return e.kind === "dose"; });
+  var padL = 34, padR = 10, padT = 12, padB = 26;
+  var x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  g.font = '11px "Share Tech Mono", monospace';
+  if(!temps.length){
+    g.fillStyle = "rgba(239,234,225,.35)";
+    g.fillText("No temperatures logged for this illness yet.", padL, H/2);
+    return;
+  }
+  var tmin = Math.min.apply(null, rows.map(function(e){ return e.t; }));
+  var tmax = Math.max.apply(null, rows.map(function(e){ return e.t; }));
+  if(tmax - tmin < 3600000) tmax = tmin + 3600000;
+  var lo = 36, hi = 41;
+  temps.forEach(function(e){ lo = Math.min(lo, Math.floor(e.tempC)); hi = Math.max(hi, Math.ceil(e.tempC)); });
+  function X(t){ var d = safeDiv(t - tmin, tmax - tmin); return x0 + (d === null ? 0 : d) * (x1 - x0); }
+  function Y(v){ var d = safeDiv(v - lo, hi - lo); return y1 - (d === null ? 0 : d) * (y1 - y0); }
+  for(var v = lo; v <= hi; v++){
+    var y = Y(v);
+    g.strokeStyle = v === 38 ? "rgba(255,97,82,.34)" : "rgba(239,234,225,.08)";
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x0, y + .5); g.lineTo(x1, y + .5); g.stroke();
+    g.fillStyle = v === 38 ? "rgba(255,97,82,.8)" : "rgba(239,234,225,.4)";
+    g.fillText(v + "°", 4, y + 4);
+  }
+  doses.forEach(function(e){
+    var x = X(e.t);
+    g.strokeStyle = e.drug === "ibu" ? "rgba(147,187,222,.55)" : "rgba(255,174,43,.55)";
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x + .5, y0); g.lineTo(x + .5, y1); g.stroke();
+    g.fillStyle = e.drug === "ibu" ? "#93BBDE" : "#FFAE2B";
+    g.beginPath(); g.arc(x, y1 + 8, 3.4, 0, Math.PI*2); g.fill();
+  });
+  g.strokeStyle = "#FF6152"; g.lineWidth = 2; g.lineJoin = "round";
+  g.beginPath();
+  temps.forEach(function(e,i){ var x = X(e.t), y = Y(e.tempC); if(i) g.lineTo(x,y); else g.moveTo(x,y); });
+  g.stroke();
+  temps.forEach(function(e){
+    g.fillStyle = "#FF6152";
+    g.beginPath(); g.arc(X(e.t), Y(e.tempC), 3.2, 0, Math.PI*2); g.fill();
+  });
+  g.fillStyle = "rgba(239,234,225,.45)";
+  g.fillText(hhmm(tmin) + " " + dayLabel(tmin), x0, H - 8);
+  var lbl = hhmm(tmax) + " " + dayLabel(tmax);
+  g.fillText(lbl, x1 - g.measureText(lbl).width, H - 8);
+}
+
+/* 9 · RENDER — growth */
+function growthSeries(k){
+  var field = ui.growthMode === "wt" ? "kg" : "cm";
+  return (k.measures || []).filter(function(m){ return num(m[field]) !== null && parseDay(m.d); })
+    .map(function(m){
+      var a = ageParts(k.dob, parseDay(m.d));
+      return { months: a ? a.months : null, v: num(m[field]), d: m.d };
+    })
+    .filter(function(p){ return p.months !== null && p.months >= 0; })
+    .sort(function(a,b){ return a.months - b.months; });
+}
+function drawGrowth(){
+  var cv = $("growthCanvas"), k = kid(); if(!cv) return;
+  var c = fitCanvas(cv, 300), g = c.g, W = c.w, H = c.h;
+  g.font = '11px "Share Tech Mono", monospace';
+  if(!k){ g.fillStyle = "rgba(239,234,225,.35)"; g.fillText("No child selected.", 12, H/2); return; }
+  var pts = growthSeries(k);
+  var kind = ui.growthMode === "wt" ? "wt" : "ht";
+  var padL = 40, padR = 42, padT = 14, padB = 28;
+  var x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  var maxM = pts.length ? Math.max.apply(null, pts.map(function(p){ return p.months; })) : 24;
+  var nowM = ageParts(k.dob) ? ageParts(k.dob).months : maxM;
+  maxM = Math.max(maxM, nowM);
+  var hiM = clamp(Math.ceil((maxM + 6) / 6) * 6, 12, 216);
+  var loM = 0;
+  var zs = [-1.881, -1.036, 0, 1.036, 1.881];
+  var lbl = ["3rd","15th","50th","85th","97th"];
+  var vals = [], mm;
+  for(mm = loM; mm <= hiM; mm += Math.max(1, Math.round((hiM-loM)/60))){
+    zs.forEach(function(z){ var v = valueAtZ(kind, k.sex, mm, z); if(v !== null) vals.push(v); });
+  }
+  pts.forEach(function(p){ vals.push(p.v); });
+  if(!vals.length){ g.fillStyle = "rgba(239,234,225,.35)"; g.fillText("No measurements yet.", 12, H/2); return; }
+  var vLo = Math.min.apply(null, vals), vHi = Math.max.apply(null, vals);
+  var span = vHi - vLo || 1;
+  vLo = Math.max(0, vLo - span*0.08); vHi = vHi + span*0.08;
+  function X(m){ var d = safeDiv(m - loM, hiM - loM); return x0 + (d === null ? 0 : d) * (x1 - x0); }
+  function Y(v){ var d = safeDiv(v - vLo, vHi - vLo); return y1 - (d === null ? 0 : d) * (y1 - y0); }
+
+  var vStep = Math.pow(10, Math.floor(Math.log(Math.max(1e-6, vHi - vLo) / 4) / Math.LN10));
+  [1,2,2.5,5,10].some(function(mul){ if((vHi - vLo) / (vStep*mul) <= 6){ vStep = vStep*mul; return true; } return false; });
+  for(var gv = Math.ceil(vLo / vStep) * vStep; gv <= vHi; gv += vStep){
+    var gy = Y(gv);
+    g.strokeStyle = "rgba(239,234,225,.055)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x0, gy + .5); g.lineTo(x1, gy + .5); g.stroke();
+    g.fillStyle = "rgba(239,234,225,.42)";
+    g.fillText(fix(gv, vStep < 1 ? 1 : 0), 4, gy + 4);
+  }
+  var yearStep = hiM > 72 ? 24 : 12;
+  for(var m2 = 0; m2 <= hiM; m2 += yearStep){
+    var x = X(m2);
+    g.strokeStyle = "rgba(239,234,225,.07)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x + .5, y0); g.lineTo(x + .5, y1); g.stroke();
+    g.fillStyle = "rgba(239,234,225,.4)";
+    var t = (m2/12) + "y";
+    g.fillText(t, x - g.measureText(t).width/2, H - 9);
+  }
+  zs.forEach(function(z, i){
+    g.strokeStyle = i === 2 ? "rgba(239,234,225,.34)" : "rgba(239,234,225,.13)";
+    g.lineWidth = i === 2 ? 1.4 : 1;
+    if(i !== 2) g.setLineDash([3,4]); else g.setLineDash([]);
+    g.beginPath();
+    var started = false, lastY = null;
+    for(var mm2 = loM; mm2 <= hiM; mm2 += 1){
+      var v = valueAtZ(kind, k.sex, mm2, z);
+      if(v === null) continue;
+      var xx = X(mm2), yy = Y(v);
+      if(!started){ g.moveTo(xx,yy); started = true; } else g.lineTo(xx,yy);
+      lastY = yy;
+    }
+    g.stroke(); g.setLineDash([]);
+    if(lastY !== null){
+      g.fillStyle = "rgba(239,234,225,.45)";
+      g.fillText(lbl[i], x1 + 5, lastY + 4);
+    }
+  });
+  if(pts.length){
+    g.strokeStyle = "#FFAE2B"; g.lineWidth = 2.2; g.lineJoin = "round";
+    g.beginPath();
+    pts.forEach(function(p,i){ var xx = X(p.months), yy = Y(p.v); if(i) g.lineTo(xx,yy); else g.moveTo(xx,yy); });
+    g.stroke();
+    pts.forEach(function(p){
+      g.fillStyle = "#FFAE2B";
+      g.beginPath(); g.arc(X(p.months), Y(p.v), 3.4, 0, Math.PI*2); g.fill();
+      g.fillStyle = "#05060A";
+      g.beginPath(); g.arc(X(p.months), Y(p.v), 1.3, 0, Math.PI*2); g.fill();
+    });
+  }
+  g.fillStyle = "rgba(239,234,225,.55)";
+  g.fillText(ui.growthMode === "wt" ? "kg" : "cm", 4, y0 - 2);
+}
+function renderCentiles(){
+  var k = kid(), box = $("centileLine");
+  box.textContent = "";
+  if(!k) return;
+  var a = ageParts(k.dob);
+  var mw = latestMeasure(k,"kg"), mh = latestMeasure(k,"cm");
+  var items = [];
+  items.push({ lab:"Age today", val: ageText(k.dob) });
+  if(mw && a){
+    var cw = centile("wt", k.sex, ageParts(k.dob, parseDay(mw.d)).months, mw.kg);
+    items.push({ lab:"Weight " + longDay(mw.d), val: fix(mw.kg,1) + " kg", note: cw === null ? DASH : ordinal(cw) + " centile" });
+  }
+  if(mh && a){
+    var ch = centile("ht", k.sex, ageParts(k.dob, parseDay(mh.d)).months, mh.cm);
+    items.push({ lab:"Height " + longDay(mh.d), val: fix(mh.cm,1) + " cm", note: ch === null ? DASH : ordinal(ch) + " centile" });
+  }
+  var eps = (k.episodes || []).length;
+  items.push({ lab:"Illnesses on record", val: String(eps) });
+  items.forEach(function(it){
+    var d = el("div","centile");
+    d.appendChild(el("b", null, it.val));
+    d.appendChild(el("span", null, it.lab + (it.note ? " · " + it.note : "")));
+    box.appendChild(d);
+  });
+}
+
+/* 10 · RENDER — the record + setup */
+function listRow(kTxt, vNode, onKill){
+  var li = document.createElement("li");
+  li.appendChild(el("span","k", kTxt));
+  var v = el("div","v"); v.appendChild(vNode); li.appendChild(v);
+  if(onKill){
+    var b = el("button","kill","×"); b.type = "button"; b.setAttribute("aria-label","Remove");
+    b.addEventListener("click", onKill); li.appendChild(b);
+  }
+  return li;
+}
+function renderRecord(){
+  var k = kid();
+  var alg = $("algList"), imm = $("immList"), med = $("medList"), his = $("hisList"), meas = $("measList");
+  [alg,imm,med,his,meas].forEach(function(n){ n.textContent = ""; });
+  if(!k){ return; }
+
+  (k.allergies||[]).forEach(function(a){
+    var v = document.createDocumentFragment();
+    var strong = el("strong", null, a.what); strong.style.fontWeight = "600";
+    v.appendChild(strong);
+    var sev = el("span","sev", a.sev || "mild"); sev.setAttribute("data-s", a.sev || "mild"); sev.style.marginLeft = "8px";
+    v.appendChild(sev);
+    if(a.how) v.appendChild(el("em", null, a.how));
+    var wrapEl = el("div"); wrapEl.appendChild(v);
+    alg.appendChild(listRow("allergy", wrapEl, function(){
+      k.allergies = k.allergies.filter(function(x){ return x.id !== a.id; }); saveState(); renderAll();
+    }));
+  });
+  if(!(k.allergies||[]).length) alg.appendChild(listRow("—", el("div", null, "No known allergies recorded."), null));
+  $("algCnt").textContent = (k.allergies||[]).length + " recorded";
+
+  (k.imm||[]).slice().sort(function(a,b){ return (parseDay(b.date)||0) - (parseDay(a.date)||0); }).forEach(function(v){
+    var d = el("div"); d.appendChild(el("strong", null, v.what));
+    if(v.who) d.appendChild(el("em", null, v.who));
+    imm.appendChild(listRow(longDay(v.date), d, function(){
+      k.imm = k.imm.filter(function(x){ return x.id !== v.id; }); saveState(); renderAll();
+    }));
+  });
+  if(!(k.imm||[]).length) imm.appendChild(listRow("—", el("div", null, "Nothing recorded yet."), null));
+  $("immCnt").textContent = (k.imm||[]).length + " doses";
+
+  (k.meds||[]).forEach(function(v){
+    var d = el("div"); d.appendChild(el("strong", null, v.what));
+    if(v.how) d.appendChild(el("em", null, v.how));
+    med.appendChild(listRow("regular", d, function(){
+      k.meds = k.meds.filter(function(x){ return x.id !== v.id; }); saveState(); renderAll();
+    }));
+  });
+  if(!(k.meds||[]).length) med.appendChild(listRow("—", el("div", null, "No regular medicines."), null));
+  $("medCnt").textContent = (k.meds||[]).length + " on repeat";
+
+  (k.episodes||[]).slice().sort(function(a,b){ return (parseDay(b.start)||0) - (parseDay(a.start)||0); }).forEach(function(e){
+    var n = (k.events||[]).filter(function(x){ return x.ep === e.id; }).length;
+    var d = el("div"); d.appendChild(el("strong", null, e.name));
+    d.appendChild(el("em", null, (e.end ? longDay(e.start) + " → " + longDay(e.end) : "started " + longDay(e.start) + " · still open") + " · " + n + " entries on the tape"));
+    his.appendChild(listRow(longDay(e.start).slice(-4), d, function(){
+      k.episodes = k.episodes.filter(function(x){ return x.id !== e.id; });
+      k.events = (k.events||[]).filter(function(x){ return x.ep !== e.id; });
+      saveState(); renderAll();
+    }));
+  });
+  if(!(k.episodes||[]).length) his.appendChild(listRow("—", el("div", null, "No illnesses recorded."), null));
+  $("hisCnt").textContent = (k.episodes||[]).length + " episodes";
+
+  (k.measures||[]).slice().sort(function(a,b){ return (parseDay(b.d)||0) - (parseDay(a.d)||0); }).forEach(function(m){
+    var d = el("div");
+    d.appendChild(el("strong", null, (num(m.kg) !== null ? fix(m.kg,1) + " kg" : "—") + "   " + (num(m.cm) !== null ? fix(m.cm,1) + " cm" : "—")));
+    var a = ageParts(k.dob, parseDay(m.d));
+    var cw = num(m.kg) !== null && a ? centile("wt", k.sex, a.months, m.kg) : null;
+    d.appendChild(el("em", null, "at " + ageText(k.dob, parseDay(m.d)) + (cw === null ? "" : " · " + ordinal(cw) + " centile for weight")));
+    meas.appendChild(listRow(longDay(m.d), d, function(){
+      k.measures = k.measures.filter(function(x){ return x !== m; }); saveState(); renderAll();
+    }));
+  });
+  $("measCnt").textContent = (k.measures||[]).length + " points";
+
+  var c = k.contacts || {};
+  $("conGp").value = c.gp || ""; $("conGpTel").value = c.gpTel || "";
+  $("conIns").value = c.ins || ""; $("conPol").value = c.pol || "";
+  $("conEm").value = c.em || ""; $("conEmTel").value = c.emTel || "";
+}
+
+function renderSetup(){
+  var bank = $("presetBank");
+  bank.textContent = "";
+  Object.keys(PRESETS).forEach(function(key){
+    var b = el("button","press" + (state.region === key ? " lit" : ""), PRESETS[key].label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(state.region === key));
+    b.addEventListener("click", function(){
+      state.region = key; ui.confirmed = false; ui.armed = false; saveState(); renderAll();
+      toast("Preset set to " + PRESETS[key].label + ". Intervals and ceilings updated.");
+    });
+    bank.appendChild(b);
+  });
+  $("regionTag").textContent = preset().short || preset().label;
+
+  var t = $("specTable");
+  t.textContent = "";
+  var cap = el("caption","hushed","Dosing rules for the selected preset"); t.appendChild(cap);
+  var thead = el("thead"), hr = el("tr");
+  ["Medicine","Per dose","Minimum gap","Max doses / 24 h","Daily ceiling","Single-dose ceiling"].forEach(function(x){ hr.appendChild(el("th",null,x)); });
+  thead.appendChild(hr); t.appendChild(thead);
+  var tb = el("tbody");
+  ["par","ibu"].forEach(function(d){
+    var sp = spec(d), tr = el("tr");
+    [sp.name, sp.mgPerKg + " mg/kg", "every " + sp.minH + " h", String(sp.maxPerDay),
+     sp.mgPerKgDay + " mg/kg/day (max " + sp.dayCeil + " mg)", sp.doseCeil + " mg"].forEach(function(x){ tr.appendChild(el("td",null,x)); });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+
+  var cc = $("ccList"); cc.textContent = "";
+  (state.customConc||[]).forEach(function(c2){
+    var d = el("div");
+    d.appendChild(el("strong", null, c2.note));
+    d.appendChild(el("em", null, c2.name + " · " + spec(c2.drug).name));
+    cc.appendChild(listRow(c2.drug === "par" ? "para" : "ibu", d, function(){
+      state.customConc = state.customConc.filter(function(x){ return x.id !== c2.id; });
+      saveState(); renderAll();
+    }));
+  });
+  if(!(state.customConc||[]).length) cc.appendChild(listRow("—", el("div", null, "No extra strengths added — the standard bottles cover almost everything."), null));
+
+  var kl = $("kidList"); kl.textContent = "";
+  state.kids.forEach(function(k2){
+    var d = el("div");
+    d.appendChild(el("strong", null, k2.name));
+    d.appendChild(el("em", null, "born " + longDay(k2.dob) + " · " + ageText(k2.dob) + " · " + (k2.sex === "M" ? "male" : "female")));
+    kl.appendChild(listRow("child", d, state.kids.length > 1 ? function(){
+      state.kids = state.kids.filter(function(x){ return x.id !== k2.id; });
+      if(state.active === k2.id) state.active = state.kids[0] ? state.kids[0].id : null;
+      saveState(); renderAll(); toast(k2.name + "’s record removed.");
+    } : null));
+  });
+  $("kidCnt").textContent = state.kids.length + " in this household";
+  $("stepSel").value = String(num(state.step) || 0.1);
+  $("sampleTag").hidden = !state.sample;
+  $("clearSampleBtn").hidden = !state.sample;
+}
+
+/* 11 · PRINT SHEETS */
+function svgTempChart(rows){
+  var temps = rows.filter(function(e){ return e.kind === "temp" && num(e.tempC) !== null; }).sort(function(a,b){ return a.t - b.t; });
+  var doses = rows.filter(function(e){ return e.kind === "dose"; });
+  var W = 640, H = 190, padL = 38, padR = 12, padT = 12, padB = 30;
+  if(!temps.length) return '<p class="pnote">No temperatures were logged for this illness.</p>';
+  var tmin = Math.min.apply(null, rows.map(function(e){ return e.t; }));
+  var tmax = Math.max.apply(null, rows.map(function(e){ return e.t; }));
+  if(tmax - tmin < 3600000) tmax = tmin + 3600000;
+  var lo = 36, hi = 41;
+  temps.forEach(function(e){ lo = Math.min(lo, Math.floor(e.tempC)); hi = Math.max(hi, Math.ceil(e.tempC)); });
+  function X(t){ var d = safeDiv(t - tmin, tmax - tmin); return padL + (d===null?0:d) * (W - padL - padR); }
+  function Y(v){ var d = safeDiv(v - lo, hi - lo); return (H - padB) - (d===null?0:d) * (H - padT - padB); }
+  var s = '<svg class="pchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Temperature over this illness">';
+  for(var v = lo; v <= hi; v++){
+    s += '<line x1="' + padL + '" y1="' + Y(v).toFixed(1) + '" x2="' + (W-padR) + '" y2="' + Y(v).toFixed(1) +
+         '" stroke="' + (v===38 ? "#555" : "#CCC") + '" stroke-width="' + (v===38?1:0.6) + '"' + (v===38?' stroke-dasharray="4 3"':'') + '/>';
+    s += '<text x="4" y="' + (Y(v)+4).toFixed(1) + '" font-family="monospace" font-size="11" fill="#444">' + v + '°</text>';
+  }
+  doses.forEach(function(e){
+    var x = X(e.t).toFixed(1);
+    s += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H-padB) + '" stroke="#999" stroke-width="0.6" stroke-dasharray="2 3"/>';
+    s += '<text x="' + x + '" y="' + (H-padB+13) + '" font-family="monospace" font-size="9" fill="#333" text-anchor="middle">' +
+         (e.drug === "par" ? "P" : "I") + '</text>';
+  });
+  var dpath = temps.map(function(e,i){ return (i?"L":"M") + X(e.t).toFixed(1) + " " + Y(e.tempC).toFixed(1); }).join(" ");
+  s += '<path d="' + dpath + '" fill="none" stroke="#000" stroke-width="1.8"/>';
+  temps.forEach(function(e){ s += '<circle cx="' + X(e.t).toFixed(1) + '" cy="' + Y(e.tempC).toFixed(1) + '" r="2.6" fill="#000"/>'; });
+  s += '<text x="' + padL + '" y="' + (H-4) + '" font-family="monospace" font-size="9" fill="#444">' + esc(hhmm(tmin) + " " + dayLabel(tmin)) + '</text>';
+  s += '<text x="' + (W-padR) + '" y="' + (H-4) + '" font-family="monospace" font-size="9" fill="#444" text-anchor="end">' + esc(hhmm(tmax) + " " + dayLabel(tmax)) + '</text>';
+  s += '</svg>';
+  return s;
+}
+function flagBlock(){
+  return '<div class="pflags"><h3>Red flags — stop and seek urgent help</h3><ul>' +
+    RED_FLAG_TEXT.map(function(t){ return "<li>" + esc(flagPlain(t)) + "</li>"; }).join("") + '</ul></div>';
+}
+function discBlock(){
+  return '<div class="pdisc"><b>Not medical advice</b>Not medical advice and not a substitute for the label on your bottle. ' +
+    'Always check the concentration and dose printed on the packaging, and follow your clinician or pharmacist. ' +
+    'Seek urgent medical help for any red-flag symptom.</div>';
+}
+function pgTop(title, k){
+  return '<div class="pgtop"><h1>' + esc(title) + '</h1><div class="who"><b>' + esc(k ? k.name : DASH) + '</b>' +
+    'born ' + esc(k ? longDay(k.dob) : DASH) + ' · ' + esc(k ? ageText(k.dob) : DASH) + '<br>' +
+    'printed ' + esc(longDay(new Date()) + " " + hhmm(new Date())) + '</div></div>';
+}
+function fact(dt, dd, small){
+  return '<div class="pfact"><dt>' + esc(dt) + '</dt><dd>' + esc(dd) + (small ? '<small>' + esc(small) + '</small>' : '') + '</dd></div>';
+}
+function buildClinic(){
+  var k = kid(); var host = $("sheetClinic");
+  if(!k){ host.innerHTML = ""; return; }
+  var ep = activeEpisode(k);
+  var rows = ep ? epEvents(k, ep.id).slice().sort(function(a,b){ return a.t - b.t; }) : [];
+  var temps = rows.filter(function(e){ return e.kind === "temp"; });
+  var doses = rows.filter(function(e){ return e.kind === "dose"; });
+  var maxT = temps.length ? Math.max.apply(null, temps.map(function(e){ return e.tempC; })) : null;
+  var mw = latestMeasure(k,"kg");
+  var now = Date.now();
+  var h = pgTop("Illness summary", k);
+  h += '<div class="pblk"><h2>This illness</h2><dl class="pgrid">' +
+    fact("Episode", ep ? ep.name : DASH, ep ? ("started " + longDay(ep.start) + (ep.end ? ", ended " + longDay(ep.end) : ", ongoing")) : "") +
+    fact("Weight used", mw ? fix(mw.kg,1) + " kg" : fix(ui.kg,1) + " kg", mw ? "measured " + longDay(mw.d) : "entered on the instrument") +
+    fact("Peak temperature", maxT === null ? DASH : fix(maxT,1) + " °C", temps.length + " readings") +
+    fact("Doses recorded", String(doses.length), preset().label + " preset") +
+    '</dl></div>';
+  h += '<div class="pblk"><h2>Temperature — P marks paracetamol, I marks ibuprofen</h2>' + svgTempChart(rows) + '</div>';
+  h += '<div class="pblk"><h2>Medicines given</h2><table class="ptab"><thead><tr>' +
+    '<th>Date</th><th>Time</th><th>Medicine</th><th>Volume</th><th>Strength on bottle</th><th>Dose</th><th>Weight</th></tr></thead><tbody>';
+  if(!doses.length) h += '<tr><td colspan="7" class="txt">No doses recorded for this illness.</td></tr>';
+  doses.forEach(function(e){
+    h += "<tr><td>" + esc(dayLabel(e.t)) + "</td><td>" + esc(hhmm(e.t)) + "</td><td>" + esc(spec(e.drug).name) +
+      "</td><td>" + esc(fix(e.ml,1) + " " + (e.unit || "mL")) + "</td><td>" + esc(strength(e.cmg, e.cml)) +
+      "</td><td>" + esc(fix(e.mg,0) + " mg") + "</td><td>" + esc(fix(e.kg,1) + " kg") + "</td></tr>";
+  });
+  h += '</tbody></table>';
+  var totals = ["par","ibu"].map(function(d){
+    var g = gateFor(k, d, ui.kg, 0, now);
+    return spec(d).name + ": " + g.count + " of " + g.maxCount + " doses and " + fix(g.sum,0) + " of " + fix(g.cap,0) + " mg in the last 24 hours";
+  }).join(". ");
+  h += '<p class="pnote">Rolling 24-hour totals at time of printing — ' + esc(totals) + '.</p></div>';
+  h += '<div class="pblk"><h2>Temperatures &amp; symptoms</h2><table class="ptab"><thead><tr><th>Date</th><th>Time</th><th>Temp</th><th>Note</th></tr></thead><tbody>';
+  var notes = rows.filter(function(e){ return e.kind !== "dose"; });
+  if(!notes.length) h += '<tr><td colspan="4" class="txt">Nothing logged.</td></tr>';
+  notes.forEach(function(e){
+    h += "<tr><td>" + esc(dayLabel(e.t)) + "</td><td>" + esc(hhmm(e.t)) + "</td><td>" +
+      (e.kind === "temp" ? esc(fix(e.tempC,1) + " °C") : "") + '</td><td class="txt">' + esc(e.text || "") + "</td></tr>";
+  });
+  h += '</tbody></table></div>';
+  var alg = (k.allergies||[]).map(function(a){ return a.what + " (" + (a.sev||"") + ") — " + (a.how||""); }).join("; ") || "None known";
+  var meds = (k.meds||[]).map(function(m){ return m.what + " — " + (m.how||""); }).join("; ") || "None";
+  h += '<div class="pblk"><h2>Background</h2><dl class="pgrid two">' +
+    fact("Allergies", alg) + fact("Regular medicines", meds) +
+    fact("GP", (k.contacts||{}).gp || DASH, (k.contacts||{}).gpTel || "") +
+    fact("Past illnesses", (k.episodes||[]).length + " on record",
+      (k.episodes||[]).slice(-4).map(function(e){ return e.name + " (" + longDay(e.start).slice(-8) + ")"; }).join("; ")) +
+    '</dl></div>';
+  h += flagBlock() + discBlock();
+  h += '<div class="pfoot"><span>Dose — kept offline by the family</span><span>' + esc(k.name + " · " + longDay(new Date())) + '</span></div>';
+  host.innerHTML = h;
+}
+function buildForms(){
+  var k = kid(); var host = $("sheetForms");
+  if(!k){ host.innerHTML = ""; return; }
+  var mw = latestMeasure(k,"kg"), mh = latestMeasure(k,"cm");
+  var aw = mw ? ageParts(k.dob, parseDay(mw.d)) : null;
+  var ah = mh ? ageParts(k.dob, parseDay(mh.d)) : null;
+  var cw = mw && aw ? centile("wt", k.sex, aw.months, mw.kg) : null;
+  var ch = mh && ah ? centile("ht", k.sex, ah.months, mh.cm) : null;
+  var c = k.contacts || {};
+  var h = pgTop("Annual medical form", k);
+  h += '<div class="pblk"><h2>Child</h2><dl class="pgrid">' +
+    fact("Full name", k.name) +
+    fact("Date of birth", longDay(k.dob), ageText(k.dob) + " today") +
+    fact("Weight", mw ? fix(mw.kg,1) + " kg" : DASH, mw ? longDay(mw.d) + (cw === null ? "" : " · " + ordinal(cw) + " centile") : "") +
+    fact("Height", mh ? fix(mh.cm,1) + " cm" : DASH, mh ? longDay(mh.d) + (ch === null ? "" : " · " + ordinal(ch) + " centile") : "") +
+    '</dl></div>';
+  h += '<div class="pblk"><h2>Allergies &amp; reactions</h2><table class="ptab"><thead><tr><th>Allergen</th><th>Reaction</th><th>Severity</th></tr></thead><tbody>';
+  if(!(k.allergies||[]).length) h += '<tr><td colspan="3" class="txt">No known allergies.</td></tr>';
+  (k.allergies||[]).forEach(function(a){
+    h += '<tr><td class="txt">' + esc(a.what) + '</td><td class="txt">' + esc(a.how||"") + '</td><td>' + esc(a.sev||"") + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="pblk"><h2>Regular medicines held at school or nursery</h2><table class="ptab"><thead><tr><th>Medicine</th><th>Dose and when</th></tr></thead><tbody>';
+  if(!(k.meds||[]).length) h += '<tr><td colspan="2" class="txt">None.</td></tr>';
+  (k.meds||[]).forEach(function(m){ h += '<tr><td class="txt">' + esc(m.what) + '</td><td class="txt">' + esc(m.how||"") + '</td></tr>'; });
+  h += '</tbody></table></div>';
+  h += '<div class="pblk"><h2>Immunisation record</h2><table class="ptab"><thead><tr><th>Vaccine</th><th>Date given</th><th>Given by</th></tr></thead><tbody>';
+  if(!(k.imm||[]).length) h += '<tr><td colspan="3" class="txt">No immunisations recorded.</td></tr>';
+  (k.imm||[]).slice().sort(function(a,b){ return (parseDay(a.date)||0) - (parseDay(b.date)||0); }).forEach(function(v){
+    h += '<tr><td class="txt">' + esc(v.what) + '</td><td>' + esc(longDay(v.date)) + '</td><td class="txt">' + esc(v.who||"") + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="pblk"><h2>Contacts</h2><dl class="pgrid two">' +
+    fact("GP / practice", c.gp || DASH, c.gpTel || "") +
+    fact("Insurer / scheme", c.ins || DASH, c.pol || "") +
+    fact("Emergency contact", c.em || DASH, c.emTel || "") +
+    fact("Illnesses on record", String((k.episodes||[]).length), "since " + ((k.episodes||[]).length ? longDay(k.episodes[0].start) : DASH)) +
+    '</dl></div>';
+  var sp = spec("par"), sp2 = spec("ibu");
+  var b1 = currentBottle("par"), b2 = currentBottle("ibu");
+  var d1 = computeDose(mw ? mw.kg : ui.kg, "par", b1), d2 = computeDose(mw ? mw.kg : ui.kg, "ibu", b2);
+  h += '<div class="pblk"><h2>Medication authorisation — over-the-counter pain and fever relief</h2>' +
+    '<p class="pnote">I give permission for the named child to be given the following, at the weight-based volumes shown, and to be told if any is given. ' +
+    'Volumes are calculated at ' + esc(fix(mw ? mw.kg : ui.kg,1)) + ' kg using the ' + esc(preset().label) + ' preset and must be re-checked against the bottle supplied.</p>' +
+    '<table class="ptab"><thead><tr><th>Medicine</th><th>Strength supplied</th><th>Volume</th><th>Minimum gap</th><th>Max in 24 h</th></tr></thead><tbody>' +
+    '<tr><td class="txt">' + esc(sp.name) + '</td><td>' + esc(b1 ? b1.note : DASH) + '</td><td>' + esc(d1 ? fix(d1.vol,1) + " " + d1.unit : DASH) +
+      '</td><td>' + sp.minH + ' h</td><td>' + sp.maxPerDay + '</td></tr>' +
+    '<tr><td class="txt">' + esc(sp2.name) + '</td><td>' + esc(b2 ? b2.note : DASH) + '</td><td>' + esc(d2 ? fix(d2.vol,1) + " " + d2.unit : DASH) +
+      '</td><td>' + sp2.minH + ' h</td><td>' + sp2.maxPerDay + '</td></tr>' +
+    '</tbody></table>' +
+    '<div class="psign"><div>Parent or guardian — signature</div><div>Print name</div><div>Date</div><div>Daytime phone</div></div></div>';
+  h += flagBlock() + discBlock();
+  h += '<div class="pfoot"><span>Dose — annual medical form</span><span>' + esc(k.name + " · " + longDay(new Date())) + '</span></div>';
+  host.innerHTML = h;
+}
+function buildHandoffSheet(){
+  var k = kid(); var host = $("sheetHandoff");
+  if(!k){ host.innerHTML = ""; return; }
+  var h = pgTop("Handoff card", k);
+  h += '<div class="pcut"><div class="lbl">Child &amp; weight</div><div class="big">' +
+    esc(k.name + " · " + fix(ui.kg,1) + " kg") + '</div><div class="lbl" style="margin-top:4pt">as at ' +
+    esc(hhmm(new Date()) + " on " + longDay(new Date())) + '</div></div>';
+  handoffFacts().forEach(function(f){
+    h += '<div class="pcut"><div class="lbl">' + esc(f.name) + '</div>' +
+      '<div class="big">' + esc(f.gate.held ? "next at " + hhmm(f.gate.nextSafe) : "safe now") + '</div>' +
+      '<dl class="pgrid three" style="margin-top:6pt">' +
+      fact("Last given", f.gate.last ? hhmm(f.gate.last.t) : "none",
+           f.gate.last ? fix(f.gate.last.ml,1) + " " + (f.gate.last.unit || "mL") + " of " + strength(f.gate.last.cmg, f.gate.last.cml) : "in the last 24 h") +
+      fact("Then give", f.dose ? fix(f.dose.vol,1) + " " + f.dose.unit : DASH, f.bottle ? "of " + f.bottle.note : "") +
+      fact("24 h so far", f.gate.count + " of " + f.gate.maxCount, fix(f.gate.sum,0) + " of " + fix(f.gate.cap,0) + " mg") +
+      '</dl></div>';
+  });
+  h += flagBlock() + discBlock();
+  h += '<div class="pfoot"><span>Leave this beside the bottle</span><span>' + esc(k.name) + '</span></div>';
+  host.innerHTML = h;
+}
+function doPrint(which){
+  buildClinic(); buildForms(); buildHandoffSheet();
+  ["sheetClinic","sheetForms","sheetHandoff"].forEach(function(id){ $(id).removeAttribute("data-active"); });
+  var map = { clinic:"sheetClinic", forms:"sheetForms", handoff:"sheetHandoff" };
+  var node = $(map[which] || "sheetClinic");
+  node.setAttribute("data-active","1");
+  window.print();
+}
+
+/* 12 · EXPORT / IMPORT */
+function csvCell(v){
+  var s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvRow(arr){ return arr.map(csvCell).join(","); }
+function buildCsv(){
+  var head = ["child","date_of_birth","episode","entry_type","date","time","medicine",
+              "volume","volume_unit","bottle_mg","bottle_ml","dose_mg","weight_kg","temp_c","note"];
+  var lines = [csvRow(head)];
+  state.kids.forEach(function(k){
+    var epName = {};
+    (k.episodes||[]).forEach(function(e){ epName[e.id] = e.name; });
+    (k.events||[]).slice().sort(function(a,b){ return a.t - b.t; }).forEach(function(e){
+      var d = new Date(e.t);
+      lines.push(csvRow([
+        k.name, k.dob, epName[e.ep] || "", e.kind, isoDay(d), pad2(d.getHours()) + ":" + pad2(d.getMinutes()),
+        e.drug ? spec(e.drug).name : "",
+        e.kind === "dose" ? fix(e.ml,1) : "", e.kind === "dose" ? (e.unit || "mL") : "",
+        e.kind === "dose" ? e.cmg : "", e.kind === "dose" ? fix(e.cml,1) : "",
+        e.kind === "dose" ? fix(e.mg,0) : "", e.kind === "dose" ? fix(e.kg,1) : "",
+        e.kind === "temp" ? fix(e.tempC,1) : "", e.text || ""
+      ]));
+    });
+    (k.measures||[]).forEach(function(m){
+      lines.push(csvRow([k.name, k.dob, "", "measurement", m.d, "", "", "", "", "", "", "", fix(m.kg,1), "",
+        num(m.cm) !== null ? fix(m.cm,1) + " cm height" : ""]));
+    });
+    (k.imm||[]).forEach(function(v){
+      lines.push(csvRow([k.name, k.dob, "", "immunisation", v.date, "", v.what, "", "", "", "", "", "", "", v.who || ""]));
+    });
+  });
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
+}
+function download(name, mime, text){
+  try{
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 800);
+    return true;
+  }catch(e){ return false; }
+}
+
+/* 13 · TOASTS */
+function toast(msg){
+  var dock = $("toastDock");
+  var t = el("div","toast", msg);
+  dock.appendChild(t);
+  setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 4200);
+  while(dock.children.length > 3) dock.removeChild(dock.firstChild);
+}
+
+/* 14 · ACTIONS */
+function ensureEpisode(k){
+  var ep = activeEpisode(k);
+  if(ep && !ep.end) return ep;
+  var fresh = { id: uid(), name: "Illness — " + longDay(new Date()), start: isoDay(new Date()), end: "" };
+  k.episodes = (k.episodes||[]).concat([fresh]);
+  return fresh;
+}
+function recordDose(){
+  var k = kid(); if(!k) return;
+  var b = currentBottle(ui.drug);
+  var d = computeDose(ui.kg, ui.drug, b);
+  if(!d || !b) return;
+  var now = Date.now();
+  var g = gateFor(k, ui.drug, ui.kg, d.mg, now);
+  if((g.held || ui.armed) && !ui.armed){ ui.armed = true; renderFace(); return; }
+  var ep = ensureEpisode(k);
+  k.events = (k.events||[]).concat([{
+    id: uid(), kind:"dose", t: now, ep: ep.id, drug: ui.drug,
+    mg: d.mg, ml: d.vol, unit: d.unit, cid: b.id, cmg: b.mg, cml: b.ml, kg: ui.kg
+  }]);
+  ui.armed = false;
+  saveState(); renderAll();
+  toast("Recorded " + fix(d.vol,1) + " " + d.unit + " of " + b.note + " for " + k.name + " at " + hhmm(now) + ".");
+}
+function renderAll(){
+  renderSubjects();
+  paintDial();
+  renderFace();
+  renderTape();
+  drawGrowth();
+  renderCentiles();
+  renderRecord();
+  renderSetup();
+}
+
+function wire(){
+  $("chPar").addEventListener("click", function(){ ui.drug = "par"; ui.confirmed = false; ui.armed = false; paintDial(); renderFace(); });
+  $("chIbu").addEventListener("click", function(){ ui.drug = "ibu"; ui.confirmed = false; ui.armed = false; paintDial(); renderFace(); });
+  $("checkBottle").addEventListener("click", function(){ ui.confirmed = !ui.confirmed; ui.armed = false; renderFace(); });
+  $("logBtn").addEventListener("click", recordDose);
+  $("saveWtBtn").addEventListener("click", function(){
+    var k = kid(); if(!k) return;
+    var today = isoDay(new Date());
+    var row = (k.measures||[]).filter(function(m){ return m.d === today; })[0];
+    if(row) row.kg = ui.kg; else k.measures = (k.measures||[]).concat([{ d: today, kg: ui.kg, cm: null }]);
+    saveState(); renderAll();
+    toast(fix(ui.kg,1) + " kg saved to " + k.name + "’s growth record for today.");
+  });
+  $("tempBtn").addEventListener("click", function(){
+    var t = $("jotTemp");
+    document.getElementById("tape").scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(function(){ t.focus(); }, 320);
+  });
+  $("ilTableBtn").addEventListener("click", function(){
+    var box = $("ilTableBox");
+    box.hidden = !box.hidden;
+    this.textContent = box.hidden ? "Full table" : "Hide table";
+  });
+  $("flagToggle").addEventListener("click", function(){
+    var rail = $("flagRail");
+    var open = rail.getAttribute("data-open") === "1";
+    rail.setAttribute("data-open", open ? "0" : "1");
+    this.setAttribute("aria-expanded", String(!open));
+    $("flagHint").textContent = open ? "Show the list" : "Hide";
+    this.querySelector("span").textContent = open ? "▲" : "▼";
+  });
+  $("copyHandoffBtn").addEventListener("click", function(){
+    var txt = handoffText();
+    if(!txt){ toast("Nothing to copy yet."); return; }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = txt; ta.setAttribute("readonly",""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+      ta.remove();
+      toast(ok ? "Handoff copied — paste it into a message." : "Copy blocked by the browser; print the card instead.");
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ toast("Handoff copied — paste it into a message."); }, fallback);
+    } else fallback();
+  });
+  $("printHandoffBtn").addEventListener("click", function(){ doPrint("handoff"); });
+  $("printClinicBtn").addEventListener("click", function(){ doPrint("clinic"); });
+  $("pcClinic").addEventListener("click", function(){ doPrint("clinic"); });
+  $("pcForms").addEventListener("click", function(){ doPrint("forms"); });
+  $("pcHandoff").addEventListener("click", function(){ doPrint("handoff"); });
+  $("toSetupBtn").addEventListener("click", function(){ $("setup").scrollIntoView({ behavior:"smooth", block:"start" }); });
+
+  $("epiSelect").addEventListener("change", function(){
+    var k = kid(); if(!k) return;
+    var picked = this.value;
+    (k.episodes||[]).forEach(function(e){ e.pick = (e.id === picked); });
+    k.episodes = (k.episodes||[]).slice().sort(function(a,b){ return (a.pick ? 1 : 0) - (b.pick ? 1 : 0); });
+    var target = (k.episodes||[]).filter(function(e){ return e.id === picked; })[0];
+    if(target){
+      k.episodes = (k.episodes||[]).filter(function(e){ return e.id !== picked; }).concat([target]);
+      if(target.end){ (k.episodes||[]).forEach(function(e){ if(e !== target) e.end = e.end || isoDay(parseDay(e.start) || new Date()); }); }
+    }
+    saveState(); renderTape(); renderRecord();
+  });
+  $("newEpiBtn").addEventListener("click", function(){
+    var k = kid(); if(!k) return;
+    (k.episodes||[]).forEach(function(e){ if(!e.end) e.end = isoDay(new Date()); });
+    var fresh = { id: uid(), name: "Illness — " + longDay(new Date()), start: isoDay(new Date()), end: "" };
+    k.episodes = (k.episodes||[]).concat([fresh]);
+    saveState(); renderAll(); toast("New illness started. Rename it in the illness history list if you like.");
+  });
+  $("endEpiBtn").addEventListener("click", function(){
+    var k = kid(); if(!k) return;
+    var ep = activeEpisode(k); if(!ep) return;
+    ep.end = ep.end ? "" : isoDay(new Date());
+    saveState(); renderAll();
+    toast(ep.end ? "Marked as ended today." : "Reopened.");
+  });
+  $("jotForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var k = kid(); if(!k){ toast("Add a child first."); return; }
+    var tv = $("jotTemp").value, nv = $("jotNote").value.trim();
+    var temp = num(tv);
+    if(temp === null && !nv){ toast("Enter a temperature or a note."); return; }
+    var when = $("jotTime").value;
+    var d = new Date();
+    if(/^\d{2}:\d{2}$/.test(when)){ d.setHours(+when.slice(0,2), +when.slice(3,5), 0, 0); if(d.getTime() > Date.now() + 60000) d.setDate(d.getDate()-1); }
+    var ep = ensureEpisode(k);
+    if(temp !== null) k.events = (k.events||[]).concat([{ id:uid(), kind:"temp", t:d.getTime(), ep:ep.id, tempC: Math.round(temp*10)/10 }]);
+    if(nv) k.events = (k.events||[]).concat([{ id:uid(), kind:"symptom", t:d.getTime()+1, ep:ep.id, text:nv }]);
+    $("jotTemp").value = ""; $("jotNote").value = "";
+    saveState(); renderAll();
+    toast("Added to the tape at " + hhmm(d) + ".");
+  });
+  $("measForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var k = kid(); if(!k){ toast("Add a child first."); return; }
+    var d = $("measDate").value, kg = num($("measKg").value), cm = num($("measCm").value);
+    if(!d || (kg === null && cm === null)){ toast("Enter a date and at least one measurement."); return; }
+    var row = (k.measures||[]).filter(function(m){ return m.d === d; })[0];
+    if(row){ if(kg !== null) row.kg = kg; if(cm !== null) row.cm = cm; }
+    else k.measures = (k.measures||[]).concat([{ d:d, kg: kg, cm: cm }]);
+    if(kg !== null){ ui.kg = snapW(kg); }
+    $("measKg").value = ""; $("measCm").value = "";
+    saveState(); renderAll(); toast("Measurement added for " + longDay(d) + ".");
+  });
+  $("gwWeight").addEventListener("click", function(){ ui.growthMode = "wt"; this.classList.add("lit"); this.setAttribute("aria-pressed","true"); $("gwHeight").classList.remove("lit"); $("gwHeight").setAttribute("aria-pressed","false"); drawGrowth(); });
+  $("gwHeight").addEventListener("click", function(){ ui.growthMode = "ht"; this.classList.add("lit"); this.setAttribute("aria-pressed","true"); $("gwWeight").classList.remove("lit"); $("gwWeight").setAttribute("aria-pressed","false"); drawGrowth(); });
+
+  $("algForm").addEventListener("submit", function(e){
+    e.preventDefault(); var k = kid(); if(!k) return;
+    k.allergies = (k.allergies||[]).concat([{ id:uid(), what:$("algWhat").value.trim(), how:$("algHow").value.trim(), sev:$("algSev").value }]);
+    this.reset(); saveState(); renderAll(); toast("Allergy added.");
+  });
+  $("immForm").addEventListener("submit", function(e){
+    e.preventDefault(); var k = kid(); if(!k) return;
+    k.imm = (k.imm||[]).concat([{ id:uid(), what:$("immWhat").value.trim(), date:$("immDate").value, who:$("immWho").value.trim() }]);
+    this.reset(); saveState(); renderAll(); toast("Immunisation recorded.");
+  });
+  $("medForm").addEventListener("submit", function(e){
+    e.preventDefault(); var k = kid(); if(!k) return;
+    k.meds = (k.meds||[]).concat([{ id:uid(), what:$("medWhat").value.trim(), how:$("medHow").value.trim() }]);
+    this.reset(); saveState(); renderAll(); toast("Regular medicine added.");
+  });
+  $("conForm").addEventListener("submit", function(e){
+    e.preventDefault(); var k = kid(); if(!k) return;
+    k.contacts = { gp:$("conGp").value.trim(), gpTel:$("conGpTel").value.trim(), ins:$("conIns").value.trim(),
+                   pol:$("conPol").value.trim(), em:$("conEm").value.trim(), emTel:$("conEmTel").value.trim() };
+    saveState(); toast("Contacts saved for " + k.name + ".");
+  });
+  $("kidForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var name = $("kidName").value.trim(), dob = $("kidDob").value, sex = $("kidSex").value;
+    if(!name || !dob) return;
+    var k = { id:uid(), name:name, sex:sex, dob:dob, bottle:{ par:"p120", ibu:"i100" }, measures:[], allergies:[], imm:[], meds:[],
+              contacts:{}, episodes:[], events:[] };
+    state.kids = state.kids.concat([k]);
+    state.active = k.id;
+    this.reset(); saveState(); renderAll(); toast(name + " added. Set a weight on the dial and save it.");
+  });
+  $("concForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var mg = num($("ccMg").value), ml = num($("ccMl").value);
+    if(mg === null || ml === null || mg <= 0 || ml <= 0){ toast("Enter both the milligrams and the millilitres from the label."); return; }
+    var drug = $("ccDrug").value;
+    var nm = $("ccName").value.trim() || "Custom strength";
+    state.customConc = (state.customConc||[]).concat([{
+      id: uid(), drug: drug, mg: mg, ml: ml, name: nm, note: fix(mg,0) + " mg / " + fix(ml,1) + " mL"
+    }]);
+    this.reset(); saveState(); renderAll(); toast("Strength added — it now appears on the instrument face.");
+  });
+  $("stepSel").addEventListener("change", function(){ state.step = num(this.value) || 0.1; saveState(); renderAll(); });
+
+  $("csvBtn").addEventListener("click", function(){
+    var ok = download("dose-record-" + isoDay(new Date()) + ".csv", "text/csv;charset=utf-8", buildCsv());
+    toast(ok ? "CSV exported." : "The browser blocked the download.");
+  });
+  $("jsonBtn").addEventListener("click", function(){
+    var ok = download("dose-record-" + isoDay(new Date()) + ".json", "application/json", JSON.stringify(state, null, 2));
+    toast(ok ? "JSON exported — send this file to the other parent’s phone and import it there." : "The browser blocked the download.");
+  });
+  $("importBtn").addEventListener("click", function(){ $("importFile").click(); });
+  $("importFile").addEventListener("change", function(){
+    var f = this.files && this.files[0]; if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      try{
+        var o = JSON.parse(String(rd.result));
+        if(!o || !Array.isArray(o.kids)) throw new Error("shape");
+        state = o;
+        state.region = PRESETS[state.region] ? state.region : "UK";
+        state.step = num(state.step) || 0.1;
+        state.customConc = Array.isArray(state.customConc) ? state.customConc : [];
+        if(!state.kids.filter(function(k){ return k.id === state.active; }).length) state.active = state.kids[0] ? state.kids[0].id : null;
+        var m = kid() ? latestMeasure(kid(),"kg") : null;
+        if(m) ui.kg = snapW(m.kg);
+        ui.confirmed = false;
+        saveState(); renderAll(); toast("Imported " + state.kids.length + " child record" + (state.kids.length===1?"":"s") + ".");
+      }catch(err){ toast("That file could not be read as a Dose export."); }
+    };
+    rd.onerror = function(){ toast("That file could not be read."); };
+    rd.readAsText(f);
+    this.value = "";
+  });
+  $("clearSampleBtn").addEventListener("click", function(){
+    state = blankState();
+    state.kids = []; state.active = null;
+    saveState(); ui.confirmed = false; renderAll();
+    toast("Sample family cleared. Add your own child in Setup.");
+  });
+  var wipeArmed = false;
+  $("wipeBtn").addEventListener("click", function(){
+    if(!wipeArmed){ wipeArmed = true; this.textContent = "Tap again to erase everything"; var b = this;
+      setTimeout(function(){ wipeArmed = false; b.textContent = "Erase everything"; }, 4000); return; }
+    try{ window.localStorage.removeItem(STORE_KEY); }catch(e){}
+    state = blankState(); ui.confirmed = false; wipeArmed = false;
+    this.textContent = "Erase everything";
+    saveState(); renderAll(); toast("Erased. Nothing left in this browser.");
+  });
+
+  var rt = null;
+  window.addEventListener("resize", function(){
+    if(rt) clearTimeout(rt);
+    rt = setTimeout(function(){ renderTape(); drawGrowth(); }, 140);
+  });
+}
+
+/* 15 · BOOT */
+function boot(){
+  var loaded = loadState();
+  state = loaded || sampleState();
+  if(!PRESETS[state.region]) state.region = "UK";
+  state.step = num(state.step) || 0.1;
+  state.customConc = Array.isArray(state.customConc) ? state.customConc : [];
+  if(!state.kids.length){ state.active = null; }
+  else if(!state.kids.filter(function(k){ return k.id === state.active; }).length) state.active = state.kids[0].id;
+
+  var k = kid();
+  var m = k ? latestMeasure(k,"kg") : null;
+  ui.kg = m ? snapW(m.kg) : 12;
+
+  var now = new Date();
+  $("jotTime").value = pad2(now.getHours()) + ":" + pad2(now.getMinutes());
+  $("measDate").value = isoDay(now);
+  $("immDate").value = isoDay(now);
+  $("kidDob").value = isoDay(now);
+
+  var fl = $("flagList");
+  RED_FLAG_TEXT.forEach(function(t, i){
+    var li = document.createElement("li");
+    li.appendChild(el("b", null, pad2(i+1)));
+    var span = el("span");
+    t.split("|").forEach(function(chunk, n){
+      if(!chunk) return;
+      span.appendChild(n % 2 ? el("b", null, chunk) : document.createTextNode(chunk));
+    });
+    li.appendChild(span);
+    fl.appendChild(li);
+  });
+
+  buildDial();
+  wireDial();
+  wire();
+  renderAll();
+  saveState();
+
+  if(ui.tick) clearInterval(ui.tick);
+  ui.tick = setInterval(function(){ if(!document.hidden) renderFace(); }, 30000);
+}
+
+if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+})();
+</script>
+</body>
+</html>

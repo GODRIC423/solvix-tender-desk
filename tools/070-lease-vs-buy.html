@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lease vs Buy Calculator — equipment total cost of ownership & NPV comparison</title>
+<meta name="description" content="Offline lease vs buy vs finance calculator for equipment and vehicles. Compares buying outright, financing with deposit/balloon, and leasing with excess-use charges on a like-for-like total cost of ownership: nominal cash total, net present value at your discount rate, and a monthly-equivalent figure. Tax treatment is captured as a note, not assumed. Saves named comparisons to the browser, prints a client-ready document and exports CSV.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='12' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ELvB%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+  textarea{resize:none}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B;--accent-ink:#145C39;--accent-wash:#E3F2EA;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}}
+:root[data-theme="dark"]{--accent:#3FB57B;--accent-ink:#6FCB9B;--accent-wash:#11291D;--on-accent:#06120B}
+
+[hidden]{display:none!important}
+.split>*,.stack>*{min-width:0}
+.card>.bd,.card>.hd,.card>.ft{min-width:0}
+.f-row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.f-row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media(max-width:480px){.f-row3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.curwrap{display:flex;gap:6px}
+.curwrap select{width:auto;flex:none}
+.method-badge{display:inline-flex;align-items:center;gap:5px;font:700 11px/1 var(--mono);
+  padding:3px 7px;border-radius:3px}
+.method-badge.buy{background:#E3F2EA;color:#145C39}
+.method-badge.fin{background:#E6EEF8;color:#17497F}
+.method-badge.lea{background:#FBF0DC;color:#8F4207}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  .method-badge.buy{background:#12251B;color:#6FCB9B}
+  .method-badge.fin{background:#152538;color:#7FB4F0}
+  .method-badge.lea{background:#2A2113;color:#D2A24C}
+}}
+:root[data-theme="dark"] .method-badge.buy{background:#12251B;color:#6FCB9B}
+:root[data-theme="dark"] .method-badge.fin{background:#152538;color:#7FB4F0}
+:root[data-theme="dark"] .method-badge.lea{background:#2A2113;color:#D2A24C}
+.cmp-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.method-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.method-dot.buy{background:#1B7A4B}
+.method-dot.fin{background:#1F5FA8}
+.method-dot.lea{background:#B45309}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  .method-dot.buy{background:#3FB57B} .method-dot.fin{background:#5A9BE8} .method-dot.lea{background:#D2A24C}
+}}
+:root[data-theme="dark"] .method-dot.buy{background:#3FB57B}
+:root[data-theme="dark"] .method-dot.fin{background:#5A9BE8}
+:root[data-theme="dark"] .method-dot.lea{background:#D2A24C}
+.chip.sm{font-size:9px;padding:2px 5px}
+.cmp-table th,.cmp-table td{padding:7px 6px}
+.cmp-table .cmp-name{white-space:nowrap}
+@media(max-width:420px){.cmp-table th,.cmp-table td{font-size:12.5px;padding:6px 5px}}
+.winner-row{outline:2px solid var(--accent);outline-offset:-2px}
+.savedrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--raise)}
+.savedrow .nm{font-weight:650;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.savedrow .ts{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.flashmsg{font:600 12px/1 var(--sans);color:var(--ok)}
+.docgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media(max-width:480px){.docgrid{grid-template-columns:minmax(0,1fr)}}
+.printonly .phead{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:12px}
+.printonly .phead h1{font-size:19px}
+.printonly .pmeta{font-size:11pt;line-height:1.6}
+.breakdown-label{color:var(--muted);font-size:12.5px}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.results{order:-1}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="appbar noprint">
+  <div class="brand">
+    <div class="mark">LvB</div>
+    <div style="min-width:0">
+      <h1>Lease vs Buy Calculator</h1>
+      <div class="sub">TOTAL COST OF OWNERSHIP</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="btnPrint">🖶 Print</button>
+    <button type="button" class="btn" id="btnCsv">⭳ CSV</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</div>
+
+<div class="printonly">
+  <div class="phead">
+    <div>
+      <h1>Lease vs Buy Comparison</h1>
+      <div class="pmeta" id="pMetaLeft"></div>
+    </div>
+    <div class="pmeta" id="pMetaRight" style="text-align:right"></div>
+  </div>
+</div>
+
+<div class="stack noprint" style="margin:14px 0">
+  <div class="note" id="sampleMsg">
+    <strong>Sample data loaded.</strong> This is a worked example so you can see how the tool behaves —
+    edit any field to replace it with your own numbers, or press <strong>Clear all data</strong> above to start blank.
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack inputs">
+
+    <div class="card">
+      <div class="hd"><h2>Document details</h2><span class="chip" id="sampleChip">SAMPLE</span></div>
+      <div class="bd stack">
+        <div class="docgrid">
+          <div class="f"><label for="docClient">Prepared for</label><input id="docClient" type="text" placeholder="Client / company"></div>
+          <div class="f"><label for="docPreparedBy">Prepared by</label><input id="docPreparedBy" type="text" placeholder="Your name / business"></div>
+          <div class="f"><label for="docDate">Date</label><input id="docDate" type="date"></div>
+          <div class="f"><label for="docRef">Reference</label><input id="docRef" type="text" placeholder="Quote / job ref"></div>
+        </div>
+        <div class="f" style="max-width:220px">
+          <label for="cur">Currency</label>
+          <div class="curwrap">
+            <select id="cur"><option value="£">£ GBP</option><option value="$">$ USD</option><option value="€">€ EUR</option><option value="custom">Custom…</option></select>
+            <input id="curCustom" type="text" maxlength="3" placeholder="¤" style="width:52px" hidden>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Equipment &amp; term</h2></div>
+      <div class="bd stack">
+        <div class="f"><label for="eqDesc">Equipment / asset</label><input id="eqDesc" type="text" placeholder="e.g. Delivery van"></div>
+        <div class="f-row2">
+          <div class="f"><label for="eqPrice">Purchase price</label><input id="eqPrice" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="f"><label for="eqTerm">Term (years)</label><input id="eqTerm" type="number" min="1" max="15" step="1" inputmode="numeric"></div>
+        </div>
+        <div class="f-row2">
+          <div class="f"><label for="eqRate">Discount rate / cost of capital</label><input id="eqRate" type="number" min="0" max="50" step="0.1" inputmode="decimal"></div>
+          <div class="f"><label for="eqResalePct">Resale value at term end</label><input id="eqResalePct" type="number" min="0" max="95" step="1" inputmode="decimal"></div>
+        </div>
+        <div class="f"><label for="eqMaint">Annual maintenance / service cost</label><input id="eqMaint" type="number" min="0" step="1" inputmode="decimal"></div>
+        <p class="hint">The discount rate is used two ways: it prices the opportunity cost of cash spent buying outright, and it discounts every option's cash flows to today's money for a fair net-present-value comparison. Resale % applies to Buy and Finance only — a leased asset is handed back with no residual to you.</p>
+        <div class="err" id="errEq" hidden></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2><span class="method-badge fin">FINANCE</span> &nbsp;Financed purchase</h2></div>
+      <div class="bd stack">
+        <div class="f-row3">
+          <div class="f"><label for="finDeposit">Deposit</label><input id="finDeposit" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="f"><label for="finMonthly">Monthly payment</label><input id="finMonthly" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="f"><label for="finBalloon">Balloon / final payment</label><input id="finBalloon" type="number" min="0" step="1" inputmode="decimal"></div>
+        </div>
+        <p class="hint">Same purchase price, resale value and maintenance as Buy above — financing changes only how the cash goes out.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2><span class="method-badge lea">LEASE</span> &nbsp;Operating lease</h2></div>
+      <div class="bd stack">
+        <div class="f-row2">
+          <div class="f"><label for="leaMonthly">Monthly lease payment</label><input id="leaMonthly" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="f"><label for="leaExcess">Est. annual excess-use / overage charge</label><input id="leaExcess" type="number" min="0" step="1" inputmode="decimal"></div>
+        </div>
+        <label class="check noprint"><input id="leaMaintIncluded" type="checkbox"><span>Maintenance is included in the lease payment (untick to add the annual maintenance cost above on top)</span></label>
+        <p class="printonly pmeta" id="leaMaintPrintText"></p>
+        <p class="hint">The asset is returned at the end of the lease — no resale value, no opportunity cost of capital, because you never tied up the purchase price.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Tax treatment</h2></div>
+      <div class="bd stack">
+        <div class="note warn">
+          <strong>This tool does not calculate tax.</strong> Capital allowances / depreciation, interest deductibility,
+          VAT or GST recovery, and whether lease payments are fully deductible as an operating expense all depend on your
+          jurisdiction, entity structure and how the asset is used — they can change which option is really cheapest
+          after tax. Record your assumption below and confirm it with your accountant before deciding. Every figure on
+          this page is a pre-tax cash comparison only.
+        </div>
+        <div class="f"><label for="taxNotes">Tax treatment note</label><textarea id="taxNotes" placeholder="e.g. Assume cash-basis, no capital allowance modelled — confirm with accountant."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card noprint">
+      <div class="hd"><h2>Saved comparisons</h2></div>
+      <div class="bd stack">
+        <div class="row">
+          <input id="saveName" type="text" placeholder="Name this comparison, e.g. Van A vs Van B" style="flex:1 1 220px">
+          <button type="button" class="btn pri sm" id="btnSave">💾 Save comparison</button>
+        </div>
+        <div class="stack" id="savedList"></div>
+        <p class="empty" id="savedEmpty">No comparisons saved yet — save the current inputs to recall or compare later.</p>
+        <p class="hint" id="savedMsg" hidden></p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="stack results">
+    <div class="card sticky">
+      <div class="hd"><h2>Comparison</h2></div>
+      <div class="bd stack">
+        <div class="stat hero">
+          <div class="k">Cheapest option (net present value)</div>
+          <div class="v" id="heroWinner">—</div>
+          <div class="u" id="heroSub">—</div>
+        </div>
+        <div class="note warn" style="font-size:12px;padding:8px 10px">
+          <strong>Pre-tax cash comparison.</strong> No tax, VAT/GST or capital allowances are modelled — record your
+          assumption in Tax treatment and confirm with your accountant. Not financial advice.
+        </div>
+        <div class="tw">
+          <table class="cmp-table">
+            <thead><tr><th scope="col">Option</th><th scope="col" class="r">Nominal</th><th scope="col" class="r">NPV</th><th scope="col" class="r">Monthly</th></tr></thead>
+            <tbody id="cmpBody"></tbody>
+          </table>
+        </div>
+        <p class="hint">Nominal total is the plain sum of cash paid and received over the term. NPV discounts every payment and receipt back to today using the discount rate above, so it fairly compares options whose cash lands at different times. Monthly equivalent is the level monthly cost with the same NPV.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Cost breakdown</h2></div>
+      <div class="bd">
+        <div class="tw">
+          <table>
+            <thead><tr><th scope="col">Line item</th><th scope="col" class="r">Buy</th><th scope="col" class="r">Finance</th><th scope="col" class="r">Lease</th></tr></thead>
+            <tbody id="breakBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ft">
+        <span class="hint">All figures pre-tax. Excludes fees, insurance, delivery, disposal and any change in usage or rates over the term.</span>
+      </div>
+    </div>
+
+    <div class="note bad noprint" style="font-size:12.5px">
+      This is a cash-cost modelling tool, not financial or tax advice. Confirm real lease/finance quotes and the tax
+      position with your provider and accountant before committing.
+    </div>
+  </div>
+</div>
+
+<footer style="margin-top:22px;padding:14px 2px;color:var(--muted);font-size:12px;line-height:1.6">
+  Assumes the discount rate compounds monthly (annual rate ÷ 12) and maintenance is spread evenly across each month of
+  the term. Excess-use charges are billed once a year. Buy's opportunity cost of capital (shown in the nominal total)
+  is the simple return the purchase price could otherwise have earned; NPV instead prices timing via discounting, so
+  the two are not added together. All figures are pre-tax cash costs, not financial or tax advice.
+</footer>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+var KEY = "solvix.lease-vs-buy.v1";
+var $ = function(id){ return document.getElementById(id); };
+
+var TEXT_FIELDS = ["docClient","docPreparedBy","docDate","docRef","eqDesc","taxNotes","curCustom"];
+var NUM_FIELDS = ["eqPrice","eqTerm","eqRate","eqResalePct","eqMaint","finDeposit","finMonthly","finBalloon","leaMonthly","leaExcess"];
+var CHK_FIELDS = ["leaMaintIncluded"];
+var SEL_FIELDS = ["cur"];
+
+function todayISO(){
+  var d = new Date();
+  return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+}
+function pad2(n){ return (n<10?"0":"") + n; }
+
+function blankState(){
+  return {
+    v:1, sample:false,
+    cur:"£", curCustom:"",
+    docClient:"", docPreparedBy:"", docDate:todayISO(), docRef:"",
+    eqDesc:"", eqPrice:"", eqTerm:"", eqRate:"", eqResalePct:"", eqMaint:"",
+    finDeposit:"", finMonthly:"", finBalloon:"",
+    leaMonthly:"", leaExcess:"", leaMaintIncluded:false,
+    taxNotes:"",
+    saved:[]
+  };
+}
+function sampleState(){
+  var s = blankState();
+  s.sample = true;
+  s.cur = "£";
+  s.docClient = "Riverside Builders Ltd";
+  s.docPreparedBy = "Solvix Fleet Advisory";
+  s.docDate = todayISO();
+  s.docRef = "LVB-0142";
+  s.eqDesc = "Delivery van — 3.5t (sample data)";
+  s.eqPrice = "38000";
+  s.eqTerm = "5";
+  s.eqRate = "8";
+  s.eqResalePct = "35";
+  s.eqMaint = "900";
+  s.finDeposit = "5000";
+  s.finMonthly = "650";
+  s.finBalloon = "4000";
+  s.leaMonthly = "720";
+  s.leaExcess = "300";
+  s.leaMaintIncluded = false;
+  s.taxNotes = "Cash-basis assumption, no capital allowances modelled — confirm treatment with accountant before signing.";
+  return s;
+}
+
+var S = sampleState();
+
+/* ── helpers ───────────────────────────────────────────────────────── */
+function num(v){
+  if (v === null || v === undefined) return NaN;
+  var s = String(v).replace(/[\s,]/g, "");
+  if (s === "") return NaN;
+  var n = parseFloat(s);
+  return isFinite(n) ? n : NaN;
+}
+function numOr(v, d){ var n = num(v); return isFinite(n) ? n : d; }
+function cur(){ return (S.cur === "custom" ? (S.curCustom || "¤") : S.cur) || "£"; }
+function fmtN(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  if (Math.abs(v) < Math.pow(10, -(dp||0)) / 2) v = 0;
+  if (Object.is(v, -0)) v = 0;
+  return (v + 0).toLocaleString("en-GB", { minimumFractionDigits: dp||0, maximumFractionDigits: dp||0 });
+}
+function money(v){
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  if (Math.abs(v) < 0.005) v = 0;
+  var neg = v < 0;
+  return (neg ? "−" : "") + cur() + fmtN(Math.abs(v), 2);
+}
+function plain(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "";
+  dp = dp === undefined ? 2 : dp;
+  if (Math.abs(v) < Math.pow(10,-dp)/2) v = 0;
+  return (v + 0).toFixed(dp);
+}
+function esc(s){
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function fmtDateLong(iso){
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "—";
+  var p = iso.split("-"), MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var d = new Date(+p[0], +p[1]-1, +p[2]);
+  return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear();
+}
+
+/* ── the maths ─────────────────────────────────────────────────────── */
+/* Ordinary-annuity present-value factor for N periods at periodic rate rm. */
+function annuityFactor(rm, N){
+  if (!(N > 0)) return 0;
+  if (Math.abs(rm) < 1e-9) return N;
+  return (1 - Math.pow(1 + rm, -N)) / rm;
+}
+function discFactor(rm, m){
+  if (Math.abs(rm) < 1e-9) return 1;
+  return Math.pow(1 + rm, -m);
+}
+
+function calc(){
+  var price = numOr(S.eqPrice, 0);
+  var years = numOr(S.eqTerm, 0);
+  var rateAnnual = numOr(S.eqRate, 0) / 100;
+  var resalePct = numOr(S.eqResalePct, 0);
+  var maintAnnual = numOr(S.eqMaint, 0);
+
+  var ok = price >= 0 && years > 0 && rateAnnual >= 0 && resalePct >= 0 && maintAnnual >= 0;
+  var N = Math.round(years * 12);
+  var rm = rateAnnual / 12;
+  var af = annuityFactor(rm, N);
+  var dfN = discFactor(rm, N);
+  var resale = price * resalePct / 100;
+  var maintMonthly = maintAnnual / 12;
+
+  /* BUY */
+  var buyOpportunity = price * rateAnnual * years;
+  var buyNominal = price - resale + maintAnnual * years + buyOpportunity;
+  var buyNPV = price + maintMonthly * af - resale * dfN;
+  var buyMonthly = af > 0 ? buyNPV / af : NaN;
+
+  /* FINANCE */
+  var deposit = numOr(S.finDeposit, 0);
+  var finMonthlyPmt = numOr(S.finMonthly, 0);
+  var balloon = numOr(S.finBalloon, 0);
+  var financeNominal = deposit + finMonthlyPmt * N + balloon - resale + maintAnnual * years;
+  var financeNPV = deposit + (finMonthlyPmt + maintMonthly) * af + balloon * dfN - resale * dfN;
+  var financeMonthly = af > 0 ? financeNPV / af : NaN;
+
+  /* LEASE */
+  var leaseMonthlyPmt = numOr(S.leaMonthly, 0);
+  var excessAnnual = numOr(S.leaExcess, 0);
+  var leaseMaintAnnual = S.leaMaintIncluded ? 0 : maintAnnual;
+  var leaseMaintMonthly = leaseMaintAnnual / 12;
+  var leaseNominal = leaseMonthlyPmt * N + excessAnnual * years + leaseMaintAnnual * years;
+  var excessPV = 0;
+  var yrs = Math.round(years);
+  for (var y = 1; y <= yrs; y++){
+    excessPV += excessAnnual * discFactor(rm, y * 12);
+  }
+  var leaseNPV = (leaseMonthlyPmt + leaseMaintMonthly) * af + excessPV;
+  var leaseMonthly = af > 0 ? leaseNPV / af : NaN;
+
+  return {
+    ok: ok, N: N, rm: rm, af: af, years: years,
+    price: price, resale: resale, resalePct: resalePct, maintAnnual: maintAnnual,
+    buyOpportunity: buyOpportunity, buyNominal: buyNominal, buyNPV: buyNPV, buyMonthly: buyMonthly,
+    deposit: deposit, finMonthlyPmt: finMonthlyPmt, balloon: balloon,
+    financeNominal: financeNominal, financeNPV: financeNPV, financeMonthly: financeMonthly,
+    leaseMonthlyPmt: leaseMonthlyPmt, excessAnnual: excessAnnual, leaseMaintAnnual: leaseMaintAnnual,
+    leaseNominal: leaseNominal, leaseNPV: leaseNPV, leaseMonthly: leaseMonthly
+  };
+}
+
+/* ── render ────────────────────────────────────────────────────────── */
+function render(){
+  var r = calc();
+
+  $("sampleChip").hidden = !S.sample;
+  $("sampleMsg").hidden = !S.sample;
+  $("curCustom").hidden = S.cur !== "custom";
+
+  if (!r.ok){
+    $("errEq").hidden = false;
+    $("errEq").textContent = "Enter a purchase price, a term of at least 1 year, and a discount rate and resale value of 0 or more.";
+  } else {
+    $("errEq").hidden = true;
+  }
+
+  var rows = [
+    { key:"buy", label:"Buy outright", badge:"buy", nominal:r.buyNominal, npv:r.buyNPV, monthly:r.buyMonthly },
+    { key:"fin", label:"Finance", badge:"fin", nominal:r.financeNominal, npv:r.financeNPV, monthly:r.financeMonthly },
+    { key:"lea", label:"Lease", badge:"lea", nominal:r.leaseNominal, npv:r.leaseNPV, monthly:r.leaseMonthly }
+  ];
+
+  var valid = r.ok && rows.every(function(x){ return isFinite(x.npv); });
+  var winner = null;
+  if (valid){
+    winner = rows.reduce(function(a,b){ return b.npv < a.npv ? b : a; });
+  }
+
+  var cmp = "";
+  rows.forEach(function(x){
+    var isWin = winner && x.key === winner.key;
+    cmp += "<tr" + (isWin ? " class=\"winner-row\"" : "") + ">" +
+      "<td><div class=\"cmp-name\"><span class=\"method-dot " + x.badge + "\" aria-hidden=\"true\"></span>" + esc(x.label) +
+        (isWin ? " <span class=\"chip ok sm\">BEST</span>" : "") + "</div></td>" +
+      "<td class=\"n\">" + money(x.nominal) + "</td>" +
+      "<td class=\"n\">" + money(x.npv) + "</td>" +
+      "<td class=\"n\">" + (isFinite(x.monthly) ? money(x.monthly) : "—") + "</td>" +
+    "</tr>";
+  });
+  $("cmpBody").innerHTML = cmp;
+
+  if (valid){
+    var others = rows.filter(function(x){ return x.key !== winner.key; });
+    var minSaving = Math.min.apply(null, others.map(function(x){ return x.npv - winner.npv; }));
+    $("heroWinner").textContent = winner.label;
+    $("heroSub").textContent = "Saves " + money(minSaving) + " (NPV) vs the next-best option over " +
+      (r.years === 1 ? "1 year" : (r.years + "-year")) + " term";
+  } else {
+    $("heroWinner").textContent = "—";
+    $("heroSub").textContent = "Fill in price, term and rate to compare";
+  }
+
+  var b = "";
+  function line(label, buyV, finV, leaV, isTotal){
+    return "<tr" + (isTotal ? " style=\"font-weight:650;background:var(--sunk)\"" : "") + ">" +
+      "<td" + (isTotal ? "" : " class=\"breakdown-label\"") + ">" + esc(label) + "</td>" +
+      "<td class=\"n\">" + buyV + "</td><td class=\"n\">" + finV + "</td><td class=\"n\">" + leaV + "</td></tr>";
+  }
+  b += line("Purchase price / deposit", money(r.price), money(r.deposit), "—");
+  b += line("Scheduled payments (" + r.N + " mo)", "—", money(r.finMonthlyPmt * r.N), money(r.leaseMonthlyPmt * r.N));
+  b += line("Balloon / final payment", "—", money(r.balloon), "—");
+  b += line("Maintenance (" + Math.round(r.years) + " yr)", money(r.maintAnnual * r.years), money(r.maintAnnual * r.years), money(r.leaseMaintAnnual * r.years));
+  b += line("Excess-use / overage charges", "—", "—", money(r.excessAnnual * Math.round(r.years)));
+  b += line("Opportunity cost of capital", money(r.buyOpportunity), "—", "—");
+  b += line("Less: resale value at term end", money(-r.resale), money(-r.resale), "—");
+  b += line("Nominal total (undiscounted)", money(r.buyNominal), money(r.financeNominal), money(r.leaseNominal), true);
+  b += line("NPV at " + (numOr(S.eqRate,0)) + "% discount rate", money(r.buyNPV), money(r.financeNPV), money(r.leaseNPV), true);
+  b += line("Monthly equivalent", isFinite(r.buyMonthly) ? money(r.buyMonthly) : "—", isFinite(r.financeMonthly) ? money(r.financeMonthly) : "—", isFinite(r.leaseMonthly) ? money(r.leaseMonthly) : "—", true);
+  $("breakBody").innerHTML = b;
+
+  /* print header */
+  var left = "<strong>" + esc(S.docClient || "—") + "</strong><br>" + esc(S.eqDesc || "Equipment comparison");
+  var right = "Prepared by " + esc(S.docPreparedBy || "—") + "<br>" + fmtDateLong(S.docDate) +
+    (S.docRef ? "<br>Ref: " + esc(S.docRef) : "");
+  $("pMetaLeft").innerHTML = left;
+  $("pMetaRight").innerHTML = right;
+  $("leaMaintPrintText").textContent = "Maintenance included in lease payment: " + (S.leaMaintIncluded ? "Yes" : "No — annual maintenance cost added on top");
+
+  renderSaved();
+}
+
+function renderSaved(){
+  var list = Array.isArray(S.saved) ? S.saved : [];
+  $("savedEmpty").hidden = list.length > 0;
+  var html = "";
+  list.slice().reverse().forEach(function(item){
+    html += "<div class=\"savedrow\">" +
+      "<span class=\"nm\">" + esc(item.name) + "</span>" +
+      "<span class=\"ts\">" + esc(item.ts) + "</span>" +
+      "<button type=\"button\" class=\"btn sm\" data-load=\"" + esc(item.id) + "\">Load</button>" +
+      "<button type=\"button\" class=\"btn sm dgr\" data-del=\"" + esc(item.id) + "\">Delete</button>" +
+    "</div>";
+  });
+  $("savedList").innerHTML = html;
+  Array.prototype.forEach.call($("savedList").querySelectorAll("[data-load]"), function(btn){
+    btn.addEventListener("click", function(){ loadSaved(btn.getAttribute("data-load")); });
+  });
+  Array.prototype.forEach.call($("savedList").querySelectorAll("[data-del]"), function(btn){
+    btn.addEventListener("click", function(){ deleteSaved(btn.getAttribute("data-del")); });
+  });
+}
+
+/* ── form <-> state ────────────────────────────────────────────────── */
+function toForm(){
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){ var e = $(k); if (e) e.value = S[k]; });
+  SEL_FIELDS.forEach(function(k){ var e = $(k); if (e) e.value = S[k]; });
+  CHK_FIELDS.forEach(function(k){ var e = $(k); if (e) e.checked = !!S[k]; });
+}
+function fromForm(){
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){ var e = $(k); if (e) S[k] = e.value; });
+  SEL_FIELDS.forEach(function(k){ var e = $(k); if (e) S[k] = e.value; });
+  CHK_FIELDS.forEach(function(k){ var e = $(k); if (e) S[k] = !!e.checked; });
+}
+function touched(){
+  if (S.sample){
+    S.sample = false;
+  }
+}
+
+/* ── persistence ───────────────────────────────────────────────────── */
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage blocked — keep working */ }
+}
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    var o = JSON.parse(raw);
+    if (!o || typeof o !== "object") return false;
+    var base = blankState();
+    Object.keys(base).forEach(function(k){ if (o[k] !== undefined) base[k] = o[k]; });
+    if (!Array.isArray(base.saved)) base.saved = [];
+    base.sample = !!o.sample;
+    S = base;
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ── export ────────────────────────────────────────────────────────── */
+function download(name, text, mime){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 400);
+  } catch (e) { /* nothing we can do offline */ }
+}
+function csvCell(v){
+  v = (v === null || v === undefined) ? "" : String(v);
+  return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function csvRow(a){ return a.map(csvCell).join(","); }
+function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
+
+function flash(el, msg){
+  var old = el.textContent;
+  el.textContent = msg;
+  el.disabled = true;
+  setTimeout(function(){ el.textContent = old; el.disabled = false; }, 1400);
+}
+
+function exportCsv(){
+  var r = calc();
+  var sym = cur();
+  var L = [];
+  L.push(csvRow(["Lease vs Buy Comparison"]));
+  L.push(csvRow(["Prepared for", S.docClient]));
+  L.push(csvRow(["Prepared by", S.docPreparedBy]));
+  L.push(csvRow(["Date", S.docDate]));
+  L.push(csvRow(["Reference", S.docRef]));
+  L.push(csvRow(["Equipment", S.eqDesc]));
+  L.push(csvRow(["Currency", sym]));
+  L.push(csvRow(["Purchase price", plain(r.price)]));
+  L.push(csvRow(["Term (years)", plain(r.years, 0)]));
+  L.push(csvRow(["Discount rate %", plain(numOr(S.eqRate,0), 2)]));
+  L.push(csvRow(["Resale value % of price", plain(r.resalePct, 2)]));
+  L.push(csvRow(["Resale value", plain(r.resale)]));
+  L.push(csvRow(["Annual maintenance", plain(r.maintAnnual)]));
+  L.push(csvRow([]));
+  L.push(csvRow(["Option", "Nominal total (" + sym + ")", "NPV (" + sym + ")", "Monthly equivalent (" + sym + ")"]));
+  L.push(csvRow(["Buy outright", plain(r.buyNominal), plain(r.buyNPV), isFinite(r.buyMonthly) ? plain(r.buyMonthly) : ""]));
+  L.push(csvRow(["Finance", plain(r.financeNominal), plain(r.financeNPV), isFinite(r.financeMonthly) ? plain(r.financeMonthly) : ""]));
+  L.push(csvRow(["Lease", plain(r.leaseNominal), plain(r.leaseNPV), isFinite(r.leaseMonthly) ? plain(r.leaseMonthly) : ""]));
+  L.push(csvRow([]));
+  L.push(csvRow(["Finance — deposit", plain(r.deposit)]));
+  L.push(csvRow(["Finance — monthly payment", plain(r.finMonthlyPmt)]));
+  L.push(csvRow(["Finance — balloon payment", plain(r.balloon)]));
+  L.push(csvRow(["Lease — monthly payment", plain(r.leaseMonthlyPmt)]));
+  L.push(csvRow(["Lease — annual excess-use charge", plain(r.excessAnnual)]));
+  L.push(csvRow(["Lease — maintenance included", S.leaMaintIncluded ? "Yes" : "No"]));
+  L.push(csvRow([]));
+  L.push(csvRow(["Tax treatment note", S.taxNotes]));
+  L.push(csvRow(["Notice", "Pre-tax cash comparison only — not financial or tax advice. Confirm real quotes and tax treatment with your provider and accountant."]));
+  var name = "lease-vs-buy-" + (slug(S.docRef) || slug(S.eqDesc) || "comparison") + ".csv";
+  download(name, "﻿" + L.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  flash($("btnCsv"), "CSV saved");
+}
+
+/* ── saved comparisons ─────────────────────────────────────────────── */
+function snapshotFields(){
+  var f = {};
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){ f[k] = S[k]; });
+  CHK_FIELDS.forEach(function(k){ f[k] = S[k]; });
+  SEL_FIELDS.forEach(function(k){ f[k] = S[k]; });
+  return f;
+}
+function saveComparison(){
+  var name = ($("saveName").value || "").trim();
+  if (!name){ $("saveName").focus(); return; }
+  if (!Array.isArray(S.saved)) S.saved = [];
+  var d = new Date();
+  var id = "c" + Date.now() + Math.random().toString(36).slice(2,6);
+  S.saved.push({ id: id, name: name, ts: d.toISOString().slice(0,10), fields: snapshotFields() });
+  $("saveName").value = "";
+  save(); render();
+  flashText($("savedMsg"), "Saved “" + name + "”.");
+}
+function loadSaved(id){
+  var item = (S.saved || []).find(function(x){ return x.id === id; });
+  if (!item) return;
+  Object.keys(item.fields).forEach(function(k){ S[k] = item.fields[k]; });
+  S.sample = false;
+  toForm(); save(); render();
+  flashText($("savedMsg"), "Loaded “" + item.name + "”.");
+}
+function deleteSaved(id){
+  if (!confirm("Delete this saved comparison? This cannot be undone.")) return;
+  S.saved = (S.saved || []).filter(function(x){ return x.id !== id; });
+  save(); render();
+}
+function flashText(el, msg){
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = msg;
+  setTimeout(function(){ el.hidden = true; }, 2200);
+}
+
+/* ── wire up ───────────────────────────────────────────────────────── */
+function onInput(){
+  fromForm();
+  touched();
+  save();
+  render();
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+  var restored = load();
+  toForm();
+  render();
+
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){
+    var e = $(k);
+    if (e) e.addEventListener("input", onInput);
+  });
+  SEL_FIELDS.forEach(function(k){
+    var e = $(k);
+    if (e) e.addEventListener("change", onInput);
+  });
+  CHK_FIELDS.forEach(function(k){
+    var e = $(k);
+    if (e) e.addEventListener("change", onInput);
+  });
+
+  $("btnPrint").addEventListener("click", function(){ window.print(); });
+  $("btnCsv").addEventListener("click", exportCsv);
+  $("btnSave").addEventListener("click", saveComparison);
+  $("saveName").addEventListener("keydown", function(ev){ if (ev.key === "Enter"){ ev.preventDefault(); saveComparison(); } });
+  $("btnClear").addEventListener("click", function(){
+    if (!confirm("Clear all saved data and comparisons? This resets the tool to its sample state and cannot be undone.")) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    S = sampleState();
+    toForm(); save(); render();
+  });
+});
+})();
+</script>
+</body>
+</html>

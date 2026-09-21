@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Table Reservation Book — covers, turn times &amp; table allocation</title>
+<meta name="description" content="A restaurant reservation diary: lunch and dinner services with seating slots, bookings with party size, table and status, turn times by party size, table capacity checks and clash detection, covers per service and per slot against capacity, a walk-in hold, live remaining covers, per-guest no-show rates, a printable service sheet and CSV export.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Ccircle cx='16' cy='15' r='7.5' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Crect x='14.9' y='4' width='2.2' height='5' rx='1.1' fill='%23fff'/%3E%3Crect x='6.5' y='23.5' width='19' height='2.4' rx='1.2' fill='%23fff' opacity='.85'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E2838E;--accent-ink:#EFA9B1;--accent-wash:#331A1E;--on-accent:#180A0C}}
+:root[data-theme="dark"]{--accent:#E2838E;--accent-ink:#EFA9B1;--accent-wash:#331A1E;--on-accent:#180A0C}
+
+[hidden]{display:none!important}
+.app{max-width:1420px}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(316px,.40fr)}
+.split>*{min-width:0}
+.stack>*{min-width:0}
+@media(max-width:1080px){.split{grid-template-columns:1fr}.split>.rail{order:-1}.sticky{position:static}}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:520px){.span2{grid-column:span 1}}
+.msg{min-height:0;margin:0}
+.msg:not(:empty){margin-top:12px;padding:9px 12px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 13px/1.4 var(--sans);border:1px solid var(--ok)}
+.msg.bad:not(:empty){background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+.hd .chip{flex:none}
+.hd .spacer{flex:1 1 auto}
+
+/* diary table */
+.bk{min-width:944px;table-layout:fixed}
+.bk col.c-time{width:132px}.bk col.c-end{width:54px}.bk col.c-guest{width:160px}
+.bk col.c-party{width:60px}.bk col.c-tbl{width:100px}.bk col.c-st{width:106px}
+.bk col.c-dep{width:76px}.bk col.c-note{width:auto}.bk col.c-flag{width:118px}.bk col.c-x{width:32px}
+.bk td{vertical-align:top;padding-top:6px;padding-bottom:6px}
+.bk td.mid{vertical-align:middle}
+.gcell{display:flex;flex-direction:column;gap:3px}
+.gcell input.ph{font-size:12.5px;color:var(--ink-2)}
+.endc{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--ink-2);font-size:13px;padding-top:13px}
+.flagcell{vertical-align:top;padding-top:15px}
+.flags{display:flex;flex-wrap:wrap;gap:3px}
+.flags .chip{font-size:9.5px;padding:3px 5px;letter-spacing:.03em}
+tr.st-seated td{background:var(--ok-wash)}
+tr.st-noshow td{background:var(--bad-wash)}
+tr.st-cancelled td{opacity:.62}
+tr.st-cancelled .gcell input{text-decoration:line-through}
+tbody tr.st-seated:hover td,tbody tr.st-noshow:hover td{filter:brightness(.985)}
+.xb{border:1px solid transparent;background:none;color:var(--faint);cursor:pointer;font:700 15px/1 var(--mono);
+  padding:2px 6px;border-radius:3px;margin-top:6px}
+.xb:hover{color:var(--bad);background:var(--bad-wash);border-color:var(--bad)}
+.tblst{min-width:520px}
+.tblst col.c-nm{width:auto}.tblst col.c-zn{width:132px}.tblst col.c-se{width:92px}
+.tblst col.c-on{width:66px}.tblst col.c-cap{width:104px}.tblst col.c-x{width:34px}
+.turns{min-width:420px}
+.turns col.c-mx{width:120px}.turns col.c-mn{width:120px}.turns col.c-ex{width:auto}.turns col.c-x{width:34px}
+.svct{min-width:520px}
+.svct col.c-sn{width:auto}.svct col.c-t{width:104px}.svct col.c-sl{width:96px}
+.svct col.c-cv{width:104px}.svct col.c-x{width:34px}
+.slot{min-width:560px}
+.slot col.c-s{width:74px}.slot col.c-ar{width:72px}.slot col.c-cv{width:82px}
+.slot col.c-se{width:82px}.slot col.c-fr{width:78px}.slot col.c-bar{width:auto}
+.bar{height:12px;background:var(--sunk);border:1px solid var(--line);border-radius:3px;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--accent);opacity:.75}
+.bar.warn i{background:var(--warn)}
+.bar.bad i{background:var(--bad);opacity:.9}
+.gst{min-width:620px}
+.gst col.c-g{width:auto}.gst col.c-ph{width:132px}.gst col.c-n{width:78px}.gst col.c-rt{width:104px}
+tr.risk td{background:var(--warn-wash)}
+
+/* rail */
+.rail .stat{background:var(--surface)}
+.rail .stat.hero{background:var(--accent-wash)}
+.hero .v{font-size:32px}
+.hero .u{display:block;margin-top:3px;line-height:1.4}
+.sgrid{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+@media(max-width:340px){.sgrid{grid-template-columns:1fr}}
+.ladder{border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.ladder div{display:flex;justify-content:space-between;gap:10px;padding:6px 11px;font-size:13px;
+  border-bottom:1px solid var(--line);background:var(--surface)}
+.ladder div:last-child{border-bottom:0}
+.ladder div.eq{background:var(--sunk);font-weight:650}
+.ladder span.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ladder .lbl2{color:var(--ink-2)}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alerts .al{font-size:12.5px;line-height:1.45;padding:7px 9px;border-radius:3px;border-left:3px solid var(--warn);
+  background:var(--warn-wash);color:var(--ink)}
+.alerts .al.bad{border-left-color:var(--bad);background:var(--bad-wash)}
+.alerts .al.ok{border-left-color:var(--ok);background:var(--ok-wash)}
+.alerts .al b{font-weight:650}
+.tiny{font-size:11.5px;color:var(--muted);line-height:1.45}
+footer.foot{max-width:1420px;margin:0 auto;padding:16px clamp(10px,2vw,22px) 40px;font-size:11.5px;
+  line-height:1.55;color:var(--muted)}
+footer.foot b{color:var(--ink-2);font-weight:650}
+
+/* printed service sheet */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:2.5pt solid #000;padding-bottom:6pt;margin-bottom:9pt}
+.doc .lh .org{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.02em}
+.doc .lh .ref{font-family:var(--mono);font-size:9.5pt;margin-top:3pt}
+.doc .lh .st{font-size:8pt;letter-spacing:.09em;text-transform:uppercase;margin-top:3pt;color:#333}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:9pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:21pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc .meta span.big{font-size:12pt;font-weight:700;font-family:var(--mono)}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7.5pt;letter-spacing:.05em;text-transform:uppercase}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tfoot td{font-weight:700;background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .two{display:grid;grid-template-columns:1fr 1fr;gap:10pt;align-items:start}
+.doc .tick{width:20pt;text-align:center}
+.doc .flagbox{border:1pt solid #000;padding:5pt 7pt;margin-top:8pt;font-size:8.5pt;line-height:1.45}
+.doc .flagbox b{text-transform:uppercase;letter-spacing:.06em;font-size:8pt}
+.doc .disc{border:1pt solid #000;padding:5pt 7pt;margin-top:8pt;font-size:8pt;line-height:1.45}
+.doc .sig{display:grid;grid-template-columns:repeat(2,1fr);gap:10pt;margin-top:10pt}
+.doc .sig .box{border:.75pt solid #666;padding:6pt 8pt}
+.doc .sig .box b{display:block;font-size:7.5pt;letter-spacing:.09em;text-transform:uppercase;color:#444}
+.doc .sig .box .nm{font-size:10pt;margin-top:2pt;min-height:13pt}
+.doc .sig .rule{border-bottom:.75pt solid #000;height:22pt;margin-top:6pt}
+.doc .sig .cap{font-size:7.5pt;color:#555;margin-top:2pt}
+.doc .foot{margin-top:8pt;border-top:.75pt solid #999;padding-top:4pt;font-size:7.5pt;color:#444;
+  display:flex;justify-content:space-between;gap:12pt}
+@media print{
+  .doc table{break-inside:auto}
+  .doc thead{display:table-header-group}
+  .doc .sig,.doc .disc,.doc .flagbox{break-inside:avoid}
+  .doc .two{display:grid}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">RB</div>
+    <div>
+      <h1>Table Reservation Book</h1>
+      <div class="sub">COVERS · TURN TIMES · TABLE PLAN</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print service sheet</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint" style="padding-top:0" id="mainApp">
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+  <div class="pagestack">
+
+    <div class="note warn" id="discOn">
+      <strong>Planning aid — not an occupancy limit.</strong> Cover figures come from your table plan and turn times.
+      They are not a fire-safety or licensed occupancy limit — confirm the maximum people permitted with your fire
+      authority and premises licence. Guest names and numbers are personal data: hold them only as long as you need
+      them (UK GDPR or local equivalent). Deposit and cancellation terms are between you and the guest.
+    </div>
+
+    <div class="split">
+
+      <!-- ═══ LEFT: the book ═══ -->
+      <div class="stack" style="gap:14px">
+
+        <section class="card">
+          <div class="hd">
+            <h2>Venue, day &amp; service</h2>
+            <span class="chip" id="sampleChip" hidden>Sample data</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm" id="bBlank">Start a blank book</button>
+            <button type="button" class="btn sm" id="bSample" hidden>Load the sample</button>
+          </div>
+          <div class="bd">
+            <div class="fgrid wide">
+              <div class="f span2"><label for="orgName">Restaurant / venue</label>
+                <input id="orgName" data-k="org.name" type="text" autocomplete="organization" placeholder="Trading name"></div>
+              <div class="f span2"><label for="orgAddr">Address</label>
+                <input id="orgAddr" data-k="org.addr" type="text" placeholder="Street, town, postcode"></div>
+              <div class="f"><label for="orgPhone">Reservations line</label>
+                <input id="orgPhone" data-k="org.phone" type="tel" placeholder="e.g. 0161 496 0000"></div>
+              <div class="f"><label for="orgHost">Host on duty</label>
+                <input id="orgHost" data-k="org.host" type="text" autocomplete="name" placeholder="Name"></div>
+              <div class="f"><label for="fDate">Service date</label>
+                <input id="fDate" data-k="date" type="date"></div>
+              <div class="f"><label for="fSvc">Service</label>
+                <select id="fSvc"></select></div>
+              <div class="f"><label for="fWalk">Walk-in hold (%)</label>
+                <input id="fWalk" data-k="walkin" type="number" min="0" max="90" step="1" inputmode="numeric">
+                <span class="hint">Covers held back for walk-ins</span></div>
+              <div class="f"><label for="curCode">Currency (deposits)</label>
+                <select id="curCode" data-k="cur.code">
+                  <option value="GBP">£ — pounds (GBP)</option>
+                  <option value="USD">$ — dollars (USD)</option>
+                  <option value="EUR">€ — euro (EUR)</option>
+                  <option value="CUSTOM">Custom symbol…</option>
+                </select></div>
+              <div class="f" id="curSymWrap" hidden><label for="curSym">Custom symbol</label>
+                <input id="curSym" data-k="cur.sym" type="text" maxlength="4" placeholder="e.g. R$"></div>
+            </div>
+            <p class="err" id="errDate" hidden></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="hd">
+            <h2 id="bkTitle">Bookings</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm" id="bAuto">Auto-assign tables</button>
+            <button type="button" class="btn sm pri" id="bAdd">Add booking</button>
+          </div>
+          <div class="tw">
+            <table class="bk">
+              <colgroup><col class="c-time"><col class="c-end"><col class="c-guest"><col class="c-party">
+                <col class="c-tbl"><col class="c-st"><col class="c-dep"><col class="c-note"><col class="c-flag"><col class="c-x"></colgroup>
+              <thead><tr>
+                <th scope="col">Time</th><th scope="col" class="r">Ends</th><th scope="col">Guest &amp; contact</th>
+                <th scope="col" class="r">Party</th><th scope="col">Table</th><th scope="col">Status</th>
+                <th scope="col" class="r">Deposit</th><th scope="col">Notes</th><th scope="col">Check</th>
+                <th scope="col"><span class="lbl" style="color:var(--muted)">Del</span></th>
+              </tr></thead>
+              <tbody id="bkBody"></tbody>
+            </table>
+          </div>
+          <div id="bkEmpty" class="empty" hidden>No bookings for this date and service yet. Use <b>Add booking</b> to start the diary.</div>
+          <div class="ft">
+            <span class="chip" id="chipParties">—</span>
+            <span class="chip" id="chipCovers">—</span>
+            <span class="chip" id="chipDeps">—</span>
+            <span class="spacer"></span>
+            <span class="tiny" id="ftNote">Table released after the turn time for the party size.</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="hd"><h2>Seating slots — covers and seats in use</h2>
+            <span class="spacer"></span><span class="chip" id="chipPeak">—</span></div>
+          <div class="tw">
+            <table class="slot">
+              <colgroup><col class="c-s"><col class="c-ar"><col class="c-cv"><col class="c-se"><col class="c-fr"><col class="c-bar"></colgroup>
+              <thead><tr>
+                <th scope="col">Slot</th><th scope="col" class="r">Arrivals</th><th scope="col" class="r">Covers in</th>
+                <th scope="col" class="r">Seats held</th><th scope="col" class="r">Seats free</th><th scope="col">Seats in use</th>
+              </tr></thead>
+              <tbody id="slotBody"></tbody>
+            </table>
+          </div>
+          <div class="ft"><span class="tiny" id="slotNote">—</span></div>
+        </section>
+
+        <section class="card">
+          <div class="hd"><h2>Service periods</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm" id="bAddSvc">Add service</button></div>
+          <div class="tw">
+            <table class="svct">
+              <colgroup><col class="c-sn"><col class="c-t"><col class="c-t"><col class="c-sl"><col class="c-cv"><col class="c-x"></colgroup>
+              <thead><tr><th scope="col">Service</th><th scope="col">First seating</th><th scope="col">Close</th>
+                <th scope="col" class="r">Slot (min)</th><th scope="col" class="r">Cover capacity</th>
+                <th scope="col"><span class="lbl" style="color:var(--muted)">Del</span></th></tr></thead>
+              <tbody id="svcBody"></tbody>
+            </table>
+          </div>
+          <div class="ft"><span class="tiny">Cover capacity = sum over tables of <b>seats × floor(service minutes ÷ turn time for that table size)</b>. A service that closes before it opens is read as running past midnight.</span></div>
+        </section>
+
+        <section class="card">
+          <div class="hd"><h2>Tables</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm" id="bAddTbl">Add table</button></div>
+          <div class="tw">
+            <table class="tblst">
+              <colgroup><col class="c-nm"><col class="c-zn"><col class="c-se"><col class="c-on"><col class="c-cap"><col class="c-x"></colgroup>
+              <thead><tr><th scope="col">Table</th><th scope="col">Zone</th><th scope="col" class="r">Seats</th>
+                <th scope="col" class="c">In service</th><th scope="col" class="r">Covers / service</th>
+                <th scope="col"><span class="lbl" style="color:var(--muted)">Del</span></th></tr></thead>
+              <tbody id="tblBody"></tbody>
+              <tfoot><tr><td colspan="2">Total seats in service</td><td class="n" id="tblSeats">—</td>
+                <td></td><td class="n" id="tblCaps">—</td><td></td></tr></tfoot>
+            </table>
+          </div>
+          <div class="ft"><span class="tiny">A party larger than the table&rsquo;s seats is flagged in the diary. Take a table out of service and its seats leave the capacity.</span></div>
+        </section>
+
+        <section class="card">
+          <div class="hd"><h2>Turn times by party size</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm" id="bAddTurn">Add band</button></div>
+          <div class="tw">
+            <table class="turns">
+              <colgroup><col class="c-mx"><col class="c-mn"><col class="c-ex"><col class="c-x"></colgroup>
+              <thead><tr><th scope="col" class="r">Up to (guests)</th><th scope="col" class="r">Turn (min)</th>
+                <th scope="col">Applies to</th><th scope="col"><span class="lbl" style="color:var(--muted)">Del</span></th></tr></thead>
+              <tbody id="turnBody"></tbody>
+            </table>
+          </div>
+          <div class="ft"><span class="tiny">Bands are read smallest first: a party takes the turn time of the first band its size fits. The table is released at the end of the turn and can be booked again.</span></div>
+        </section>
+
+        <section class="card">
+          <div class="hd"><h2>Guest history &amp; no-show rate</h2>
+            <span class="spacer"></span>
+            <span class="chip" id="chipGuests">—</span>
+            <button type="button" class="btn sm" id="bCsvG">CSV</button></div>
+          <div class="tw">
+            <table class="gst">
+              <colgroup><col class="c-g"><col class="c-ph"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-rt"></colgroup>
+              <thead><tr><th scope="col">Guest</th><th scope="col">Contact</th><th scope="col" class="r">Bookings</th>
+                <th scope="col" class="r">Seated</th><th scope="col" class="r">No-shows</th><th scope="col" class="r">Cancelled</th>
+                <th scope="col" class="r">No-show rate</th></tr></thead>
+              <tbody id="gstBody"></tbody>
+            </table>
+          </div>
+          <div id="gstEmpty" class="empty" hidden>No guests in the book yet.</div>
+          <div class="ft"><span class="tiny">No-show rate = no-shows ÷ bookings excluding cancellations, across every date in the book. Guests are matched on contact number where given, otherwise on name.</span></div>
+        </section>
+
+      </div>
+
+      <!-- ═══ RIGHT: live result ═══ -->
+      <div class="rail">
+        <section class="card sticky">
+          <div class="hd"><h2 id="railTitle">Covers</h2><span class="spacer"></span><span class="chip" id="chipSvc">—</span></div>
+          <div class="bd stack" style="gap:11px">
+            <div class="stat hero">
+              <div class="k" id="heroK">Covers still bookable</div>
+              <div class="v" id="heroV">—</div>
+              <div class="u" id="heroU">—</div>
+            </div>
+            <div class="sgrid">
+              <div class="stat"><div class="k">Covers booked</div><div class="v" id="sCov">—</div><div class="u" id="sCovU">—</div></div>
+              <div class="stat"><div class="k">Bookings</div><div class="v" id="sBk">—</div><div class="u" id="sBkU">—</div></div>
+            </div>
+            <div class="ladder" id="ladder"></div>
+            <div class="sgrid">
+              <div class="stat"><div class="k">Busiest slot</div><div class="v" id="sPeak">—</div><div class="u" id="sPeakU">—</div></div>
+              <div class="stat"><div class="k">Deposits held</div><div class="v" id="sDep">—</div><div class="u" id="sDepU">—</div></div>
+            </div>
+            <div class="alerts" id="alerts"></div>
+          </div>
+          <div class="ft">
+            <span class="tiny">Capacity <span class="mono" id="ftCap">—</span> − walk-in hold <span class="mono" id="ftHold">—</span>
+              = bookable <span class="mono" id="ftBook">—</span></span>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer class="foot noprint">
+  <b>What this tool assumes.</b> Cover capacity for a service = Σ over tables in service of (seats × floor(service minutes ÷ turn time for a party of that table&rsquo;s size));
+  the walk-in hold is that capacity × your percentage, <b>rounded up</b>; bookable covers = capacity − hold; remaining covers = bookable − covers booked
+  (statuses booked, confirmed and seated). A table is occupied from the booking time until the turn time for that party size has elapsed, then released.
+  No-show rate = no-shows ÷ bookings excluding cancellations. Times are venue local time; a service closing before it opens is treated as running past midnight.
+  Everything is stored in this browser only — nothing is sent anywhere.
+</footer>
+
+<div class="printonly" id="printdoc"></div>
+
+<script>
+(function(){
+'use strict';
+var KEY='solvix.reservation-book.v1';
+var $=function(s,r){return (r||document).querySelector(s);};
+var STATUSES=[['booked','Booked'],['confirmed','Confirmed'],['seated','Seated'],['noshow','No-show'],['cancelled','Cancelled']];
+var STLABEL={booked:'Booked',confirmed:'Confirmed',seated:'Seated',noshow:'No-show',cancelled:'Cancelled'};
+var HOLDS={booked:1,confirmed:1,seated:1};
+var SYM={GBP:'£',USD:'$',EUR:'€'};
+var S=null, mutedSave=false;
+
+/* ── helpers ─────────────────────────────────────────────── */
+function esc(s){ return String(s===null||s===undefined?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function uid(p){ return (p||'id')+Math.random().toString(36).slice(2,9); }
+function fin(v){ return typeof v==='number' && isFinite(v); }
+function nz(v){ v=Number(v); return isFinite(v)?v:0; }
+function nfmt(v){ if(!fin(v)) return '—'; var r=Math.round(v); if(Object.is(r,-0)) r=0;
+  return String(r).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function sym(){ var c=S&&S.cur?S.cur.code:'GBP'; if(c==='CUSTOM') return (S.cur.sym||'').slice(0,4)||'¤'; return SYM[c]||'£'; }
+function money(v){ if(!fin(v)) return '—'; var x=Math.round(v*100)/100; if(Object.is(x,-0)) x=0;
+  var neg=x<0; x=Math.abs(x);
+  var s=x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,'');
+  var p=x.toFixed(2).split('.');
+  s=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+p[1];
+  return (neg?'-':'')+sym()+s; }
+function pct1(v){ if(!fin(v)) return '—'; return (Math.round(v*10)/10).toFixed(1)+'%'; }
+function t2m(s){ if(!s) return null; var m=/^(\d{1,2}):(\d{2})$/.exec(String(s).trim()); if(!m) return null;
+  var h=+m[1], mi=+m[2]; if(h>23||mi>59) return null; return h*60+mi; }
+function m2t(v){ if(!fin(v)) return '—'; var m=((Math.round(v)%1440)+1440)%1440;
+  var h=Math.floor(m/60), mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
+function isoDay(off){ var d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+(off||0));
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function longDate(iso){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||'')); if(!m) return iso||'—';
+  var d=new Date(+m[1],+m[2]-1,+m[3]); if(isNaN(d.getTime())) return iso;
+  var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return days[d.getDay()]+' '+d.getDate()+' '+mo[d.getMonth()]+' '+d.getFullYear(); }
+function msg(t,bad){ var e=$('#msg'); e.textContent=t||''; e.className='msg'+(bad?' bad':'');
+  if(t){ clearTimeout(msg._t); msg._t=setTimeout(function(){ e.textContent=''; },5000); } }
+function getPath(o,p){ var a=p.split('.'),v=o; for(var i=0;i<a.length;i++){ if(v==null) return undefined; v=v[a[i]]; } return v; }
+function setPath(o,p,v){ var a=p.split('.'),t=o; for(var i=0;i<a.length-1;i++){ if(typeof t[a[i]]!=='object'||!t[a[i]]) t[a[i]]={}; t=t[a[i]]; } t[a[a.length-1]]=v; }
+
+/* ── default + sample data ───────────────────────────────── */
+function blank(){
+  return {
+    v:1, sample:false,
+    org:{name:'',addr:'',phone:'',host:''},
+    cur:{code:'GBP',sym:''},
+    date:isoDay(0), walkin:15, active:'sv_d',
+    services:[
+      {id:'sv_l',name:'Lunch',start:'12:00',end:'14:30',slot:15},
+      {id:'sv_d',name:'Dinner',start:'17:30',end:'22:30',slot:15}
+    ],
+    tables:[],
+    turns:[{id:'tn1',max:2,min:75},{id:'tn2',max:4,min:90},{id:'tn3',max:6,min:120},{id:'tn4',max:12,min:150}],
+    bookings:[]
+  };
+}
+function sample(){
+  var s=blank();
+  s.sample=true;
+  s.org={name:'The Copper Vine',addr:'14 Marlow Street, Manchester M1 4QT',phone:'0161 496 0142',host:'Priya Raman'};
+  var T=[['tb1','T1','Window',2],['tb2','T2','Window',2],['tb3','T3','Window',4],['tb4','T4','Main room',4],
+         ['tb5','T5','Main room',4],['tb6','T6','Main room',6],['tb7','T7','Main room',6],['tb8','T8','Booth',4],
+         ['tb9','T9','Booth',2],['tb10','T10','Terrace',8]];
+  s.tables=T.map(function(r){ return {id:r[0],name:r[1],zone:r[2],seats:r[3],on:true}; });
+  var d0=isoDay(0), d7=isoDay(-7), d14=isoDay(-14), d28=isoDay(-28);
+  var B=[
+    [d0,'sv_d','17:45','Alderton','07700 900118',2,'tb1','confirmed',0,'Anniversary — window if free'],
+    [d0,'sv_d','18:00','Brightwell','07700 900241',4,'tb3','confirmed',0,''],
+    [d0,'sv_d','18:15','Casey','07700 900377',2,'tb2','booked',0,'One high chair'],
+    [d0,'sv_d','18:30','Dunmore','07700 900403',6,'tb6','confirmed',50,'Set menu, pre-ordered'],
+    [d0,'sv_d','18:45','Ellery','07700 900512',4,'tb4','booked',0,'Nut allergy — table 4'],
+    [d0,'sv_d','19:00','Fairhurst','07700 900668',8,'tb10','confirmed',100,'Birthday, cake at 20:30'],
+    [d0,'sv_d','19:15','Gallagher','07700 900731',2,'tb9','booked',0,''],
+    [d0,'sv_d','19:30','Hollis','07700 900854',4,'tb5','confirmed',0,'Theatre — out by 21:00'],
+    [d0,'sv_d','19:45','Ives','07700 900902',4,'tb8','booked',0,'Card taken on the phone'],
+    [d0,'sv_d','20:00','Jarrett','07700 901067',6,'tb7','confirmed',60,'Wine flight'],
+    [d0,'sv_d','20:15','Kemble','07700 901188',2,'tb1','booked',0,''],
+    [d0,'sv_d','20:30','Lomax','07700 901254',4,'tb3','confirmed',0,''],
+    [d0,'sv_d','21:00','Marchetti','07700 901396',2,'tb2','booked',0,'Late arrival, called ahead'],
+    [d0,'sv_d','21:15','Nunn','07700 901432',4,'tb4','booked',0,'Last seating'],
+    [d0,'sv_d','19:00','Sandoval','07700 901555',3,'','noshow',0,'Did not arrive, no call'],
+    [d0,'sv_d','20:00','Rushworth','07700 901690',2,'','cancelled',0,'Cancelled same day'],
+    [d0,'sv_l','12:30','Okonkwo','07700 901744',2,'tb1','confirmed',0,'Business lunch'],
+    [d0,'sv_l','13:00','Pemberton','07700 901820',4,'tb3','booked',0,''],
+    [d7,'sv_d','19:45','Ives','07700 900902',4,'tb8','seated',0,''],
+    [d7,'sv_d','19:00','Dunmore','07700 900403',6,'tb6','seated',0,''],
+    [d14,'sv_d','20:00','Ives','07700 900902',2,'tb2','noshow',0,'No contact'],
+    [d14,'sv_d','18:30','Brightwell','07700 900241',4,'tb3','seated',0,''],
+    [d28,'sv_d','19:30','Ives','07700 900902',4,'tb8','noshow',0,'Rang after service'],
+    [d28,'sv_l','12:30','Casey','07700 900377',2,'tb1','seated',0,'']
+  ];
+  s.bookings=B.map(function(r){ return {id:uid('bk'),date:r[0],svc:r[1],time:r[2],name:r[3],phone:r[4],
+    party:r[5],table:r[6],status:r[7],dep:r[8],notes:r[9]}; });
+  return s;
+}
+
+/* ── persistence ─────────────────────────────────────────── */
+function merge(o){
+  var b=blank();
+  if(!o||typeof o!=='object') return b;
+  b.sample=!!o.sample;
+  if(o.org&&typeof o.org==='object'){ ['name','addr','phone','host'].forEach(function(k){ if(typeof o.org[k]==='string') b.org[k]=o.org[k]; }); }
+  if(o.cur&&typeof o.cur==='object'){ if(typeof o.cur.code==='string') b.cur.code=o.cur.code; if(typeof o.cur.sym==='string') b.cur.sym=o.cur.sym; }
+  if(typeof o.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(o.date)) b.date=o.date;
+  if(isFinite(o.walkin)) b.walkin=Math.max(0,Math.min(90,Math.round(nz(o.walkin))));
+  if(Array.isArray(o.services)&&o.services.length){
+    b.services=o.services.slice(0,12).map(function(s){ return {id:(typeof s.id==='string'&&s.id)||uid('sv'),
+      name:String(s.name||'Service').slice(0,40), start:/^\d{1,2}:\d{2}$/.test(s.start||'')?s.start:'12:00',
+      end:/^\d{1,2}:\d{2}$/.test(s.end||'')?s.end:'14:30',
+      slot:Math.max(5,Math.min(120,Math.round(nz(s.slot)||15)))}; });
+  }
+  if(Array.isArray(o.tables)){
+    b.tables=o.tables.slice(0,120).map(function(t){ return {id:(typeof t.id==='string'&&t.id)||uid('tb'),
+      name:String(t.name||'').slice(0,24), zone:String(t.zone||'').slice(0,24),
+      seats:Math.max(0,Math.min(60,Math.round(nz(t.seats)))), on:t.on===false?false:true}; });
+  }
+  if(Array.isArray(o.turns)&&o.turns.length){
+    b.turns=o.turns.slice(0,12).map(function(t){ return {id:(typeof t.id==='string'&&t.id)||uid('tn'),
+      max:Math.max(1,Math.min(99,Math.round(nz(t.max)||1))), min:Math.max(0,Math.min(600,Math.round(nz(t.min))))}; });
+  }
+  if(Array.isArray(o.bookings)){
+    b.bookings=o.bookings.slice(0,2000).map(function(k){ return {id:(typeof k.id==='string'&&k.id)||uid('bk'),
+      date:/^\d{4}-\d{2}-\d{2}$/.test(k.date||'')?k.date:b.date,
+      svc:String(k.svc||''), time:/^\d{1,2}:\d{2}$/.test(k.time||'')?k.time:'',
+      name:String(k.name||'').slice(0,60), phone:String(k.phone||'').slice(0,32),
+      party:Math.max(0,Math.min(200,Math.round(nz(k.party)))), table:String(k.table||''),
+      status:STLABEL[k.status]?k.status:'booked', dep:Math.max(0,nz(k.dep)), notes:String(k.notes||'').slice(0,200)}; });
+  }
+  var ids=b.services.map(function(s){return s.id;});
+  b.active=(typeof o.active==='string'&&ids.indexOf(o.active)>=0)?o.active:ids[0];
+  return b;
+}
+function save(){ if(mutedSave) return; try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function load(){ try{ var raw=localStorage.getItem(KEY); if(!raw) return null; return merge(JSON.parse(raw)); }catch(e){ return null; } }
+
+/* ── domain maths ────────────────────────────────────────── */
+function svcById(id){ for(var i=0;i<S.services.length;i++) if(S.services[i].id===id) return S.services[i]; return null; }
+function tblById(id){ for(var i=0;i<S.tables.length;i++) if(S.tables[i].id===id) return S.tables[i]; return null; }
+function bands(){ return S.turns.slice().sort(function(a,b){ return a.max-b.max; }); }
+function turnFor(party){
+  var bs=bands(); if(!bs.length) return 0;
+  var p=Math.max(1,Math.round(nz(party)));
+  for(var i=0;i<bs.length;i++) if(p<=bs[i].max) return Math.max(0,bs[i].min);
+  return Math.max(0,bs[bs.length-1].min);
+}
+function svcWindow(sv){
+  if(!sv) return null;
+  var a=t2m(sv.start), b=t2m(sv.end);
+  if(a===null||b===null) return null;
+  var end=b>a?b:(b<a?b+1440:a);
+  return {start:a,end:end,dur:end-a};
+}
+function seatsOn(){ var n=0; S.tables.forEach(function(t){ if(t.on) n+=Math.max(0,Math.round(nz(t.seats))); }); return n; }
+/* capacity in covers = sum over tables of seats x floor(service minutes / turn time for a party of that size) */
+function capacityFor(sv){
+  var w=svcWindow(sv); if(!w||w.dur<=0) return {covers:0,dur:w?w.dur:0,per:{}};
+  var per={}, tot=0;
+  S.tables.forEach(function(t){
+    if(!t.on) return;
+    var seats=Math.max(0,Math.round(nz(t.seats)));
+    var tt=turnFor(seats);
+    var turns=(tt>0)?Math.floor(w.dur/tt):0;
+    var c=seats*turns;
+    per[t.id]={turns:turns,covers:c,turn:tt};
+    tot+=c;
+  });
+  return {covers:tot,dur:w.dur,per:per};
+}
+function occOf(b){
+  var st=t2m(b.time); if(st===null) return null;
+  var tt=turnFor(b.party); if(tt<=0) return {s:st,e:st,t:0};
+  return {s:st,e:st+tt,t:tt};
+}
+function guestKey(b){
+  var ph=String(b.phone||'').replace(/[^0-9+]/g,'');
+  if(ph.length>=6) return 'p:'+ph.slice(-9);
+  var nm=String(b.name||'').trim().toLowerCase();
+  return nm?('n:'+nm):'';
+}
+function guestStats(){
+  var m={};
+  S.bookings.forEach(function(b){
+    var k=guestKey(b); if(!k) return;
+    if(!m[k]) m[k]={key:k,name:b.name||'(no name)',phone:b.phone||'',total:0,seated:0,noshow:0,cancelled:0,all:0,last:''};
+    var g=m[k];
+    g.all++;
+    if(b.date>g.last){ g.last=b.date; if(b.name) g.name=b.name; if(b.phone) g.phone=b.phone; }
+    if(b.status==='cancelled'){ g.cancelled++; return; }
+    g.total++;
+    if(b.status==='seated') g.seated++;
+    if(b.status==='noshow') g.noshow++;
+  });
+  var out=[];
+  for(var k in m){ if(!Object.prototype.hasOwnProperty.call(m,k)) continue;
+    var g=m[k]; g.rate=(g.total>0)?(g.noshow/g.total*100):null; out.push(g); }
+  out.sort(function(a,b){
+    var ra=(a.rate===null?-1:a.rate), rb=(b.rate===null?-1:b.rate);
+    if(rb!==ra) return rb-ra; if(b.all!==a.all) return b.all-a.all;
+    return a.name.localeCompare(b.name); });
+  return out;
+}
+function riskGuest(g){ return !!g && g.total>=2 && g.noshow>=1 && g.rate!==null && g.rate>=25; }
+
+/* full computation for the selected date + service */
+function compute(){
+  var sv=svcById(S.active) || S.services[0] || null;
+  var w=svcWindow(sv);
+  var cap=capacityFor(sv);
+  var walk=Math.max(0,Math.min(90,Math.round(nz(S.walkin))));
+  var hold=Math.ceil(cap.covers*walk/100);
+  var bookable=cap.covers-hold;
+  var day=S.bookings.filter(function(b){ return b.date===S.date; });
+  var rows=day.filter(function(b){ return b.svc===(sv?sv.id:''); });
+  rows=rows.slice().sort(function(a,b){
+    var ta=t2m(a.time), tb=t2m(b.time);
+    if(ta===null&&tb===null) return 0; if(ta===null) return 1; if(tb===null) return -1;
+    if(ta!==tb) return ta-tb; return String(a.name).localeCompare(String(b.name)); });
+  var gs={}; guestStats().forEach(function(g){ gs[g.key]=g; });
+
+  var counts={booked:0,confirmed:0,seated:0,noshow:0,cancelled:0};
+  var covers={booked:0,confirmed:0,seated:0,noshow:0,cancelled:0};
+  var booked=0, parties=0, deps=0, issues={clash:0,small:0,notable:0,late:0,outside:0,risk:0};
+  var flags={};
+
+  rows.forEach(function(b){
+    var st=STLABEL[b.status]?b.status:'booked';
+    counts[st]++; covers[st]+=Math.max(0,Math.round(nz(b.party)));
+    if(st!=='cancelled') deps+=Math.max(0,nz(b.dep));
+    if(HOLDS[st]){ booked+=Math.max(0,Math.round(nz(b.party))); parties++; }
+    var f=[];
+    var o=occOf(b);
+    if(HOLDS[st]){
+      var p=Math.max(0,Math.round(nz(b.party)));
+      if(!b.time||o===null){ f.push({t:'bad',s:'No time'}); issues.outside++; }
+      if(p<1){ f.push({t:'bad',s:'Party size?'}); }
+      var t=b.table?tblById(b.table):null;
+      if(!b.table){ f.push({t:'warn',s:'No table'}); issues.notable++; }
+      else if(!t){ f.push({t:'bad',s:'Table gone'}); issues.notable++; }
+      else {
+        if(p>Math.round(nz(t.seats))){ f.push({t:'bad',s:'Seats '+nfmt(nz(t.seats))}); issues.small++; }
+        if(!t.on){ f.push({t:'warn',s:'Off service'}); }
+        if(o){
+          day.forEach(function(x){
+            if(x.id===b.id||!HOLDS[x.status]||x.table!==b.table) return;
+            var ox=occOf(x); if(!ox||!o) return;
+            if(o.s<ox.e && ox.s<o.e){ f.push({t:'bad',s:'Clash '+ (x.time||'?')}); issues.clash++; }
+          });
+        }
+      }
+      if(o&&w){
+        var st0=o.s<w.start?o.s+1440:o.s;
+        if(st0<w.start||st0>w.end){ f.push({t:'warn',s:'Outside service'}); issues.outside++; }
+        else if(o.e>w.end && o.t>0){ f.push({t:'warn',s:'Past close'}); issues.late++; }
+      }
+      var g=gs[guestKey(b)];
+      if(riskGuest(g)){ f.push({t:'warn',s:nfmt(g.noshow)+' no-show'+(g.noshow===1?'':'s')}); issues.risk++; }
+      if(!f.length) f.push({t:'ok',s:'OK'});
+    }
+    flags[b.id]=f;
+  });
+
+  /* seating slots */
+  var slots=[], peak=null;
+  var totalSeats=seatsOn();
+  var slotHold=Math.ceil(totalSeats*walk/100);
+  if(w&&w.dur>0&&sv){
+    var step=Math.max(5,Math.round(nz(sv.slot)||15));
+    for(var t0=w.start;t0<w.end;t0+=step){
+      var arr=0, cov=0, held=0;
+      day.forEach(function(b){
+        if(!HOLDS[b.status]) return;
+        var o=occOf(b); if(!o) return;
+        var s0=o.s, e0=o.e;
+        if(s0<w.start-720){ s0+=1440; e0+=1440; }
+        var p=Math.max(0,Math.round(nz(b.party)));
+        if(s0>=t0 && s0<t0+step) arr+=p;
+        if(s0<=t0 && t0<e0){
+          cov+=p;
+          var tb=b.table?tblById(b.table):null;
+          held+=(tb&&tb.on)?Math.max(0,Math.round(nz(tb.seats))):p;
+        }
+      });
+      var free=totalSeats-held;
+      var pctv=totalSeats>0?(held/totalSeats*100):null;
+      var row={t:t0,arr:arr,cov:cov,held:held,free:free,pct:pctv,
+        state:(free<0?'bad':(free<slotHold?'warn':'ok'))};
+      slots.push(row);
+      if(!peak||held>peak.held) peak=row;
+    }
+  }
+  return {sv:sv,w:w,cap:cap,walk:walk,hold:hold,bookable:bookable,rows:rows,day:day,
+    counts:counts,coversBy:covers,booked:booked,parties:parties,deps:deps,issues:issues,
+    flags:flags,slots:slots,peak:peak,totalSeats:totalSeats,slotHold:slotHold,gs:gs,
+    remaining:bookable-booked};
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+function syncFields(){
+  var els=document.querySelectorAll('[data-k]');
+  for(var i=0;i<els.length;i++){
+    var el=els[i], v=getPath(S,el.getAttribute('data-k'));
+    el.value=(v===undefined||v===null)?'':v;
+  }
+  $('#curSymWrap').hidden=(S.cur.code!=='CUSTOM');
+  $('#sampleChip').hidden=!S.sample;
+  $('#bSample').hidden=!!S.sample;
+}
+function renderSvcSelect(){
+  var sel=$('#fSvc'), h='';
+  S.services.forEach(function(s){
+    h+='<option value="'+esc(s.id)+'">'+esc(s.name)+' · '+esc(s.start)+'–'+esc(s.end)+'</option>';
+  });
+  sel.innerHTML=h||'<option value="">No services</option>';
+  sel.value=S.active;
+  if(!sel.value && S.services.length){ S.active=S.services[0].id; sel.value=S.active; }
+}
+function tableOptions(sel){
+  var h='<option value="">— none —</option>';
+  S.tables.forEach(function(t){
+    h+='<option value="'+esc(t.id)+'"'+(t.id===sel?' selected':'')+'>'+esc(t.name||'?')+' ('+nfmt(nz(t.seats))+')'+(t.on?'':' – off')+'</option>';
+  });
+  return h;
+}
+function renderRows(){
+  var c=compute(), b='', body=$('#bkBody');
+  c.rows.forEach(function(k){
+    var stc=k.status==='noshow'?'st-noshow':(k.status==='seated'?'st-seated':(k.status==='cancelled'?'st-cancelled':''));
+    b+='<tr data-id="'+esc(k.id)+'" class="'+stc+'">'+
+      '<td><input type="time" data-b="time" value="'+esc(k.time)+'" aria-label="Booking time"></td>'+
+      '<td class="endc" id="e_'+esc(k.id)+'">—</td>'+
+      '<td><div class="gcell">'+
+        '<input type="text" data-b="name" value="'+esc(k.name)+'" title="'+esc(k.name)+'" placeholder="Guest name" aria-label="Guest name">'+
+        '<input type="tel" class="ph" data-b="phone" value="'+esc(k.phone)+'" placeholder="Contact" aria-label="Contact number"></div></td>'+
+      '<td><input type="number" data-b="party" value="'+esc(k.party)+'" min="1" max="200" step="1" inputmode="numeric" aria-label="Party size"></td>'+
+      '<td><select data-b="table" aria-label="Table">'+tableOptions(k.table)+'</select></td>'+
+      '<td><select data-b="status" aria-label="Status">'+STATUSES.map(function(s){
+          return '<option value="'+s[0]+'"'+(s[0]===k.status?' selected':'')+'>'+s[1]+'</option>'; }).join('')+'</select></td>'+
+      '<td><input type="number" data-b="dep" value="'+esc(k.dep)+'" min="0" step="0.01" inputmode="decimal" aria-label="Deposit"></td>'+
+      '<td><input type="text" data-b="notes" value="'+esc(k.notes)+'" title="'+esc(k.notes)+'" placeholder="Notes" aria-label="Notes"></td>'+
+      '<td class="flagcell"><div class="flags" id="f_'+esc(k.id)+'"></div></td>'+
+      '<td class="r"><button type="button" class="xb" data-del="'+esc(k.id)+'" aria-label="Remove booking for '+esc(k.name||'guest')+'">✕</button></td>'+
+    '</tr>';
+  });
+  body.innerHTML=b;
+  $('#bkEmpty').hidden=c.rows.length>0;
+}
+function renderSvcTable(){
+  var h='';
+  S.services.forEach(function(s){
+    var cap=capacityFor(s), w=svcWindow(s);
+    h+='<tr data-sid="'+esc(s.id)+'">'+
+      '<td><input type="text" data-s="name" value="'+esc(s.name)+'" aria-label="Service name"></td>'+
+      '<td><input type="time" data-s="start" value="'+esc(s.start)+'" aria-label="First seating"></td>'+
+      '<td><input type="time" data-s="end" value="'+esc(s.end)+'" aria-label="Service close"></td>'+
+      '<td><input type="number" data-s="slot" value="'+esc(s.slot)+'" min="5" max="120" step="5" inputmode="numeric" aria-label="Slot minutes"></td>'+
+      '<td class="n">'+nfmt(cap.covers)+'<span class="tiny"> ('+(w?nfmt(w.dur):'—')+'m)</span></td>'+
+      '<td class="r"><button type="button" class="xb" data-delsvc="'+esc(s.id)+'" aria-label="Remove service '+esc(s.name)+'">✕</button></td></tr>';
+  });
+  $('#svcBody').innerHTML=h;
+}
+function renderTables(){
+  var sv=svcById(S.active), cap=capacityFor(sv), h='';
+  S.tables.forEach(function(t){
+    var p=cap.per[t.id];
+    h+='<tr data-tid="'+esc(t.id)+'">'+
+      '<td><input type="text" data-t="name" value="'+esc(t.name)+'" aria-label="Table name"></td>'+
+      '<td><input type="text" data-t="zone" value="'+esc(t.zone)+'" aria-label="Zone"></td>'+
+      '<td><input type="number" data-t="seats" value="'+esc(t.seats)+'" min="0" max="60" step="1" inputmode="numeric" aria-label="Seats"></td>'+
+      '<td class="c"><input type="checkbox" data-t="on"'+(t.on?' checked':'')+' aria-label="Table '+esc(t.name)+' in service" style="width:16px;height:16px;accent-color:var(--accent)"></td>'+
+      '<td class="n">'+(t.on&&p?nfmt(p.covers)+'<span class="tiny"> ('+nfmt(p.turns)+'×)</span>':'—')+'</td>'+
+      '<td class="r"><button type="button" class="xb" data-deltbl="'+esc(t.id)+'" aria-label="Remove table '+esc(t.name)+'">✕</button></td></tr>';
+  });
+  $('#tblBody').innerHTML=h||'<tr><td colspan="6" class="empty">No tables yet — add your table plan.</td></tr>';
+  $('#tblSeats').textContent=nfmt(seatsOn());
+  $('#tblCaps').textContent=nfmt(cap.covers);
+}
+function renderTurns(){
+  var bs=bands(), h='', prev=0;
+  bs.forEach(function(t){
+    var from=prev+1, to=t.max;
+    h+='<tr data-nid="'+esc(t.id)+'">'+
+      '<td><input type="number" data-n="max" value="'+esc(t.max)+'" min="1" max="99" step="1" inputmode="numeric" aria-label="Band upper party size"></td>'+
+      '<td><input type="number" data-n="min" value="'+esc(t.min)+'" min="0" max="600" step="5" inputmode="numeric" aria-label="Turn minutes"></td>'+
+      '<td class="tiny">'+(to>=from?('Parties of '+nfmt(from)+(to>from?('–'+nfmt(to)):'')+' → '+nfmt(t.min)+' min'):'Covered by a smaller band')+'</td>'+
+      '<td class="r"><button type="button" class="xb" data-delturn="'+esc(t.id)+'" aria-label="Remove turn band">✕</button></td></tr>';
+    prev=Math.max(prev,to);
+  });
+  $('#turnBody').innerHTML=h||'<tr><td colspan="4" class="empty">No turn times set — capacity cannot be worked out.</td></tr>';
+}
+function renderGuests(){
+  var gs=guestStats(), h='';
+  gs.forEach(function(g){
+    h+='<tr'+(riskGuest(g)?' class="risk"':'')+'><td>'+esc(g.name)+(riskGuest(g)?' <span class="chip warn">watch</span>':'')+'</td>'+
+      '<td class="mono" style="font-size:12.5px">'+esc(g.phone||'—')+'</td>'+
+      '<td class="n">'+nfmt(g.total)+'</td><td class="n">'+nfmt(g.seated)+'</td>'+
+      '<td class="n">'+nfmt(g.noshow)+'</td><td class="n">'+nfmt(g.cancelled)+'</td>'+
+      '<td class="n">'+(g.rate===null?'—':pct1(g.rate))+'</td></tr>';
+  });
+  $('#gstBody').innerHTML=h;
+  $('#gstEmpty').hidden=gs.length>0;
+  $('#chipGuests').textContent=nfmt(gs.length)+' guest'+(gs.length===1?'':'s')+' on file';
+}
+function chip(t,s){ return '<span class="chip '+(t==='bad'?'bad':(t==='warn'?'warn':'ok'))+'">'+esc(s)+'</span>'; }
+
+function recalc(){
+  var c=compute();
+  var sv=c.sv;
+  /* per-row computed cells */
+  c.rows.forEach(function(b){
+    var o=occOf(b);
+    var e=$('#e_'+b.id);
+    if(e) e.textContent=(o&&o.t>0&&HOLDS[b.status])?m2t(o.e):'—';
+    var f=$('#f_'+b.id);
+    if(f){
+      var arr=c.flags[b.id]||[];
+      f.innerHTML=arr.length?arr.map(function(x){ return chip(x.t,x.s); }).join(''):'<span class="chip">—</span>';
+    }
+  });
+  /* card headers + footers */
+  $('#bkTitle').textContent='Bookings — '+longDate(S.date)+(sv?(', '+sv.name):'');
+  $('#chipSvc').textContent=sv?(sv.name+' '+sv.start+'–'+sv.end):'No service';
+  $('#railTitle').textContent='Covers — '+(sv?sv.name:'—');
+  $('#chipParties').textContent=nfmt(c.parties)+' part'+(c.parties===1?'y':'ies')+' holding tables';
+  $('#chipCovers').textContent=nfmt(c.booked)+' covers booked';
+  $('#chipDeps').textContent=money(c.deps)+' deposits';
+  var tt=[]; bands().forEach(function(b){ tt.push('≤'+nfmt(b.max)+': '+nfmt(b.min)+'m'); });
+  $('#ftNote').textContent='Turn times — '+(tt.length?tt.join(' · '):'none set');
+
+  /* hero */
+  var hv=$('#heroV'), hu=$('#heroU'), hk=$('#heroK');
+  if(!sv||!c.w||c.cap.covers<=0){
+    hk.textContent='Covers still bookable'; hv.textContent='—';
+    hv.style.color=''; hu.textContent='Add tables, turn times and a service window to see capacity.';
+  } else if(c.remaining<0){
+    hk.textContent='Over the bookable limit';
+    hv.textContent='+'+nfmt(-c.remaining);
+    hv.style.color='var(--bad)';
+    hu.textContent='covers past the '+nfmt(c.bookable)+' bookable — you are into the walk-in hold or over capacity.';
+  } else {
+    hk.textContent='Covers still bookable'; hv.textContent=nfmt(c.remaining); hv.style.color='';
+    hu.textContent=nfmt(c.booked)+' of '+nfmt(c.bookable)+' bookable covers taken · capacity '+nfmt(c.cap.covers)+' · '+nfmt(c.hold)+' held for walk-ins';
+  }
+  $('#sCov').textContent=nfmt(c.booked);
+  $('#sCovU').textContent=c.cap.covers>0?(pct1(c.booked/c.cap.covers*100)+' of capacity'):'—';
+  $('#sBk').textContent=nfmt(c.parties);
+  $('#sBkU').textContent=c.parties>0?('avg party '+(Math.round(c.booked/c.parties*10)/10).toFixed(1)):'no live bookings';
+  $('#sPeak').textContent=c.peak?m2t(c.peak.t):'—';
+  $('#sPeakU').textContent=c.peak?(nfmt(c.peak.held)+' of '+nfmt(c.totalSeats)+' seats'+(c.peak.pct===null?'':' · '+pct1(c.peak.pct))):'—';
+  $('#sDep').textContent=money(c.deps);
+  $('#sDepU').textContent='held against bookings';
+  $('#ftCap').textContent=nfmt(c.cap.covers);
+  $('#ftHold').textContent=nfmt(c.hold)+' ('+nfmt(c.walk)+'%)';
+  $('#ftBook').textContent=nfmt(c.bookable);
+
+  /* ladder */
+  var lh='';
+  STATUSES.forEach(function(s){
+    var n=c.counts[s[0]], cv=c.coversBy[s[0]];
+    lh+='<div'+(HOLDS[s[0]]?'':' class="eq"')+'><span class="lbl2">'+s[1]+'</span><span class="n">'+nfmt(n)+' · '+nfmt(cv)+' cov</span></div>';
+  });
+  lh+='<div class="eq"><span class="lbl2">Holding tables</span><span class="n">'+nfmt(c.parties)+' · '+nfmt(c.booked)+' cov</span></div>';
+  $('#ladder').innerHTML=lh;
+
+  /* alerts */
+  var al=[];
+  if(c.remaining<0) al.push(['bad','<b>Over bookable covers by '+nfmt(-c.remaining)+'.</b> Either release walk-in hold, add a table or push a party to another slot.']);
+  if(c.issues.clash) al.push(['bad','<b>'+nfmt(c.issues.clash)+' table clash'+(c.issues.clash===1?'':'es')+'.</b> Two parties hold the same table inside one turn.']);
+  if(c.issues.small) al.push(['bad','<b>'+nfmt(c.issues.small)+' part'+(c.issues.small===1?'y':'ies')+' too big for the table</b> allocated.']);
+  if(c.issues.notable) al.push(['warn','<b>'+nfmt(c.issues.notable)+' booking'+(c.issues.notable===1?'':'s')+' with no table.</b> Use Auto-assign tables.']);
+  if(c.issues.late) al.push(['warn','<b>'+nfmt(c.issues.late)+' turn'+(c.issues.late===1?'':'s')+' finish after close.</b> Fine if you run on — the covers are still counted.']);
+  if(c.issues.outside) al.push(['warn','<b>'+nfmt(c.issues.outside)+' booking'+(c.issues.outside===1?'':'s')+' outside the service window</b> or with no time.']);
+  if(c.issues.risk) al.push(['warn','<b>'+nfmt(c.issues.risk)+' guest'+(c.issues.risk===1?'':'s')+' with a no-show record</b> booked tonight — consider re-confirming.']);
+  var over=c.slots.filter(function(s){ return s.state==='bad'; }).length;
+  if(over) al.push(['bad','<b>'+nfmt(over)+' slot'+(over===1?'':'s')+' need more seats than the room holds.</b>']);
+  if(!al.length) al.push(['ok','<b>Book looks clean.</b> No clashes, every party fits its table and you are inside capacity.']);
+  $('#alerts').innerHTML=al.map(function(a){ return '<div class="al '+a[0]+'">'+a[1]+'</div>'; }).join('');
+
+  /* slots */
+  var sh='';
+  c.slots.forEach(function(s){
+    var w=(s.pct===null)?0:Math.max(0,Math.min(100,s.pct));
+    sh+='<tr><td class="n">'+m2t(s.t)+'</td><td class="n">'+(s.arr?nfmt(s.arr):'–')+'</td>'+
+      '<td class="n">'+nfmt(s.cov)+'</td><td class="n">'+nfmt(s.held)+'</td>'+
+      '<td class="n">'+nfmt(s.free)+'</td>'+
+      '<td><div class="bar '+(s.state==='ok'?'':s.state)+'"><i style="width:'+(Math.round(w*10)/10)+'%"></i></div></td></tr>';
+  });
+  $('#slotBody').innerHTML=sh||'<tr><td colspan="6" class="empty">Set a service window and slot length to see the seating plan.</td></tr>';
+  $('#chipPeak').textContent=c.peak?('peak '+m2t(c.peak.t)+' · '+nfmt(c.peak.held)+'/'+nfmt(c.totalSeats)+' seats'):'—';
+  $('#slotNote').innerHTML='Seats free is against '+nfmt(c.totalSeats)+' seats in service. A slot is flagged amber once free seats fall below the walk-in hold of '+
+    nfmt(c.slotHold)+' seat'+(c.slotHold===1?'':'s')+' ('+nfmt(c.walk)+'% of the room), and red if the room is oversubscribed.';
+
+  buildPrint(c);
+  return c;
+}
+function renderAll(){
+  renderSvcSelect(); syncFields(); renderRows(); renderSvcTable(); renderTables(); renderTurns(); renderGuests(); recalc();
+}
+
+/* ── printed service sheet ───────────────────────────────── */
+function buildPrint(c){
+  var sv=c.sv, o=S.org;
+  var h='<div class="doc">';
+  h+='<div class="lh"><div><div class="org">'+esc(o.name||'Your restaurant')+'</div>'+
+     '<div class="oaddr">'+esc(o.addr||'')+(o.phone?('\n'+'Reservations '+esc(o.phone)):'')+'</div></div>'+
+     '<div class="ttl"><h2>SERVICE SHEET</h2>'+
+     '<div class="ref">'+esc(sv?sv.name:'—')+' · '+esc(S.date)+'</div>'+
+     '<div class="st">'+esc(longDate(S.date))+'</div></div></div>';
+  h+='<div class="meta">'+
+     '<div><b>Service</b><span>'+esc(sv?sv.name:'—')+'</span></div>'+
+     '<div><b>Seating window</b><span>'+esc(sv?(sv.start+'–'+sv.end):'—')+'</span></div>'+
+     '<div><b>Host on duty</b><span>'+esc(o.host||'—')+'</span></div>'+
+     '<div><b>Tables in service</b><span>'+nfmt(S.tables.filter(function(t){return t.on;}).length)+' · '+nfmt(c.totalSeats)+' seats</span></div>'+
+     '<div><b>Cover capacity</b><span>'+nfmt(c.cap.covers)+'</span></div>'+
+     '<div><b>Walk-in hold ('+nfmt(c.walk)+'%)</b><span>'+nfmt(c.hold)+'</span></div>'+
+     '<div><b>Covers booked</b><span>'+nfmt(c.booked)+' in '+nfmt(c.parties)+' parties</span></div>'+
+     '<div><b>Covers still bookable</b><span class="big">'+(c.cap.covers>0?(c.remaining<0?('−'+nfmt(-c.remaining)):nfmt(c.remaining)):'—')+'</span></div>'+
+     '</div>';
+
+  h+='<h3 class="sec">Bookings — in seating order</h3>';
+  h+='<table><thead><tr><th class="tick">✓</th><th class="n">Time</th><th class="n">Ends</th><th>Table</th>'+
+     '<th class="n">Party</th><th>Guest</th><th>Contact</th><th>Status</th><th class="n">Deposit</th><th>Notes</th></tr></thead><tbody>';
+  if(!c.rows.length){
+    h+='<tr><td colspan="10" style="text-align:center;padding:8pt">No bookings taken for this service.</td></tr>';
+  }
+  c.rows.forEach(function(b){
+    var oc=occOf(b), t=b.table?tblById(b.table):null;
+    var fl=(c.flags[b.id]||[]).filter(function(x){ return x.t!=='ok'; }).map(function(x){ return x.s; });
+    h+='<tr><td class="tick"></td><td class="n">'+esc(b.time||'—')+'</td>'+
+      '<td class="n">'+((oc&&oc.t>0&&HOLDS[b.status])?m2t(oc.e):'—')+'</td>'+
+      '<td>'+esc(t?(t.name+(t.zone?(' · '+t.zone):'')):'—')+'</td>'+
+      '<td class="n">'+nfmt(nz(b.party))+'</td>'+
+      '<td>'+esc(b.name||'—')+'</td><td>'+esc(b.phone||'—')+'</td>'+
+      '<td>'+esc(STLABEL[b.status]||'')+'</td>'+
+      '<td class="n">'+(nz(b.dep)>0?money(nz(b.dep)):'—')+'</td>'+
+      '<td>'+esc(b.notes||'')+(fl.length?('<b> · '+esc(fl.join('; '))+'</b>'):'')+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="4">Covers holding tables</td><td class="n">'+nfmt(c.booked)+'</td>'+
+     '<td colspan="3">Deposits held</td><td class="n">'+money(c.deps)+'</td><td></td></tr></tfoot></table>';
+
+  h+='<div class="two">';
+  h+='<div><h3 class="sec">Seats in use by slot</h3><table><thead><tr><th class="n">Slot</th><th class="n">Arr.</th>'+
+     '<th class="n">Covers</th><th class="n">Seats held</th><th class="n">Free</th></tr></thead><tbody>';
+  if(!c.slots.length) h+='<tr><td colspan="5" style="text-align:center">—</td></tr>';
+  c.slots.forEach(function(s){
+    h+='<tr><td class="n">'+m2t(s.t)+'</td><td class="n">'+(s.arr?nfmt(s.arr):'–')+'</td><td class="n">'+nfmt(s.cov)+
+       '</td><td class="n">'+nfmt(s.held)+'</td><td class="n">'+nfmt(s.free)+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+
+  var watch=[];
+  c.rows.forEach(function(b){
+    if(!HOLDS[b.status]) return;
+    var g=c.gs[guestKey(b)];
+    if(riskGuest(g)&&watch.indexOf(g)<0) watch.push(g);
+  });
+  h+='<div><h3 class="sec">Turn times &amp; service notes</h3><table><thead><tr><th>Party size</th><th class="n">Turn</th></tr></thead><tbody>';
+  var prev=0;
+  bands().forEach(function(t){
+    var from=prev+1;
+    if(t.max>=from) h+='<tr><td>'+nfmt(from)+(t.max>from?('–'+nfmt(t.max)):'')+' guests</td><td class="n">'+nfmt(t.min)+' min</td></tr>';
+    prev=Math.max(prev,t.max);
+  });
+  h+='</tbody></table>';
+  h+='<div class="flagbox"><b>Guests to re-confirm</b><br>'+
+     (watch.length?watch.map(function(g){ return esc(g.name)+' — '+nfmt(g.noshow)+' no-show'+(g.noshow===1?'':'s')+' in '+nfmt(g.total)+' bookings ('+pct1(g.rate)+')'; }).join('<br>')
+      :'None on tonight’s book.')+'</div>';
+  h+='</div></div>';
+
+  h+='<div class="disc"><b>Planning aid — not an occupancy limit.</b> Cover figures on this sheet are calculated from the table plan and the turn times '+
+     'entered in the book (capacity = sum of seats × whole turns that fit the service window; walk-in hold rounded up). They are not a fire-safety or '+
+     'licensed occupancy limit — confirm the maximum number of people permitted on the premises with your fire authority and premises licence. '+
+     'Guest names and contact numbers on this sheet are personal data: keep it out of public view and dispose of it securely after service.</div>';
+
+  h+='<div class="sig"><div class="box"><b>Service opened by</b><div class="nm">'+esc(o.host||'')+'</div><div class="rule"></div><div class="cap">Signature / time</div></div>'+
+     '<div class="box"><b>Book reconciled at close by</b><div class="nm"></div><div class="rule"></div><div class="cap">Signature / time</div></div></div>';
+  h+='<div class="foot"><span>'+esc(o.name||'')+' · '+esc(sv?sv.name:'')+' service sheet</span><span>Printed '+esc(new Date().toLocaleString())+'</span></div>';
+  h+='</div>';
+  $('#printdoc').innerHTML=h;
+}
+
+/* ── export ──────────────────────────────────────────────── */
+function csvCell(v){ var s=(v===null||v===undefined)?'':String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function csvRows(rows){ return rows.map(function(r){ return r.map(csvCell).join(','); }).join('\r\n'); }
+function dl(name,mime,text){
+  try{
+    var blob=new Blob(['﻿'+text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+    return true;
+  }catch(e){ msg('Download failed: '+e.message,true); return false; }
+}
+function dlPlain(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+    return true;
+  }catch(e){ msg('Download failed: '+e.message,true); return false; }
+}
+function slug(s){ return String(s||'reservation-book').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'reservation-book'; }
+function exportCsv(){
+  var c=compute();
+  var rows=[['Date','Service','Time','Ends','Table','Zone','Table seats','Party','Guest','Contact','Status','Deposit ('+sym()+')','Notes','Checks']];
+  var all=S.bookings.slice().sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    var ta=t2m(a.time), tb=t2m(b.time);
+    if(ta===null) return 1; if(tb===null) return -1; return ta-tb; });
+  all.forEach(function(b){
+    var sv=svcById(b.svc), t=b.table?tblById(b.table):null, oc=occOf(b);
+    var fl=(b.date===S.date&&sv&&sv.id===S.active)?((c.flags[b.id]||[]).filter(function(x){return x.t!=='ok';}).map(function(x){return x.s;}).join('; ')):'';
+    rows.push([b.date, sv?sv.name:b.svc, b.time||'', (oc&&oc.t>0&&HOLDS[b.status])?m2t(oc.e):'',
+      t?t.name:'', t?t.zone:'', t?Math.round(nz(t.seats)):'', Math.round(nz(b.party)), b.name, b.phone,
+      STLABEL[b.status]||b.status, (Math.round(nz(b.dep)*100)/100).toFixed(2), b.notes, fl]);
+  });
+  rows.push([]);
+  rows.push(['Summary for',S.date,c.sv?c.sv.name:'']);
+  rows.push(['Seats in service',c.totalSeats]);
+  rows.push(['Cover capacity',c.cap.covers]);
+  rows.push(['Walk-in hold ('+c.walk+'%)',c.hold]);
+  rows.push(['Bookable covers',c.bookable]);
+  rows.push(['Covers booked',c.booked]);
+  rows.push(['Covers still bookable',c.remaining]);
+  rows.push(['Deposits held',(Math.round(c.deps*100)/100).toFixed(2)]);
+  dl(slug(S.org.name)+'-diary-'+S.date+'.csv','text/csv;charset=utf-8;',csvRows(rows));
+  msg('CSV exported: every booking in the book plus the service summary.');
+}
+function exportGuestCsv(){
+  var rows=[['Guest','Contact','Bookings (excl. cancelled)','Seated','No-shows','Cancelled','No-show rate %','Last booking']];
+  guestStats().forEach(function(g){
+    rows.push([g.name,g.phone,g.total,g.seated,g.noshow,g.cancelled,g.rate===null?'':(Math.round(g.rate*10)/10).toFixed(1),g.last]);
+  });
+  dl(slug(S.org.name)+'-guest-no-show-rates.csv','text/csv;charset=utf-8;',csvRows(rows));
+  msg('Guest history exported.');
+}
+function exportJson(){
+  dlPlain(slug(S.org.name)+'-reservation-book-'+S.date+'.json','application/json',JSON.stringify(S,null,2));
+  msg('JSON exported — the whole book, ready to import back.');
+}
+
+/* ── events ──────────────────────────────────────────────── */
+function touched(){ if(S.sample){ S.sample=false; $('#sampleChip').hidden=true; $('#bSample').hidden=false; } }
+
+document.addEventListener('input',function(e){
+  var el=e.target;
+  if(el.matches('[data-k]')){
+    var k=el.getAttribute('data-k');
+    var v=el.value;
+    if(k==='walkin'){ v=(el.value===''?0:Math.round(nz(el.value))); }
+    setPath(S,k,v);
+    if(k==='cur.code'){ $('#curSymWrap').hidden=(v!=='CUSTOM'); }
+    if(k==='date'){ renderRows(); }
+    touched(); save(); recalc(); return;
+  }
+  var tr=el.closest('tr');
+  if(!tr) return;
+  if(tr.dataset.id && el.hasAttribute('data-b')){
+    var b=null; for(var i=0;i<S.bookings.length;i++) if(S.bookings[i].id===tr.dataset.id){ b=S.bookings[i]; break; }
+    if(!b) return;
+    var f=el.getAttribute('data-b');
+    if(f==='party') b.party=(el.value===''?0:Math.max(0,Math.round(nz(el.value))));
+    else if(f==='dep') b.dep=(el.value===''?0:Math.max(0,nz(el.value)));
+    else b[f]=el.value;
+    if(f==='status'){
+      tr.className=b.status==='noshow'?'st-noshow':(b.status==='seated'?'st-seated':(b.status==='cancelled'?'st-cancelled':''));
+    }
+    touched(); save(); recalc(); renderGuests(); return;
+  }
+  if(tr.dataset.sid && el.hasAttribute('data-s')){
+    var sv=svcById(tr.dataset.sid); if(!sv) return;
+    var g=el.getAttribute('data-s');
+    if(g==='slot') sv.slot=Math.max(5,Math.min(120,Math.round(nz(el.value))||15)); else sv[g]=el.value;
+    touched(); save(); renderSvcSelect(); renderSvcTable(); recalc(); return;
+  }
+  if(tr.dataset.tid && el.hasAttribute('data-t')){
+    var t=tblById(tr.dataset.tid); if(!t) return;
+    var q=el.getAttribute('data-t');
+    if(q==='on') t.on=el.checked;
+    else if(q==='seats') t.seats=(el.value===''?0:Math.max(0,Math.min(60,Math.round(nz(el.value)))));
+    else t[q]=el.value;
+    touched(); save(); recalc();
+    if(q!=='name'&&q!=='zone') renderTables();
+    return;
+  }
+  if(tr.dataset.nid && el.hasAttribute('data-n')){
+    var b2=null; for(var j=0;j<S.turns.length;j++) if(S.turns[j].id===tr.dataset.nid){ b2=S.turns[j]; break; }
+    if(!b2) return;
+    var q2=el.getAttribute('data-n');
+    b2[q2]=(el.value===''?0:Math.max(0,Math.round(nz(el.value))));
+    if(q2==='max') b2.max=Math.max(1,Math.min(99,b2.max));
+    touched(); save(); recalc(); renderTables();
+    return;
+  }
+});
+document.addEventListener('change',function(e){
+  var el=e.target;
+  if(el.id==='fSvc'){ S.active=el.value; save(); renderRows(); renderTables(); recalc(); return; }
+  if(el.matches('[data-k]') && el.getAttribute('data-k')==='date'){ renderRows(); recalc(); return; }
+  if(el.matches('[data-k]') && el.getAttribute('data-k')==='walkin'){
+    var v=Math.max(0,Math.min(90,Math.round(nz(el.value))));
+    S.walkin=v; el.value=v; save(); recalc(); return;
+  }
+  var tr=el.closest('tr');
+  if(tr && tr.dataset.id && el.getAttribute('data-b')==='time'){ renderRows(); recalc(); }
+  if(tr && (tr.dataset.tid||tr.dataset.nid)){ renderRows(); renderTables(); renderTurns(); recalc(); }
+  if(tr && tr.dataset.sid){ renderSvcTable(); recalc(); }
+});
+document.addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  if(b.hasAttribute('data-del')){
+    var id=b.getAttribute('data-del');
+    S.bookings=S.bookings.filter(function(x){ return x.id!==id; });
+    touched(); save(); renderRows(); renderGuests(); recalc(); msg('Booking removed.'); return;
+  }
+  if(b.hasAttribute('data-deltbl')){
+    var tid=b.getAttribute('data-deltbl');
+    var used=S.bookings.filter(function(x){ return x.table===tid; }).length;
+    if(used && !confirm('That table is on '+used+' booking'+(used===1?'':'s')+'. Remove it anyway? The bookings will be left with no table.')) return;
+    S.tables=S.tables.filter(function(x){ return x.id!==tid; });
+    S.bookings.forEach(function(x){ if(x.table===tid) x.table=''; });
+    touched(); save(); renderTables(); renderRows(); recalc(); return;
+  }
+  if(b.hasAttribute('data-delturn')){
+    if(S.turns.length<=1){ msg('Keep at least one turn-time band.',true); return; }
+    var nid=b.getAttribute('data-delturn');
+    S.turns=S.turns.filter(function(x){ return x.id!==nid; });
+    touched(); save(); renderTurns(); renderTables(); recalc(); return;
+  }
+  if(b.hasAttribute('data-delsvc')){
+    if(S.services.length<=1){ msg('Keep at least one service period.',true); return; }
+    var sid=b.getAttribute('data-delsvc');
+    var n=S.bookings.filter(function(x){ return x.svc===sid; }).length;
+    if(n && !confirm('That service has '+n+' booking'+(n===1?'':'s')+' against it. Remove the service and its bookings?')) return;
+    S.services=S.services.filter(function(x){ return x.id!==sid; });
+    S.bookings=S.bookings.filter(function(x){ return x.svc!==sid; });
+    if(S.active===sid) S.active=S.services[0].id;
+    touched(); save(); renderAll(); return;
+  }
+});
+
+$('#bAdd').addEventListener('click',function(){
+  var c=compute(), sv=c.sv;
+  if(!sv){ msg('Add a service period first.',true); return; }
+  var w=svcWindow(sv);
+  var last=null;
+  c.rows.forEach(function(r){ var t=t2m(r.time); if(t!==null&&(last===null||t>last)) last=t; });
+  var step=Math.max(5,Math.round(nz(sv.slot)||15));
+  var t0=(last===null)?(w?w.start:t2m('19:00')||1140):Math.min(last+step,(w?w.end-step:last+step));
+  if(!fin(t0)) t0=1140;
+  S.bookings.push({id:uid('bk'),date:S.date,svc:sv.id,time:m2t(t0),name:'',phone:'',party:2,table:'',status:'booked',dep:0,notes:''});
+  touched(); save(); renderRows(); recalc();
+  var rows=document.querySelectorAll('#bkBody tr');
+  for(var i=0;i<rows.length;i++){ if(rows[i].querySelector('input[data-b="name"]').value===''){ rows[i].querySelector('input[data-b="name"]').focus(); break; } }
+  msg('Booking added at '+m2t(t0)+' — fill in the guest.');
+});
+$('#bAuto').addEventListener('click',function(){
+  var c=compute(), n=0;
+  var live=c.rows.filter(function(b){ return HOLDS[b.status]; });
+  var busy=[];
+  live.forEach(function(b){ if(b.table){ var o=occOf(b); if(o) busy.push({t:b.table,s:o.s,e:o.e}); } });
+  live.forEach(function(b){
+    if(b.table && tblById(b.table)) return;
+    var o=occOf(b); if(!o) return;
+    var p=Math.max(1,Math.round(nz(b.party)));
+    var cand=S.tables.filter(function(t){ return t.on && Math.round(nz(t.seats))>=p; })
+      .sort(function(a,z){ return Math.round(nz(a.seats))-Math.round(nz(z.seats)); });
+    for(var i=0;i<cand.length;i++){
+      var free=true;
+      for(var j=0;j<busy.length;j++){ if(busy[j].t===cand[i].id && o.s<busy[j].e && busy[j].s<o.e){ free=false; break; } }
+      if(free){ b.table=cand[i].id; busy.push({t:cand[i].id,s:o.s,e:o.e}); n++; break; }
+    }
+  });
+  if(n){ touched(); save(); renderRows(); recalc(); msg(n+' booking'+(n===1?'':'s')+' allocated to the smallest free table that fits.'); }
+  else msg('Nothing to allocate — every live booking already has a table, or no free table fits.',true);
+});
+$('#bAddTbl').addEventListener('click',function(){
+  S.tables.push({id:uid('tb'),name:'T'+(S.tables.length+1),zone:'',seats:4,on:true});
+  touched(); save(); renderTables(); renderRows(); recalc();
+});
+$('#bAddTurn').addEventListener('click',function(){
+  var mx=1; S.turns.forEach(function(t){ mx=Math.max(mx,t.max); });
+  S.turns.push({id:uid('tn'),max:Math.min(99,mx+2),min:150});
+  touched(); save(); renderTurns(); renderTables(); recalc();
+});
+$('#bAddSvc').addEventListener('click',function(){
+  S.services.push({id:uid('sv'),name:'Service '+(S.services.length+1),start:'17:30',end:'22:30',slot:15});
+  touched(); save(); renderSvcSelect(); renderSvcTable(); recalc();
+});
+$('#bPrint').addEventListener('click',function(){ recalc(); window.print(); });
+$('#bCsv').addEventListener('click',exportCsv);
+$('#bCsvG').addEventListener('click',exportGuestCsv);
+$('#bJson').addEventListener('click',exportJson);
+$('#bImport').addEventListener('click',function(){ $('#fImport').click(); });
+$('#fImport').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var o=JSON.parse(String(r.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.bookings)) throw new Error('not a reservation book file');
+      S=merge(o); save(); renderAll(); msg('Book imported: '+S.bookings.length+' booking'+(S.bookings.length===1?'':'s')+'.');
+    }catch(err){ msg('Could not import that file: '+err.message,true); }
+    e.target.value='';
+  };
+  r.onerror=function(){ msg('Could not read that file.',true); e.target.value=''; };
+  r.readAsText(f);
+});
+$('#bBlank').addEventListener('click',function(){
+  if(!confirm('Start a blank book? The sample bookings, tables and guest history will be cleared.')) return;
+  S=blank(); S.tables=[{id:uid('tb'),name:'T1',zone:'',seats:2,on:true},{id:uid('tb'),name:'T2',zone:'',seats:4,on:true},
+    {id:uid('tb'),name:'T3',zone:'',seats:4,on:true},{id:uid('tb'),name:'T4',zone:'',seats:6,on:true}];
+  save(); renderAll(); msg('Blank book ready. Add your tables, then take bookings.');
+});
+$('#bSample').addEventListener('click',function(){
+  if(!confirm('Load the sample book? Anything in the diary now will be replaced.')) return;
+  S=sample(); save(); renderAll(); msg('Sample book loaded.');
+});
+$('#bClear').addEventListener('click',function(){
+  if(!confirm('Clear all data? Every booking, table and guest record in this browser will be deleted and the sample book restored.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S=sample(); save(); renderAll(); msg('All data cleared. The sample book is back.');
+});
+
+/* ── boot ────────────────────────────────────────────────── */
+S=load()||sample();
+if(!S.services.length) S.services=blank().services;
+if(!svcById(S.active)) S.active=S.services[0].id;
+renderAll();
+save();
+})();
+</script>
+</body>
+</html>

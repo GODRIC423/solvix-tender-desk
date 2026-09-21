@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boarding Pass — SVX 204 · Solvix Air OSL→LIS</title>
+<meta name="description" content="Interactive boarding pass for fictional flight SVX 204 Oslo–Lisbon: tear off the perforated stub, watch the gate digits flip on a live gate change, and pick your seat on the A321neo seat map.">
+<meta name="theme-color" content="#0B3D91">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B3D91'/%3E%3Cpath d='M8 23h5l4-5h7l1-2-1-2h-7l-4-5H8l2 7z' fill='%23FBFBF9'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=B612:ital,wght@0,400;0,700;1,400&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBFBF9;
+  --blue:#0B3D91;
+  --blue-deep:#082E6E;
+  --orange:#F57C00;
+  --ink:#222222;
+  --muted:#5B6069;
+  --rule:#C9CDD5;
+  --perf:#AEB3BC;
+  --desk:#E3E7EF;
+  --desk-deep:#D3D9E4;
+  --r:11px;
+  --mono:"B612 Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans:"B612", "Helvetica Neue", Arial, sans-serif;
+}
+*{box-sizing:border-box}
+html{background:var(--desk);scroll-behavior:smooth}
+body{
+  margin:0;color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.55;
+  background:
+    radial-gradient(1200px 600px at 50% -200px, #EEF1F7 0%, transparent 70%),
+    var(--desk);
+  min-height:100vh;
+}
+:focus-visible{outline:2.5px solid var(--orange);outline-offset:3px}
+button{font:inherit;color:inherit}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- top strip ---------- */
+.topbar{
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+  padding:14px clamp(20px,5vw,72px);font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  border-bottom:1px solid var(--rule);
+}
+.brand{display:flex;align-items:center;gap:10px;color:var(--blue);font-weight:700;font-size:13px}
+.brand svg{width:20px;height:20px}
+.topbar .meta{flex:1;min-width:200px}
+.status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1.5px solid var(--blue);border-radius:999px;color:var(--blue);font-weight:700;transition:background .3s,color .3s,border-color .3s}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:pulse 2s infinite}
+body.alert .status{background:var(--orange);border-color:var(--orange);color:var(--ink)}
+body.alert .status .dot{background:var(--ink)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ---------- stage ---------- */
+main{padding-bottom:40px}
+.stage{padding:28px clamp(20px,6vw,96px) 12px;overflow-x:clip;overflow-y:visible;position:relative}
+.stage-in{max-width:1120px;margin:0 auto;position:relative}
+.slot{height:14px;border-radius:5px;background:linear-gradient(var(--blue-deep),var(--blue));box-shadow:inset 0 4px 5px rgba(0,0,0,.35),0 1px 0 #fff;position:relative;z-index:3}
+.slot::after{content:"";position:absolute;left:12px;right:12px;top:5px;height:3px;border-radius:2px;background:#03163a}
+
+.alert{display:grid;grid-template-rows:0fr;transition:grid-template-rows .55s cubic-bezier(.2,.7,.2,1);margin-top:14px}
+.alert.on{grid-template-rows:1fr}
+.alert-in{overflow:hidden;min-height:0}
+.alert-box{
+  display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:var(--orange);color:var(--ink);padding:14px 20px;border-radius:5px;
+  font-family:var(--mono);font-size:13.5px;line-height:1.45;
+  box-shadow:0 8px 24px -10px rgba(245,124,0,.7);
+}
+.alert-box strong{font-size:12px;letter-spacing:.16em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.alert-box strong svg{width:16px;height:16px}
+.alert-box #alertText{flex:1;min-width:240px}
+.alert-box .walk{margin-left:auto;font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+
+/* ---------- sheet ---------- */
+.sheet{
+  display:grid;grid-template-columns:1fr 300px;
+  margin-top:16px;position:relative;
+}
+.sheet.printing{animation:print 1.15s steps(28) both}
+@keyframes print{from{clip-path:inset(0 0 100% 0);transform:translateY(-26px)}to{clip-path:inset(0 0 -40px 0);transform:none}}
+.piece{position:relative;filter:drop-shadow(0 12px 18px rgba(11,61,145,.14)) drop-shadow(0 1px 2px rgba(0,0,0,.12))}
+.piece.stub-piece{z-index:2;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;transition:transform .55s cubic-bezier(.2,.7,.2,1),filter .55s}
+.piece.stub-piece.dragging{transition:none;cursor:grabbing}
+.piece.stub-piece.detached{cursor:default;filter:drop-shadow(0 22px 28px rgba(11,61,145,.22)) drop-shadow(0 2px 2px rgba(0,0,0,.14))}
+.piece.stub-piece:focus-visible{outline:none}
+.piece.stub-piece:focus-visible .paper{box-shadow:inset 0 0 0 3px var(--orange)}
+.paper{
+  background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M0 12L12 0' stroke='%230B3D91' stroke-opacity='.06' stroke-width='1'/%3E%3C/svg%3E");
+  height:100%;position:relative;
+}
+.body{border-radius:6px 0 0 6px}
+.stub{border-radius:0 6px 6px 0}
+
+/* band */
+.band{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--blue);color:var(--paper);padding:0 26px;height:46px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.body .band{border-radius:6px 0 0 0}
+.stub .band{border-radius:0 6px 0 0;padding:0 22px;font-weight:700}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:700;font-size:15px;letter-spacing:.08em}
+.logo svg{width:22px;height:22px}
+.band h1{margin:0;font:inherit;font-weight:400;letter-spacing:.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.band h1 .fr{opacity:.65}
+.band-right{white-space:nowrap}
+.band-right b{font-weight:700}
+
+/* route */
+.route{display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:20px;padding:26px 30px 6px}
+.ap{display:flex;flex-direction:column}
+.ap.to{text-align:right;align-items:flex-end}
+.iata{font-family:var(--sans);font-weight:700;font-size:clamp(58px,7.4vw,108px);line-height:.92;letter-spacing:-.02em;color:var(--blue)}
+.ap .city{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:10px}
+.ap .time{font-family:var(--mono);font-weight:700;font-size:22px;margin-top:2px}
+.ap .time small{font-weight:400;font-size:11px;letter-spacing:.1em;color:var(--muted);margin-left:6px}
+.arrow{display:flex;flex-direction:column;align-items:center;gap:6px;padding-bottom:34px;color:var(--blue)}
+.arrow .line{width:100%;height:16px;position:relative}
+.arrow .line::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--rule)}
+.arrow .line svg{position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);background:var(--paper);padding:2px;border-radius:50%}
+.arrow .dur{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* data grid */
+dl{margin:0}
+.data{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:18px 20px;padding:18px 30px 22px;border-top:1px dashed var(--rule);margin:14px 30px 0;padding-left:0;padding-right:0}
+.data > div{min-width:0}
+dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;align-items:baseline}
+dt small{font-size:10px;letter-spacing:.08em;color:var(--orange);font-weight:700;text-transform:none}
+dd{margin:0;font-family:var(--mono);font-weight:700;font-size:19px;line-height:1.2;overflow-wrap:anywhere}
+dd .sub{display:block;font-weight:400;font-size:11px;letter-spacing:.08em;color:var(--muted);margin-top:4px}
+
+/* split-flap */
+.flaps{display:inline-flex;gap:3px;font-size:30px;vertical-align:top}
+.flaps.sm{font-size:22px}
+.flap{position:relative;width:.78em;height:1.16em;perspective:220px;display:inline-block}
+.half{position:absolute;left:0;right:0;height:50%;overflow:hidden;background:var(--blue);color:var(--paper);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.half.top,.half.lf{top:0;border-radius:3px 3px 0 0;box-shadow:inset 0 -1px 0 rgba(0,0,0,.35)}
+.half.bot,.half.lb{bottom:0;border-radius:0 0 3px 3px}
+.half i{position:absolute;left:0;right:0;height:200%;font-style:normal;text-align:center;font-family:var(--mono);font-weight:700;line-height:1.16em}
+.half.top i,.half.lf i{top:0}
+.half.bot i,.half.lb i{bottom:0}
+.half.lf{transform-origin:50% 100%;visibility:hidden}
+.half.lb{transform-origin:50% 0;visibility:hidden}
+.flap.flipping .lf,.flap.flipping .lb{visibility:visible}
+body.alert .gatecell .half{background:var(--orange);color:var(--ink)}
+.gatecell dd .was{display:block;font-weight:400;font-size:11px;letter-spacing:.08em;color:var(--muted);margin-top:6px;visibility:hidden}
+body.alert .gatecell dd .was{visibility:visible}
+.gatecell dd .was s{color:var(--orange)}
+
+/* tail: barcode */
+.tail{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center;padding:16px 30px 24px;border-top:1px dashed var(--rule);margin:0 30px;padding-left:0;padding-right:0}
+.bc2d{width:270px;height:58px;display:block}
+.bcbp{display:flex;flex-direction:column;gap:6px;min-width:0;font-family:var(--mono);color:var(--muted);font-size:11px;letter-spacing:.06em}
+.bcbp code{font-family:var(--mono);font-size:12px;color:var(--ink);letter-spacing:.04em;overflow-wrap:anywhere;line-height:1.5}
+
+/* stub */
+.stub{display:flex;flex-direction:column}
+.s-grid{display:grid;grid-template-columns:1fr 40px;gap:14px;padding:20px 20px 20px 30px;flex:1}
+.s-route{display:flex;align-items:center;gap:10px;color:var(--blue);margin-bottom:4px}
+.s-route .iata{font-size:34px}
+.s-route svg{width:20px;height:20px}
+.s-dl{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+.s-dl dd{font-size:15px}
+.s-dl .wide{grid-column:1/-1}
+.bc1d{width:40px;height:100%;min-height:200px;display:block;justify-self:end}
+.perf{position:absolute;left:0;top:var(--r);bottom:var(--r);width:2px;background:repeating-linear-gradient(to bottom,var(--perf) 0 6px,transparent 6px 11px);pointer-events:none}
+.tearhint{position:absolute;left:8px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--perf);white-space:nowrap;pointer-events:none}
+.stamp{
+  position:absolute;left:50%;top:72%;white-space:nowrap;transform:translate(-50%,-50%) rotate(-14deg) scale(1.6);opacity:0;pointer-events:none;
+  border:2.5px solid var(--blue);color:var(--blue);border-radius:6px;padding:8px 14px;text-align:center;
+  font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;line-height:1.3;
+  mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.2,1.2,.3,1),opacity .3s;
+}
+.stamp small{display:block;font-weight:400;font-size:9.5px;letter-spacing:.14em;margin-top:2px}
+.detached .stamp{opacity:.85;transform:translate(-50%,-50%) rotate(-14deg) scale(1)}
+
+/* console */
+.console{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:60px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--mono)}
+.console h2{margin:0 auto 0 0;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:400}
+.btn{
+  border:1.5px solid var(--blue);background:transparent;color:var(--blue);border-radius:4px;padding:9px 16px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;cursor:pointer;
+  transition:background .2s,color .2s,transform .1s;
+}
+.btn:hover{background:var(--blue);color:var(--paper)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--blue);color:var(--paper)}
+.btn.primary:hover{background:var(--blue-deep)}
+.btn.warn{border-color:var(--orange);color:#B75C00}
+.btn.warn:hover{background:var(--orange);color:var(--ink)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn[disabled]:hover{background:transparent;color:var(--blue)}
+
+/* ---------- seat map ---------- */
+.seatmap{padding:36px clamp(20px,6vw,96px) 0}
+.seatmap-in{max-width:1120px;margin:0 auto;background:var(--paper);border-radius:6px;box-shadow:0 12px 24px -14px rgba(11,61,145,.25),0 1px 2px rgba(0,0,0,.1)}
+.seatmap .band{border-radius:6px 6px 0 0}
+.seatmap .band h2{margin:0;font:inherit;letter-spacing:.2em}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:18px 26px 0;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend i{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--blue);display:inline-block}
+.legend i.occ{background:var(--rule);border-color:var(--rule)}
+.legend i.me{background:var(--blue)}
+.legend i.biz{border-radius:7px 7px 3px 3px;border-color:var(--muted);background:repeating-linear-gradient(45deg,transparent 0 3px,#dde1e8 3px 5px)}
+.legend i.ex{border:none;width:auto;height:auto;color:var(--orange);font-weight:700;font-style:normal;font-size:10px}
+.fuselage-wrap{overflow-x:auto;padding:22px 26px 26px}
+.fuselage{
+  position:relative;display:grid;gap:4px;
+  grid-template-columns:repeat(33,26px);grid-template-rows:26px 26px 26px 20px 26px 26px 26px;
+  padding:26px 70px 26px 90px;border:2px solid var(--rule);border-radius:120px 60px 60px 120px / 50% 40% 40% 50%;
+  width:max-content;margin:0 auto;background:linear-gradient(90deg,#f4f5f8,transparent 12%,transparent 88%,#f4f5f8);
+}
+.fuselage::before{content:"NOSE";position:absolute;left:26px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--perf)}
+.fuselage::after{content:"TAIL";position:absolute;right:20px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--perf)}
+.seat,.rown,.letter,.exit{grid-column:calc(var(--r) + 1);grid-row:var(--s)}
+.seat{
+  width:26px;height:26px;padding:0;border:1.5px solid var(--blue);border-radius:4px 4px 6px 6px;background:var(--paper);cursor:pointer;
+  font-family:var(--mono);font-size:9px;color:transparent;transition:background .15s,transform .15s;
+}
+.seat:hover{background:#dfe6f5}
+.seat.occ{background:var(--rule);border-color:var(--rule);cursor:not-allowed}
+.seat.biz{border-radius:8px 8px 4px 4px;border-color:var(--muted);background:repeating-linear-gradient(45deg,transparent 0 3px,#dde1e8 3px 5px);cursor:not-allowed}
+.seat.biz.occ{background:var(--rule);border-color:var(--rule)}
+.seat[aria-pressed="true"]{background:var(--blue);color:var(--paper);transform:scale(1.1)}
+.rown{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;line-height:20px}
+.letter{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;line-height:26px;font-weight:700}
+.exit{grid-row:1/-1;grid-column:calc(var(--r) + 1) / span 2;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--orange);font-weight:700;text-align:center;position:relative;pointer-events:none}
+.exit::before,.exit::after{content:"EXIT";position:absolute;left:0;right:0;line-height:1}
+.exit::before{top:-20px}
+.exit::after{bottom:-20px}
+.seat-status{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;padding:0 26px 24px;font-family:var(--mono);font-size:12.5px;color:var(--muted);letter-spacing:.04em}
+.seat-status b{color:var(--blue);font-size:16px;letter-spacing:.06em}
+
+/* ---------- notes ---------- */
+.notes{max-width:1120px;margin:0 auto;padding:56px clamp(20px,6vw,96px) 0;display:grid;grid-template-columns:repeat(3,1fr);gap:40px 44px}
+.notes article h2{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--blue);margin:0 0 16px;padding-bottom:10px;border-bottom:1.5px solid var(--blue);display:flex;gap:14px}
+.notes article h2 span{color:var(--muted)}
+.notes p{margin:0 0 14px}
+.notes p:last-child{margin:0}
+.fine{max-width:1120px;margin:56px auto 0;padding:18px clamp(20px,6vw,96px) 40px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.06em;line-height:1.7;color:var(--muted);display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.fine a{color:var(--blue)}
+
+/* ---------- mobile / stacked ---------- */
+@media (max-width:859.98px){
+  .sheet{grid-template-columns:1fr}
+  .body{border-radius:6px 6px 0 0}
+  .stub{border-radius:0 0 6px 6px}
+  .body .band{border-radius:6px 6px 0 0;padding:0 18px;height:44px}
+  .band h1{font-size:10.5px}
+  .topbar{padding:12px 18px;gap:10px 14px}
+  .topbar .meta .long{display:none}
+  .topbar .meta{min-width:0}
+  .band h1 .fr{display:none}
+  .band-right .date{display:none}
+  .logo span{display:none}
+  .stub .band{border-radius:0;padding:14px 18px 0;height:60px}
+  .stamp{top:56%}
+  .topbar .meta{display:none}
+  .seatmap .band > span{display:none}
+  .console .btn{flex:1 1 auto}
+  .route{grid-template-columns:1fr;padding:20px 18px 4px;gap:8px}
+  .iata{font-size:clamp(56px,15vw,84px)}
+  .ap,.ap.to{flex-direction:row;align-items:baseline;gap:14px;text-align:left}
+  .ap .city{order:2;margin:0;flex:1;font-size:10px;line-height:1.35;letter-spacing:.06em}
+  .ap .time{order:3;margin:0;font-size:20px}
+  .ap .time small{display:block;margin:2px 0 0;font-size:9.5px}
+  .ap.to{flex-direction:row-reverse;text-align:right}
+  .ap.to .city{text-align:right}
+  .arrow{flex-direction:row;padding:6px 0;gap:14px}
+  .arrow .line{flex:1;width:auto}
+  .arrow .dur{font-size:9.5px;white-space:nowrap}
+  .data{grid-template-columns:1fr 1fr;margin:12px 18px 0;padding:16px 0 18px;gap:16px 14px}
+  .data .pax{grid-column:1/-1}
+  .flaps{font-size:26px}
+  .tail{grid-template-columns:1fr;margin:0 18px;padding:16px 0 20px;gap:14px}
+  .bc2d{width:100%;max-width:300px;height:auto;aspect-ratio:270/58}
+  .s-grid{grid-template-columns:1fr 34px;padding:26px 18px 20px}
+  .s-dl{grid-template-columns:1fr 1fr 1fr}
+  .s-dl .wide{grid-column:1/-1}
+  .bc1d{width:34px;min-height:150px}
+  .perf{left:var(--r);right:var(--r);top:0;bottom:auto;width:auto;height:2px;background:repeating-linear-gradient(to right,var(--perf) 0 6px,transparent 6px 11px)}
+  .tearhint{left:50%;top:8px;transform:translateX(-50%);writing-mode:horizontal-tb;color:rgba(251,251,249,.7)}
+  .console{margin-top:40px}
+  .console h2{width:100%;margin-bottom:2px}
+  .fuselage{
+    grid-template-columns:26px 26px 26px 20px 26px 26px 26px;grid-template-rows:repeat(33,26px);
+    padding:90px 26px 70px;border-radius:50% 50% 40% 40% / 120px 120px 60px 60px;
+    background:linear-gradient(180deg,#f4f5f8,transparent 12%,transparent 88%,#f4f5f8);
+  }
+  .fuselage::before{left:50%;top:30px;transform:translateX(-50%)}
+  .fuselage::after{left:50%;right:auto;top:auto;bottom:26px;transform:translateX(-50%)}
+  .seat,.rown,.letter,.exit{grid-row:calc(var(--r) + 1);grid-column:var(--s)}
+  .exit{grid-row:calc(var(--r) + 1) / span 2;grid-column:1/-1}
+  .exit::before,.exit::after{top:50%;bottom:auto;transform:translateY(-50%);width:26px;left:auto;right:auto}
+  .exit::before{left:-24px}
+  .exit::after{right:-24px}
+  .notes{grid-template-columns:1fr;gap:34px}
+}
+@media (min-width:860px) and (max-width:1100px){
+  .sheet{grid-template-columns:1fr 260px}
+  .data{grid-template-columns:1.6fr 1fr 1fr 1fr}
+  .band h1 .fr{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .sheet.printing{animation:none}
+  .status .dot{animation:none}
+  .piece.stub-piece,.alert,.stamp,.seat,.btn,.status{transition:none}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" aria-label="Solvix Air">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 15.5v-1.6l8-5V3.7a1.7 1.7 0 0 1 3.4 0v5.2l8 5v1.6l-8-2.4v5.1l2.2 1.6V21l-3.9-1.1L7.8 21v-1.3L10 18.1V13z" transform="rotate(90 12 12)"/></svg>
+    SOLVIX AIR
+  </div>
+  <div class="meta"><span class="long">Agent desk · OSL Terminal 1 · </span>Counter 14 · <span class="long">Printed </span>03 Sep 2026 06:12</div>
+  <div class="status" id="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="statusText">On time</span></div>
+</header>
+
+<main>
+<section class="stage" aria-labelledby="passTitle">
+  <div class="stage-in">
+    <div class="slot" aria-hidden="true"></div>
+
+    <div class="alert" id="alert" role="status" aria-live="polite">
+      <div class="alert-in">
+        <div class="alert-box">
+          <strong><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.5 15 14H1L8 1.5zm-.75 4.5v4h1.5V6h-1.5zm0 5v1.5h1.5V11h-1.5z"/></svg>Gate change</strong>
+          <span id="alertText"></span>
+          <span class="walk" id="alertWalk"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet printing" id="sheet">
+      <!-- main body -->
+      <div class="piece body-piece">
+        <article class="paper body" id="body">
+          <header class="band">
+            <div class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 15.5v-1.6l8-5V3.7a1.7 1.7 0 0 1 3.4 0v5.2l8 5v1.6l-8-2.4v5.1l2.2 1.6V21l-3.9-1.1L7.8 21v-1.3L10 18.1V13z" transform="rotate(90 12 12)"/></svg><span>SOLVIX AIR</span></div>
+            <h1 id="passTitle">Boarding pass <span class="fr">· Carte d'accès à bord</span></h1>
+            <div class="band-right"><b>SVX 204</b> <span class="date">· 03 Sep 2026</span></div>
+          </header>
+
+          <div class="route">
+            <div class="ap">
+              <span class="iata">OSL</span>
+              <span class="city">Oslo Gardermoen · T1</span>
+              <span class="time">07:45 <small>DEP · LOCAL</small></span>
+            </div>
+            <div class="arrow" aria-label="Nonstop, 4 hours 25 minutes">
+              <div class="line"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 15.5v-1.6l8-5V3.7a1.7 1.7 0 0 1 3.4 0v5.2l8 5v1.6l-8-2.4v5.1l2.2 1.6V21l-3.9-1.1L7.8 21v-1.3L10 18.1V13z" transform="rotate(90 12 12)"/></svg></div>
+              <span class="dur">4h 25m · nonstop · A321neo</span>
+            </div>
+            <div class="ap to">
+              <span class="iata">LIS</span>
+              <span class="city">Lisbon Humberto Delgado · T1</span>
+              <span class="time">11:10 <small>ARR · LOCAL</small></span>
+            </div>
+          </div>
+
+          <dl class="data">
+            <div class="pax"><dt>Passenger</dt><dd>EJDEHOLM / ANNIKA MS<span class="sub">SVX Gold · 0042 8813</span></dd></div>
+            <div><dt>Flight</dt><dd>SVX 204<span class="sub">Operated by Solvix Air</span></dd></div>
+            <div><dt>Date</dt><dd>03 SEP 2026<span class="sub">Thursday</span></dd></div>
+            <div><dt>Class</dt><dd>Y<span class="sub">Economy · Flex</span></dd></div>
+            <div class="pax"><dt>Boarding</dt><dd>07:05<span class="sub">Gate closes 07:30 · Zone 3 boards after Gold and zones 1–2</span></dd></div>
+            <div class="gatecell"><dt>Gate <small id="gateNote"></small></dt><dd><span class="flaps" id="gateFlap"></span><span class="was">was <s>B14</s></span></dd></div>
+            <div><dt>Seat</dt><dd><span class="flaps" id="seatFlap"></span><span class="sub" id="seatKind">Aisle</span></dd></div>
+            <div><dt>Zone</dt><dd>3<span class="sub">Seq 031</span></dd></div>
+          </dl>
+
+          <footer class="tail">
+            <svg id="bc2d" class="bc2d" role="img" aria-label="PDF417 boarding pass barcode"></svg>
+            <div class="bcbp">
+              <code id="bcbp">M1EJDEHOLM/ANNIKA MS  EJDXK9F OSLLISSVX 0204 246Y014C0031 100</code>
+              <span>ETKT 117 2400 001234 · Bag allowance 1 × 8 kg cabin · Issued OSL agent 1412</span>
+            </div>
+          </footer>
+        </article>
+      </div>
+
+      <!-- stub -->
+      <div class="piece stub-piece" id="stubPiece" tabindex="0" role="group" aria-label="Boarding stub" aria-describedby="tearHint">
+        <div class="paper stub" id="stub">
+          <header class="band s"><span>SVX 204</span><span>Seq 031</span></header>
+          <div class="s-grid">
+            <div>
+              <div class="s-route" aria-label="Oslo to Lisbon"><span class="iata">OSL</span><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 15.5v-1.6l8-5V3.7a1.7 1.7 0 0 1 3.4 0v5.2l8 5v1.6l-8-2.4v5.1l2.2 1.6V21l-3.9-1.1L7.8 21v-1.3L10 18.1V13z" transform="rotate(90 12 12)"/></svg><span class="iata">LIS</span></div>
+              <dl class="s-dl">
+                <div class="wide"><dt>Passenger</dt><dd>EJDEHOLM / ANNIKA</dd></div>
+                <div><dt>Date</dt><dd>03 SEP</dd></div>
+                <div><dt>Boarding</dt><dd>07:05</dd></div>
+                <div><dt>Zone</dt><dd>3</dd></div>
+                <div class="gatecell"><dt>Gate</dt><dd><span class="flaps sm" id="gateFlap2"></span></dd></div>
+                <div><dt>Seat</dt><dd><span class="flaps sm" id="seatFlap2"></span></dd></div>
+                <div><dt>Class</dt><dd>Y</dd></div>
+              </dl>
+            </div>
+            <svg id="bc1d" class="bc1d" role="img" aria-label="Stub barcode"></svg>
+          </div>
+          <div class="perf" aria-hidden="true"></div>
+          <span class="tearhint" id="tearHint">Tear here · drag or press Enter</span>
+        </div>
+        <div class="stamp" aria-hidden="true">Stub detached<small>03 Sep 2026 · OSL 1412</small></div>
+      </div>
+    </div>
+
+    <div class="console" aria-label="Agent console">
+      <h2>Agent console</h2>
+      <button class="btn primary" id="btnTear" type="button">Tear stub</button>
+      <button class="btn warn" id="btnGate" type="button">Gate change</button>
+      <button class="btn" id="btnReprint" type="button">Reprint</button>
+    </div>
+    <p class="sr" id="live" aria-live="polite"></p>
+  </div>
+</section>
+
+<section class="seatmap" aria-labelledby="seatmapTitle">
+  <div class="seatmap-in">
+    <header class="band"><h2 id="seatmapTitle">Seat map · Airbus A321neo · SE-SVX</h2><span>4 rows J · 28 rows Y</span></header>
+    <div class="legend" aria-label="Legend">
+      <span><i></i>Available</span>
+      <span><i class="occ"></i>Occupied</span>
+      <span><i class="me"></i>Your seat</span>
+      <span><i class="biz"></i>Business · not on fare Y</span>
+      <span><i class="ex">EXIT</i>Exit rows 12–13</span>
+    </div>
+    <div class="fuselage-wrap">
+      <div class="fuselage" id="fuselage" role="group" aria-label="Seat selection, rows 1 to 32"></div>
+    </div>
+    <p class="seat-status">Selected <b id="seatSel">14C</b><span id="seatDesc">Aisle · row 14 · economy · forward of the wing exits, first row past the over-wing doors</span></p>
+  </div>
+</section>
+
+<section class="notes" aria-label="Boarding information">
+  <article>
+    <h2><span>01</span>Before you board</h2>
+    <p>Boarding for SVX 204 opens at 07:05 at the gate printed above and closes at 07:30, fifteen minutes before departure. You are in boarding zone 3, which is called after Solvix Gold members and zones 1 and 2. Have this pass and photo ID ready at the gate. A screen and a print are equally valid, but the barcode must be legible, so raise your brightness or keep the printed stub flat and dry.</p>
+    <p>Your Flex fare includes one cabin bag up to 8 kg (55 × 40 × 23 cm) and one personal item that fits under the seat in front. Bags that do not fit the gauge at the gate are tagged and carried in the hold at no charge on this flight, but they come out on the belt in Lisbon, so keep medication, documents and electronics with you.</p>
+    <p>Oslo and Lisbon are both inside the Schengen area, so there is no passport control on arrival, only a random customs check. Keep your ID anyway; the crew may ask for it when matching names to seats.</p>
+  </article>
+  <article>
+    <h2><span>02</span>About this flight</h2>
+    <p>SVX 204 is Solvix Air's morning rotation between Oslo Gardermoen and Lisbon Humberto Delgado, flown by an Airbus A321neo with four rows of business seating and twenty-eight rows of economy in a 3-3 layout. Block time is 4 hours 25 minutes. The routing runs south over the Skagerrak and the Danish coast, crosses the Low Countries and the Bay of Biscay, and joins the Lisbon arrival over Peniche.</p>
+    <p>A hot breakfast is served in business; economy has a buy-on-board menu, and the seat-back pocket holds the route map and the safety card, which is worth reading even if you have flown this type before.</p>
+    <p>Sunrise over the North Sea is at about 06:40 at this time of year, so a window seat on the left (A) catches the early light, while the right side (F) keeps the coastline for most of the second half.</p>
+  </article>
+  <article>
+    <h2><span>03</span>Gate changes</h2>
+    <p>Gate assignments at Oslo are confirmed roughly ninety minutes before departure and can move if the inbound aircraft parks at a different stand. When that happens this pass updates itself: the gate digits flip to the new gate and an orange notice appears at the top of the document with the walking time between piers.</p>
+    <p>Gate B14 and gate C22 are on different piers. Allow nine minutes between them, more if you are travelling with a child seat or need assistance, which you can request from any Solvix agent in the pier. The boarding time does not change unless the notice says so.</p>
+    <p>Once the stub is torn, keep it until you have collected your bag in Lisbon; it carries the sequence number the ground staff use to trace a missing bag.</p>
+  </article>
+</section>
+
+<footer class="fine">
+  <span>Solvix Air, flight SVX 204 and every name on this page are fictional. This is a design study and is not valid for travel. No ticket is issued.</span>
+  <span>Set in B612 and B612 Mono, typefaces designed for aircraft cockpit displays.</span>
+</footer>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+const mqH = matchMedia('(min-width: 860px)');
+const hor = () => mqH.matches;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* seeded rng (mulberry32) */
+function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/* ---------- barcodes ---------- */
+function pdf417(svg){
+  const r = rng(204), rows = 9, W = 270, m = 2, h = 6;
+  const start = [8,1,1,1,1,1,1,3], stop = [7,1,1,3,1,1,1,2,1];
+  const stopW = stop.reduce((a,b)=>a+b,0) * m;
+  let s = '';
+  for (let y = 0; y < rows; y++){
+    let x = 0;
+    const draw = (w, dark) => { if (dark) s += `<rect x="${x}" y="${y*h}" width="${w*m}" height="${h}"/>`; x += w*m; };
+    start.forEach((w,i)=>draw(w, i%2===0));
+    while (x < W - stopW - 8){ draw(1+Math.floor(r()*4), true); draw(1+Math.floor(r()*3), false); }
+    x = W - stopW;
+    stop.forEach((w,i)=>draw(w, i%2===0));
+  }
+  svg.setAttribute('viewBox', `0 0 ${W} ${rows*h}`);
+  svg.innerHTML = `<g fill="#222">${s}</g>`;
+}
+function bar1d(svg){
+  const r = rng(31), W = 40, H = 220; let y = 0, s = '';
+  const guard = [1,1,1];
+  const draw = (w, dark) => { if (dark) s += `<rect x="0" y="${y}" width="${W}" height="${w*1.6}"/>`; y += w*1.6; };
+  guard.forEach((w,i)=>draw(w, i%2===0));
+  while (y < H - 8){ draw(1+Math.floor(r()*3), true); draw(1+Math.floor(r()*2), false); }
+  y = H - 4.8; guard.forEach((w,i)=>draw(w, i%2===0));
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = `<g fill="#222">${s}</g>`;
+}
+pdf417($('#bc2d')); bar1d($('#bc1d'));
+
+/* ---------- split-flap ---------- */
+const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+class Flap {
+  constructor(el, text){
+    this.el = el; this.cells = []; this.busy = false;
+    this.sr = document.createElement('span'); this.sr.className = 'sr'; el.appendChild(this.sr);
+    for (const ch of text){
+      const c = document.createElement('span'); c.className = 'flap'; c.setAttribute('aria-hidden', 'true');
+      c.innerHTML = '<span class="half top"><i></i></span><span class="half bot"><i></i></span><span class="half lf"><i></i></span><span class="half lb"><i></i></span>';
+      c.q = ['.top i', '.bot i', '.lf i', '.lb i'].map(s => c.querySelector(s));
+      c.lf = c.querySelector('.lf'); c.lb = c.querySelector('.lb');
+      this.setCell(c, ch); el.appendChild(c); this.cells.push(c);
+    }
+    this.text = text; this.sr.textContent = text;
+  }
+  setCell(c, ch){ c.q.forEach(i => i.textContent = ch); c.ch = ch; }
+  async flip(c, next){
+    const [top, bot, lf, lb] = c.q, cur = c.ch;
+    top.textContent = next; bot.textContent = cur; lf.textContent = cur; lb.textContent = next;
+    c.lb.style.transform = 'rotateX(90deg)'; c.lf.style.transform = '';
+    c.classList.add('flipping');
+    const a1 = c.lf.animate([{transform:'rotateX(0deg)'},{transform:'rotateX(-90deg)'}], {duration:105, easing:'ease-in', fill:'forwards'});
+    await a1.finished;
+    c.lf.style.visibility = 'hidden';
+    const a2 = c.lb.animate([{transform:'rotateX(90deg)'},{transform:'rotateX(0deg)'}], {duration:105, easing:'ease-out', fill:'forwards'});
+    await a2.finished;
+    a1.cancel(); a2.cancel();
+    this.setCell(c, next); c.classList.remove('flipping'); c.lf.style.visibility = '';
+  }
+  async spin(c, target){
+    if (reduce.matches || document.hidden){ this.setCell(c, target); return; }
+    let i = ALPHA.indexOf(c.ch), t = ALPHA.indexOf(target);
+    if (i < 0 || t < 0){ await this.flip(c, target); return; }
+    let steps = (t - i + ALPHA.length) % ALPHA.length;
+    const path = [];
+    if (steps === 0) return;
+    if (steps > 9){ // long way round: take the nearest 9 in order then land
+      for (let k = 1; k <= 8; k++) path.push(ALPHA[(t - 9 + k + ALPHA.length) % ALPHA.length]);
+      path.push(target);
+    } else { for (let k = 1; k <= steps; k++) path.push(ALPHA[(i + k) % ALPHA.length]); }
+    for (const ch of path) await this.flip(c, ch);
+  }
+  async set(text){
+    if (this.busy) { this.pending = text; return; }
+    this.busy = true;
+    await Promise.all(this.cells.map((c, k) => this.spin(c, text[k] || ' ')));
+    this.text = text; this.sr.textContent = text; this.busy = false;
+    if (this.pending && this.pending !== text){ const p = this.pending; this.pending = null; await this.set(p); }
+    this.pending = null;
+  }
+}
+const gateFlap = new Flap($('#gateFlap'), 'B14');
+const gateFlap2 = new Flap($('#gateFlap2'), 'B14');
+const seatFlap = new Flap($('#seatFlap'), '14C');
+const seatFlap2 = new Flap($('#seatFlap2'), '14C');
+
+/* ---------- gate change ---------- */
+const GATES = { a: 'B14', b: 'C22' };
+let gate = 'a';
+const live = $('#live');
+function setGate(g){
+  gate = g;
+  const alerting = g === 'b';
+  document.body.classList.toggle('alert', alerting);
+  $('#alert').classList.toggle('on', alerting);
+  $('#statusText').textContent = alerting ? 'Gate change' : 'On time';
+  $('#gateNote').textContent = alerting ? 'changed 06:31' : '';
+  $('#alertText').textContent = alerting ? 'SVX 204 now boards from gate C22, Pier C · boarding 07:05 unchanged · closes 07:30' : '';
+  $('#alertWalk').textContent = alerting ? 'B14 → C22 · 9 min walk' : '';
+  $('#btnGate').textContent = alerting ? 'Revert gate' : 'Gate change';
+  live.textContent = alerting ? 'Gate changed from B14 to C22.' : 'Gate reverted to B14.';
+  return Promise.all([gateFlap.set(GATES[g]), gateFlap2.set(GATES[g])]);
+}
+$('#btnGate').addEventListener('click', () => setGate(gate === 'a' ? 'b' : 'a'));
+let autoGate = setTimeout(() => { if (gate === 'a') setGate('b'); }, 5600);
+
+/* ---------- tear ---------- */
+const body = $('#body'), stub = $('#stub'), stubPiece = $('#stubPiece'), sheet = $('#sheet');
+const jr = rng(92);
+const JAG = Array.from({length: 96}, () => 0.6 + jr() * 5.4);
+const R = 11;
+let p = 0, dragging = false, start = 0, torn = false, raf = 0;
+
+function arc(cx, cy, r, a0, a1, n = 6){ const pts = []; for (let k = 0; k <= n; k++){ const a = a0 + (a1 - a0) * k / n; pts.push([cx + r*Math.cos(a), cy + r*Math.sin(a)]); } return pts; }
+function poly(pts){ return 'polygon(' + pts.map(q => q[0].toFixed(1) + 'px ' + q[1].toFixed(1) + 'px').join(',') + ')'; }
+function shapes(prog){
+  const H = hor();
+  const bw = body.offsetWidth, bh = body.offsetHeight, sw = stub.offsetWidth, sh = stub.offsetHeight;
+  const L = H ? sh : sw, N = JAG.length;
+  const front = prog * (L + 70) - 35;
+  const amp = t => clamp((front - t) / 42, 0, 1);
+  const bp = [], sp = [];
+  if (H){
+    bp.push([0,0],[bw-R,0], ...arc(bw,0,R,Math.PI,Math.PI/2));
+    sp.push([R,0], ...arc(0,0,R,0,Math.PI/2));
+    for (let i = 0; i <= N; i++){ const t = R + (L-2*R)*i/N, a = amp(t)*JAG[i%N]; bp.push([bw-a, t]); sp.push([a, t]); }
+    bp.push(...arc(bw,bh,R,-Math.PI/2,-Math.PI), [0,bh]);
+    sp.push(...arc(0,sh,R,-Math.PI/2,0), [sw,sh],[sw,0]);
+  } else {
+    bp.push([0,0],[bw,0],[bw,bh-R], ...arc(bw,bh,R,-Math.PI/2,-Math.PI));
+    sp.push([0,R], ...arc(0,0,R,Math.PI/2,0));
+    for (let i = 0; i <= N; i++){
+      const xb = bw - R - (bw-2*R)*i/N, xs = R + (sw-2*R)*i/N;
+      bp.push([xb, bh - amp(xb)*JAG[i%N]]); sp.push([xs, amp(xs)*JAG[i%N]]);
+    }
+    bp.push(...arc(0,bh,R,0,-Math.PI/2));
+    sp.push(...arc(sw,0,R,Math.PI,Math.PI/2), [sw,sh],[0,sh]);
+  }
+  body.style.clipPath = poly(bp); stub.style.clipPath = poly(sp);
+}
+function applyP(prog){
+  p = prog; shapes(p);
+  const H = hor();
+  stubPiece.style.transformOrigin = H ? '0 100%' : '100% 0';
+  stubPiece.style.transform = H ? `translate(${(p*12).toFixed(1)}px,0) rotate(${(p*8).toFixed(2)}deg)` : `translate(0,${(p*12).toFixed(1)}px) rotate(${(-p*6).toFixed(2)}deg)`;
+}
+function tween(from, to, dur, cb){
+  cancelAnimationFrame(raf);
+  return new Promise(res => {
+    if (reduce.matches || document.hidden || dur <= 0){ cb(to); res(); return; }
+    const t0 = performance.now();
+    const step = now => {
+      const k = clamp((now - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 3);
+      cb(from + (to - from) * e);
+      if (k < 1) raf = requestAnimationFrame(step); else res();
+    };
+    raf = requestAnimationFrame(step);
+  });
+}
+function detach(){
+  torn = true;
+  stubPiece.classList.remove('dragging');
+  const H = hor();
+  stubPiece.classList.add('detached');
+  stubPiece.style.transform = H ? 'translate(38px,28px) rotate(5deg)' : 'translate(0,34px) rotate(-3deg)';
+  body.classList.add('torn');
+  stubPiece.setAttribute('aria-label', 'Boarding stub, detached');
+  $('#btnTear').disabled = true;
+  live.textContent = 'Stub torn off and detached.';
+}
+async function finish(){
+  if (torn) return; torn = true;
+  stubPiece.classList.add('dragging');
+  await tween(p, 1, 180, applyP);
+  detach();
+}
+async function autoTear(){
+  if (torn || dragging) return;
+  stubPiece.classList.add('dragging');
+  await tween(p, 1, 750, applyP);
+  finish();
+}
+stubPiece.addEventListener('pointerdown', e => {
+  if (torn) return;
+  dragging = true; start = hor() ? e.clientX : e.clientY;
+  stubPiece.setPointerCapture(e.pointerId); stubPiece.classList.add('dragging');
+});
+stubPiece.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const d = (hor() ? e.clientX : e.clientY) - start;
+  applyP(clamp(d / 150, 0, 1));
+  if (p >= 1){ dragging = false; finish(); }
+});
+const release = () => {
+  if (!dragging) return; dragging = false;
+  if (p >= 0.78) finish();
+  else { tween(p, 0, 260, applyP).then(() => stubPiece.classList.remove('dragging')); }
+};
+stubPiece.addEventListener('pointerup', release);
+stubPiece.addEventListener('pointercancel', release);
+stubPiece.addEventListener('keydown', e => {
+  if (torn) return;
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); autoTear(); }
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); stubPiece.classList.add('dragging'); applyP(clamp(p + 0.12, 0, 1)); if (p >= 1) finish(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); applyP(clamp(p - 0.12, 0, 1)); }
+});
+$('#btnTear').addEventListener('click', autoTear);
+
+function reprint(){
+  cancelAnimationFrame(raf);
+  torn = false; dragging = false;
+  stubPiece.classList.remove('detached', 'dragging');
+  body.classList.remove('torn');
+  stubPiece.setAttribute('aria-label', 'Boarding stub');
+  $('#btnTear').disabled = false;
+  applyP(0);
+  clearTimeout(autoGate);
+  if (gate !== 'a') setGate('a');
+  autoGate = setTimeout(() => { if (gate === 'a') setGate('b'); }, 5600);
+  sheet.classList.remove('printing');
+  void sheet.offsetWidth;
+  sheet.classList.add('printing');
+  live.textContent = 'Boarding pass reprinted.';
+}
+$('#btnReprint').addEventListener('click', reprint);
+sheet.addEventListener('animationend', () => sheet.classList.remove('printing'));
+
+/* keep shapes in sync with layout */
+let lastH = hor();
+const relayout = () => {
+  const H = hor();
+  if (torn){ shapes(1); if (H !== lastH){ stubPiece.style.transformOrigin = H ? '0 100%' : '100% 0'; stubPiece.style.transform = H ? 'translate(38px,28px) rotate(5deg)' : 'translate(0,34px) rotate(-3deg)'; } }
+  else applyP(dragging ? p : 0);
+  lastH = H;
+};
+addEventListener('resize', relayout);
+new ResizeObserver(relayout).observe(body);
+applyP(0);
+document.fonts && document.fonts.ready.then(relayout);
+
+/* ---------- seat map ---------- */
+const fus = $('#fuselage');
+const LETTERS = ['A','B','C','D','E','F'];
+const TRACK = {A:1,B:2,C:3,D:5,E:6,F:7};
+const sr = rng(7);
+let seat = '14C';
+const KIND = {A:'Window',F:'Window',B:'Middle',E:'Middle',C:'Aisle',D:'Aisle'};
+function seatDesc(s){
+  const row = parseInt(s, 10), L = s.slice(-1);
+  let where = row <= 11 ? 'forward of the wing exits' : row <= 13 ? 'exit row, extra legroom, no bags under the seat during take-off' : row === 14 ? 'first row past the over-wing doors' : row >= 28 ? 'rear cabin, closest to the aft galley' : 'over the wing';
+  return `${KIND[L]} · row ${row} · economy · ${where}`;
+}
+function updateBcbp(){
+  const row = String(parseInt(seat,10)).padStart(3,'0'), L = seat.slice(-1);
+  $('#bcbp').textContent = `M1EJDEHOLM/ANNIKA MS  EJDXK9F OSLLISSVX 0204 246Y${row}${L}0031 100`;
+  $('#seatSel').textContent = seat; $('#seatDesc').textContent = seatDesc(seat);
+  $('#seatKind').textContent = KIND[seat.slice(-1)];
+}
+const frag = document.createDocumentFragment();
+LETTERS.forEach(L => { const e = document.createElement('span'); e.className = 'letter'; e.style.cssText = `--r:0;--s:${TRACK[L]}`; e.textContent = L; e.setAttribute('aria-hidden','true'); frag.appendChild(e); });
+for (let r = 1; r <= 32; r++){
+  const n = document.createElement('span'); n.className = 'rown'; n.style.cssText = `--r:${r};--s:4`; n.textContent = r; n.setAttribute('aria-hidden','true'); frag.appendChild(n);
+  if (r === 12){ const x = document.createElement('span'); x.className = 'exit'; x.style.cssText = `--r:${r};--s:4`; x.setAttribute('aria-hidden','true'); frag.appendChild(x); }
+  const biz = r <= 4;
+  for (const L of LETTERS){
+    if (biz && (L === 'B' || L === 'E')) continue;
+    const id = r + L;
+    const occ = id === '14C' ? false : sr() < (biz ? 0.5 : 0.64);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'seat' + (occ ? ' occ' : '') + (biz ? ' biz' : '');
+    b.style.cssText = `--r:${r};--s:${TRACK[L]}`; b.dataset.id = id; b.textContent = L;
+    if (biz){ b.disabled = true; b.setAttribute('aria-label', `Seat ${id}, business cabin, not available on fare Y`); }
+    else if (occ){ b.disabled = true; b.setAttribute('aria-label', `Seat ${id}, occupied`); }
+    else { b.setAttribute('aria-label', `Seat ${id}, ${KIND[L].toLowerCase()}, available`); b.setAttribute('aria-pressed', id === seat ? 'true' : 'false'); }
+    frag.appendChild(b);
+  }
+}
+fus.appendChild(frag);
+fus.addEventListener('click', e => {
+  const b = e.target.closest('.seat'); if (!b || b.disabled) return;
+  const prev = fus.querySelector('.seat[aria-pressed="true"]');
+  if (prev) prev.setAttribute('aria-pressed', 'false');
+  b.setAttribute('aria-pressed', 'true');
+  seat = b.dataset.id; updateBcbp();
+  seatFlap.set(seat.length === 2 ? '0' + seat : seat); seatFlap2.set(seat.length === 2 ? '0' + seat : seat);
+  live.textContent = `Seat changed to ${seat}.`;
+});
+updateBcbp();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paint Coverage Estimator — room-by-room paint quantities &amp; cost</title>
+<meta name="description" content="Estimate paint quantities room by room: wall area less doors and windows, ceilings, primer pass, coats, coverage rate, cans to buy and job cost. Printable spec sheet and CSV export. Works offline.">
+<meta name="theme-color" content="#B45309">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23B45309'/%3E%3Crect x='6' y='6' width='20' height='7' rx='1.5' fill='%23fff'/%3E%3Crect x='15' y='13' width='2' height='5' fill='%23fff'/%3E%3Crect x='11' y='18' width='10' height='8' rx='2' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Tool 002 — Paint Coverage Estimator · Trades & Construction ══ */
+:root{--accent:#B45309;--accent-ink:#8F4207;--accent-wash:#FBF0DC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E08B3D;--accent-ink:#F2A85F;--accent-wash:#2E1F0D;--on-accent:#1A1206}}
+:root[data-theme="dark"]{--accent:#E08B3D;--accent-ink:#F2A85F;--accent-wash:#2E1F0D;--on-accent:#1A1206}
+
+.split>*,.stack>*,.grid>*{min-width:0}
+.tw{position:relative}
+[hidden]{display:none!important}
+.app{max-width:1270px}
+.grid.tight{grid-template-columns:repeat(auto-fit,minmax(202px,1fr))}
+#roomsTbl td,#roomsTbl th{padding:6px 5px}
+#roomsTbl th{font-size:10px;letter-spacing:.04em}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.stack.gap{gap:14px}
+#topGap{height:14px}
+.stat.hero .v{font-size:32px;line-height:1.08}
+.stat.hero .u{margin-top:4px;display:block;color:var(--accent-ink);opacity:.85}
+.stat .v.sm{font-size:19px}
+.stat.b{background:var(--surface)}
+.kv{display:flex;gap:10px;align-items:baseline;font-size:13.5px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .v{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.kv.tot{font-weight:650;font-size:15px;border-top:1px solid var(--line-hard);border-bottom:0;padding-top:8px;margin-top:2px}
+.mini th,.mini td{padding:6px 8px;font-size:13px}
+.mini th{font-size:9.5px}
+#roomsTbl td:first-child,#roomsTbl th:first-child{min-width:116px;width:26%}
+#roomsTbl input[type=number]{min-width:40px}
+#roomsTbl th{min-width:40px}
+#roomsTbl td.nm input{text-align:left;font-family:var(--sans)}
+#prodTbl td:first-child,#prodTbl th:first-child{min-width:200px;width:36%}
+#prodTbl td:first-child input{text-align:left;font-family:var(--sans)}
+#prodTbl input[type=number]{min-width:62px}
+#bdTbl td.rm{font-weight:600}
+.swatch{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none;margin-right:6px;vertical-align:-1px}
+.sw-wall{background:#B45309}.sw-ceil{background:#6B747E}.sw-prime{background:#1B7A4B}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.f.inline{flex-direction:row;align-items:center;gap:8px}
+.f.inline>label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.tiny{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.right{margin-left:auto}
+#sampleBar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}
+#sampleBar .btn{margin-left:auto}
+.appbar .acts{display:flex;flex-wrap:wrap;gap:7px}
+footer{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.55}
+
+/* printed document */
+.doc{margin-bottom:7mm}
+.doc .top{display:flex;justify-content:space-between;gap:12mm;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:3mm}
+.doc .biz{font:700 17pt/1.15 var(--sans)}
+.doc .bizc{font-size:9.5pt;color:#333;margin-top:1.5mm}
+.doc .ttl{text-align:right;font:700 12pt/1.2 var(--sans);text-transform:uppercase;letter-spacing:.06em}
+.doc .ref{text-align:right;font:10pt/1.5 var(--mono);margin-top:1.5mm}
+.doc dl{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:1.5mm 4mm;margin:4mm 0 0;font-size:10pt}
+.doc dt{font-weight:700;color:#333}
+.doc dd{margin:0}
+.doc .nt{margin-top:3mm;font-size:9.5pt;line-height:1.45}
+@media print{
+  .split{display:flex!important;flex-direction:column;gap:0;align-items:stretch}
+  #resCol{order:-1}
+  #roomsCard,#sampleBar{display:none!important}
+  .sticky{position:static}
+  .card{margin-bottom:6mm}
+  .stat.hero .v{font-size:19pt}
+  .grid.cols-2,.grid.cols-3{display:grid!important;grid-template-columns:1fr 1fr;gap:4mm}
+  .note{border-left:3px solid #000;background:#fff!important;padding:2mm 3mm}
+  #bdTbl{font-size:9pt}
+}
+@media(max-width:900px){
+  #resCol{order:-1}
+  .sticky{position:static}
+}
+@media(max-width:520px){
+  .stat.hero .v{font-size:28px}
+  .appbar .acts .btn{flex:1 1 auto;justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<main class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PT</div>
+    <div style="min-width:0">
+      <h1>Paint Coverage Estimator</h1>
+      <div class="sub">SOLVIX TOOLKIT · 002</div>
+    </div>
+  </div>
+  <div class="acts noprint">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Save .json</button>
+    <button type="button" class="btn" id="btnImport">Load .json</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</header>
+<div id="topGap"></div>
+
+  <!-- printed document header -->
+  <section class="printonly doc">
+    <div class="top">
+      <div>
+        <div class="biz" id="dBiz"></div>
+        <div class="bizc" id="dContact"></div>
+      </div>
+      <div>
+        <div class="ttl">Paint schedule<br>&amp; material estimate</div>
+        <div class="ref" id="dRef"></div>
+      </div>
+    </div>
+    <dl>
+      <dt>Project</dt><dd id="dProject"></dd>
+      <dt>Client</dt><dd id="dClient"></dd>
+      <dt>Site</dt><dd id="dSite"></dd>
+      <dt>Date</dt><dd id="dDate"></dd>
+      <dt>Prepared by</dt><dd id="dBy"></dd>
+      <dt>Units</dt><dd id="dUnits"></dd>
+    </dl>
+    <div class="nt" id="dNotes"></div>
+  </section>
+
+  <div class="note noprint" id="sampleBar">
+    <strong>Sample project loaded.</strong> Everything below is example data so you can see the numbers work — type over it, or start clean.
+    <button type="button" class="btn sm" id="btnBlank">Start a blank project</button>
+  </div>
+
+  <div class="split">
+
+    <div class="stack gap">
+
+      <!-- project -->
+      <section class="card noprint">
+        <div class="hd">
+          <h2>Project &amp; job details</h2>
+          <span class="tiny">Printed at the top of the spec sheet</span>
+        </div>
+        <div class="bd stack">
+          <div class="grid cols-2 tight">
+            <div class="f"><label for="mBiz">Your business</label><input id="mBiz" autocomplete="organization"></div>
+            <div class="f"><label for="mContact">Phone / email</label><input id="mContact"></div>
+            <div class="f"><label for="mProject">Project</label><input id="mProject"></div>
+            <div class="f"><label for="mClient">Client</label><input id="mClient"></div>
+            <div class="f"><label for="mSite">Site address</label><input id="mSite"></div>
+            <div class="f"><label for="mRef">Estimate ref.</label><input id="mRef"></div>
+            <div class="f"><label for="mDate">Date</label><input id="mDate" type="date"></div>
+            <div class="f"><label for="mBy">Prepared by</label><input id="mBy"></div>
+          </div>
+          <div class="f"><label for="mNotes">Notes shown on the printed estimate</label><textarea id="mNotes"></textarea></div>
+          <div class="row">
+            <div class="f inline"><label for="curSel">Currency</label>
+              <select id="curSel" style="width:auto">
+                <option value="&#163;">&#163; GBP</option>
+                <option value="$">$ USD</option>
+                <option value="&#8364;">&#8364; EUR</option>
+                <option value="custom">Other…</option>
+              </select></div>
+            <div class="f inline" id="curCustomWrap" hidden><label for="curCustom">Symbol</label>
+              <input id="curCustom" maxlength="4" style="width:70px;text-align:center"></div>
+            <div class="row right" role="group" aria-label="Measurement units">
+              <span class="lbl">Units</span>
+              <span class="seg">
+                <button type="button" id="uImp" data-units="imp" aria-pressed="true">Imperial · ft / US gal</button>
+                <button type="button" id="uMet" data-units="met" aria-pressed="false">Metric · m / L</button>
+              </span>
+            </div>
+          </div>
+          <div class="row" style="border-top:1px solid var(--line);padding-top:11px">
+            <div class="f inline" style="flex:1 1 190px"><label for="projSel">Saved projects</label>
+              <select id="projSel" style="flex:1"><option value="">— none saved —</option></select></div>
+            <button type="button" class="btn sm" id="btnSaveProj">Save current</button>
+            <button type="button" class="btn sm" id="btnLoadProj">Open</button>
+            <button type="button" class="btn sm dgr" id="btnDelProj">Delete</button>
+          </div>
+          <p class="tiny" id="projMsg">Projects are stored in this browser only — nothing is uploaded anywhere.</p>
+        </div>
+      </section>
+
+      <!-- rooms -->
+      <section class="card" id="roomsCard">
+        <div class="hd">
+          <h2>Rooms</h2>
+          <span class="chip" id="roomChip">0 rooms</span>
+          <span class="right row noprint">
+            <button type="button" class="btn sm" id="btnAdd">+ Add room</button>
+            <button type="button" class="btn sm" id="btnDup">Duplicate last</button>
+          </span>
+        </div>
+        <div class="tw noprint">
+          <table id="roomsTbl" aria-label="Room dimensions, openings and number of coats">
+            <thead><tr>
+              <th scope="col">Room</th>
+              <th scope="col" class="n" id="thL" title="Room length">L</th>
+              <th scope="col" class="n" id="thW" title="Room width">W</th>
+              <th scope="col" class="n" id="thH" title="Floor to ceiling height">H</th>
+              <th scope="col" class="n" title="Number of doors / door-sized openings to deduct">Drs</th>
+              <th scope="col" class="n" title="Number of windows to deduct">Wins</th>
+              <th scope="col" class="n" title="Finish coats on the walls">Wall<br>coats</th>
+              <th scope="col" class="n" title="Finish coats on the ceiling — 0 leaves the ceiling out">Ceil<br>coats</th>
+              <th scope="col" class="n" title="Primer coats over walls (plus ceiling when the ceiling is painted)">Prime<br>coats</th>
+              <th scope="col" aria-label="Remove room"></th>
+            </tr></thead>
+            <tbody id="roomsBody"></tbody>
+          </table>
+        </div>
+        <div class="ft noprint">
+          <span class="tiny">Set ceiling coats to <strong>0</strong> to leave a ceiling out. Primer covers the walls, plus the ceiling when the ceiling is being painted.</span>
+        </div>
+      </section>
+
+      <!-- products -->
+      <section class="card">
+        <div class="hd"><h2>Products, coverage &amp; openings</h2></div>
+        <div class="tw">
+          <table id="prodTbl">
+            <thead><tr>
+              <th scope="col">Product</th>
+              <th scope="col" class="n" id="thCov">Coverage</th>
+              <th scope="col" class="n" id="thCan">Can size</th>
+              <th scope="col" class="n" id="thCost">Cost / can</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="swatch sw-wall"></span><input id="pWallName" aria-label="Wall product name"></td>
+                <td><input id="pWallCov" type="number" inputmode="decimal" min="0" step="any" aria-label="Wall paint coverage"></td>
+                <td><input id="pWallCan" type="number" inputmode="decimal" min="0" step="any" aria-label="Wall paint can size"></td>
+                <td><input id="pWallCost" type="number" inputmode="decimal" min="0" step="0.01" aria-label="Wall paint cost per can"></td>
+              </tr>
+              <tr>
+                <td><span class="swatch sw-ceil"></span><input id="pCeilName" aria-label="Ceiling product name"></td>
+                <td><input id="pCeilCov" type="number" inputmode="decimal" min="0" step="any" aria-label="Ceiling paint coverage"></td>
+                <td><input id="pCeilCan" type="number" inputmode="decimal" min="0" step="any" aria-label="Ceiling paint can size"></td>
+                <td><input id="pCeilCost" type="number" inputmode="decimal" min="0" step="0.01" aria-label="Ceiling paint cost per can"></td>
+              </tr>
+              <tr>
+                <td><span class="swatch sw-prime"></span><input id="pPrimeName" aria-label="Primer product name"></td>
+                <td><input id="pPrimeCov" type="number" inputmode="decimal" min="0" step="any" aria-label="Primer coverage"></td>
+                <td><input id="pPrimeCan" type="number" inputmode="decimal" min="0" step="any" aria-label="Primer can size"></td>
+                <td><input id="pPrimeCost" type="number" inputmode="decimal" min="0" step="0.01" aria-label="Primer cost per can"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="bd">
+          <div class="grid cols-3">
+            <div class="f"><label for="oDoor">Deduct per door</label>
+              <input id="oDoor" type="number" inputmode="decimal" min="0" step="any">
+              <span class="hint" id="hDoor"></span><span class="err" id="e_oDoor" hidden></span></div>
+            <div class="f"><label for="oWin">Deduct per window</label>
+              <input id="oWin" type="number" inputmode="decimal" min="0" step="any">
+              <span class="hint" id="hWin"></span><span class="err" id="e_oWin" hidden></span></div>
+            <div class="f"><label for="waste">Wastage allowance</label>
+              <input id="waste" type="number" inputmode="decimal" min="0" max="100" step="0.5">
+              <span class="hint">% added to every volume. 0 = none.</span><span class="err" id="e_waste" hidden></span></div>
+          </div>
+          <div class="grid cols-3">
+            <span class="err" id="e_pWallCov" hidden></span><span class="err" id="e_pCeilCov" hidden></span><span class="err" id="e_pPrimeCov" hidden></span>
+            <span class="err" id="e_pWallCan" hidden></span><span class="err" id="e_pCeilCan" hidden></span><span class="err" id="e_pPrimeCan" hidden></span>
+            <span class="err" id="e_pWallCost" hidden></span><span class="err" id="e_pCeilCost" hidden></span><span class="err" id="e_pPrimeCost" hidden></span>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /left -->
+
+    <!-- results -->
+    <section class="card sticky" id="resCol">
+      <div class="hd"><h2>Estimate</h2><span class="chip" id="unitChip">ft &middot; US gal</span></div>
+      <div class="bd stack">
+        <div class="stat hero" aria-live="polite">
+          <div class="k">Paint to buy — whole job</div>
+          <div class="v" id="heroCans">—</div>
+          <div class="u" id="heroSub">Add a room to start</div>
+        </div>
+        <div class="grid cols-2">
+          <div class="stat b"><div class="k">Material cost</div><div class="v sm" id="statCost">—</div><div class="u">cans rounded up</div></div>
+          <div class="stat b"><div class="k">Total volume needed</div><div class="v sm" id="statVol">—</div><div class="u" id="statVolU">before rounding</div></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="stat b"><div class="k">Net wall area</div><div class="v sm" id="statWall">—</div><div class="u" id="statWallU">after openings</div></div>
+          <div class="stat b"><div class="k">Ceiling area</div><div class="v sm" id="statCeil">—</div><div class="u">painted ceilings</div></div>
+        </div>
+        <div class="tw">
+          <table class="mini" id="matTbl">
+            <thead><tr>
+              <th scope="col">Material schedule</th>
+              <th scope="col" class="n" id="thMatVol">Needed</th>
+              <th scope="col" class="n">Cans</th>
+              <th scope="col" class="n">Cost</th>
+            </tr></thead>
+            <tbody id="matBody"></tbody>
+            <tfoot><tr><td>Job total</td><td class="n" id="matVolTot">—</td><td class="n" id="matCanTot">—</td><td class="n" id="matCostTot">—</td></tr></tfoot>
+          </table>
+        </div>
+        <div>
+          <div class="kv"><span class="k">Paint used (pro-rata value)</span><span class="v" id="kProRata">—</span></div>
+          <div class="kv"><span class="k">Added by rounding up to whole cans</span><span class="v" id="kRound">—</span></div>
+          <div class="kv tot"><span class="k">Material total</span><span class="v" id="kTotal">—</span></div>
+        </div>
+        <div class="note warn" id="disclaimer">
+          <strong>Estimate only — not a guaranteed quantity.</strong> Real coverage changes with surface porosity, texture, colour change,
+          thinning and how the paint is applied. This tool measures painted area from the sizes you type in; it does not survey the
+          building, allow for trim, radiators, stairwells or repairs, and it does not price labour. Check the spread rate on the
+          manufacturer's data sheet and keep a contingency before ordering.
+        </div>
+      </div>
+      <div class="ft"><strong style="margin-right:auto">Total to buy</strong><span class="mono" id="ftTotal">—</span></div>
+    </section>
+
+  </div><!-- /split -->
+
+  <!-- breakdown -->
+  <section class="card" style="margin-top:14px">
+    <div class="hd"><h2>Room-by-room breakdown</h2><span class="tiny right" id="bdNote"></span></div>
+    <div class="tw">
+      <table id="bdTbl">
+        <thead><tr>
+          <th scope="col">Room</th>
+          <th scope="col" id="thSize">Size (L&times;W&times;H)</th>
+          <th scope="col" class="n">Openings</th>
+          <th scope="col" class="n" title="Wall / ceiling / primer coats">Coats W&middot;C&middot;P</th>
+          <th scope="col" class="n" id="thNet">Net wall</th>
+          <th scope="col" class="n" id="thCeilA">Ceiling</th>
+          <th scope="col" class="n" id="thWallV">Wall paint</th>
+          <th scope="col" class="n" id="thCeilV">Ceiling paint</th>
+          <th scope="col" class="n" id="thPrimeV">Primer</th>
+          <th scope="col" class="n">Material</th>
+        </tr></thead>
+        <tbody id="bdBody"></tbody>
+        <tfoot id="bdFoot"></tfoot>
+      </table>
+    </div>
+    <div class="ft">
+      <span class="tiny">Volumes are the paint actually needed. Cans are bought for the job as a whole, not per room, so the job total is rounded up once per product.</span>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <div class="hd"><h2>Basis of this estimate</h2><span class="tiny right">Printed with the spec sheet</span></div>
+    <div class="bd">
+      <ul id="assumeList" style="margin:0;padding-left:18px;font-size:13px;line-height:1.65;color:var(--ink-2)"></ul>
+    </div>
+  </section>
+
+  <footer>
+    <strong>How it calculates.</strong> Wall area = perimeter (2 × [L + W]) × height, less the openings you count
+    (default 21 ft² per door, 15 ft² per window). Ceiling = L × W. Volume = area × coats ÷ coverage rate.
+    Cans = ⌈ volume ÷ can size ⌉, rounded up per product across the whole job. Primer is a separate pass over the walls,
+    plus the ceiling where the ceiling is painted. Default coverage 350 ft² per US gallon (8.6 m² per litre) —
+    a typical spread rate for interior wall paint on prepared surfaces; always use the figure on your own product's data sheet.
+    Prices are materials only and exclude labour, sundries, tax and delivery. Works entirely offline; your data stays in this browser.
+  </footer>
+</main>
+
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+(function(){
+var KEY='solvix.paint-estimator.v1';
+var FT_M=0.3048, FT2_M2=0.09290304, GAL_L=3.785411784;
+var COV_F=FT2_M2/GAL_L;            /* ft²/US gal  ->  m²/L  (350 -> 8.5898) */
+var S=null, LIB=[];
+function $(id){return document.getElementById(id)}
+
+/* ── numbers ─────────────────────────────────────────────── */
+function num(v){
+  if(typeof v==='number') return isFinite(v)?v:0;
+  if(v===null||v===undefined) return 0;
+  var n=parseFloat(String(v).replace(/[^0-9.eE+\-]/g,''));
+  return isFinite(n)?n:0;
+}
+function dec(v,dp){
+  if(!isFinite(v)) return '';
+  var s=(Math.abs(v)<Math.pow(10,-dp)/2?0:v).toFixed(dp);
+  if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
+function qty(v,dp){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=(Math.abs(v)<Math.pow(10,-dp)/2)?0:v;
+  return x.toFixed(dp);
+}
+function sym(){ return S.cur==='custom' ? (S.curCustom||'') : S.cur; }
+function money(v){
+  if(v===null||v===undefined||!isFinite(v)) return '—';
+  var x=Math.round(v*100)/100; if(Math.abs(x)<0.005) x=0;
+  return sym()+x.toFixed(2);
+}
+function cans(vol,size){
+  if(!isFinite(vol)||!isFinite(size)||size<=0) return null;
+  if(vol<=0) return 0;
+  return Math.ceil(vol/size-1e-9);
+}
+
+/* ── units ───────────────────────────────────────────────── */
+function met(){return S.units==='met'}
+function Lo(ft){return met()?ft*FT_M:ft}          function Li(v){return met()?v/FT_M:v}
+function Ao(f){return met()?f*FT2_M2:f}           function Ai(v){return met()?v/FT2_M2:v}
+function Vo(g){return met()?g*GAL_L:g}            function Vi(v){return met()?v/GAL_L:v}
+function Co(c){return met()?c*COV_F:c}            function Ci(v){return met()?v/COV_F:v}
+function uL(){return met()?'m':'ft'}
+function uA(){return met()?'m²':'ft²'}
+function uV(){return met()?'L':'gal'}
+function uC(){return met()?'m²/L':'ft²/US gal'}
+function aDp(){return met()?2:1}
+function vDp(){return met()?1:2}
+
+/* ── state ───────────────────────────────────────────────── */
+function uid(){return 'r'+Math.random().toString(36).slice(2,9)+(Date.now()%1000)}
+function today(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
+function room(n,L,W,H,d,w,wc,cc,pc){return{id:uid(),name:n,L:L,W:W,H:H,doors:d,wins:w,wc:wc,cc:cc,pc:pc}}
+function baseProducts(){return{
+  wall :{name:'Wall paint — matt emulsion', cov:350, can:1, cost:42.00},
+  ceil :{name:'Ceiling paint — flat white',  cov:350, can:1, cost:34.00},
+  prime:{name:'Primer / sealer',                  cov:300, can:1, cost:28.50}
+}}
+function blank(){return{
+  v:1, sample:false, units:'imp', cur:'$', curCustom:'',
+  meta:{biz:'',contact:'',project:'',client:'',site:'',ref:'',date:today(),by:'',notes:''},
+  waste:0, openings:{door:21, window:15}, products:baseProducts(), rooms:[]
+}}
+function sample(){
+  var s=blank(); s.sample=true;
+  s.meta={biz:'Northgate Decorating Co.', contact:'(555) 0134  ·  quotes@northgate-dec.example',
+    project:'Whole-house repaint — ground floor', client:'M. & J. Halloway',
+    site:'14 Alder Court, Springfield', ref:'EST-1042', date:today(), by:'D. Whitfield',
+    notes:'Two finish coats throughout. Walls filled and sanded before priming. Colours to be confirmed before materials are ordered. Price covers materials only.'};
+  s.rooms=[
+    room('Living Room',    18,14,9, 2,3, 2,2,1),
+    room('Master Bedroom', 14,12,9, 2,2, 2,2,1),
+    room('Kitchen & Diner',16,11,9, 3,2, 2,1,0),
+    room('Hallway & Stairs',20,4,9, 5,1, 2,1,1)
+  ];
+  return s;
+}
+function migrate(o){
+  var b=blank();
+  if(!o||typeof o!=='object') return sample();
+  b.v=1;
+  b.sample=!!o.sample;
+  b.units=(o.units==='met')?'met':'imp';
+  b.cur=o.cur||'$'; b.curCustom=o.curCustom||'';
+  if(o.meta) for(var k in b.meta){ if(typeof o.meta[k]==='string') b.meta[k]=o.meta[k]; }
+  b.waste=num(o.waste);
+  if(o.openings){ b.openings.door=num(o.openings.door); b.openings.window=num(o.openings.window); }
+  if(o.products) ['wall','ceil','prime'].forEach(function(p){
+    var s=o.products[p]; if(!s) return;
+    if(typeof s.name==='string') b.products[p].name=s.name;
+    b.products[p].cov=num(s.cov); b.products[p].can=num(s.can); b.products[p].cost=num(s.cost);
+  });
+  b.rooms=(Array.isArray(o.rooms)?o.rooms:[]).map(function(r){
+    return room(String(r&&r.name!==undefined?r.name:''),num(r.L),num(r.W),num(r.H),
+      Math.max(0,Math.round(num(r.doors))),Math.max(0,Math.round(num(r.wins))),
+      Math.max(0,num(r.wc)),Math.max(0,num(r.cc)),Math.max(0,num(r.pc)));
+  });
+  return b;
+}
+
+/* ── storage ─────────────────────────────────────────────── */
+function readStore(){ try{ var raw=localStorage.getItem(KEY); return raw?(JSON.parse(raw)||{}):{}; }catch(e){ return {}; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify({cur:S, lib:LIB})); }catch(e){} }
+
+/* ── calculation ─────────────────────────────────────────
+   Wall area   = perimeter (2(L+W)) x height, less openings
+   Ceiling     = L x W                (only when ceiling coats > 0)
+   Volume      = area x coats / coverage  x (1 + wastage)
+   Cans        = ceil(volume / can size)  — pooled per product
+──────────────────────────────────────────────────────────*/
+function calc(){
+  var P=S.products, dA=num(S.openings.door), wA=num(S.openings.window);
+  var wf=1+num(S.waste)/100; if(!isFinite(wf)||wf<0) wf=1;
+  var unit={}, ok={};
+  ['wall','ceil','prime'].forEach(function(k){
+    ok[k]=(num(P[k].cov)>0 && num(P[k].can)>0);
+    unit[k]= ok[k] ? num(P[k].cost)/num(P[k].can) : null;   /* money per gal/L */
+  });
+  var rows=S.rooms.map(function(r){
+    var L=num(r.L), W=num(r.W), H=num(r.H);
+    var per=2*(L+W), gross=per*H;
+    var nd=Math.max(0,num(r.doors)), nw=Math.max(0,num(r.wins));
+    var open=nd*dA+nw*wA;
+    var net=Math.max(0,gross-open);
+    var wc=Math.max(0,num(r.wc)), cc=Math.max(0,num(r.cc)), pc=Math.max(0,num(r.pc));
+    var ceilA= cc>0 ? L*W : 0;
+    var primeA= net+ceilA;
+    var wv = num(P.wall.cov)>0  ? net*wc/num(P.wall.cov)*wf      : null;
+    var cv = num(P.ceil.cov)>0  ? ceilA*cc/num(P.ceil.cov)*wf    : null;
+    var pv = num(P.prime.cov)>0 ? primeA*pc/num(P.prime.cov)*wf  : null;
+    var cost=0, costOk=true;
+    [['wall',wv],['ceil',cv],['prime',pv]].forEach(function(t){
+      if(t[1]===null||unit[t[0]]===null){ if(t[1]===null||t[1]>0) costOk=false; return; }
+      cost+=t[1]*unit[t[0]];
+    });
+    return {r:r, L:L,W:W,H:H, per:per, gross:gross, doors:nd, wins:nw, open:open, net:net,
+            ceilA:ceilA, primeA:primeA, wc:wc, cc:cc, pc:pc, wv:wv, cv:cv, pv:pv,
+            cost:costOk?cost:null};
+  });
+  function sum(f){
+    var t=0, bad=false;
+    rows.forEach(function(x){ var v=f(x); if(v===null||!isFinite(v)) bad=true; else t+=v; });
+    return bad?null:t;
+  }
+  var T={
+    rows:rows, n:rows.length,
+    net:sum(function(x){return x.net}), ceilA:sum(function(x){return x.ceilA}),
+    gross:sum(function(x){return x.gross}), open:sum(function(x){return x.open}),
+    vol:{wall:sum(function(x){return x.wv}), ceil:sum(function(x){return x.cv}), prime:sum(function(x){return x.pv})},
+    proRata:sum(function(x){return x.cost}), unit:unit, ok:ok
+  };
+  T.cans={}; T.cost={};
+  var totCans=0, totCost=0, totVol=0, canBad=false, costBad=false, volBad=false;
+  ['wall','ceil','prime'].forEach(function(k){
+    var v=T.vol[k];
+    if(v===null){ volBad=true; } else { totVol+=v; }
+    var c=(v===null)?null:cans(v,num(P[k].can));
+    T.cans[k]=c;
+    if(c===null){ canBad=true; T.cost[k]=null; costBad=true; }
+    else { T.cost[k]=c*num(P[k].cost); totCans+=c; totCost+=T.cost[k]; }
+  });
+  T.totVol=volBad?null:totVol;
+  T.totCans=canBad?null:totCans;
+  T.totCost=costBad?null:totCost;
+  T.round=(T.totCost===null||T.proRata===null)?null:(T.totCost-T.proRata);
+  if(!T.n){   /* empty form: show em-dashes, never zeros or NaN */
+    T.net=T.ceilA=T.gross=T.open=T.proRata=null;
+    T.vol={wall:null,ceil:null,prime:null};
+    T.cans={wall:null,ceil:null,prime:null};
+    T.cost={wall:null,ceil:null,prime:null};
+    T.totVol=T.totCans=T.totCost=T.round=null;
+  }
+  return T;
+}
+
+/* ── room table (structural render) ──────────────────────── */
+function esc(s){return String(s===undefined||s===null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function renderRooms(){
+  var b=$('roomsBody'); var h='';
+  if(!S.rooms.length){
+    h='<tr><td colspan="10"><div class="empty">No rooms yet. <button type="button" class="btn sm pri" id="btnAdd2">+ Add your first room</button></div></td></tr>';
+  } else {
+    S.rooms.forEach(function(r,i){
+      var nm=esc(r.name||('Room '+(i+1)));
+      function cell(k,val,dp,step,label,min){
+        return '<td><input type="number" inputmode="decimal" step="'+step+'" min="'+(min===undefined?0:min)+'" data-rid="'+r.id+'" data-k="'+k+'" value="'+dec(val,dp)+'" aria-label="'+nm+' — '+label+'"></td>';
+      }
+      h+='<tr data-rid="'+r.id+'">'
+       + '<td class="nm"><input type="text" data-rid="'+r.id+'" data-k="name" value="'+esc(r.name)+'" aria-label="Room '+(i+1)+' name"></td>'
+       + cell('L',Lo(num(r.L)),2,'any','length in '+uL())
+       + cell('W',Lo(num(r.W)),2,'any','width in '+uL())
+       + cell('H',Lo(num(r.H)),2,'any','height in '+uL())
+       + cell('doors',num(r.doors),0,'1','number of doors')
+       + cell('wins',num(r.wins),0,'1','number of windows')
+       + cell('wc',num(r.wc),0,'1','wall coats')
+       + cell('cc',num(r.cc),0,'1','ceiling coats')
+       + cell('pc',num(r.pc),0,'1','primer coats')
+       + '<td class="r"><button type="button" class="btn ico sm dgr" data-act="del" data-rid="'+r.id+'" aria-label="Remove '+nm+'" title="Remove room">✕</button></td>'
+       + '</tr>';
+    });
+  }
+  b.innerHTML=h;
+  $('thL').textContent='L ('+uL()+')';
+  $('thW').textContent='W ('+uL()+')';
+  $('thH').textContent='H ('+uL()+')';
+}
+
+/* ── panel inputs ────────────────────────────────────────── */
+var F={
+  mBiz:{g:function(){return S.meta.biz},s:function(v){S.meta.biz=v}},
+  mContact:{g:function(){return S.meta.contact},s:function(v){S.meta.contact=v}},
+  mProject:{g:function(){return S.meta.project},s:function(v){S.meta.project=v}},
+  mClient:{g:function(){return S.meta.client},s:function(v){S.meta.client=v}},
+  mSite:{g:function(){return S.meta.site},s:function(v){S.meta.site=v}},
+  mRef:{g:function(){return S.meta.ref},s:function(v){S.meta.ref=v}},
+  mDate:{g:function(){return S.meta.date},s:function(v){S.meta.date=v}},
+  mBy:{g:function(){return S.meta.by},s:function(v){S.meta.by=v}},
+  mNotes:{g:function(){return S.meta.notes},s:function(v){S.meta.notes=v}},
+  curCustom:{g:function(){return S.curCustom},s:function(v){S.curCustom=v}},
+  oDoor:{g:function(){return dec(Ao(num(S.openings.door)),met()?3:1)},s:function(v){S.openings.door=Ai(num(v))},n:1,min:0,msg:'Cannot be negative.'},
+  oWin:{g:function(){return dec(Ao(num(S.openings.window)),met()?3:1)},s:function(v){S.openings.window=Ai(num(v))},n:1,min:0,msg:'Cannot be negative.'},
+  waste:{g:function(){return dec(num(S.waste),2)},s:function(v){S.waste=num(v)},n:1,min:0,max:100,msg:'Enter 0–100.'}
+};
+['wall','ceil','prime'].forEach(function(k){
+  var K=k.charAt(0).toUpperCase()+k.slice(1);
+  F['p'+K+'Name']={g:function(){return S.products[k].name},s:function(v){S.products[k].name=v}};
+  F['p'+K+'Cov'] ={g:function(){return dec(Co(num(S.products[k].cov)),met()?2:1)},s:function(v){S.products[k].cov=Ci(num(v))},n:1,min:0,gt0:1,msg:'Coverage must be more than 0.'};
+  F['p'+K+'Can'] ={g:function(){return dec(Vo(num(S.products[k].can)),2)},s:function(v){S.products[k].can=Vi(num(v))},n:1,min:0,gt0:1,msg:'Can size must be more than 0.'};
+  F['p'+K+'Cost']={g:function(){return dec(num(S.products[k].cost),2)},s:function(v){S.products[k].cost=num(v)},n:1,min:0,msg:'Cost cannot be negative.'};
+});
+function syncPanel(){
+  Object.keys(F).forEach(function(id){ var el=$(id); if(el) el.value=F[id].g(); });
+  $('curSel').value=(S.cur==='custom')?'custom':S.cur;
+  $('curCustomWrap').hidden=(S.cur!=='custom');
+  $('uImp').setAttribute('aria-pressed', met()?'false':'true');
+  $('uMet').setAttribute('aria-pressed', met()?'true':'false');
+  $('thCov').textContent='Coverage ('+uC()+')';
+  $('thCan').textContent='Can size ('+uV()+')';
+  $('thCost').textContent='Cost / can';
+  $('hDoor').textContent=uA()+' each · default '+(met()?'1.951 m²':'21 ft²');
+  $('hWin').textContent=uA()+' each · default '+(met()?'1.394 m²':'15 ft²');
+  $('sampleBar').hidden=!S.sample;
+  $('unitChip').textContent=met()?'m · litres':'ft · US gal';
+  $('thMatVol').textContent='Needed ('+uV()+')';
+  $('thNet').textContent='Net wall ('+uA()+')';
+  $('thCeilA').textContent='Ceiling ('+uA()+')';
+  $('thWallV').textContent='Wall paint ('+uV()+')';
+  $('thCeilV').textContent='Ceiling paint ('+uV()+')';
+  $('thPrimeV').textContent='Primer ('+uV()+')';
+  $('thSize').innerHTML='Size L&times;W&times;H ('+uL()+')';
+  $('statVolU').textContent='before rounding, '+uV();
+  $('statWallU').textContent='after openings, '+uA();
+}
+function showErr(id,msg){
+  var el=$(id), e=$('e_'+id); if(!el) return;
+  if(msg){ el.classList.add('inv'); el.setAttribute('aria-invalid','true'); if(e){e.textContent=msg; e.hidden=false;} }
+  else { el.classList.remove('inv'); el.removeAttribute('aria-invalid'); if(e){e.textContent=''; e.hidden=true;} }
+}
+function validate(id){
+  var f=F[id], el=$(id); if(!f||!f.n||!el) return true;
+  var raw=String(el.value).trim();
+  if(raw===''){ showErr(id, f.gt0?f.msg:null); return !f.gt0; }
+  var v=parseFloat(raw);
+  if(!isFinite(v)){ showErr(id,'Enter a number.'); return false; }
+  if(f.gt0 && v<=0){ showErr(id,f.msg); return false; }
+  if(f.min!==undefined && v<f.min){ showErr(id,f.msg); return false; }
+  if(f.max!==undefined && v>f.max){ showErr(id,f.msg); return false; }
+  showErr(id,null); return true;
+}
+
+/* ── render results ──────────────────────────────────────── */
+var T=null;
+function paint(){
+  T=calc();
+  var P=S.products;
+  $('roomChip').textContent=T.n+(T.n===1?' room':' rooms');
+
+  /* hero */
+  if(T.n===0){
+    $('heroCans').textContent='—';
+    $('heroSub').textContent='Add a room to start';
+  } else if(T.totCans===null){
+    $('heroCans').textContent='—';
+    $('heroSub').textContent='Check coverage and can size — they must be more than zero';
+  } else {
+    $('heroCans').textContent=T.totCans+(T.totCans===1?' can':' cans');
+    var bits=[];
+    ['wall','ceil','prime'].forEach(function(k){
+      var c=T.cans[k]; if(c) bits.push(c+' × '+dec(Vo(num(P[k].can)),2)+' '+uV()+' '+({wall:'wall',ceil:'ceiling',prime:'primer'})[k]);
+    });
+    $('heroSub').textContent=bits.length?bits.join('  ·  '):'No paint required with these coats';
+  }
+  $('statCost').textContent=money(T.totCost);
+  $('statVol').textContent=(T.totVol===null)?'—':qty(Vo(T.totVol),vDp())+' '+uV();
+  $('statWall').textContent=(T.net===null)?'—':qty(Ao(T.net),aDp())+' '+uA();
+  $('statCeil').textContent=(T.ceilA===null)?'—':qty(Ao(T.ceilA),aDp())+' '+uA();
+  $('ftTotal').textContent=(T.totCans===null)?'—':(T.totCans+(T.totCans===1?' can':' cans')+'   ·   '+money(T.totCost));
+
+  /* material schedule */
+  var mh='';
+  ['wall','ceil','prime'].forEach(function(k){
+    var cls={wall:'sw-wall',ceil:'sw-ceil',prime:'sw-prime'}[k];
+    mh+='<tr><td><span class="swatch '+cls+'"></span>'+esc(P[k].name||k)+'<br><span class="tiny">'
+      + dec(Co(num(P[k].cov)),met()?2:1)+' '+uC()+' · '+dec(Vo(num(P[k].can)),2)+' '+uV()+' can · '+money(num(P[k].cost))+'</span></td>'
+      + '<td class="n">'+(T.vol[k]===null?'—':qty(Vo(T.vol[k]),vDp()))+'</td>'
+      + '<td class="n">'+(T.cans[k]===null?'—':T.cans[k])+'</td>'
+      + '<td class="n">'+money(T.cost[k])+'</td></tr>';
+  });
+  $('matBody').innerHTML=mh;
+  $('matVolTot').textContent=(T.totVol===null)?'—':qty(Vo(T.totVol),vDp());
+  $('matCanTot').textContent=(T.totCans===null)?'—':T.totCans;
+  $('matCostTot').textContent=money(T.totCost);
+  $('kProRata').textContent=money(T.proRata);
+  $('kRound').textContent=(T.round===null)?'—':'+ '+money(T.round).replace(/^-\s*/,'');
+  $('kTotal').textContent=money(T.totCost);
+
+  /* breakdown */
+  var bh='';
+  if(!T.n){
+    bh='<tr><td colspan="10"><div class="empty">Add a room and the breakdown appears here.</div></td></tr>';
+  } else {
+    T.rows.forEach(function(x){
+      bh+='<tr><td class="rm">'+esc(x.r.name||'Room')+'</td>'
+        + '<td class="n">'+qty(Lo(x.L),2)+' × '+qty(Lo(x.W),2)+' × '+qty(Lo(x.H),2)+'</td>'
+        + '<td class="n">'+x.doors+'D / '+x.wins+'W</td>'
+        + '<td class="n">'+dec(x.wc,0)+' · '+dec(x.cc,0)+' · '+dec(x.pc,0)+'</td>'
+        + '<td class="n">'+qty(Ao(x.net),aDp())+'</td>'
+        + '<td class="n">'+(x.ceilA>0?qty(Ao(x.ceilA),aDp()):'—')+'</td>'
+        + '<td class="n">'+(x.wv===null?'—':qty(Vo(x.wv),vDp()))+'</td>'
+        + '<td class="n">'+(x.cv===null?'—':(x.cv>0?qty(Vo(x.cv),vDp()):'—'))+'</td>'
+        + '<td class="n">'+(x.pv===null?'—':(x.pv>0?qty(Vo(x.pv),vDp()):'—'))+'</td>'
+        + '<td class="n">'+money(x.cost)+'</td></tr>';
+    });
+  }
+  $('bdBody').innerHTML=bh;
+  $('bdFoot').innerHTML= T.n ? ('<tr><td>Job total</td><td class="n">'+T.n+' rooms</td>'
+      + '<td class="n">'+(T.open===null?'—':qty(Ao(T.open),aDp())+' '+uA()+' out')+'</td><td class="n">—</td>'
+      + '<td class="n">'+(T.net===null?'—':qty(Ao(T.net),aDp()))+'</td>'
+      + '<td class="n">'+(T.ceilA===null?'—':qty(Ao(T.ceilA),aDp()))+'</td>'
+      + '<td class="n">'+(T.vol.wall===null?'—':qty(Vo(T.vol.wall),vDp()))+'</td>'
+      + '<td class="n">'+(T.vol.ceil===null?'—':qty(Vo(T.vol.ceil),vDp()))+'</td>'
+      + '<td class="n">'+(T.vol.prime===null?'—':qty(Vo(T.vol.prime),vDp()))+'</td>'
+      + '<td class="n">'+money(T.proRata)+'</td></tr>') : '';
+  $('bdNote').textContent=(T.n? 'Pro-rata material value before cans are rounded up' : '');
+
+  /* printed doc header + basis */
+  $('dBiz').textContent=S.meta.biz||'—';
+  $('dContact').textContent=S.meta.contact||'';
+  $('dRef').textContent=(S.meta.ref?('Ref '+S.meta.ref):'');
+  $('dProject').textContent=S.meta.project||'—';
+  $('dClient').textContent=S.meta.client||'—';
+  $('dSite').textContent=S.meta.site||'—';
+  $('dDate').textContent=S.meta.date||'—';
+  $('dBy').textContent=S.meta.by||'—';
+  $('dUnits').textContent=met()?'Metric — metres, m², litres':'Imperial — feet, ft², US gallons';
+  $('dNotes').textContent=S.meta.notes||'';
+  var A=[];
+  A.push('Wall area = perimeter (2 × [length + width]) × ceiling height, less openings.');
+  A.push('Openings deducted at '+dec(Ao(num(S.openings.door)),met()?3:1)+' '+uA()+' per door and '
+        +dec(Ao(num(S.openings.window)),met()?3:1)+' '+uA()+' per window, counted room by room.');
+  A.push('Ceiling area = length × width, included only where ceiling coats are greater than zero.');
+  A.push('Primer is a separate pass over the wall area, plus the ceiling where the ceiling is painted.');
+  ['wall','ceil','prime'].forEach(function(k){
+    A.push(esc(P[k].name||k)+' — '+dec(Co(num(P[k].cov)),met()?2:1)+' '+uC()+', '+dec(Vo(num(P[k].can)),2)+' '+uV()+' can at '+money(num(P[k].cost))+' per can.');
+  });
+  if(num(S.waste)>0) A.push('Wastage allowance of '+dec(num(S.waste),2)+'% added to every volume.');
+  A.push('Cans are rounded UP to whole cans, once per product across the whole job.');
+  A.push('Materials only — excludes labour, sundries, tax and delivery.');
+  A.push('Estimate only. Coverage varies with surface porosity, texture, colour change and application. Check the manufacturer’s data sheet before ordering.');
+  $('assumeList').innerHTML=A.map(function(t){return '<li>'+t+'</li>'}).join('');
+}
+function refresh(){ paint(); save(); }
+
+/* ── events ──────────────────────────────────────────────── */
+function touched(){ if(S.sample){ S.sample=false; $('sampleBar').hidden=true; } }
+document.addEventListener('input', function(e){
+  var el=e.target; if(!el||!el.id&&!el.getAttribute) return;
+  var rid=el.getAttribute('data-rid');
+  if(rid){
+    var r=null; for(var i=0;i<S.rooms.length;i++) if(S.rooms[i].id===rid) r=S.rooms[i];
+    if(!r) return;
+    var k=el.getAttribute('data-k');
+    if(k==='name'){ r.name=el.value; }
+    else if(k==='L'||k==='W'||k==='H'){ r[k]=Li(num(el.value)); }
+    else if(k==='doors'||k==='wins'){ r[k]=Math.max(0,Math.round(num(el.value))); }
+    else { r[k]=Math.max(0,num(el.value)); }
+    el.classList.toggle('inv', String(el.value).trim()!=='' && !(parseFloat(el.value)>=0));
+    touched(); refresh(); return;
+  }
+  if(el.id && F[el.id]){ F[el.id].s(el.value); touched(); refresh(); }
+  if(el.id==='curCustom'){ refresh(); }
+});
+document.addEventListener('blur', function(e){
+  var el=e.target; if(el&&el.id&&F[el.id]) validate(el.id);
+}, true);
+document.addEventListener('change', function(e){
+  var el=e.target;
+  if(el.id==='curSel'){ S.cur=el.value; $('curCustomWrap').hidden=(S.cur!=='custom'); touched(); refresh(); }
+  if(el.id==='projSel'){ /* selection only */ }
+  if(el.id==='fileIn'){ importFile(el.files&&el.files[0]); el.value=''; }
+});
+function addRoom(base){
+  var n=S.rooms.length+1;
+  var r= base ? room(base.name+' (copy)',base.L,base.W,base.H,base.doors,base.wins,base.wc,base.cc,base.pc)
+              : room('Room '+n, Li(met()?4:12), Li(met()?3.5:10), Li(met()?2.4:8), 1,1,2,2,1);
+  S.rooms.push(r); touched(); renderRooms(); refresh();
+  var el=document.querySelector('tr[data-rid="'+r.id+'"] input'); if(el){ el.focus(); el.select&&el.select(); }
+}
+document.addEventListener('click', function(e){
+  var t=e.target.closest?e.target.closest('button'):null; if(!t) return;
+  var id=t.id, act=t.getAttribute('data-act');
+  if(act==='del'){
+    var rid=t.getAttribute('data-rid');
+    S.rooms=S.rooms.filter(function(r){return r.id!==rid});
+    touched(); renderRooms(); refresh(); return;
+  }
+  if(t.getAttribute('data-units')){
+    var u=t.getAttribute('data-units'); if(u===S.units) return;
+    S.units=u; syncPanel(); renderRooms(); refresh(); return;
+  }
+  switch(id){
+    case 'btnAdd': case 'btnAdd2': addRoom(null); break;
+    case 'btnDup': addRoom(S.rooms.length?S.rooms[S.rooms.length-1]:null); break;
+    case 'btnPrint': window.print(); break;
+    case 'btnCsv': exportCsv(); break;
+    case 'btnJson': exportJson(); break;
+    case 'btnImport': $('fileIn').click(); break;
+    case 'btnBlank': S=blank(); boot(false); break;
+    case 'btnClear':
+      if(window.confirm('Clear all data?\n\nThis wipes the current estimate AND every saved project from this browser. It cannot be undone.')){
+        try{ localStorage.removeItem(KEY); }catch(err){}
+        LIB=[]; S=blank(); boot(false);
+      }
+      break;
+    case 'btnSaveProj': saveProj(); break;
+    case 'btnLoadProj': loadProj(); break;
+    case 'btnDelProj': delProj(); break;
+  }
+});
+
+/* ── saved projects ──────────────────────────────────────── */
+function projName(){ return (S.meta.project||'').trim() || (S.meta.client||'').trim() || ('Estimate '+today()); }
+function renderProjs(sel){
+  var s=$('projSel'), v=sel!==undefined?sel:s.value;
+  s.innerHTML='<option value="">'+(LIB.length?'— choose a project —':'— none saved —')+'</option>'
+    + LIB.map(function(p){return '<option value="'+esc(p.id)+'">'+esc(p.name)+'  ·  '+esc(p.ts)+'</option>'}).join('');
+  if(v) s.value=v;
+}
+function msg(t){ $('projMsg').textContent=t; }
+function saveProj(){
+  var nm=projName();
+  var ex=null; LIB.forEach(function(p){ if(p.name===nm) ex=p; });
+  var rec={id:ex?ex.id:('p'+Date.now()), name:nm, ts:today(), state:JSON.parse(JSON.stringify(S))};
+  if(ex){ LIB[LIB.indexOf(ex)]=rec; } else { LIB.unshift(rec); }
+  if(LIB.length>40) LIB.length=40;
+  renderProjs(rec.id); save(); msg('Saved “'+nm+'” to this browser.');
+}
+function loadProj(){
+  var id=$('projSel').value; if(!id){ msg('Choose a saved project first.'); return; }
+  var p=null; LIB.forEach(function(x){ if(x.id===id) p=x; });
+  if(!p){ msg('That project is no longer available.'); return; }
+  S=migrate(p.state); S.sample=false; boot(false); renderProjs(id); msg('Opened “'+p.name+'”.');
+}
+function delProj(){
+  var id=$('projSel').value; if(!id){ msg('Choose a saved project first.'); return; }
+  var p=null; LIB.forEach(function(x){ if(x.id===id) p=x; });
+  if(!p) return;
+  if(!window.confirm('Delete the saved project “'+p.name+'”?')) return;
+  LIB=LIB.filter(function(x){return x.id!==id}); renderProjs(''); save(); msg('Deleted “'+p.name+'”.');
+}
+
+/* ── exports ─────────────────────────────────────────────── */
+function dl(blob,name){
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+}
+function slug(s){ return (String(s||'paint-estimate').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'paint-estimate').slice(0,48); }
+function q(v){
+  var s=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvRow(a){ return a.map(q).join(',') }
+function exportCsv(){
+  var P=S.products, L=[];
+  L.push(csvRow(['Paint Coverage Estimator','Solvix Toolkit 002']));
+  L.push(csvRow(['Business',S.meta.biz]));
+  L.push(csvRow(['Contact',S.meta.contact]));
+  L.push(csvRow(['Project',S.meta.project]));
+  L.push(csvRow(['Client',S.meta.client]));
+  L.push(csvRow(['Site',S.meta.site]));
+  L.push(csvRow(['Reference',S.meta.ref]));
+  L.push(csvRow(['Date',S.meta.date]));
+  L.push(csvRow(['Prepared by',S.meta.by]));
+  L.push(csvRow(['Units',met()?'Metric (m, m2, L)':'Imperial (ft, ft2, US gal)']));
+  L.push(csvRow(['Currency',sym()]));
+  L.push(csvRow(['Deduction per door',dec(Ao(num(S.openings.door)),3),uA()]));
+  L.push(csvRow(['Deduction per window',dec(Ao(num(S.openings.window)),3),uA()]));
+  L.push(csvRow(['Wastage allowance %',dec(num(S.waste),2)]));
+  L.push('');
+  L.push(csvRow(['ROOMS']));
+  L.push(csvRow(['Room','Length ('+uL()+')','Width ('+uL()+')','Height ('+uL()+')','Doors','Windows',
+    'Wall coats','Ceiling coats','Primer coats','Gross wall ('+uA()+')','Openings ('+uA()+')','Net wall ('+uA()+')',
+    'Ceiling ('+uA()+')','Wall paint ('+uV()+')','Ceiling paint ('+uV()+')','Primer ('+uV()+')','Material cost ('+sym()+')']));
+  T.rows.forEach(function(x){
+    L.push(csvRow([x.r.name, qty(Lo(x.L),2), qty(Lo(x.W),2), qty(Lo(x.H),2), x.doors, x.wins, x.wc, x.cc, x.pc,
+      qty(Ao(x.gross),2), qty(Ao(x.open),2), qty(Ao(x.net),2), qty(Ao(x.ceilA),2),
+      x.wv===null?'':qty(Vo(x.wv),3), x.cv===null?'':qty(Vo(x.cv),3), x.pv===null?'':qty(Vo(x.pv),3),
+      x.cost===null?'':qty(x.cost,2)]));
+  });
+  L.push(csvRow(['TOTAL','','','','','','','','', T.gross===null?'':qty(Ao(T.gross),2), T.open===null?'':qty(Ao(T.open),2),
+    T.net===null?'':qty(Ao(T.net),2), T.ceilA===null?'':qty(Ao(T.ceilA),2),
+    T.vol.wall===null?'':qty(Vo(T.vol.wall),3), T.vol.ceil===null?'':qty(Vo(T.vol.ceil),3),
+    T.vol.prime===null?'':qty(Vo(T.vol.prime),3), T.proRata===null?'':qty(T.proRata,2)]));
+  L.push('');
+  L.push(csvRow(['MATERIAL SCHEDULE']));
+  L.push(csvRow(['Product','Coverage ('+uC()+')','Can size ('+uV()+')','Cost per can ('+sym()+')',
+    'Volume needed ('+uV()+')','Cans (rounded up)','Line cost ('+sym()+')']));
+  ['wall','ceil','prime'].forEach(function(k){
+    L.push(csvRow([P[k].name, dec(Co(num(P[k].cov)),4), dec(Vo(num(P[k].can)),4), qty(num(P[k].cost),2),
+      T.vol[k]===null?'':qty(Vo(T.vol[k]),3), T.cans[k]===null?'':T.cans[k], T.cost[k]===null?'':qty(T.cost[k],2)]));
+  });
+  L.push(csvRow(['TOTAL','','','', T.totVol===null?'':qty(Vo(T.totVol),3), T.totCans===null?'':T.totCans, T.totCost===null?'':qty(T.totCost,2)]));
+  L.push('');
+  L.push(csvRow(['Pro-rata paint value ('+sym()+')', T.proRata===null?'':qty(T.proRata,2)]));
+  L.push(csvRow(['Added by rounding up to whole cans ('+sym()+')', T.round===null?'':qty(T.round,2)]));
+  L.push(csvRow(['MATERIAL TOTAL ('+sym()+')', T.totCost===null?'':qty(T.totCost,2)]));
+  L.push('');
+  L.push(csvRow(['Estimate only. Coverage varies with surface porosity, texture, colour change and application method. Materials only - excludes labour, sundries, tax and delivery. Check the manufacturer data sheet before ordering.']));
+  var blob=new Blob(['﻿'+L.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8;'});
+  dl(blob, slug(S.meta.project||S.meta.client)+'-paint-estimate.csv');
+}
+function exportJson(){
+  var out={tool:'solvix.paint-estimator', version:1, exported:new Date().toISOString(), state:S};
+  dl(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}), slug(S.meta.project||S.meta.client)+'-paint-estimate.json');
+}
+function importFile(f){
+  if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(String(rd.result));
+      var st=(o&&o.state)?o.state:o;
+      S=migrate(st); S.sample=false; boot(false); msg('Loaded '+f.name+'.');
+    }catch(err){ msg('That file could not be read as a Solvix paint estimate.'); }
+  };
+  rd.onerror=function(){ msg('That file could not be read.'); };
+  rd.readAsText(f);
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+function boot(first){
+  syncPanel(); renderRooms(); refresh();
+  if(first) renderProjs('');
+}
+(function init(){
+  var st=readStore();
+  LIB=Array.isArray(st.lib)?st.lib:[];
+  S=st.cur?migrate(st.cur):sample();
+  if(st.cur&&st.cur.sample) S.sample=true;
+  boot(true);
+})();
+})();
+</script>
+</body>
+</html>

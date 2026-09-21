@@ -1,0 +1,1378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loan Amortisation Schedule — payment, interest and overpayment savings</title>
+<meta name="description" content="Offline loan amortisation calculator and printable repayment schedule. Monthly payment by the standard annuity formula, period-by-period opening balance, payment, interest, principal and closing balance, totals for interest paid and total repaid, interest-only periods, balloon payments, monthly, fortnightly or weekly frequency with the periodic rate converted correctly, and overpayment modelling showing months and interest saved. Saves to the browser, prints a schedule document and exports CSV and JSON.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Ctext x='16' y='21.5' font-family='ui-monospace,monospace' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EAM%3C/text%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B; --accent-ink:#145C39; --accent-wash:#E3F2EA; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#45BC7E; --accent-ink:#74D3A0; --accent-wash:#11291D; --on-accent:#07120C;
+}}
+:root[data-theme="dark"]{--accent:#45BC7E; --accent-ink:#74D3A0; --accent-wash:#11291D; --on-accent:#07120C}
+
+[hidden]{display:none!important}
+.app{padding-bottom:40px}
+.mt{margin-top:14px}
+.fgrid{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.two{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.f.wide{grid-column:1/-1}
+.stats{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+.stat.hero .v{font-size:31px}
+.stat.hero{padding:14px 15px}
+.stat.pos .v{color:var(--ok)}
+.sub-split{display:flex;gap:6px;align-items:flex-end}
+.sub-split .f{flex:1}
+.pill{font:600 11px/1 var(--sans);color:var(--muted);letter-spacing:.04em}
+.samp{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:14px}
+.cmp{width:100%;font-size:13.5px;margin-top:2px}
+.cmp th{background:transparent;padding:6px 8px 6px 0;border-bottom:1px solid var(--line)}
+.cmp td{padding:6px 8px 6px 0;border-bottom:1px solid var(--line);font-family:var(--mono);
+  text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cmp td:first-child{font-family:var(--sans);text-align:left;color:var(--ink-2)}
+.cmp tbody tr:hover{background:transparent}
+.cmp .save{color:var(--ok);font-weight:650}
+.sched{font-size:13.5px}
+.sched td{padding:6px 9px}
+.sched th{padding:8px 9px}
+.sched tr.io td{background:var(--warn-wash)}
+.sched tr.fin td{background:var(--accent-wash);font-weight:650}
+.sched tr.io:hover td,.sched tr.fin:hover td{filter:brightness(.98)}
+.sched td.ex{color:var(--ok)}
+.lumps td{padding:5px 6px}
+.lumps th:last-child,.lumps td:last-child{width:38px;text-align:center}
+.lumps td.dt{font:12px/1.3 var(--mono);color:var(--muted);white-space:nowrap}
+.hd .row{gap:8px}
+.hd select{width:auto;min-width:150px;font-size:13.5px;padding:6px 8px}
+.rowcap{font-size:12px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.docmeta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 18px;margin-top:10px}
+.docmeta div{font-size:12.5px;min-width:0}
+.docmeta .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.docmeta .v{font-weight:600;word-break:break-word}
+.phead{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+.phead .t{font:700 19px/1.2 var(--sans);letter-spacing:-.02em}
+.phead .s{font-size:12px;color:#333;margin-top:3px}
+.povr{font-size:10.5pt;line-height:1.5;margin-top:9px;padding:7px 9px;border:1px solid #bbb;background:#f6f6f6}
+.keyfacts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:10px 0 4px}
+.keyfacts div{font-size:11pt;border-bottom:1px dotted #bbb;padding-bottom:3px}
+.keyfacts .k{font:600 8.5pt/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:#555}
+footer{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--muted);line-height:1.55}
+@media(max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .split>#resultCol{order:1}
+  .split>.stack{order:2}
+  .sticky{position:static}
+}
+@media(max-width:640px){
+  .stat.hero .v{font-size:27px}
+  .sched{font-size:12.5px}
+  .sched td,.sched th{padding:5px 7px}
+  .appbar h1{font-size:14.5px;white-space:normal}
+}
+@media print{
+  .sticky{position:static}
+  .stats{display:grid!important;grid-template-columns:repeat(4,1fr)}
+  .split{display:block}
+  .sched tr.fin td,.sched tr.io td{background:#f0f0f0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card{margin-bottom:6mm}
+  .note{border-left:3px solid #000;background:#f4f4f4!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  thead{display:table-header-group}
+  #chipStatus,#chipBasis,#chipOver{display:none!important}
+  #resultCol .card>.hd h2::after{content:" — summary of the illustration";font-weight:400;color:#555}
+  .stat.hero{border:2px solid #000}
+  .cmp td,.cmp th{border-bottom:1px solid #ccc}
+  .printonly .keyfacts{page-break-inside:avoid}
+  .sched td,.sched th{padding:3px 5px}
+  footer{margin-top:8mm}
+}
+</style>
+</head>
+<body>
+
+
+
+<main class="app">
+
+<header class="appbar noprint">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">AM</span>
+    <div style="min-width:0">
+      <h1>Loan Amortisation Schedule</h1>
+      <div class="sub">payment · interest · overpayment savings</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Save JSON</button>
+    <button type="button" class="btn" id="btnImport">Import</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</header>
+
+  <!-- printed document header -->
+  <div class="printonly">
+    <div class="phead">
+      <div class="t">Loan Amortisation Schedule</div>
+      <div class="s" id="pSub">Illustrative repayment schedule</div>
+    </div>
+    <div class="docmeta">
+      <div><div class="k">Borrower</div><div class="v" id="pBorrower">—</div></div>
+      <div><div class="k">Lender / facility</div><div class="v" id="pLender">—</div></div>
+      <div><div class="k">Reference</div><div class="v" id="pRef">—</div></div>
+      <div><div class="k">Purpose</div><div class="v" id="pPurpose">—</div></div>
+      <div><div class="k">Prepared</div><div class="v" id="pDate">—</div></div>
+      <div><div class="k">Prepared by</div><div class="v" id="pBy">—</div></div>
+    </div>
+    <div class="keyfacts">
+      <div><div class="k">Amount advanced</div><span id="pAmount">—</span></div>
+      <div><div class="k">Annual rate</div><span id="pRate">—</span></div>
+      <div><div class="k">Periodic rate</div><span id="pPeriodic">—</span></div>
+      <div><div class="k">Frequency</div><span id="pFreq">—</span></div>
+      <div><div class="k">Number of payments</div><span id="pN">—</span></div>
+      <div><div class="k">First payment</div><span id="pStart">—</span></div>
+      <div><div class="k">Interest-only period</div><span id="pIo">—</span></div>
+      <div><div class="k">Balloon / final lump</div><span id="pBalloon">—</span></div>
+      <div><div class="k">Contractual payment</div><span id="pPmt">—</span></div>
+    </div>
+    <p class="povr" id="pOver">—</p>
+  </div>
+
+  <div class="samp noprint">
+    <span class="chip warn" id="sampleChip" hidden>Sample data</span>
+    <span class="rowcap" id="sampleMsg" hidden>A worked example is loaded so you can see the tool working. Edit any field to make it yours.</span>
+    <span class="rowcap" id="savedMsg">Everything you type is saved in this browser only.</span>
+  </div>
+
+  <div style="margin-top:12px">
+    <div class="note warn" role="note">
+      <strong>Illustration only — this is not a credit quotation.</strong>
+      It assumes every payment is made in full and on time and that the rate never changes, and it
+      excludes fees, charges, insurance, early-repayment penalties and day-count adjustments. Your
+      lender's figures are the ones that count. Check this against your credit agreement and take
+      advice from a qualified accountant, broker or regulated financial adviser.
+      <span class="printonly" style="margin-top:6px">Interest here is charged on the balance at each
+      payment date, not daily, and each period's interest is rounded to the nearest minor unit. Real
+      agreements may use daily accrual, different day-count conventions and their own rounding, so a
+      lender's figures can differ by a few units per payment. No tax treatment is modelled.</span>
+    </div>
+  </div>
+
+  <div class="split mt">
+
+    <!-- ═══ inputs ═══ -->
+    <div class="stack">
+
+      <section class="card noprint">
+        <div class="hd"><h2>The loan</h2><span class="chip" id="chipBasis">Nominal rate</span></div>
+        <div class="bd stack">
+          <div class="fgrid">
+            <div class="f">
+              <label for="amount">Amount advanced</label>
+              <input type="number" id="amount" inputmode="decimal" step="100" min="0" placeholder="0.00">
+              <span class="err" id="e-amount"></span>
+            </div>
+            <div class="f">
+              <label for="rate">Annual interest rate %</label>
+              <input type="number" id="rate" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+              <span class="err" id="e-rate"></span>
+            </div>
+            <div class="f">
+              <label for="cur">Currency</label>
+              <select id="cur">
+                <option value="£">£ Pound</option>
+                <option value="$">$ Dollar</option>
+                <option value="€">€ Euro</option>
+                <option value="custom">Custom symbol…</option>
+              </select>
+            </div>
+            <div class="f" id="curCustomWrap" hidden>
+              <label for="curCustom">Custom symbol</label>
+              <input type="text" id="curCustom" maxlength="4" placeholder="R" style="text-align:left;font-family:var(--sans)">
+            </div>
+          </div>
+
+          <div class="fgrid two">
+            <div class="f">
+              <label for="basis">Rate basis</label>
+              <select id="basis">
+                <option value="nom">Nominal — annual rate ÷ payments per year</option>
+                <option value="eff">Effective annual — compounds to the quoted rate</option>
+              </select>
+              <span class="hint" id="basisHint"></span>
+            </div>
+            <div class="f">
+              <label for="freq">Payment frequency</label>
+              <select id="freq">
+                <option value="12">Monthly (12 a year)</option>
+                <option value="26">Fortnightly (26 a year)</option>
+                <option value="52">Weekly (52 a year)</option>
+              </select>
+              <span class="hint" id="freqHint"></span>
+            </div>
+          </div>
+
+          <div class="fgrid">
+            <div class="f">
+              <label for="years">Term — years</label>
+              <input type="number" id="years" inputmode="numeric" step="1" min="0" max="50" placeholder="0">
+              <span class="err" id="e-years"></span>
+            </div>
+            <div class="f">
+              <label for="months">Term — extra months</label>
+              <input type="number" id="months" inputmode="numeric" step="1" min="0" max="11" placeholder="0">
+            </div>
+            <div class="f">
+              <label for="start">First payment date</label>
+              <input type="date" id="start" style="text-align:left;font-family:var(--sans)">
+              <span class="err" id="e-start"></span>
+            </div>
+          </div>
+
+          <div class="fgrid">
+            <div class="f">
+              <label for="ioMonths">Interest-only period (months)</label>
+              <input type="number" id="ioMonths" inputmode="numeric" step="1" min="0" placeholder="0">
+              <span class="hint">Balance is not reduced during this period.</span>
+              <span class="err" id="e-io"></span>
+            </div>
+            <div class="f">
+              <label for="balloon">Balloon / final lump sum</label>
+              <input type="number" id="balloon" inputmode="decimal" step="100" min="0" placeholder="0.00">
+              <span class="hint">Left owing at the end and cleared by the final payment.</span>
+              <span class="err" id="e-balloon"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd">
+          <h2>Overpayments</h2>
+          <span class="chip ok" id="chipOver" hidden>Modelled</span>
+        </div>
+        <div class="bd stack">
+          <p class="hint">Overpayments are applied straight to the balance. The contractual payment stays
+            the same, so the loan clears earlier — the model shows the time and interest that saves.</p>
+          <div class="fgrid">
+            <div class="f">
+              <label for="extra">Regular extra, every payment</label>
+              <input type="number" id="extra" inputmode="decimal" step="10" min="0" placeholder="0.00">
+              <span class="err" id="e-extra"></span>
+            </div>
+            <div class="f">
+              <label for="extraFrom">Starting at payment #</label>
+              <input type="number" id="extraFrom" inputmode="numeric" step="1" min="1" placeholder="1">
+              <span class="err" id="e-extraFrom"></span>
+            </div>
+          </div>
+
+          <div>
+            <div class="lbl" style="margin-bottom:5px">One-off lump sums</div>
+            <div class="tw">
+              <table class="lumps">
+                <thead>
+                  <tr>
+                    <th scope="col" style="width:96px">Payment #</th>
+                    <th scope="col">Due</th>
+                    <th scope="col" class="n" style="width:130px">Amount</th>
+                    <th scope="col"><span class="sr">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody id="lumpBody"></tbody>
+              </table>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="btn sm" id="btnAddLump">+ Add lump sum</button>
+              <span class="err" id="e-lumps"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>Document details</h2><span class="chip">Appears on the printout</span></div>
+        <div class="bd fgrid two">
+          <div class="f">
+            <label for="borrower">Borrower</label>
+            <input type="text" id="borrower" style="text-align:left;font-family:var(--sans)">
+          </div>
+          <div class="f">
+            <label for="lender">Lender / facility</label>
+            <input type="text" id="lender" style="text-align:left;font-family:var(--sans)">
+          </div>
+          <div class="f">
+            <label for="ref">Agreement reference</label>
+            <input type="text" id="ref" style="text-align:left;font-family:var(--sans)">
+          </div>
+          <div class="f">
+            <label for="purpose">Purpose</label>
+            <input type="text" id="purpose" style="text-align:left;font-family:var(--sans)">
+          </div>
+          <div class="f">
+            <label for="prepared">Prepared on</label>
+            <input type="date" id="prepared" style="text-align:left;font-family:var(--sans)">
+          </div>
+          <div class="f">
+            <label for="preparedBy">Prepared by</label>
+            <input type="text" id="preparedBy" style="text-align:left;font-family:var(--sans)">
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ results ═══ -->
+    <div id="resultCol">
+      <section class="card sticky">
+        <div class="hd"><h2>Result</h2><span class="chip" id="chipStatus">Live</span></div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k" id="heroKey">Contractual payment</div>
+            <div class="v" id="heroVal">—</div>
+            <div class="u" id="heroSub">Enter the loan details to begin.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Total interest</div>
+              <div class="v" id="sInterest" style="font-size:18px">—</div>
+              <div class="u" id="sInterestSub">&nbsp;</div>
+            </div>
+            <div class="stat">
+              <div class="k">Total repaid</div>
+              <div class="v" id="sRepaid" style="font-size:18px">—</div>
+              <div class="u" id="sRepaidSub">&nbsp;</div>
+            </div>
+            <div class="stat">
+              <div class="k">Loan cleared</div>
+              <div class="v" id="sCleared" style="font-size:18px">—</div>
+              <div class="u" id="sClearedSub">&nbsp;</div>
+            </div>
+            <div class="stat pos" id="statSaved">
+              <div class="k">Interest saved</div>
+              <div class="v" id="sSaved" style="font-size:18px">—</div>
+              <div class="u" id="sSavedSub">&nbsp;</div>
+            </div>
+          </div>
+
+          <div id="cmpWrap">
+            <div class="lbl" style="margin-bottom:2px">Contractual vs with overpayments</div>
+            <div class="tw">
+            <table class="cmp">
+              <thead>
+                <tr><th scope="col">&nbsp;</th><th scope="col" class="r">Contractual</th><th scope="col" class="r">With extra</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row" style="font-weight:400">Payments made</th><td id="cBaseN">—</td><td id="cOverN">—</td></tr>
+                <tr><th scope="row" style="font-weight:400">Final payment date</th><td id="cBaseD">—</td><td id="cOverD">—</td></tr>
+                <tr><th scope="row" style="font-weight:400">Total interest</th><td id="cBaseI">—</td><td id="cOverI">—</td></tr>
+                <tr><th scope="row" style="font-weight:400">Total repaid</th><td id="cBaseT">—</td><td id="cOverT">—</td></tr>
+                <tr><th scope="row" style="font-weight:400">Time saved</th><td>—</td><td id="cSavedT" class="save">—</td></tr>
+                <tr><th scope="row" style="font-weight:400">Interest saved</th><td>—</td><td id="cSavedI" class="save">—</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          <div class="note" id="noteCalc">
+            <span id="calcNote">—</span>
+          </div>
+          <div class="note bad" id="noteErr" hidden><span id="errNote"></span></div>
+        </div>
+        <div class="ft">
+          <span class="lbl" style="margin-right:auto">Cost of borrowing</span>
+          <span class="mono" id="ftCost" style="font-weight:700">—</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ schedule ═══ -->
+  <section class="card" style="margin-top:14px">
+    <div class="hd">
+      <h2>Repayment schedule</h2>
+      <div class="row noprint">
+        <label class="lbl" for="scenario">Schedule</label>
+        <select id="scenario">
+          <option value="over">With overpayments</option>
+          <option value="base">Contractual only</option>
+        </select>
+        <label class="lbl" for="view">View</label>
+        <select id="view">
+          <option value="all">Every payment</option>
+          <option value="year">Yearly summary</option>
+        </select>
+      </div>
+      <span class="chip" id="chipSched">—</span>
+    </div>
+    <div class="tw">
+      <table class="sched" id="schedTable">
+        <thead id="schedHead"></thead>
+        <tbody id="schedBody"></tbody>
+        <tfoot id="schedFoot"></tfoot>
+      </table>
+    </div>
+    <div class="ft">
+      <span class="rowcap" id="schedNote">—</span>
+    </div>
+  </section>
+
+  <footer>
+    <strong>Method.</strong> Payment by the standard annuity (amortisation) formula
+    P = r·PV ⁄ (1 − (1 + r)<sup>−n</sup>), where PV is the amount advanced, n the number of payments and
+    r the periodic interest rate. With a balloon B the formula becomes
+    P = r·(PV − B·(1 + r)<sup>−n</sup>) ⁄ (1 − (1 + r)<sup>−n</sup>); with an interest-only period the amortising
+    formula is applied over the payments that remain after it. Periodic rate: nominal basis
+    r = i ⁄ f; effective-annual basis r = (1 + i)<sup>1/f</sup> − 1, where f is payments per year
+    (12, 26 or 52). Each period, interest = opening balance × r rounded to the cent, principal =
+    payment − interest, closing = opening − principal; the final payment is adjusted to clear the
+    balance exactly and includes any balloon. Interest is calculated on the balance each period, not
+    daily; no fees, charges or rate changes are modelled. This tool gives arithmetic, not financial
+    advice, and is not a regulated credit illustration.
+  </footer>
+</main>
+
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+
+<script>
+(function(){
+"use strict";
+
+var KEY = "solvix.loan-amortisation.v1";
+var $ = function(s){ return document.getElementById(s); };
+
+var FREQ = {
+  12: { name:"Monthly",     per:"month",     each:"every month",     plural:"months",     mpp:1 },
+  26: { name:"Fortnightly", per:"fortnight", each:"every fortnight", plural:"fortnights", mpp:12/26 },
+  52: { name:"Weekly",      per:"week",      each:"every week",      plural:"weeks",      mpp:12/52 }
+};
+var MAX_ROWS = 3000;
+
+/* ── sample ────────────────────────────────────────────────────────── */
+function sampleState(){
+  return {
+    v:1, sample:true,
+    cur:"£", curCustom:"",
+    borrower:"Marsh & Hale Joinery Ltd",
+    lender:"Northbank Commercial Finance — Facility A",
+    ref:"NCF-2026-4471",
+    purpose:"Unit 7, Brantwood Trade Park — commercial mortgage",
+    prepared:"2026-09-03",
+    preparedBy:"D. Hale, Finance Director",
+    amount:"250000", rate:"5.4", basis:"nom", freq:"12",
+    years:"25", months:"0", start:"2026-10-01",
+    ioMonths:"0", balloon:"0",
+    extra:"150", extraFrom:"1",
+    lumps:[{ p:"24", amt:"5000" }],
+    scenario:"over", view:"all"
+  };
+}
+function blankState(){
+  var t = new Date();
+  var iso = t.getFullYear() + "-" + pad2(t.getMonth()+1) + "-" + pad2(t.getDate());
+  var nm = new Date(t.getFullYear(), t.getMonth()+1, 1);
+  return {
+    v:1, sample:false,
+    cur:"£", curCustom:"",
+    borrower:"", lender:"", ref:"", purpose:"",
+    prepared:iso, preparedBy:"",
+    amount:"", rate:"", basis:"nom", freq:"12",
+    years:"", months:"", start:nm.getFullYear()+"-"+pad2(nm.getMonth()+1)+"-01",
+    ioMonths:"", balloon:"",
+    extra:"", extraFrom:"1",
+    lumps:[],
+    scenario:"over", view:"all"
+  };
+}
+
+var S = sampleState();
+var R = null; /* last computed result */
+
+/* ── helpers ───────────────────────────────────────────────────────── */
+function pad2(n){ return (n<10?"0":"") + n; }
+function r2(x){ return Math.round((x + (x<0?-1e-9:1e-9)) * 100) / 100; }
+function num(v){
+  if (v === null || v === undefined) return NaN;
+  var s = String(v).replace(/[\s,]/g, "");
+  if (s === "") return NaN;
+  var n = parseFloat(s);
+  return isFinite(n) ? n : NaN;
+}
+function numOr(v, d){ var n = num(v); return isFinite(n) ? n : d; }
+function cur(){ return (S.cur === "custom" ? (S.curCustom || "¤") : S.cur) || "£"; }
+function fmtN(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  if (Math.abs(v) < Math.pow(10, -(dp||0)) / 2) v = 0;
+  return (v + 0).toLocaleString("en-GB", { minimumFractionDigits: dp||0, maximumFractionDigits: dp||0 });
+}
+function money(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  if (Math.abs(v) < 0.005) v = 0;
+  var neg = v < 0;
+  return (neg ? "−" : "") + cur() + fmtN(Math.abs(v), dp === undefined ? 2 : dp);
+}
+function plain(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "";
+  if (Math.abs(v) < 0.005 && (dp === undefined || dp === 2)) v = 0;
+  return (v + 0).toFixed(dp === undefined ? 2 : dp);
+}
+function pct(v, dp){
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  return fmtN(v, dp === undefined ? 3 : dp) + "%";
+}
+function esc(s){
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* dates */
+var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function parseISO(s){
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  var p = s.split("-"), d = new Date(+p[0], +p[1]-1, +p[2]);
+  if (d.getFullYear() !== +p[0] || d.getMonth() !== +p[1]-1 || d.getDate() !== +p[2]) return null;
+  return d;
+}
+function addMonths(d, m){
+  var day = d.getDate();
+  var nd = new Date(d.getFullYear(), d.getMonth() + m, 1);
+  var last = new Date(nd.getFullYear(), nd.getMonth() + 1, 0).getDate();
+  nd.setDate(Math.min(day, last));
+  return nd;
+}
+function addPeriods(d, k, f){
+  if (!d) return null;
+  if (f === 12) return addMonths(d, k);
+  var nd = new Date(d.getTime());
+  nd.setDate(nd.getDate() + (f === 26 ? 14 : 7) * k);
+  return nd;
+}
+function fmtDate(d){
+  if (!d) return "—";
+  return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear();
+}
+function isoOf(d){ return d ? d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()) : ""; }
+
+/* term in periods, months in periods */
+function monthsToPeriods(m, f){ return Math.round(m / 12 * f); }
+
+/* ── the maths ─────────────────────────────────────────────────────── */
+/* Annuity payment. r = periodic rate, pv = principal at start of amortising
+   phase, na = number of amortising payments, bal = balloon left at the end.
+   P = r*(PV - B*(1+r)^-na) / (1 - (1+r)^-na);  r = 0 -> P = (PV - B)/na     */
+function annuity(pv, r, na, bal){
+  if (!(na > 0)) return NaN;
+  if (!isFinite(pv) || !isFinite(r) || !isFinite(bal)) return NaN;
+  if (r === 0) return (pv - bal) / na;
+  var disc = Math.pow(1 + r, -na);
+  var den = 1 - disc;
+  if (!(Math.abs(den) > 1e-12)) return NaN;
+  return r * (pv - bal * disc) / den;
+}
+
+/* Build a period-by-period schedule. extraFn(p) -> extra paid at period p. */
+function build(pv, r, n, io, pmt, extraFn, firstDate, f){
+  var rows = [], bal = r2(pv), ti = 0, tp = 0, tx = 0;
+  var cap = Math.min(n, MAX_ROWS);
+  for (var p = 1; p <= cap; p++){
+    var open = bal;
+    var interest = r2(open * r);
+    var baseAmt = (p <= io) ? interest : pmt;
+    var ex = extraFn ? r2(extraFn(p)) : 0;
+    if (!(ex >= 0)) ex = 0;
+    var pay = r2(baseAmt + ex);
+    var payoff = r2(open + interest);
+    var fin = false;
+    if (p >= n || pay >= payoff - 0.004){
+      pay = payoff; fin = true;
+      if (pay <= baseAmt){ baseAmt = pay; ex = 0; }
+      else ex = r2(pay - baseAmt);
+    }
+    var princ = r2(pay - interest);
+    var close = r2(open - princ);
+    if (Math.abs(close) < 0.005) close = 0;
+    rows.push({
+      p: p, date: addPeriods(firstDate, p - 1, f),
+      open: open, pay: pay, extra: ex, interest: interest,
+      princ: princ, close: close, io: p <= io, fin: fin
+    });
+    ti = r2(ti + interest); tp = r2(tp + pay); tx = r2(tx + ex);
+    bal = close;
+    if (bal <= 0) break;
+  }
+  var last = rows.length ? rows[rows.length - 1] : null;
+  return {
+    rows: rows, totalInterest: ti, totalPaid: tp, totalExtra: tx,
+    periods: rows.length, lastDate: last ? last.date : null,
+    finalPayment: last ? last.pay : NaN, settled: !!(last && last.close === 0)
+  };
+}
+
+function compute(){
+  var res = { ok:false, errors:{}, warn:"" };
+  var pv = num(S.amount);
+  var i  = num(S.rate);
+  var f  = parseInt(S.freq, 10) || 12;
+  var yrs = numOr(S.years, 0), mos = numOr(S.months, 0);
+  var totalMonths = yrs * 12 + mos;
+  var n = monthsToPeriods(totalMonths, f);
+  var ioM = numOr(S.ioMonths, 0);
+  var io = monthsToPeriods(ioM, f);
+  var balloon = numOr(S.balloon, 0);
+  var start = parseISO(S.start);
+  var extra = numOr(S.extra, 0);
+  var extraFrom = Math.max(1, Math.round(numOr(S.extraFrom, 1)));
+
+  res.f = f; res.n = n; res.io = io; res.balloon = balloon;
+  res.pv = pv; res.start = start; res.extra = extra; res.extraFrom = extraFrom;
+  res.totalMonths = totalMonths;
+
+  if (!isFinite(pv) || pv <= 0) res.errors.amount = isFinite(pv) ? "Must be more than zero." : "Enter the amount advanced.";
+  if (!isFinite(i) || i < 0) res.errors.rate = isFinite(i) ? "Cannot be negative." : "Enter the annual rate (0 is allowed).";
+  else if (i > 200) res.errors.rate = "That looks too high — enter a percentage, e.g. 5.4";
+  if (!(totalMonths > 0)) res.errors.years = "Enter a term of at least one month.";
+  else if (yrs > 50) res.errors.years = "Maximum term is 50 years.";
+  if (!start) res.errors.start = "Enter a valid first payment date.";
+  if (io > 0 && n > 0 && io >= n) res.errors.io = "Must be shorter than the full term.";
+  if (balloon < 0) res.errors.balloon = "Cannot be negative.";
+  else if (isFinite(pv) && pv > 0 && balloon >= pv) res.errors.balloon = "Must be less than the amount advanced.";
+  if (extra < 0) res.errors.extra = "Cannot be negative.";
+
+  /* periodic rate */
+  var r = NaN;
+  if (isFinite(i) && i >= 0){
+    r = (S.basis === "eff") ? (Math.pow(1 + i/100, 1/f) - 1) : (i/100/f);
+  }
+  res.r = r;
+  res.effAnnual = isFinite(r) ? (Math.pow(1 + r, f) - 1) : NaN;
+
+  /* lump sums */
+  var lumpMap = {}, lumpErr = "";
+  var lumps = S.lumps || [];
+  for (var k = 0; k < lumps.length; k++){
+    var lp = Math.round(numOr(lumps[k].p, NaN));
+    var la = num(lumps[k].amt);
+    if (!isFinite(lp) && !isFinite(la)) continue;
+    if (!isFinite(lp) || lp < 1){ lumpErr = "Every lump sum needs a payment number of 1 or more."; continue; }
+    if (n > 0 && lp > n){ lumpErr = "A lump sum is set after the last payment (" + n + ")."; continue; }
+    if (!isFinite(la) || la <= 0){ lumpErr = "Every lump sum needs an amount above zero."; continue; }
+    lumpMap[lp] = r2((lumpMap[lp] || 0) + la);
+  }
+  if (lumpErr) res.errors.lumps = lumpErr;
+  res.lumpMap = lumpMap;
+
+  if (Object.keys(res.errors).length) return res;
+
+  var na = n - io;
+  if (!(na > 0)){ res.errors.io = "Must be shorter than the full term."; return res; }
+
+  var pmt = annuity(pv, r, na, balloon);
+  if (!isFinite(pmt) || pmt <= 0){ res.errors.amount = "These figures do not produce a workable payment."; return res; }
+  pmt = r2(pmt);
+  var ioPmt = r2(pv * r);
+  if (io > 0 && pmt <= ioPmt && r > 0 && balloon > 0){
+    res.warn = "The balloon is so large that almost nothing is repaid during the term.";
+  }
+
+  res.pmt = pmt; res.ioPmt = ioPmt; res.na = na;
+
+  var hasExtra = (extra > 0) || Object.keys(lumpMap).length > 0;
+  res.hasExtra = hasExtra;
+
+  var base = build(pv, r, n, io, pmt, null, start, f);
+  var over = hasExtra
+    ? build(pv, r, n, io, pmt, function(p){ return (p >= extraFrom ? extra : 0) + (lumpMap[p] || 0); }, start, f)
+    : base;
+
+  res.base = base; res.over = over;
+  res.savedInterest = r2(base.totalInterest - over.totalInterest);
+  res.savedPeriods = base.periods - over.periods;
+  res.savedMonths = Math.round(res.savedPeriods * FREQ[f].mpp);
+  res.ok = true;
+  if (base.periods >= MAX_ROWS) res.warn = "Schedule capped at " + MAX_ROWS + " payments.";
+  return res;
+}
+
+/* ── formatting of durations ───────────────────────────────────────── */
+function termText(periods, f){
+  if (!isFinite(periods) || periods <= 0) return "—";
+  var m = Math.round(periods * FREQ[f].mpp);
+  var y = Math.floor(m / 12), mm = m % 12;
+  var parts = [];
+  if (y) parts.push(y + " yr");
+  if (mm) parts.push(mm + " mo");
+  if (!parts.length) parts.push("under a month");
+  return parts.join(" ");
+}
+
+/* ── rendering ─────────────────────────────────────────────────────── */
+function setErr(id, msg){
+  var el = $("e-" + id);
+  if (el) el.textContent = msg || "";
+  var input = $(id === "io" ? "ioMonths" : (id === "lumps" ? null : id));
+  if (input) input.classList.toggle("inv", !!msg);
+}
+
+function render(){
+  R = compute();
+  var f = R.f, F = FREQ[f];
+
+  /* field errors */
+  ["amount","rate","years","start","balloon","extra","extraFrom"].forEach(function(k){ setErr(k, R.errors[k]); });
+  setErr("io", R.errors.io);
+  setErr("lumps", R.errors.lumps);
+  var ioIn = $("ioMonths"); if (ioIn) ioIn.classList.toggle("inv", !!R.errors.io);
+
+  var errKeys = Object.keys(R.errors);
+  $("noteErr").hidden = !errKeys.length;
+  if (errKeys.length){
+    $("errNote").textContent = "Check the highlighted fields: " + errKeys.map(function(k){ return R.errors[k]; }).join(" ");
+  }
+  $("chipStatus").textContent = errKeys.length ? "Incomplete" : "Live";
+  $("chipStatus").className = "chip " + (errKeys.length ? "warn" : "ok");
+
+  $("chipBasis").textContent = S.basis === "eff" ? "Effective annual" : "Nominal rate";
+  $("basisHint").textContent = S.basis === "eff"
+    ? "r = (1 + i)^(1/f) − 1"
+    : "r = i ÷ f — the usual consumer-credit convention";
+  $("freqHint").textContent = isFinite(R.n) && R.n > 0
+    ? R.n + " payments over " + termText(R.n, f)
+    : "";
+  $("chipOver").hidden = !(R.hasExtra);
+
+  var showOver = (S.scenario !== "base") && R.hasExtra;
+  var sc = R.ok ? (showOver ? R.over : R.base) : null;
+
+  /* hero */
+  $("heroKey").textContent = "Contractual payment — " + F.each;
+  if (R.ok){
+    $("heroVal").textContent = money(R.pmt);
+    var bits = [R.n + " payments", "first " + fmtDate(R.start)];
+    if (R.io > 0) bits.push(R.io + " interest-only at " + money(R.ioPmt));
+    if (R.balloon > 0) bits.push("balloon " + money(R.balloon));
+    $("heroSub").textContent = bits.join(" · ");
+  } else {
+    $("heroVal").textContent = "—";
+    $("heroSub").textContent = "Enter the amount, rate and term to see the payment.";
+  }
+
+  /* stats */
+  if (R.ok && sc){
+    $("sInterest").textContent = money(sc.totalInterest);
+    $("sInterestSub").textContent = R.pv > 0 ? fmtN(sc.totalInterest / R.pv * 100, 1) + "% of the advance" : "";
+    $("sRepaid").textContent = money(sc.totalPaid);
+    $("sRepaidSub").textContent = sc.periods + " payments";
+    $("sCleared").textContent = fmtDate(sc.lastDate);
+    $("sClearedSub").textContent = termText(sc.periods, f);
+    $("ftCost").textContent = money(sc.totalInterest);
+  } else {
+    ["sInterest","sRepaid","sCleared"].forEach(function(id){ $(id).textContent = "—"; });
+    $("sInterestSub").textContent = ""; $("sRepaidSub").textContent = ""; $("sClearedSub").textContent = "";
+    $("ftCost").textContent = "—";
+  }
+
+  if (R.ok && R.hasExtra){
+    $("statSaved").hidden = false;
+    $("sSaved").textContent = money(R.savedInterest);
+    $("sSavedSub").textContent = R.savedPeriods > 0
+      ? termText(R.savedPeriods, f) + " earlier"
+      : "no time saved";
+    $("cmpWrap").hidden = false;
+    $("cBaseN").textContent = R.base.periods; $("cOverN").textContent = R.over.periods;
+    $("cBaseD").textContent = fmtDate(R.base.lastDate); $("cOverD").textContent = fmtDate(R.over.lastDate);
+    $("cBaseI").textContent = money(R.base.totalInterest); $("cOverI").textContent = money(R.over.totalInterest);
+    $("cBaseT").textContent = money(R.base.totalPaid); $("cOverT").textContent = money(R.over.totalPaid);
+    $("cSavedT").textContent = R.savedPeriods > 0 ? termText(R.savedPeriods, f) + " (" + R.savedPeriods + " payments)" : "—";
+    $("cSavedI").textContent = R.savedInterest > 0 ? money(R.savedInterest) : "—";
+  } else {
+    $("statSaved").hidden = true;
+    $("sSaved").textContent = "—"; $("sSavedSub").textContent = "";
+    $("cmpWrap").hidden = true;
+  }
+
+  /* method note */
+  if (R.ok){
+    var bits2 = [];
+    bits2.push("Periodic rate r = " + pct(R.r * 100, 6) + " " + (S.basis === "eff" ? "= (1 + i)^(1/" + f + ") − 1" : "= " + fmtN(num(S.rate), 2) + "% ÷ " + f) + ".");
+    bits2.push("Effective annual rate " + pct(R.effAnnual * 100, 3) + ".");
+    if (R.io > 0) bits2.push("Amortised over the " + R.na + " payments after the interest-only period.");
+    if (R.balloon > 0) bits2.push("Balloon of " + money(R.balloon) + " cleared by the final payment.");
+    bits2.push("Final payment " + money(sc.finalPayment) + " adjusted to settle the balance exactly.");
+    if (R.warn) bits2.push(R.warn);
+    $("calcNote").textContent = bits2.join(" ");
+  } else {
+    $("calcNote").textContent = "The payment, totals and schedule update as you type. Nothing is sent anywhere.";
+  }
+
+  renderSchedule(sc, showOver);
+  renderPrintHeader();
+}
+
+function renderSchedule(sc, showOver){
+  var head = $("schedHead"), body = $("schedBody"), foot = $("schedFoot");
+  var f = R.f, F = FREQ[f];
+  if (!R.ok || !sc || !sc.rows.length){
+    head.innerHTML = "";
+    body.innerHTML = '<tr><td class="empty">Enter the amount advanced, the interest rate and the term — the full schedule appears here.</td></tr>';
+    foot.innerHTML = "";
+    $("chipSched").textContent = "—";
+    $("schedNote").textContent = "No schedule yet.";
+    return;
+  }
+  var yearly = S.view === "year";
+  var h, rowsHtml = "", ft = "";
+
+  if (!yearly){
+    h = '<tr><th scope="col" class="n">#</th><th scope="col">Due</th><th scope="col" class="n">Opening</th>'
+      + '<th scope="col" class="n">Payment</th><th scope="col" class="n">of which extra</th>'
+      + '<th scope="col" class="n">Interest</th><th scope="col" class="n">Principal</th>'
+      + '<th scope="col" class="n">Closing</th></tr>';
+    var out = [];
+    for (var k = 0; k < sc.rows.length; k++){
+      var x = sc.rows[k];
+      out.push('<tr class="' + (x.fin ? "fin" : (x.io ? "io" : "")) + '">'
+        + '<td class="n">' + x.p + '</td>'
+        + '<td>' + esc(fmtDate(x.date)) + '</td>'
+        + '<td class="n">' + money(x.open) + '</td>'
+        + '<td class="n">' + money(x.pay) + '</td>'
+        + '<td class="n ' + (x.extra > 0 ? "ex" : "") + '">' + (x.extra > 0 ? money(x.extra) : "—") + '</td>'
+        + '<td class="n">' + money(x.interest) + '</td>'
+        + '<td class="n">' + money(x.princ) + '</td>'
+        + '<td class="n">' + money(x.close) + '</td></tr>');
+    }
+    rowsHtml = out.join("");
+    ft = '<tr><td colspan="3">Totals — ' + sc.periods + ' payments</td>'
+      + '<td class="n">' + money(sc.totalPaid) + '</td>'
+      + '<td class="n">' + (sc.totalExtra > 0 ? money(sc.totalExtra) : "—") + '</td>'
+      + '<td class="n">' + money(sc.totalInterest) + '</td>'
+      + '<td class="n">' + money(r2(sc.totalPaid - sc.totalInterest)) + '</td>'
+      + '<td class="n">' + money(0) + '</td></tr>';
+  } else {
+    h = '<tr><th scope="col">Year</th><th scope="col" class="n">Payments</th><th scope="col" class="n">Opening</th>'
+      + '<th scope="col" class="n">Paid</th><th scope="col" class="n">of which extra</th>'
+      + '<th scope="col" class="n">Interest</th><th scope="col" class="n">Principal</th>'
+      + '<th scope="col" class="n">Closing</th></tr>';
+    var groups = [], byYear = {};
+    for (var j = 0; j < sc.rows.length; j++){
+      var rw = sc.rows[j];
+      var y = rw.date ? rw.date.getFullYear() : "—";
+      if (!byYear[y]){ byYear[y] = { y:y, n:0, open:rw.open, pay:0, extra:0, interest:0, princ:0, close:0 }; groups.push(byYear[y]); }
+      var g = byYear[y];
+      g.n++; g.pay = r2(g.pay + rw.pay); g.extra = r2(g.extra + rw.extra);
+      g.interest = r2(g.interest + rw.interest); g.princ = r2(g.princ + rw.princ); g.close = rw.close;
+    }
+    var o2 = [];
+    for (var q = 0; q < groups.length; q++){
+      var G = groups[q];
+      o2.push('<tr><td>' + esc(G.y) + '</td><td class="n">' + G.n + '</td>'
+        + '<td class="n">' + money(G.open) + '</td><td class="n">' + money(G.pay) + '</td>'
+        + '<td class="n ' + (G.extra > 0 ? "ex" : "") + '">' + (G.extra > 0 ? money(G.extra) : "—") + '</td>'
+        + '<td class="n">' + money(G.interest) + '</td><td class="n">' + money(G.princ) + '</td>'
+        + '<td class="n">' + money(G.close) + '</td></tr>');
+    }
+    rowsHtml = o2.join("");
+    ft = '<tr><td>Totals</td><td class="n">' + sc.periods + '</td><td class="n">' + money(R.pv) + '</td>'
+      + '<td class="n">' + money(sc.totalPaid) + '</td>'
+      + '<td class="n">' + (sc.totalExtra > 0 ? money(sc.totalExtra) : "—") + '</td>'
+      + '<td class="n">' + money(sc.totalInterest) + '</td>'
+      + '<td class="n">' + money(r2(sc.totalPaid - sc.totalInterest)) + '</td>'
+      + '<td class="n">' + money(0) + '</td></tr>';
+  }
+
+  head.innerHTML = h;
+  body.innerHTML = rowsHtml;
+  foot.innerHTML = ft;
+
+  $("chipSched").textContent = (showOver ? "With overpayments" : "Contractual") + " · " + sc.periods + " payments";
+  var notes = [F.name + " payments. Interest is charged on the opening balance each period and rounded to the nearest " + cur() + "0.01."];
+  if (R.io > 0) notes.push("Shaded rows at the top are the interest-only period.");
+  notes.push("The final (shaded) payment of " + money(sc.finalPayment) + " is adjusted to clear the balance exactly"
+    + (R.balloon > 0 ? " and includes the balloon of " + money(R.balloon) + "." : "."));
+  if (!showOver && R.hasExtra) notes.push("Overpayments are excluded from this view.");
+  $("schedNote").textContent = notes.join(" ");
+}
+
+function renderPrintHeader(){
+  $("pBorrower").textContent = S.borrower || "—";
+  $("pLender").textContent = S.lender || "—";
+  $("pRef").textContent = S.ref || "—";
+  $("pPurpose").textContent = S.purpose || "—";
+  var pd = parseISO(S.prepared);
+  $("pDate").textContent = pd ? fmtDate(pd) : "—";
+  $("pBy").textContent = S.preparedBy || "—";
+  $("pSub").textContent = "Illustrative repayment schedule"
+    + (S.ref ? " — " + S.ref : "")
+    + (S.sample ? " (SAMPLE DATA)" : "");
+  var f = R && R.f ? R.f : 12;
+  $("pAmount").textContent = R && R.ok ? money(R.pv) : "—";
+  $("pRate").textContent = R && R.ok ? pct(num(S.rate), 2) + (S.basis === "eff" ? " effective annual" : " nominal") : "—";
+  $("pPeriodic").textContent = R && R.ok ? pct(R.r * 100, 6) + " per " + FREQ[f].per : "—";
+  $("pFreq").textContent = FREQ[f].name;
+  $("pN").textContent = R && R.ok ? R.n : "—";
+  $("pStart").textContent = R && R.ok ? fmtDate(R.start) : "—";
+  $("pIo").textContent = R && R.ok ? (R.io > 0 ? R.io + " payments" : "None") : "—";
+  $("pBalloon").textContent = R && R.ok ? (R.balloon > 0 ? money(R.balloon) : "None") : "—";
+  $("pPmt").textContent = R && R.ok ? money(R.pmt) + " " + FREQ[f].each : "—";
+
+  var ov = [];
+  if (R && R.ok && R.hasExtra){
+    if (R.extra > 0) ov.push("Regular overpayment of " + money(R.extra) + " " + FREQ[f].each + " from payment " + R.extraFrom + ".");
+    var ks = Object.keys(R.lumpMap).sort(function(a, b){ return a - b; });
+    if (ks.length){
+      ov.push("Lump sums: " + ks.map(function(k){
+        return money(R.lumpMap[k]) + " at payment " + k + " (" + fmtDate(addPeriods(R.start, k - 1, f)) + ")";
+      }).join("; ") + ".");
+    }
+    ov.push("Modelled effect: cleared in " + R.over.periods + " payments instead of " + R.base.periods
+      + " (" + termText(R.savedPeriods, f) + " earlier), saving " + money(R.savedInterest) + " of interest.");
+    ov.unshift("Overpayments assumed —");
+  } else {
+    ov.push("No overpayments assumed — this is the contractual schedule.");
+  }
+  $("pOver").textContent = ov.join(" ");
+}
+
+/* ── lump-sum rows ─────────────────────────────────────────────────── */
+function renderLumps(){
+  var tb = $("lumpBody");
+  var lumps = S.lumps || [];
+  if (!lumps.length){
+    tb.innerHTML = '<tr><td colspan="4" class="rowcap" style="padding:10px 6px">No lump sums. Add one to model a bonus, a sale or an inheritance paid into the loan.</td></tr>';
+    return;
+  }
+  var f = R && R.f ? R.f : (parseInt(S.freq,10) || 12);
+  var start = parseISO(S.start);
+  var out = [];
+  for (var k = 0; k < lumps.length; k++){
+    var L = lumps[k];
+    var p = Math.round(numOr(L.p, NaN));
+    var d = (isFinite(p) && p >= 1 && start) ? addPeriods(start, p - 1, f) : null;
+    out.push('<tr>'
+      + '<td><label class="sr" for="lp' + k + '">Payment number</label>'
+      + '<input type="number" id="lp' + k + '" class="lump-p" data-i="' + k + '" min="1" step="1" inputmode="numeric" value="' + esc(L.p) + '"></td>'
+      + '<td class="dt">' + esc(d ? fmtDate(d) : "—") + '</td>'
+      + '<td><label class="sr" for="la' + k + '">Lump sum amount</label>'
+      + '<input type="number" id="la' + k + '" class="lump-a" data-i="' + k + '" min="0" step="100" inputmode="decimal" value="' + esc(L.amt) + '"></td>'
+      + '<td><button type="button" class="btn ico sm lump-x" data-i="' + k + '" aria-label="Remove lump sum ' + (k+1) + '">×</button></td>'
+      + '</tr>');
+  }
+  tb.innerHTML = out.join("");
+}
+
+/* ── state <-> form ────────────────────────────────────────────────── */
+var TEXT_FIELDS = ["borrower","lender","ref","purpose","prepared","preparedBy","start","curCustom"];
+var NUM_FIELDS  = ["amount","rate","years","months","ioMonths","balloon","extra","extraFrom"];
+var SEL_FIELDS  = ["cur","basis","freq","scenario","view"];
+
+function toForm(){
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){ var e = $(k); if (e) e.value = S[k] === undefined || S[k] === null ? "" : S[k]; });
+  SEL_FIELDS.forEach(function(k){ var e = $(k); if (e) e.value = S[k]; });
+  $("curCustomWrap").hidden = S.cur !== "custom";
+  $("sampleChip").hidden = !S.sample;
+  $("sampleMsg").hidden = !S.sample;
+  $("savedMsg").hidden = !!S.sample;
+  renderLumps();
+}
+
+function fromForm(){
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){ var e = $(k); if (e) S[k] = e.value; });
+  SEL_FIELDS.forEach(function(k){ var e = $(k); if (e) S[k] = e.value; });
+  $("curCustomWrap").hidden = S.cur !== "custom";
+}
+
+function touched(){
+  if (S.sample){
+    S.sample = false;
+    $("sampleChip").hidden = true;
+    $("sampleMsg").hidden = true;
+    $("savedMsg").hidden = false;
+  }
+}
+
+/* ── persistence ───────────────────────────────────────────────────── */
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage blocked — keep working */ }
+}
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    var o = JSON.parse(raw);
+    if (!o || typeof o !== "object") return false;
+    var base = blankState();
+    Object.keys(base).forEach(function(k){ if (o[k] !== undefined) base[k] = o[k]; });
+    if (!Array.isArray(base.lumps)) base.lumps = [];
+    base.lumps = base.lumps.map(function(L){ return { p: (L && L.p !== undefined) ? String(L.p) : "", amt: (L && L.amt !== undefined) ? String(L.amt) : "" }; });
+    base.sample = !!o.sample;
+    S = base;
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ── export ────────────────────────────────────────────────────────── */
+function download(name, text, mime){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 400);
+  } catch (e) { /* nothing we can do offline */ }
+}
+function csvCell(v){
+  v = (v === null || v === undefined) ? "" : String(v);
+  return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function csvRow(a){ return a.map(csvCell).join(","); }
+function slug(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
+
+function exportCsv(){
+  if (!R || !R.ok){ flash($("btnCsv"), "Nothing to export"); return; }
+  var showOver = (S.scenario !== "base") && R.hasExtra;
+  var sc = showOver ? R.over : R.base;
+  var f = R.f, sym = cur();
+  var L = [];
+  L.push(csvRow(["Loan Amortisation Schedule"]));
+  L.push(csvRow(["Borrower", S.borrower]));
+  L.push(csvRow(["Lender / facility", S.lender]));
+  L.push(csvRow(["Reference", S.ref]));
+  L.push(csvRow(["Purpose", S.purpose]));
+  L.push(csvRow(["Prepared", S.prepared, "by", S.preparedBy]));
+  L.push(csvRow(["Scenario", showOver ? "With overpayments" : "Contractual only"]));
+  L.push(csvRow(["Notice", "Illustration only — not a credit quotation. Excludes fees, charges, insurance, rate changes, early-repayment penalties and day-count adjustments."]));
+  L.push(csvRow([]));
+  L.push(csvRow(["Currency", sym]));
+  L.push(csvRow(["Amount advanced", plain(R.pv)]));
+  L.push(csvRow(["Annual rate %", plain(num(S.rate), 4), S.basis === "eff" ? "effective annual" : "nominal"]));
+  L.push(csvRow(["Periodic rate", plain(R.r * 100, 8) + "%", "per " + FREQ[f].per]));
+  L.push(csvRow(["Effective annual rate %", plain(R.effAnnual * 100, 4)]));
+  L.push(csvRow(["Payment frequency", FREQ[f].name]));
+  L.push(csvRow(["Number of payments", R.n]));
+  L.push(csvRow(["First payment date", isoOf(R.start)]));
+  L.push(csvRow(["Interest-only payments", R.io]));
+  L.push(csvRow(["Balloon", plain(R.balloon)]));
+  L.push(csvRow(["Contractual payment", plain(R.pmt)]));
+  if (R.hasExtra){
+    L.push(csvRow(["Regular extra", plain(R.extra), "from payment", R.extraFrom]));
+    Object.keys(R.lumpMap).sort(function(a,b){ return a-b; }).forEach(function(p){
+      L.push(csvRow(["Lump sum at payment " + p, plain(R.lumpMap[p])]));
+    });
+    L.push(csvRow(["Interest saved vs contractual", plain(R.savedInterest)]));
+    L.push(csvRow(["Payments saved", R.savedPeriods]));
+  }
+  L.push(csvRow([]));
+  L.push(csvRow(["Payment #", "Due date", "Opening balance (" + sym + ")", "Payment (" + sym + ")",
+                 "Of which extra (" + sym + ")", "Interest (" + sym + ")", "Principal (" + sym + ")",
+                 "Closing balance (" + sym + ")", "Note"]));
+  sc.rows.forEach(function(x){
+    L.push(csvRow([x.p, isoOf(x.date), plain(x.open), plain(x.pay), plain(x.extra),
+                   plain(x.interest), plain(x.princ), plain(x.close),
+                   x.fin ? "Final payment — clears the balance" : (x.io ? "Interest only" : "")]));
+  });
+  L.push(csvRow(["Totals", "", "", plain(sc.totalPaid), plain(sc.totalExtra), plain(sc.totalInterest),
+                 plain(r2(sc.totalPaid - sc.totalInterest)), plain(0), sc.periods + " payments"]));
+  var name = "amortisation-" + (slug(S.ref) || slug(S.borrower) || "schedule") + ".csv";
+  download(name, "﻿" + L.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  flash($("btnCsv"), "CSV saved");
+}
+
+function exportJson(){
+  var payload = { tool: "solvix.loan-amortisation", version: 1, exported: new Date().toISOString(), state: S };
+  var name = "amortisation-" + (slug(S.ref) || slug(S.borrower) || "schedule") + ".json";
+  download(name, JSON.stringify(payload, null, 2), "application/json");
+  flash($("btnJson"), "JSON saved");
+}
+
+function importJson(text){
+  var o;
+  try { o = JSON.parse(text); } catch (e) { flash($("btnImport"), "Not valid JSON"); return; }
+  var st = (o && o.state) ? o.state : o;
+  if (!st || typeof st !== "object"){ flash($("btnImport"), "Nothing to import"); return; }
+  var base = blankState();
+  Object.keys(base).forEach(function(k){ if (st[k] !== undefined) base[k] = st[k]; });
+  if (!Array.isArray(base.lumps)) base.lumps = [];
+  base.lumps = base.lumps.map(function(L){ return { p: String(L && L.p !== undefined ? L.p : ""), amt: String(L && L.amt !== undefined ? L.amt : "") }; });
+  base.sample = false;
+  S = base;
+  toForm(); render(); save();
+  flash($("btnImport"), "Imported");
+}
+
+var flashTimer = null;
+function flash(btn, msg){
+  if (!btn) return;
+  var old = btn.getAttribute("data-label") || btn.textContent;
+  btn.setAttribute("data-label", old);
+  btn.textContent = msg;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(function(){ btn.textContent = btn.getAttribute("data-label") || old; }, 1600);
+}
+
+/* ── wiring ────────────────────────────────────────────────────────── */
+function onInput(){
+  touched();
+  fromForm();
+  render();
+  renderLumps();
+  save();
+}
+
+function bind(){
+  TEXT_FIELDS.concat(NUM_FIELDS).forEach(function(k){
+    var e = $(k); if (!e) return;
+    e.addEventListener("input", function(){
+      touched(); fromForm(); render(); save();
+      if (k === "start") renderLumps();
+    });
+    e.addEventListener("blur", function(){ fromForm(); render(); save(); });
+  });
+  SEL_FIELDS.forEach(function(k){
+    var e = $(k); if (!e) return;
+    e.addEventListener("change", function(){
+      if (k !== "scenario" && k !== "view") touched();
+      fromForm(); render(); renderLumps(); save();
+    });
+  });
+
+  $("lumpBody").addEventListener("input", function(ev){
+    var t = ev.target;
+    if (!t.classList) return;
+    var i = parseInt(t.getAttribute("data-i"), 10);
+    if (!isFinite(i) || !S.lumps[i]) return;
+    if (t.classList.contains("lump-p")) S.lumps[i].p = t.value;
+    else if (t.classList.contains("lump-a")) S.lumps[i].amt = t.value;
+    else return;
+    touched(); render(); save();
+    /* refresh only the due-date cell so focus is not lost */
+    var tr = t.closest("tr");
+    if (tr){
+      var p = Math.round(numOr(S.lumps[i].p, NaN));
+      var st = parseISO(S.start);
+      var f = parseInt(S.freq, 10) || 12;
+      var d = (isFinite(p) && p >= 1 && st) ? addPeriods(st, p - 1, f) : null;
+      var cell = tr.querySelector("td.dt");
+      if (cell) cell.textContent = d ? fmtDate(d) : "—";
+    }
+  });
+  $("lumpBody").addEventListener("click", function(ev){
+    var b = ev.target.closest ? ev.target.closest(".lump-x") : null;
+    if (!b) return;
+    var i = parseInt(b.getAttribute("data-i"), 10);
+    if (!isFinite(i)) return;
+    touched();
+    S.lumps.splice(i, 1);
+    renderLumps(); render(); save();
+    var next = $("btnAddLump"); if (next) next.focus();
+  });
+  $("btnAddLump").addEventListener("click", function(){
+    touched();
+    var f = parseInt(S.freq, 10) || 12;
+    var n = R && R.n ? R.n : 0;
+    var suggest = n ? Math.min(n, Math.max(1, Math.round(f))) : 12;
+    S.lumps.push({ p: String(suggest), amt: "1000" });
+    renderLumps(); render(); save();
+    var inputs = $("lumpBody").querySelectorAll(".lump-a");
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+
+  $("btnPrint").addEventListener("click", function(){ window.print(); });
+  $("btnCsv").addEventListener("click", exportCsv);
+  $("btnJson").addEventListener("click", exportJson);
+  $("btnImport").addEventListener("click", function(){ $("fileIn").click(); });
+  $("fileIn").addEventListener("change", function(){
+    var file = this.files && this.files[0];
+    if (!file) return;
+    var rd = new FileReader();
+    rd.onload = function(){ importJson(String(rd.result || "")); };
+    rd.onerror = function(){ flash($("btnImport"), "Could not read"); };
+    rd.readAsText(file);
+    this.value = "";
+  });
+  $("btnClear").addEventListener("click", function(){
+    if (!window.confirm("Clear all data? This wipes the loan details, overpayments and document details saved in this browser. It cannot be undone.")) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    S = blankState();
+    toForm(); render(); save();
+    var a = $("amount"); if (a) a.focus();
+  });
+}
+
+/* ── go ────────────────────────────────────────────────────────────── */
+if (!load()) S = sampleState();
+toForm();
+render();
+renderLumps();
+bind();
+save();
+
+window.SolvixLoan = { get state(){ return S; }, get result(){ return R; }, compute: compute, annuity: annuity };
+})();
+</script>
+</body>
+</html>

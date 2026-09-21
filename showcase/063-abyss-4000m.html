@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abyss — 4,000 m · A descent through the ocean's light zones</title>
+<meta name="description" content="Scroll to descend from the sunlit surface to the abyssal plain at 4,000 metres. A live depth meter, drifting marine snow, and eight bioluminescent creatures revealed only where your light falls.">
+<meta name="theme-color" content="#020814">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23020814'/%3E%3Ccircle cx='32' cy='30' r='11' fill='none' stroke='%2335F0FF' stroke-width='3'/%3E%3Ccircle cx='32' cy='30' r='4' fill='%23A66CFF'/%3E%3Cpath d='M20 46q12 10 24 0' fill='none' stroke='%2335F0FF' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --abyss:#020814;--deep:#04203F;--cyan:#35F0FF;--violet:#A66CFF;
+  --ink:#DCEFF6;--body:#C4DAE5;--mute:#8FB3C7;
+  --prog:0;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--abyss);color:var(--ink);
+  font-family:Quicksand,"Avenir Next","Segoe UI",system-ui,sans-serif;
+  font-size:17px;line-height:1.6;font-weight:500;
+  overflow-x:hidden;min-height:100vh;
+}
+@media (hover:hover) and (pointer:fine){ body, a, button{cursor:none} }
+a{color:var(--cyan)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:4px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- fixed layers ---------- */
+.bg{position:fixed;inset:0;z-index:-2;
+  background:
+    radial-gradient(60% 40% at 50% -10%, rgba(53,240,255,.10), transparent 70%),
+    linear-gradient(180deg,#04203F 0%,#031a35 45%,#020c1c 100%);
+}
+.bg::after{content:"";position:absolute;inset:0;background:var(--abyss);opacity:calc(var(--prog) * .96)}
+.vig{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(2,8,20,.75) 100%)}
+#snow{position:fixed;inset:0;z-index:1;pointer-events:none}
+.beam{position:fixed;left:0;top:0;width:680px;height:680px;border-radius:50%;pointer-events:none;z-index:3;
+  mix-blend-mode:screen;will-change:transform;
+  background:radial-gradient(circle,rgba(53,240,255,.20) 0%,rgba(53,240,255,.08) 28%,rgba(166,108,255,.035) 48%,transparent 66%)}
+.ret{position:fixed;left:0;top:0;width:14px;height:14px;border-radius:50%;z-index:9;pointer-events:none;
+  border:1.5px solid rgba(53,240,255,.95);box-shadow:0 0 12px rgba(53,240,255,.6);
+  will-change:transform;transition:width .18s,height .18s,background .18s}
+.ret::after{content:"";position:absolute;left:50%;top:50%;width:2px;height:2px;margin:-1px;border-radius:50%;background:var(--cyan)}
+.ret.hot{width:34px;height:34px;background:rgba(53,240,255,.12)}
+@media (hover:none), (pointer:coarse){ .ret{display:none} }
+
+/* ---------- top bar ---------- */
+.top{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:center;
+  padding:1.1rem clamp(1rem,3vw,2.5rem) 2.2rem;pointer-events:none;
+  background:linear-gradient(180deg,rgba(2,8,20,.92) 0%,rgba(2,8,20,.6) 55%,transparent 100%)}
+.top>*{pointer-events:auto}
+.mark{display:flex;align-items:center;gap:.7rem;font-weight:700;letter-spacing:.28em;font-size:.78rem;text-transform:uppercase;color:var(--ink);text-decoration:none}
+.mark i{width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.mark b{font-weight:400;color:var(--mute);letter-spacing:.2em}
+.flood{font:inherit;font-weight:600;font-size:.74rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);
+  background:rgba(4,32,63,.55);border:1px solid rgba(53,240,255,.28);border-radius:999px;padding:.55rem 1rem .55rem .8rem;
+  display:flex;align-items:center;gap:.6rem;backdrop-filter:blur(8px);transition:border-color .2s,background .2s}
+.flood i{width:8px;height:8px;border-radius:50%;background:rgba(143,179,199,.5);transition:background .2s,box-shadow .2s}
+.flood[aria-pressed="true"]{border-color:var(--cyan);background:rgba(53,240,255,.12)}
+.flood[aria-pressed="true"] i{background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.flood span::after{content:"off"}
+.flood[aria-pressed="true"] span::after{content:"on"}
+
+/* ---------- depth meter ---------- */
+.meter{position:fixed;z-index:7;left:clamp(1rem,3vw,2.8rem);top:50%;transform:translateY(-50%);width:190px;
+  display:grid;gap:1.1rem;font-variant-numeric:tabular-nums}
+.m-read{display:flex;align-items:baseline;gap:.35rem;line-height:1}
+.m-num{font-size:3.4rem;font-weight:700;letter-spacing:-.04em;color:#F1FBFD;text-shadow:0 0 30px rgba(53,240,255,.25)}
+.m-unit{font-size:1.1rem;font-weight:400;color:var(--mute)}
+.m-zone{font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;font-weight:600;color:var(--cyan);margin-top:-.6rem}
+.m-rail{position:relative;width:2px;height:44vh;min-height:220px;background:rgba(53,240,255,.16);margin-left:9px}
+.m-band{position:absolute;left:0;width:2px}
+.m-band.b1{top:0;height:5%;background:rgba(53,240,255,.7)}
+.m-band.b2{top:5%;height:20%;background:rgba(53,240,255,.35)}
+.m-band.b3{top:25%;height:75%;background:rgba(166,108,255,.35)}
+.m-tick{position:absolute;left:-4px;width:10px;height:1px;background:rgba(53,240,255,.35);top:calc(var(--t) * 100%)}
+.m-tick.major{width:16px;left:-7px;background:rgba(53,240,255,.6)}
+.m-tick span{position:absolute;left:22px;top:-.65em;font-size:.68rem;letter-spacing:.1em;color:var(--mute);white-space:nowrap;font-weight:500}
+.m-marker{position:absolute;left:-8px;top:calc(var(--p) * 100%);width:18px;height:18px;margin-top:-9px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 25%,var(--cyan) 30%,rgba(53,240,255,0) 72%);box-shadow:0 0 22px rgba(53,240,255,.8)}
+.m-marker::before{content:"";position:absolute;inset:-7px;border-radius:50%;border:1px solid rgba(53,240,255,.45);animation:ping 2.4s ease-out infinite}
+@keyframes ping{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+.m-data{margin:0;display:grid;gap:.5rem}
+.m-data div{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px dashed rgba(53,240,255,.14);padding-bottom:.3rem}
+.m-data dt{font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.m-data dd{margin:0;font-size:.92rem;font-weight:600;color:var(--ink)}
+
+/* ---------- page ---------- */
+.page{position:relative;z-index:2;padding-left:290px;padding-right:clamp(1.25rem,4vw,4rem)}
+.wrap{max-width:1080px}
+
+.hero{min-height:100vh;display:grid;align-content:center;position:relative;padding:8rem 0 6rem;overflow:hidden}
+.caus{position:absolute;border-radius:50%;filter:blur(40px);pointer-events:none;opacity:.7}
+.caus.a{width:60vw;height:30vh;left:-10%;top:-10%;background:radial-gradient(ellipse,rgba(53,240,255,.09),transparent 70%);animation:drift 22s ease-in-out infinite alternate}
+.caus.b{width:40vw;height:26vh;right:0;top:10%;background:radial-gradient(ellipse,rgba(166,108,255,.08),transparent 70%);animation:drift 28s ease-in-out infinite alternate-reverse}
+@keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(8vw,6vh) scale(1.15)}}
+.eyebrow{font-size:.74rem;letter-spacing:.26em;text-transform:uppercase;font-weight:600;color:var(--cyan);margin:0 0 1rem}
+.eyebrow b{color:var(--mute);font-weight:500}
+h1{font-size:clamp(4.8rem,15.5vw,14rem);line-height:.86;font-weight:700;letter-spacing:-.045em;margin:0;color:#EEF9FC;
+  text-shadow:0 0 80px rgba(53,240,255,.18)}
+.h1row{display:flex;align-items:center;gap:clamp(1rem,3vw,2.5rem);flex-wrap:wrap;margin:.4rem 0 2rem}
+.h1row .rule{flex:1 1 60px;height:1px;background:linear-gradient(90deg,var(--cyan),transparent);min-width:60px;max-width:280px}
+.h1row .target{font-size:clamp(1.6rem,3.6vw,3.2rem);font-weight:300;letter-spacing:-.01em;color:var(--mute);font-variant-numeric:tabular-nums}
+.h1row .target b{font-weight:600;color:var(--ink)}
+.lead{max-width:52ch;font-size:clamp(1.05rem,1.35vw,1.28rem);color:var(--body);margin:0;font-weight:500}
+.lead em{font-style:normal;color:var(--cyan);font-weight:600}
+.cue{position:absolute;left:0;bottom:2.4rem;display:flex;align-items:center;gap:1rem;font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.cue i{width:1px;height:56px;background:linear-gradient(180deg,var(--cyan),transparent);position:relative;overflow:hidden}
+.cue i::after{content:"";position:absolute;left:0;top:-100%;width:1px;height:100%;background:#fff;animation:fall 1.8s ease-in-out infinite}
+@keyframes fall{to{top:100%}}
+
+.zone{position:relative;padding:clamp(4rem,14vh,10rem) 0 clamp(2rem,6vh,4rem);overflow:hidden}
+.z-mark{position:absolute;right:-.06em;top:clamp(1rem,4vh,3rem);font-size:clamp(10rem,24vw,22rem);font-weight:700;line-height:.9;
+  letter-spacing:-.05em;color:transparent;-webkit-text-stroke:1px rgba(53,240,255,.2);pointer-events:none;user-select:none}
+.z-head{position:relative;display:grid;grid-template-columns:1fr auto;align-items:end;gap:1.5rem 3rem;
+  padding-bottom:1.6rem;margin-bottom:2.2rem;border-bottom:1px solid rgba(53,240,255,.14)}
+.z-num{font-size:.74rem;letter-spacing:.26em;text-transform:uppercase;font-weight:600;color:var(--cyan);margin:0 0 .9rem;display:flex;gap:.8rem;align-items:center}
+.z-num::before{content:"";width:28px;height:1px;background:var(--cyan)}
+.z-num b{color:var(--mute);font-weight:500}
+h2{font-size:clamp(2.7rem,6.4vw,5.4rem);margin:0;font-weight:600;letter-spacing:-.03em;line-height:.95;color:#EEF9FC}
+.z-range{font-size:clamp(1.5rem,2.8vw,2.5rem);font-weight:300;color:var(--mute);letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.z-range b{font-weight:600;color:var(--ink)}
+.z-intro{max-width:58ch;font-size:clamp(1.05rem,1.3vw,1.22rem);color:var(--body);margin:0 0 1rem}
+
+.creature{position:relative;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(1.5rem,4vw,4.5rem);
+  align-items:center;min-height:66vh;padding:clamp(2rem,5vh,3.5rem) 0;border-radius:12px}
+.creature:nth-of-type(even) .fig{order:2}
+.creature:focus-visible{outline:none}
+.creature:focus-visible .fig::after{content:"";position:absolute;inset:-6px;border-radius:18px;border:2px solid var(--cyan)}
+.fig{position:relative;aspect-ratio:4/3}
+.fig::before{content:"";position:absolute;inset:6% 10%;border-radius:50%;background:radial-gradient(circle,rgba(4,32,63,.6),transparent 70%)}
+.fig svg{position:relative;width:100%;height:100%;display:block;overflow:visible}
+.ln{fill:none;stroke:var(--cyan);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.lv{fill:none;stroke:var(--violet);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.fl{fill:rgba(4,32,63,.85)}
+.fv{fill:rgba(166,108,255,.14)}
+.fc{fill:rgba(53,240,255,.10)}
+.th{stroke-width:.9;opacity:.7}
+.ph circle{fill:var(--cyan);filter:url(#glow);animation:pulse 2.6s ease-in-out infinite;animation-delay:var(--d,0s)}
+.ph .v{fill:var(--violet)}
+.ph .esca{animation-duration:3.8s}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.c-meta{display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;font-weight:600;color:var(--cyan)}
+.c-meta .tag{border:1px solid rgba(166,108,255,.5);color:var(--violet);border-radius:999px;padding:.15rem .7rem;letter-spacing:.14em}
+.c-meta .tag.off{border-color:rgba(143,179,199,.4);color:var(--mute)}
+h3{font-size:clamp(1.8rem,2.7vw,2.5rem);margin:.6rem 0 .1rem;font-weight:600;letter-spacing:-.025em;line-height:1.05;color:#EEF9FC}
+.latin{margin:0 0 1rem;color:var(--mute);font-size:1.05rem;font-weight:400}
+.c-text p{color:var(--body);max-width:50ch;margin:0}
+.hint{display:inline-flex;align-items:center;gap:.6rem;margin-top:1.4rem;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan);font-weight:600}
+.hint i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--cyan);position:relative}
+.hint i::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1px solid rgba(53,240,255,.6);animation:ping 1.8s ease-out infinite}
+.hint .t{display:none}
+@media (hover:none){ .hint .m{display:none} .hint .t{display:inline} }
+
+.landing{padding-top:clamp(2rem,6vh,4rem);padding-bottom:clamp(6rem,14vh,10rem)}
+.outro{max-width:54ch;font-size:clamp(1.1rem,1.5vw,1.4rem);color:var(--ink);font-weight:500;margin:0 0 2rem}
+.outro b{color:var(--cyan);font-weight:600}
+.ascend{display:inline-flex;align-items:center;gap:.9rem;text-decoration:none;color:var(--ink);font-weight:600;letter-spacing:.2em;text-transform:uppercase;font-size:.78rem;
+  border:1px solid rgba(53,240,255,.35);border-radius:999px;padding:.9rem 1.5rem;transition:background .2s,border-color .2s}
+.ascend:hover{background:rgba(53,240,255,.1);border-color:var(--cyan)}
+.ascend svg{width:16px;height:16px}
+.foot{margin-top:4rem;padding-top:1.4rem;border-top:1px solid rgba(53,240,255,.12);font-size:.8rem;color:var(--mute);max-width:70ch;font-weight:500}
+
+/* ---------- responsive ---------- */
+@media (max-width:1180px){ .page{padding-left:250px} }
+@media (max-width:900px){
+  .page{padding-left:clamp(1.25rem,4vw,4rem);padding-bottom:110px}
+  .meter{left:0;right:0;top:auto;bottom:0;transform:none;width:auto;
+    grid-template-columns:auto 1fr;grid-template-areas:"read data" "zone data" "rail rail";align-items:center;gap:.15rem 1rem;
+    padding:.75rem clamp(1rem,4vw,2rem) calc(2.2rem + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg,rgba(2,8,20,.97),rgba(2,8,20,.88));backdrop-filter:blur(10px);border-top:1px solid rgba(53,240,255,.16)}
+  .m-read{grid-area:read;gap:.3rem}
+  .m-num{font-size:2.1rem}
+  .m-zone{grid-area:zone;margin:0;font-size:.6rem;letter-spacing:.2em}
+  .m-rail{grid-area:rail;width:100%;height:2px;min-height:0;margin:.9rem 0 0}
+  .m-band{top:0!important;height:2px}
+  .m-band.b1{left:0;width:5%}
+  .m-band.b2{left:5%;width:20%}
+  .m-band.b3{left:25%;width:75%}
+  .m-tick{top:-4px;left:calc(var(--t) * 100%);width:1px;height:10px}
+  .m-tick.major{height:14px;top:-6px;width:1px;left:calc(var(--t) * 100%)}
+  .m-tick span{left:0;top:calc(100% + .35rem);transform:translateX(-50%);font-size:.58rem}
+  .m-tick.major.end span{transform:translateX(-100%)}
+  .m-tick.major.start span{transform:none}
+  .m-marker{left:calc(var(--p) * 100%);top:1px;margin-left:-9px}
+  .m-data{grid-area:data;grid-template-columns:1fr 1fr;gap:.4rem .8rem}
+  .m-data div{border:none;padding:0;flex-direction:column;align-items:flex-end;gap:0}
+  .m-data div:last-child{display:none}
+  .m-data dd{font-size:.86rem}
+  .m-data{align-self:center}
+}
+@media (max-width:760px){
+  .creature{grid-template-columns:1fr;min-height:0;gap:1rem}
+  .creature:nth-of-type(even) .fig{order:0}
+  .fig{max-width:420px;margin:0 auto;width:100%}
+  .z-head{grid-template-columns:1fr}
+  .z-mark{font-size:clamp(9rem,40vw,14rem);top:auto;bottom:-.1em;right:-.04em}
+  .hero{padding-top:6rem}
+  .top{padding:.9rem 1rem}
+  .mark b{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .caus,.cue i::after,.m-marker::before,.hint i::after,.ph circle{animation:none}
+  .ph circle{opacity:.9}
+  .ret{transition:none}
+}
+</style>
+</head>
+<body id="top">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="glow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="2.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div class="bg" aria-hidden="true"></div>
+<canvas id="snow" aria-hidden="true"></canvas>
+<div class="vig" aria-hidden="true"></div>
+<div class="beam" id="beam" aria-hidden="true"></div>
+<div class="ret" id="ret" aria-hidden="true"></div>
+
+<header class="top">
+  <a class="mark" href="#top"><i aria-hidden="true"></i>Abyss <b>· dive 063</b></a>
+  <button class="flood" id="flood" type="button" aria-pressed="false"><i aria-hidden="true"></i>Floodlights <span class="sr">are </span><span></span></button>
+</header>
+
+<aside class="meter" aria-label="Depth meter" aria-live="off">
+  <div class="m-read"><span class="m-num" id="mNum">0</span><span class="m-unit">m</span></div>
+  <div class="m-zone" id="mZone">Surface</div>
+  <div class="m-rail" aria-hidden="true" id="rail">
+    <div class="m-band b1"></div><div class="m-band b2"></div><div class="m-band b3"></div>
+    <div class="m-marker" id="mMarker" style="--p:0"></div>
+  </div>
+  <dl class="m-data">
+    <div><dt>Pressure</dt><dd id="mP">1 atm</dd></div>
+    <div><dt>Water</dt><dd id="mT">22 °C</dd></div>
+    <div><dt>Sunlight</dt><dd id="mL">100 %</dd></div>
+  </dl>
+</aside>
+
+<main class="page">
+<div class="wrap">
+
+  <section class="hero" aria-labelledby="h1">
+    <div class="caus a" aria-hidden="true"></div>
+    <div class="caus b" aria-hidden="true"></div>
+    <p class="eyebrow">Dive log 063 <b>· vertical transect · surface to sea floor</b></p>
+    <h1 id="h1">Abyss</h1>
+    <div class="h1row"><span class="rule" aria-hidden="true"></span><span class="target">to <b>4,000</b> m</span></div>
+    <p class="lead">Below you is the largest habitat on Earth, and almost none of it has ever been lit. <em>Scroll to descend.</em> The meter is your depth; the light is yours to aim. Most of what lives down here will show itself only where the beam finds it.</p>
+    <div class="cue" aria-hidden="true"><i></i>Scroll to descend</div>
+  </section>
+
+  <!-- ZONE I -->
+  <section class="zone" data-from="0" data-to="200" aria-labelledby="z1">
+    <div class="z-mark" aria-hidden="true">I</div>
+    <header class="z-head">
+      <div>
+        <p class="z-num">Zone one <b>· epipelagic</b></p>
+        <h2 id="z1">Sunlight</h2>
+      </div>
+      <div class="z-range"><b>0</b> – <b>200</b> m</div>
+    </header>
+    <p class="z-intro">Everything the ocean grows, it grows here. Sunlight fades exponentially with depth: at 200 metres roughly one percent of it remains, too little for photosynthesis. Even so, this thin lit skin holds the plankton that feeds every animal below it, and bioluminescence already begins at the surface, on nights when the waves sparkle.</p>
+
+    <article class="creature" tabindex="0" aria-label="Sea sparkle">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of Noctiluca cells, balloon-shaped single cells with a short tentacle, surrounded by blue sparks">
+          <defs>
+            <radialGradient id="g1" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m1" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g1)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m1)">
+            <g class="fv"><circle cx="150" cy="112" r="46"/><circle cx="236" cy="78" r="26"/><circle cx="82" cy="170" r="20"/><circle cx="252" cy="176" r="14"/></g>
+            <g class="lv">
+              <circle cx="150" cy="112" r="46"/><path d="M150 66c-3-14 4-22 12-26"/><path d="M118 142c-18 10-28 30-30 52"/>
+              <circle cx="236" cy="78" r="26"/><path d="M236 52c-2-8 2-13 7-16"/><path d="M216 94c-8 6-14 18-14 30"/>
+              <circle cx="82" cy="170" r="20"/><path d="M82 150c-2-6 1-10 5-12"/><path d="M68 184c-6 5-10 14-10 22"/>
+              <circle cx="252" cy="176" r="14"/><path d="M252 162c-1-4 1-7 4-9"/>
+            </g>
+            <g class="ln th"><ellipse cx="160" cy="104" rx="8" ry="6"/><ellipse cx="242" cy="74" rx="5" ry="4"/><ellipse cx="86" cy="166" rx="4" ry="3"/><path d="M128 100c8-8 20-12 34-12M134 128c8 6 20 8 30 6"/></g>
+          </g>
+          <g class="ph">
+            <circle cx="120" cy="80" r="1.8" style="--d:.1s"/><circle cx="188" cy="96" r="2.2" style="--d:.9s"/><circle cx="172" cy="150" r="1.6" style="--d:1.6s"/><circle cx="210" cy="60" r="1.4" style="--d:.5s"/>
+            <circle cx="262" cy="104" r="1.8" style="--d:2s"/><circle cx="62" cy="140" r="1.5" style="--d:1.2s"/><circle cx="104" cy="196" r="2" style="--d:.3s"/><circle cx="238" cy="150" r="1.4" style="--d:1.9s"/>
+            <circle cx="278" cy="190" r="1.7" style="--d:.7s"/><circle cx="46" cy="96" r="1.3" style="--d:2.3s"/><circle cx="150" cy="200" r="1.5" style="--d:1.4s"/><circle cx="92" cy="60" r="1.6" style="--d:2.5s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>0 – 50 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Sea sparkle</h3>
+        <p class="latin">Noctiluca scintillans · dinoflagellate</p>
+        <p>A single-celled organism about a millimetre across that flashes blue when the water around it is disturbed. In a dense bloom a footstep in wet sand, a paddle stroke or a breaking wave sets off millions at once. The flash is a startle response: a sudden light that scares off the tiny grazers trying to eat it, or draws in something bigger to eat the grazer.</p>
+        <p class="hint"><i aria-hidden="true"></i><span class="m">Move your light over the drawing</span><span class="t">Tap the drawing to aim the light</span></p>
+      </div>
+    </article>
+
+    <article class="creature" tabindex="0" aria-label="Warty comb jelly">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a comb jelly, an oval translucent body with two lobes and rows of glowing comb plates">
+          <defs>
+            <radialGradient id="g2" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m2" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g2)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m2)">
+            <path class="fc" d="M160 30c40 0 62 44 62 92 0 40-22 76-46 92-8 5-24 5-32 0-24-16-46-52-46-92 0-48 22-92 62-92z"/>
+            <path class="ln" d="M160 30c40 0 62 44 62 92 0 40-22 76-46 92-8 5-24 5-32 0-24-16-46-52-46-92 0-48 22-92 62-92z"/>
+            <path class="ln th" d="M132 42c-12 30-10 100 8 150M188 42c12 30 10 100-8 150M160 30v184"/>
+            <path class="lv th" d="M144 190c8 22 24 22 32 0M118 108c10-6 20-2 22 8-6 8-18 8-22-8zM202 108c-10-6-20-2-22 8 6 8 18 8 22-8z"/>
+            <path class="ln th" d="M160 62c-10 30-6 110 0 150M160 62c10 30 6 110 0 150"/>
+          </g>
+          <g class="ph">
+            <circle cx="132" cy="60" r="1.6" style="--d:0s"/><circle cx="128" cy="90" r="1.6" style="--d:.2s"/><circle cx="126" cy="120" r="1.6" style="--d:.4s"/><circle cx="128" cy="150" r="1.6" style="--d:.6s"/><circle cx="134" cy="178" r="1.6" style="--d:.8s"/>
+            <circle cx="188" cy="60" r="1.6" style="--d:1s"/><circle cx="192" cy="90" r="1.6" style="--d:1.2s"/><circle cx="194" cy="120" r="1.6" style="--d:1.4s"/><circle cx="192" cy="150" r="1.6" style="--d:1.6s"/><circle cx="186" cy="178" r="1.6" style="--d:1.8s"/>
+            <circle cx="160" cy="46" r="1.4" style="--d:2s"/><circle cx="160" cy="200" r="1.4" style="--d:2.2s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>0 – 200 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Warty comb jelly</h3>
+        <p class="latin">Mnemiopsis leidyi · ctenophore</p>
+        <p>By day the eight rows of beating cilia scatter sunlight into shifting rainbows. By night the same animal produces its own blue-green glow when it is touched. It has no stinging cells, no brain and no bones, yet when ballast water carried it into the Black Sea in the 1980s it ate enough fish eggs and larvae to collapse an anchovy fishery.</p>
+      </div>
+    </article>
+  </section>
+
+  <!-- ZONE II -->
+  <section class="zone" data-from="200" data-to="1000" aria-labelledby="z2">
+    <div class="z-mark" aria-hidden="true">II</div>
+    <header class="z-head">
+      <div>
+        <p class="z-num">Zone two <b>· mesopelagic</b></p>
+        <h2 id="z2">Twilight</h2>
+      </div>
+      <div class="z-range"><b>200</b> – <b>1,000</b> m</div>
+    </header>
+    <p class="z-intro">Light still reaches this far, but only as a faint blue glow from above, and nothing can grow on it. Instead the twilight zone is the ocean's great commuter belt: each night the largest animal migration on the planet rises hundreds of metres to feed near the surface, and sinks again before dawn. Camouflage here means matching the glow overhead so you cast no silhouette.</p>
+
+    <article class="creature" tabindex="0" aria-label="Lanternfish">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a lanternfish with a large eye and a row of glowing photophores along its belly">
+          <defs>
+            <radialGradient id="g3" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m3" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g3)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m3)">
+            <path class="fl" d="M44 124c40-52 140-62 206-26l44-18-8 44 8 42-44-20c-66 36-166 30-206-22z"/>
+            <path class="ln" d="M44 124c40-52 140-62 206-26l44-18-8 44 8 42-44-20c-66 36-166 30-206-22z"/>
+            <path class="ln th" d="M150 78l14-30 30 34M186 156l10 26 24-22M118 138c8 12 20 16 36 12M74 118c60-10 120-6 176 8"/>
+            <circle class="ln" cx="84" cy="114" r="15"/><circle class="fc" cx="84" cy="114" r="15"/><circle cx="88" cy="112" r="6" fill="#020814"/><circle cx="90" cy="110" r="1.6" fill="#DCEFF6"/>
+            <path class="ln th" d="M48 128c10 6 20 8 30 8"/>
+          </g>
+          <g class="ph">
+            <circle cx="96" cy="158" r="2" style="--d:0s"/><circle cx="116" cy="164" r="2" style="--d:.15s"/><circle cx="138" cy="168" r="2" style="--d:.3s"/><circle cx="160" cy="169" r="2" style="--d:.45s"/><circle cx="182" cy="167" r="2" style="--d:.6s"/><circle cx="204" cy="162" r="2" style="--d:.75s"/><circle cx="226" cy="154" r="2" style="--d:.9s"/>
+            <circle cx="70" cy="132" r="1.6" style="--d:1.2s"/><circle cx="120" cy="140" r="1.4" style="--d:1.5s"/><circle cx="170" cy="142" r="1.4" style="--d:1.7s"/><circle cx="220" cy="136" r="1.4" style="--d:1.9s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>300 – 1,200 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Lanternfish</h3>
+        <p class="latin">Myctophidae · around 250 species</p>
+        <p>Probably the most abundant vertebrates on Earth: by some estimates lanternfish make up well over half of all deep-sea fish biomass. Rows of photophores along the belly emit a dim blue light tuned to the downwelling glow, erasing the fish's shadow for anything hunting from below. Their nightly migration is dense enough that early sonar operators mistook it for a false sea floor.</p>
+      </div>
+    </article>
+
+    <article class="creature" tabindex="0" aria-label="Hatchetfish">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a hatchetfish, a tall thin silver body with tubular eyes pointing upward and glowing photophores along its keel">
+          <defs>
+            <radialGradient id="g4" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m4" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g4)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m4)">
+            <path class="fl" d="M120 56c44-22 100-8 116 38 12 36 6 78-20 92l64 6-62 16c-40 10-92-10-108-52-14-38-14-80 10-100z"/>
+            <path class="ln" d="M120 56c44-22 100-8 116 38 12 36 6 78-20 92l64 6-62 16c-40 10-92-10-108-52-14-38-14-80 10-100z"/>
+            <path class="ln th" d="M150 70c-4 36 0 78 14 108M176 64c2 36 2 72 8 104M202 78c6 30 8 60 8 90" opacity=".45"/>
+            <rect class="ln" x="128" y="30" width="18" height="34" rx="9"/><rect class="ln" x="154" y="26" width="18" height="34" rx="9"/>
+            <circle cx="137" cy="36" r="4" fill="#DCEFF6"/><circle cx="163" cy="32" r="4" fill="#DCEFF6"/>
+            <path class="ln th" d="M110 96c-6 8-8 20-2 30M210 62c10 6 14 18 12 30"/>
+          </g>
+          <g class="ph">
+            <circle cx="112" cy="170" r="2" style="--d:0s"/><circle cx="126" cy="186" r="2" style="--d:.2s"/><circle cx="142" cy="198" r="2" style="--d:.4s"/><circle cx="160" cy="205" r="2" style="--d:.6s"/><circle cx="178" cy="207" r="2" style="--d:.8s"/><circle cx="196" cy="204" r="2" style="--d:1s"/><circle cx="212" cy="198" r="2" style="--d:1.2s"/>
+            <circle cx="110" cy="128" r="1.4" style="--d:1.6s"/><circle cx="112" cy="150" r="1.4" style="--d:1.9s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>200 – 1,000 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Hatchetfish</h3>
+        <p class="latin">Argyropelecus · deep-sea hatchetfishes</p>
+        <p>A body no thicker than a coin, plated with mirror-like scales that reflect the surrounding blue so the fish nearly disappears from the side. Tubular eyes point straight up, scanning for the silhouettes of prey against the last of the light. Underneath, a keel of photophores runs counter-illumination, dimming and brightening as clouds pass far above.</p>
+      </div>
+    </article>
+  </section>
+
+  <!-- ZONE III -->
+  <section class="zone" data-from="1000" data-to="4000" aria-labelledby="z3">
+    <div class="z-mark" aria-hidden="true">III</div>
+    <header class="z-head">
+      <div>
+        <p class="z-num">Zone three <b>· bathypelagic</b></p>
+        <h2 id="z3">Midnight</h2>
+      </div>
+      <div class="z-range"><b>1,000</b> – <b>4,000</b> m</div>
+    </header>
+    <p class="z-intro">No sunlight at all. From here down the only light anywhere is made by living things, and around three quarters of the animals here can make it. The water settles near four degrees; pressure passes one hundred atmospheres. Food arrives as marine snow, a slow blizzard of dead plankton, mucus and faecal pellets drifting down from the productive water far above.</p>
+
+    <article class="creature" tabindex="0" aria-label="Humpback anglerfish">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a humpback anglerfish with a gaping toothed jaw and a glowing lure on a stalk above its head">
+          <defs>
+            <radialGradient id="g5" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m5" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g5)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m5)">
+            <path class="fl" d="M64 128c0-50 54-70 108-60 56 10 92 46 86 80-6 32-50 50-100 46-52-4-94-14-94-66z"/>
+            <path class="ln" d="M64 128c0-50 54-70 108-60 56 10 92 46 86 80-6 32-50 50-100 46-52-4-94-14-94-66z"/>
+            <path class="fl" d="M66 142c30 12 70 18 110 10l16 30c-42 12-90 6-126-24z"/>
+            <path class="ln" d="M66 142c30 12 70 18 110 10l16 30c-42 12-90 6-126-24z"/>
+            <path class="ln th" d="M84 142l-4 14M100 148l-2 16M118 152l0 16M136 154l2 16M156 152l4 14M172 148l6 12M90 132l4-12M108 138l2-14M128 142l0-14M148 142l-2-14M166 138l-4-12"/>
+            <circle class="ln" cx="108" cy="110" r="8"/><circle cx="110" cy="109" r="3.5" fill="#DCEFF6"/>
+            <path class="ln th" d="M218 92l24-30 8 30M208 170l30 22-12-38M172 90c20-10 40-10 60-2"/>
+            <path class="lv" d="M118 72c-6-30 30-52 66-40 14 5 20 12 22 22"/>
+          </g>
+          <g class="ph">
+            <circle class="v" cx="206" cy="54" r="9" opacity=".5" style="--d:.6s"/><circle class="esca" cx="206" cy="54" r="4.5" style="--d:0s"/>
+            <circle cx="92" cy="98" r="1.2" style="--d:1s"/><circle cx="130" cy="86" r="1.2" style="--d:1.5s"/><circle cx="172" cy="86" r="1.2" style="--d:2s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>1,000 – 2,000 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Humpback anglerfish</h3>
+        <p class="latin">Melanocetus johnsonii · female</p>
+        <p>The lure on her forehead is a modified fin ray whose tip is packed with luminous symbiotic bacteria. She waves it, waits, and swallows whatever comes to investigate; a stomach that stretches lets her take prey longer than herself. Only females grow this large, roughly a hand's length. Males are a few centimetres, have no lure at all, and spend their lives searching the dark for a mate.</p>
+      </div>
+    </article>
+
+    <article class="creature" tabindex="0" aria-label="Atolla jellyfish">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of an Atolla crown jellyfish, a domed bell with a ring of rotating blue flashes and one long trailing tentacle">
+          <defs>
+            <radialGradient id="g6" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m6" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g6)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m6)">
+            <path class="fv" d="M64 122c0-56 48-84 96-84s96 28 96 84c-30 14-62 20-96 20s-66-6-96-20z"/>
+            <path class="lv" d="M64 122c0-56 48-84 96-84s96 28 96 84c-30 14-62 20-96 20s-66-6-96-20z"/>
+            <path class="lv th" d="M86 92c40-14 108-14 148 0M160 38v104M110 48c-8 30-10 60-8 86M210 48c8 30 10 60 8 86"/>
+            <path class="lv th" d="M70 126c6 10 14 14 22 10 6 10 14 14 22 10 6 10 14 14 22 10 8 10 16 14 24 10 8 4 16 0 24-10 8 4 16 0 22-10 8 4 16 0 22-10 8 4 16 0 22-10"/>
+            <path class="lv th" d="M84 138v26M100 144v28M118 148v30M136 150v30M154 152v30M172 152v30M190 150v30M208 148v30M226 144v28M242 138v26"/>
+            <path class="ln" d="M160 150c10 30 40 40 70 40 20 0 40 14 50 40" opacity=".8"/>
+          </g>
+          <g class="ph" id="pinwheel">
+            <circle cx="72" cy="118" r="2.2" style="--d:0s"/><circle cx="90" cy="128" r="2.2" style="--d:.13s"/><circle cx="112" cy="135" r="2.2" style="--d:.26s"/><circle cx="136" cy="139" r="2.2" style="--d:.39s"/><circle cx="160" cy="141" r="2.2" style="--d:.52s"/><circle cx="184" cy="139" r="2.2" style="--d:.65s"/><circle cx="208" cy="135" r="2.2" style="--d:.78s"/><circle cx="230" cy="128" r="2.2" style="--d:.91s"/><circle cx="248" cy="118" r="2.2" style="--d:1.04s"/>
+            <circle cx="236" cy="104" r="1.6" style="--d:1.17s"/><circle cx="200" cy="96" r="1.6" style="--d:1.3s"/><circle cx="160" cy="94" r="1.6" style="--d:1.43s"/><circle cx="120" cy="96" r="1.6" style="--d:1.56s"/><circle cx="84" cy="104" r="1.6" style="--d:1.69s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>500 – 5,000 m</span><span class="tag">Bioluminescent</span></div>
+        <h3>Atolla jellyfish</h3>
+        <p class="latin">Atolla wyvillei · crown jellyfish</p>
+        <p>Deep red by day, which reads as black down here, so it is nearly invisible until something attacks it. Then it lights up in a rotating pinwheel of blue flashes: a burglar alarm meant to attract a larger predator to whatever is biting it. An electronic lure imitating this display was what drew the first giant squid ever filmed in its natural habitat, in 2012.</p>
+      </div>
+    </article>
+  </section>
+
+  <!-- ZONE IV -->
+  <section class="zone landing" data-from="4000" data-to="4000" aria-labelledby="z4">
+    <div class="z-mark" aria-hidden="true">IV</div>
+    <header class="z-head">
+      <div>
+        <p class="z-num">Zone four <b>· abyssal plain</b></p>
+        <h2 id="z4">Abyssal</h2>
+      </div>
+      <div class="z-range"><b>4,000</b> m</div>
+    </header>
+    <p class="z-intro">The abyssal plain. Pressure is roughly four hundred times what you feel at the surface; the water holds a steady one to two degrees and has been out of contact with the sky for centuries. Yet this is not empty. The sediment is worked over by animals that have never encountered daylight and would not know what to do with it. Your light is the first many of them have ever seen.</p>
+
+    <article class="creature" tabindex="0" aria-label="Dumbo octopus">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a dumbo octopus, a rounded mantle with two ear-like fins and eight short webbed arms">
+          <defs>
+            <radialGradient id="g7" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m7" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g7)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m7)">
+            <path class="fv" d="M160 40c46 0 74 40 74 82 0 34-26 58-74 58s-74-24-74-58c0-42 28-82 74-82z"/>
+            <path class="lv" d="M160 40c46 0 74 40 74 82 0 34-26 58-74 58s-74-24-74-58c0-42 28-82 74-82z"/>
+            <path class="fv" d="M98 74c-26-10-50-2-58 16 14 12 38 12 62 0zM222 74c26-10 50-2 58 16-14 12-38 12-62 0z"/>
+            <path class="lv" d="M98 74c-26-10-50-2-58 16 14 12 38 12 62 0zM222 74c26-10 50-2 58 16-14 12-38 12-62 0z"/>
+            <path class="lv th" d="M96 174c-6 20-4 36 4 48M118 180c-4 20 0 34 8 44M140 182c-2 18 2 30 6 40M160 182c0 16 0 28 0 40M180 182c2 18-2 30-6 40M202 180c4 20 0 34-8 44M224 174c6 20 4 36-4 48"/>
+            <path class="lv th" d="M96 176c20 14 108 14 128 0" opacity=".5"/>
+            <circle class="ln" cx="136" cy="112" r="9"/><circle class="ln" cx="184" cy="112" r="9"/>
+            <circle cx="138" cy="112" r="4" fill="#DCEFF6"/><circle cx="186" cy="112" r="4" fill="#DCEFF6"/>
+          </g>
+          <g class="ph">
+            <circle class="v" cx="138" cy="112" r="1.2" opacity=".6" style="--d:0s"/><circle class="v" cx="186" cy="112" r="1.2" opacity=".6" style="--d:.4s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>3,000 – 4,000 m</span><span class="tag off">Not luminous</span></div>
+        <h3>Dumbo octopus</h3>
+        <p class="latin">Grimpoteuthis · deepest-living octopus</p>
+        <p>Named for the pair of ear-like fins it flaps to hover just above the sea floor, this is the deepest-living octopus genus known: one was filmed at almost 7,000 metres in the Java Trench in 2020. It has no ink sac, having nothing to hide from in the dark, and swallows worms and crustaceans whole. Most are about the size of a shoe. Without your light there is nothing here to see at all.</p>
+      </div>
+    </article>
+
+    <article class="creature" tabindex="0" aria-label="Tripod fish">
+      <figure class="fig">
+        <svg viewBox="0 0 320 240" role="img" aria-label="Drawing of a tripod fish standing on the sea floor on three long stiff fin rays, with two pectoral fins raised like antennae">
+          <defs>
+            <radialGradient id="g8" gradientUnits="userSpaceOnUse" cx="160" cy="120" r="170"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e6e6e6"/><stop offset=".82" stop-color="#555"/><stop offset="1" stop-color="#1c1c1c"/></radialGradient>
+            <mask id="m8" maskUnits="userSpaceOnUse" x="-40" y="-40" width="400" height="320"><rect x="-40" y="-40" width="400" height="320" fill="url(#g8)"/></mask>
+          </defs>
+          <g class="body" mask="url(#m8)">
+            <path class="lv th" d="M10 210c30-6 60 4 90 0s60-8 90-2 60 6 120-2"/>
+            <path class="fl" d="M56 148c40-22 140-26 206 2l34-12-8 20 8 20-34-12c-66 26-166 22-206-4z"/>
+            <path class="ln" d="M56 148c40-22 140-26 206 2l34-12-8 20 8 20-34-12c-66 26-166 22-206-4z"/>
+            <path class="ln" d="M126 168l-30 40M136 168l14 42M270 164l24 44"/>
+            <path class="ln th" d="M96 140l-40-70M104 140l-24-84"/>
+            <path class="ln th" d="M160 134l10-16 14 16M70 150c40-6 130-6 190 2" opacity=".6"/>
+            <circle cx="78" cy="146" r="2.5" fill="#DCEFF6"/>
+          </g>
+          <g class="ph">
+            <circle cx="40" cy="60" r="1" opacity=".5" style="--d:0s"/><circle cx="240" cy="40" r="1" opacity=".5" style="--d:1s"/><circle cx="300" cy="110" r="1" opacity=".5" style="--d:2s"/><circle cx="200" cy="90" r="1" opacity=".5" style="--d:1.5s"/>
+          </g>
+        </svg>
+      </figure>
+      <div class="c-text">
+        <div class="c-meta"><span>1,000 – 4,700 m</span><span class="tag off">Not luminous</span></div>
+        <h3>Tripod fish</h3>
+        <p class="latin">Bathypterois grallator · standing fish</p>
+        <p>It stands. Three fin rays stiffen into stilts up to a metre long, lifting a thirty-centimetre body above the mud, facing into the current with its pectoral fins fanned out like antennae to feel for drifting food. Its eyes are almost useless here; touch does the work. When it needs to move, the rays go slack and it swims.</p>
+      </div>
+    </article>
+
+    <p class="outro">You are at <b>4,000 metres</b>. Above you is four kilometres of water; below, sediment that has been settling since before there were people. The ocean's average depth is about 3,700 m, so most of the planet's floor looks like this: dark, cold, slow, and quietly alive.</p>
+    <a class="ascend" href="#top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V3M3 8l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Ascend to the surface</a>
+    <footer class="foot">Depth ranges, temperatures and pressures are typical values from published records and vary by ocean and season. Creatures are drawn freehand and not to scale. Page 63 of a hundred-page showcase.</footer>
+  </section>
+
+</div>
+</main>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const noHover = matchMedia('(hover: none), (pointer: coarse)').matches;
+  const beamEl = document.getElementById('beam');
+  const ret = document.getElementById('ret');
+  const R = 280; // beam radius in CSS px
+
+  /* ---------- pointer / beam ---------- */
+  let mx = innerWidth * .6, my = innerHeight * .55, tx = mx, ty = my;
+  let manualUntil = 0, focusEl = null, flood = false;
+  const now = () => performance.now();
+
+  addEventListener('pointermove', e => {
+    tx = e.clientX; ty = e.clientY; manualUntil = now() + 4000; focusEl = null;
+    if (!noHover) ret.classList.toggle('hot', !!(e.target.closest && e.target.closest('a,button')));
+  }, { passive: true });
+  addEventListener('pointerdown', e => { tx = e.clientX; ty = e.clientY; manualUntil = now() + 5000; focusEl = null; }, { passive: true });
+
+  const creatures = [...document.querySelectorAll('.creature')].map(el => ({
+    el, svg: el.querySelector('svg'), grad: el.querySelector('radialGradient')
+  }));
+  creatures.forEach(c => {
+    c.el.addEventListener('focus', () => { focusEl = c.svg; });
+    c.el.addEventListener('blur', () => { if (focusEl === c.svg) focusEl = null; });
+  });
+
+  const floodBtn = document.getElementById('flood');
+  floodBtn.addEventListener('click', () => {
+    flood = !flood; floodBtn.setAttribute('aria-pressed', String(flood));
+  });
+
+  function updateMasks() {
+    const vh = innerHeight;
+    for (const c of creatures) {
+      const r = c.svg.getBoundingClientRect();
+      if (r.bottom < -80 || r.top > vh + 80) continue;
+      if (flood) { c.grad.setAttribute('cx', 160); c.grad.setAttribute('cy', 120); c.grad.setAttribute('r', 2000); continue; }
+      const s = Math.min(r.width / 320, r.height / 240);
+      const ox = r.left + (r.width - 320 * s) / 2, oy = r.top + (r.height - 240 * s) / 2;
+      c.grad.setAttribute('cx', ((mx - ox) / s).toFixed(1));
+      c.grad.setAttribute('cy', ((my - oy) / s).toFixed(1));
+      c.grad.setAttribute('r', (R / s).toFixed(1));
+    }
+  }
+
+  /* ---------- depth meter ---------- */
+  const zones = [...document.querySelectorAll('.zone')].map(z => ({ el: z, a: +z.dataset.from, b: +z.dataset.to }));
+  const mNum = document.getElementById('mNum'), mZone = document.getElementById('mZone'),
+        mP = document.getElementById('mP'), mT = document.getElementById('mT'), mL = document.getElementById('mL'),
+        mMarker = document.getElementById('mMarker'), rail = document.getElementById('rail');
+  for (let d = 0; d <= 4000; d += 500) {
+    const t = document.createElement('div');
+    const major = d % 1000 === 0;
+    t.className = 'm-tick' + (major ? ' major' : '') + (d === 0 ? ' start' : d === 4000 ? ' end' : '');
+    t.style.setProperty('--t', d / 4000);
+    if (major) t.innerHTML = '<span>' + d.toLocaleString('en-US') + ' m</span>';
+    rail.appendChild(t);
+  }
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function tempAt(d) {
+    if (d <= 200) return lerp(22, 14, d / 200);
+    if (d <= 1000) return lerp(14, 4, (d - 200) / 800);
+    return lerp(4, 1.6, (d - 1000) / 3000);
+  }
+  let lastDepth = -1;
+  function updateDepth() {
+    const ref = innerHeight * .55;
+    let depth = 0;
+    for (const z of zones) {
+      const r = z.el.getBoundingClientRect();
+      if (r.top <= ref && r.bottom > ref) { depth = lerp(z.a, z.b, (ref - r.top) / r.height); break; }
+      if (r.top > ref) break;
+      depth = z.b;
+    }
+    depth = Math.round(depth);
+    if (depth === lastDepth) return;
+    lastDepth = depth;
+    mNum.textContent = depth.toLocaleString('en-US');
+    mZone.textContent = depth === 0 ? 'Surface' : depth <= 200 ? 'Sunlight zone' : depth <= 1000 ? 'Twilight zone' : depth < 4000 ? 'Midnight zone' : 'Abyssal plain';
+    mP.textContent = Math.round(1 + depth / 10).toLocaleString('en-US') + ' atm';
+    mT.textContent = tempAt(depth).toFixed(1) + ' °C';
+    const light = 100 * Math.exp(-depth * 0.023);
+    mL.textContent = depth === 0 ? '100 %' : light >= 0.1 ? light.toFixed(1) + ' %' : light >= 0.001 ? '< 0.1 %' : 'none';
+    const p = depth / 4000;
+    mMarker.style.setProperty('--p', p.toFixed(4));
+    root.style.setProperty('--prog', Math.pow(p, .7).toFixed(3));
+  }
+  let scrollDirty = true;
+  addEventListener('scroll', () => { scrollDirty = true; }, { passive: true });
+
+  /* ---------- marine snow ---------- */
+  const cv = document.getElementById('snow'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, ps = [], lastSY = scrollY;
+  const mk = (any) => { const z = .35 + Math.random() * .65; return { x: Math.random() * W, y: any ? Math.random() * H : -6, z, r: (.5 + Math.random() * 1.5) * z, v: (.1 + Math.random() * .28) * z, ph: Math.random() * 6.28, a: .18 + Math.random() * .38 }; };
+  function resize() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(230, Math.max(70, W * H / 8500)));
+    ps = Array.from({ length: n }, () => mk(true));
+    scrollDirty = true;
+    if (rm) drawSnow(0, 0);
+  }
+  function drawSnow(t, dy) {
+    ctx.clearRect(0, 0, W, H);
+    const depthBoost = .55 + .45 * parseFloat(root.style.getPropertyValue('--prog') || 0);
+    for (const p of ps) {
+      p.y += p.v - dy * p.z * .38;
+      p.x += Math.sin(t / 1600 + p.ph) * .16 * p.z;
+      if (p.y > H + 8) { p.y = -6; p.x = Math.random() * W; } else if (p.y < -8) { p.y = H + 6; p.x = Math.random() * W; }
+      if (p.x > W + 8) p.x = -6; else if (p.x < -8) p.x = W + 6;
+      const dx = p.x - mx, dyy = p.y - my;
+      const d = Math.sqrt(dx * dx + dyy * dyy);
+      const lit = d < R ? (1 - d / R) : 0;
+      const a = Math.min(1, p.a * depthBoost + lit * .7);
+      ctx.fillStyle = lit > 0 ? `rgba(${Math.round(170 + 60 * lit)},${Math.round(225 + 30 * lit)},255,${a.toFixed(3)})` : `rgba(180,210,230,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + lit * .8, 0, 6.2832); ctx.fill();
+    }
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  /* ---------- main loop ---------- */
+  let raf = 0;
+  function frame(t) {
+    raf = requestAnimationFrame(frame);
+    const n = now();
+    if (focusEl) {
+      const r = focusEl.getBoundingClientRect(); tx = r.left + r.width / 2; ty = r.top + r.height / 2;
+    } else if (noHover && n > manualUntil && !rm) {
+      tx = innerWidth * .5 + Math.sin(n / 2900) * innerWidth * .3;
+      ty = innerHeight * .5 + Math.sin(n / 2100 + 1.3) * innerHeight * .26;
+    }
+    const k = rm ? 1 : .13;
+    mx += (tx - mx) * k; my += (ty - my) * k;
+    beamEl.style.transform = `translate(${(mx - 340).toFixed(1)}px,${(my - 340).toFixed(1)}px)`;
+    ret.style.transform = `translate(${(mx - ret.offsetWidth / 2).toFixed(1)}px,${(my - ret.offsetHeight / 2).toFixed(1)}px)`;
+    if (scrollDirty) { scrollDirty = false; updateDepth(); }
+    updateMasks();
+    if (!rm) { const sy = scrollY; drawSnow(t, sy - lastSY); lastSY = sy; }
+  }
+  function start() { if (!raf) raf = requestAnimationFrame(frame); }
+  function stop() { cancelAnimationFrame(raf); raf = 0; }
+  document.addEventListener('visibilitychange', () => document.hidden ? stop() : start());
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Receipt Generator — Solvix Toolkit</title>
+<meta name="description" content="Issue numbered payment receipts for cash, card, bank transfer or cheque. Records what the payment was for, links it to an invoice number and shows the remaining balance after part payments, handles overpayments and refunds, prints on A4, US Letter or an 80mm thermal roll, and keeps a receipt register with CSV and JSON export.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Cpath d='M8.5 6.5h15v20l-2.5-1.7-2.5 1.7-2.5-1.7-2.5 1.7-2.5-1.7-2.5 1.7z' fill='%23fff'/%3E%3Cpath d='M12 12h8M12 16h8M12 20h5' stroke='%233F4A9E' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#3F4A9E; --accent-ink:#31397B; --accent-wash:#EAECF8; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#7E88DE; --accent-ink:#9EA6EA; --accent-wash:#1B1F35; --on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#7E88DE; --accent-ink:#9EA6EA; --accent-wash:#1B1F35; --on-accent:#0B1017}
+
+[hidden]{display:none!important}
+.app{padding-bottom:40px}
+.wrap{padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(304px,.58fr)}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>div{min-width:0}
+.card+.card{margin-top:14px}
+.sticky{top:calc(var(--abh,58px) + 10px)}
+.hd .tag{font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--muted)}
+.fg{display:grid;gap:10px}
+.fg.c2{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.fg.c3{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.fg+.fg{margin-top:10px}
+.mini{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.mini+.mini{margin-top:5px}
+.vh{position:absolute!important;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.topnotes{display:grid;gap:10px;padding-top:14px}
+.samp{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.samp .btn{margin-left:auto}
+.seg{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;width:100%}
+.seg label{flex:1 1 auto;min-width:62px}
+.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg span{display:block;text-align:center;padding:8px 6px;font:600 12.5px/1.2 var(--sans);
+  background:var(--raise);color:var(--ink-2);cursor:pointer;border-left:1px solid var(--line)}
+.seg label:first-child span{border-left:0}
+.seg input:checked+span{background:var(--accent);color:var(--on-accent)}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* line + register tables */
+#tLines td,#tLines th,#tReg td,#tReg th{padding:6px 6px}
+#tHist td,#tHist th{padding:5px 6px;font-size:12.5px}
+#tHist .chip{font-size:9px;padding:2px 4px}
+.w-amt{width:104px}.w-ref{width:120px}
+.desc-c{min-width:150px;width:46%}
+.desc-c input,.ref-c input{text-align:left;font-family:var(--sans)}
+.idx{color:var(--muted);font:600 12px/1 var(--mono);width:24px;text-align:center}
+td .err{display:block;margin-top:2px}
+.regempty td,.emptyrow td{color:var(--muted);text-align:center;padding:16px}
+#tReg .n{white-space:nowrap}
+.swipe{display:none;margin-top:8px}
+@media(max-width:900px){.swipe{display:block}}
+
+/* results panel */
+.res .stat+.stat,.res .note{margin-top:9px}
+.res .stat.hero .v{font-size:31px;word-break:break-word}
+.res .stat.hero .u{display:block;margin-top:4px;color:var(--accent-ink)}
+.stat.bal{border-color:var(--line-hard);border-width:2px}
+.stat.bal .v{font-size:26px}
+.stat.bal.ok{background:var(--ok-wash);border-color:var(--ok)}
+.stat.bal.ok .v{color:var(--ok)}
+.stat.bal.warnb{background:var(--warn-wash);border-color:var(--warn)}
+.stat.bal.warnb .v{color:var(--warn)}
+.stat.bal.badb{background:var(--bad-wash);border-color:var(--bad)}
+.stat.bal.badb .v{color:var(--bad)}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.sgrid .stat{margin-top:0}
+.sgrid .stat .v{font-size:17px}
+.ln{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13.5px;border-bottom:1px dotted var(--line)}
+.ln:last-child{border-bottom:0}
+.ln .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln .k small{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.ln.tot{font-weight:650;border-top:1px solid var(--line-hard);border-bottom:0;margin-top:3px;padding-top:8px}
+.ln.neg .v{color:var(--bad)}
+.blk{margin-top:12px}
+.blk>.lbl{margin-bottom:5px;display:block}
+.bar{height:7px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar.over i{background:var(--warn)}
+
+/* logo */
+.logo-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.logo-prev{width:92px;height:52px;border:1px dashed var(--line-hard);border-radius:4px;display:grid;place-items:center;
+  background:var(--raise);overflow:hidden;flex:none}
+.logo-prev img{max-width:100%;max-height:100%;display:block}
+.logo-prev .ph{font:10px/1.2 var(--sans);color:var(--faint);text-align:center;padding:4px}
+
+/* mobile answer bar */
+.mbar{display:none}
+@media(max-width:900px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,96px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 10px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 20px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+  .sgrid{grid-template-columns:1fr}
+}
+
+/* ══ the printed document ══════════════════════════════════════════ */
+#docwrap{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px)}
+#docwrap.show{display:block}
+.doc{display:none;background:#fff;color:#111;border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh);margin:0 auto 40px}
+html[data-psize="thermal"] #docT{display:block}
+html:not([data-psize="thermal"]) #docA4{display:block}
+.docA{padding:26px 30px 30px;max-width:190mm;font-size:13px;line-height:1.5}
+.docA h3{color:#111}
+.d-hd{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;
+  border-bottom:2px solid #111;padding-bottom:12px}
+.d-hd .who{font-size:12.5px;white-space:pre-line;color:#333;min-width:0}
+.d-hd .who strong{display:block;font-size:15.5px;color:#111;margin-bottom:3px;white-space:normal}
+.d-hd .logo{max-height:54px;max-width:190px;display:block;margin-bottom:8px}
+.d-ttl{text-align:right;min-width:186px}
+.d-ttl .t{font:700 22px/1.1 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:#111}
+.d-ttl .t.ref{color:#8D1E17}
+.d-ttl table{margin-top:8px;font-size:12px;width:100%}
+.d-ttl td{border:0;padding:1px 0;color:#333;text-align:right}
+.d-ttl td:first-child{text-align:left;padding-right:12px;color:#666;white-space:nowrap}
+.d-band{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;
+  border:2px solid #111;border-radius:4px;padding:11px 14px;margin:16px 0 4px;background:#F4F5FA}
+.d-band .k{font:600 10.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#333}
+.d-band .k small{display:block;text-transform:none;letter-spacing:0;font-weight:400;color:#555;font-size:11.5px;margin-top:2px}
+.d-band .v{font:700 27px/1.1 var(--mono);color:#111;font-variant-numeric:tabular-nums;white-space:nowrap}
+.d-cols{display:flex;gap:26px;flex-wrap:wrap;margin-top:16px}
+.d-cols>div{flex:1 1 210px;min-width:0}
+.d-cols .lbl{color:#666;display:block;margin-bottom:3px}
+.d-cols .who{font-size:12.5px;white-space:pre-line;color:#333}
+.d-cols .who b{color:#111;font-size:13.5px}
+.docA table.g{margin-top:14px;font-size:12.5px}
+.docA table.g th{background:#EDEEF5!important;color:#333;border-bottom:1px solid #999;padding:6px 8px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.docA table.g td{border-bottom:1px solid #DDD;padding:6px 8px;color:#222}
+.docA table.g tfoot td{background:#F4F5FA;border-top:2px solid #111;font-weight:650;color:#111}
+.docA table.g .n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.d-sum{margin-top:14px;margin-left:auto;max-width:330px;font-size:12.5px}
+.d-sum .r{display:flex;justify-content:space-between;gap:14px;padding:4px 0;border-bottom:1px dotted #CCC}
+.d-sum .r.tot{border-top:2px solid #111;border-bottom:0;margin-top:3px;padding-top:7px;font-weight:700;font-size:14px}
+.d-sum .r span:last-child{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.d-note{margin-top:16px;font-size:12.5px;color:#222;white-space:pre-line;border-left:3px solid #999;padding-left:10px}
+.d-sign{display:flex;gap:30px;flex-wrap:wrap;margin-top:22px;font-size:11.5px;color:#555}
+.d-sign>div{flex:1 1 190px;border-top:1px solid #111;padding-top:5px}
+.d-fine{margin-top:18px;border-top:1px solid #CCC;padding-top:9px;font-size:10.5px;line-height:1.45;color:#444}
+.d-fine b{color:#111}
+
+/* 80 mm thermal slip */
+.docT{width:72mm;padding:5mm 4mm 8mm;font:11.5px/1.42 var(--mono);color:#000;background:#fff}
+.docT .c{text-align:center}
+.docT .b{font-weight:700}
+.docT .big{font-size:15px;font-weight:700;letter-spacing:.04em}
+.docT .hr{border-top:1px dashed #000;margin:6px 0}
+.docT .r{display:flex;justify-content:space-between;gap:8px}
+.docT .r span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.docT .r.tot{font-size:14px;font-weight:700;margin:3px 0}
+.docT .li{margin-top:3px;align-items:baseline}
+.docT .li .d{word-break:break-word;padding-right:5px;text-align:left}
+.docT .sm{font-size:9.5px;line-height:1.35}
+.docT .logo{max-width:52mm;max-height:16mm;margin:0 auto 4px;display:block}
+@media(max-width:560px){.docT{width:100%;max-width:72mm}}
+
+@media print{
+  .app,.topnotes,#bar{display:none!important}
+  #docwrap{padding:0;max-width:none}
+  .doc{border:0;box-shadow:none;margin:0;border-radius:0}
+  .docA{padding:0;max-width:none;font-size:10.5pt}
+  .docT{width:auto;padding:0;font-size:9.6pt;line-height:1.4}
+  .d-band{background:#F4F5FA!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .docA table.g tfoot td{background:#F4F5FA!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .docA table.g tbody tr:hover,.docA table.g tr:hover{background:transparent}
+}
+</style>
+<style id="pageStyle">@page{size:A4;margin:14mm}</style>
+</head>
+<body>
+
+<div class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">RC</div>
+    <div style="min-width:0">
+      <h1>Receipt Generator</h1>
+      <div class="sub">PART PAYMENTS · BALANCE · 80MM OR A4</div>
+    </div>
+  </div>
+  <button type="button" class="btn" id="bPreview" aria-pressed="false">Preview document</button>
+  <button type="button" class="btn pri" id="bPrint">Print</button>
+  <button type="button" class="btn" id="bCsv">CSV</button>
+  <button type="button" class="btn" id="bJson">JSON</button>
+  <button type="button" class="btn" id="bImport">Import</button>
+  <input type="file" id="fImport" accept="application/json,.json" class="vh" tabindex="-1" aria-hidden="true">
+  <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+</header>
+
+  <div class="mbar" id="bar" aria-hidden="true"><span class="k">Balance after</span><span class="v" id="barV">—</span></div>
+
+  <div class="topnotes noprint">
+    <div class="note" id="sampleBanner">
+      <div class="samp">
+        <span><strong>Sample receipt loaded.</strong> A part payment against invoice INV-2048. Edit any field, or clear it and start your own.</span>
+        <button type="button" class="btn sm" id="bClearSample">Start a blank receipt</button>
+      </div>
+    </div>
+    <div class="note warn">
+      <strong>What this is, and what it is not.</strong> This tool produces a receipt acknowledging money you say you have
+      received, using only the figures you type in. It does <strong>not</strong> verify that funds have cleared, it is
+      <strong>not</strong> a VAT or sales-tax invoice, and it does not calculate any tax. Issue a receipt only once the
+      payment has actually cleared, and check with your accountant or tax authority what records you are required to keep.
+    </div>
+  </div>
+
+  <div class="split wrap">
+    <div>
+
+      <!-- ── the receipt ─────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Receipt details</h2><span class="tag" id="tagNo">—</span></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f">
+              <label for="iNo">Receipt number</label>
+              <input id="iNo" data-b="rc.no" autocomplete="off">
+              <p class="err" id="e-no" hidden></p>
+            </div>
+            <div class="f">
+              <label for="iDate">Date received</label>
+              <input id="iDate" type="date" data-b="rc.date">
+              <p class="err" id="e-date" hidden></p>
+            </div>
+            <div class="f">
+              <label for="iTime">Time (optional)</label>
+              <input id="iTime" type="time" data-b="rc.time">
+            </div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f">
+              <span class="lbl" id="lblType">Receipt type</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblType">
+                <label><input type="radio" name="rtype" value="payment" id="ty1"><span>Payment in</span></label>
+                <label><input type="radio" name="rtype" value="refund" id="ty2"><span>Refund out</span></label>
+              </div>
+              <p class="hint">A refund is recorded as a negative amount and increases the balance owed.</p>
+            </div>
+            <div class="f">
+              <label for="iMethod">Payment method</label>
+              <select id="iMethod" data-b="rc.method">
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="transfer">Bank transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="dd">Direct debit</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f">
+              <label for="iMref" id="lblMref">Transaction reference</label>
+              <input id="iMref" data-b="rc.mref" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iBy">Received / issued by</label>
+              <input id="iBy" data-b="rc.by" autocomplete="off" placeholder="Name of the person taking the payment">
+            </div>
+          </div>
+          <div class="fg c3" style="margin-top:10px">
+            <div class="f">
+              <label for="iCur">Currency symbol</label>
+              <select id="iCur" data-b="cur.sym">
+                <option value="£">£ Pound</option>
+                <option value="$">$ Dollar</option>
+                <option value="€">€ Euro</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="f" id="wCustom" hidden>
+              <label for="iCurC">Custom symbol</label>
+              <input id="iCurC" data-b="cur.custom" maxlength="4" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iCurCode">Currency code</label>
+              <input id="iCurCode" data-b="cur.code" maxlength="6" autocomplete="off" placeholder="GBP">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── what it was for ─────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>What the payment was for</h2>
+          <button type="button" class="btn sm" id="bAdd">+ Add line</button></div>
+        <div class="tw">
+          <table id="tLines">
+            <caption class="vh">Breakdown of what this payment covers</caption>
+            <thead><tr>
+              <th scope="col" class="idx">#</th>
+              <th scope="col" class="desc-c">Description</th>
+              <th scope="col" class="ref-c">Reference / period</th>
+              <th scope="col" class="n w-amt">Amount</th>
+              <th scope="col"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="lineBody"></tbody>
+            <tfoot><tr>
+              <td colspan="3">Total on this receipt</td>
+              <td class="n" id="fLines">—</td><td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft"><p class="mini">Enter amounts as positive figures. Switching the receipt to <b>Refund out</b> flips the sign for you.</p></div>
+      </section>
+
+      <!-- ── cash handling ───────────────────────────────────────── -->
+      <section class="card" id="cCash" hidden>
+        <div class="hd"><h2>Cash handling</h2></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f">
+              <label for="iTend">Cash tendered</label>
+              <input id="iTend" type="number" step="0.01" min="0" inputmode="decimal" data-b="cash.tendered">
+              <p class="err" id="e-tend" hidden></p>
+            </div>
+            <div class="f">
+              <span class="lbl">Amount due</span>
+              <input type="text" id="oDue" readonly tabindex="-1" class="ta-r" value="—">
+            </div>
+            <div class="f">
+              <span class="lbl">Change given</span>
+              <input type="text" id="oChange" readonly tabindex="-1" class="ta-r" value="—">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── invoice link ────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Invoice this payment is against</h2><span class="tag" id="tagInv">—</span></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f">
+              <label for="iInvNo">Invoice number</label>
+              <input id="iInvNo" data-b="inv.no" autocomplete="off" placeholder="INV-2048">
+            </div>
+            <div class="f">
+              <label for="iInvDate">Invoice date</label>
+              <input id="iInvDate" type="date" data-b="inv.date">
+            </div>
+            <div class="f">
+              <label for="iInvTot">Invoice total</label>
+              <input id="iInvTot" type="number" step="0.01" min="0" inputmode="decimal" data-b="inv.total">
+              <p class="err" id="e-invtot" hidden></p>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <label class="check"><input type="checkbox" id="iManual" data-b="inv.manual">
+              <span>Enter the amount previously received by hand instead of taking it from the register below</span></label>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f">
+              <label for="iPrior">Previously received on this invoice</label>
+              <input id="iPrior" type="number" step="0.01" inputmode="decimal" data-b="inv.prior">
+              <p class="hint" id="hPrior">Summed automatically from other receipts in the register with the same invoice number.</p>
+            </div>
+            <div class="f">
+              <label for="iPo">Their reference / purchase order</label>
+              <input id="iPo" data-b="inv.po" autocomplete="off">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── payer ───────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2 id="hPayer">Received from</h2></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f">
+              <label for="iPName">Name</label>
+              <input id="iPName" data-b="payer.name" autocomplete="off">
+              <p class="err" id="e-pname" hidden></p>
+            </div>
+            <div class="f">
+              <label for="iPRef">Account reference</label>
+              <input id="iPRef" data-b="payer.ref" autocomplete="off">
+            </div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f">
+              <label for="iPAddr">Address</label>
+              <textarea id="iPAddr" data-b="payer.addr" rows="3"></textarea>
+            </div>
+            <div class="f">
+              <label for="iPCon">Email or phone</label>
+              <input id="iPCon" data-b="payer.contact" autocomplete="off">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── your business ───────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Your business</h2><span class="tag">Saved for next time</span></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f">
+              <label for="iBName">Business name</label>
+              <input id="iBName" data-b="biz.name" autocomplete="organization">
+              <p class="err" id="e-bname" hidden></p>
+            </div>
+            <div class="f">
+              <label for="iBTax">Tax / company registration</label>
+              <input id="iBTax" data-b="biz.tax" autocomplete="off">
+            </div>
+          </div>
+          <div class="fg c2" style="margin-top:10px">
+            <div class="f">
+              <label for="iBAddr">Address</label>
+              <textarea id="iBAddr" data-b="biz.addr" rows="3"></textarea>
+            </div>
+            <div class="stack">
+              <div class="f">
+                <label for="iBPhone">Phone</label>
+                <input id="iBPhone" data-b="biz.phone" autocomplete="tel">
+              </div>
+              <div class="f">
+                <label for="iBEmail">Email</label>
+                <input id="iBEmail" data-b="biz.email" autocomplete="email">
+              </div>
+            </div>
+          </div>
+          <div class="blk">
+            <span class="lbl">Logo (optional)</span>
+            <div class="logo-row">
+              <span class="logo-prev" id="logoPrev"><span class="ph">No logo</span></span>
+              <input type="file" id="fLogo" accept="image/*" class="vh" tabindex="-1" aria-hidden="true">
+              <button type="button" class="btn sm" id="bLogo">Choose image…</button>
+              <button type="button" class="btn sm dgr" id="bLogoX" hidden>Remove</button>
+            </div>
+            <p class="mini" id="logoMsg">Stored in this browser only. Kept small so it prints crisply on both layouts.</p>
+          </div>
+          <div class="f blk">
+            <label for="iThanks">Message printed on the receipt</label>
+            <input id="iThanks" data-b="rc.thanks" autocomplete="off">
+          </div>
+          <div class="f blk">
+            <label for="iNotes">Notes (printed under the message)</label>
+            <textarea id="iNotes" data-b="rc.notes" rows="2"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── numbering + print ───────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Numbering &amp; print size</h2></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f">
+              <label for="iPrefix">Number prefix</label>
+              <input id="iPrefix" data-b="seq.prefix" autocomplete="off">
+            </div>
+            <div class="f">
+              <label for="iNext">Next number</label>
+              <input id="iNext" type="number" step="1" min="0" data-b="seq.next">
+            </div>
+            <div class="f">
+              <label for="iPad">Digits</label>
+              <input id="iPad" type="number" step="1" min="1" max="10" data-b="seq.pad">
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button type="button" class="btn sm" id="bUseNext">Use next number now</button>
+            <span class="mini" id="nextPreview">—</span>
+          </div>
+          <div class="f blk">
+            <span class="lbl" id="lblPs">Print layout</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblPs">
+              <label><input type="radio" name="psize" value="a4" id="ps1"><span>A4</span></label>
+              <label><input type="radio" name="psize" value="letter" id="ps2"><span>US Letter</span></label>
+              <label><input type="radio" name="psize" value="thermal" id="ps3"><span>80&thinsp;mm roll</span></label>
+            </div>
+            <p class="hint">A4 and Letter print the full document with the invoice balance. The 80&thinsp;mm setting prints a
+              narrow thermal slip (72&thinsp;mm of print on 80&thinsp;mm paper) — set your printer to the receipt roll.</p>
+          </div>
+          <div style="margin-top:10px">
+            <label class="check"><input type="checkbox" id="iHist" data-b="print.history">
+              <span>Print the payment history for this invoice (A4 / Letter only)</span></label>
+            <label class="check" style="margin-top:7px"><input type="checkbox" id="iSign" data-b="print.sign">
+              <span>Print signature lines</span></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── register ────────────────────────────────────────────── -->
+      <section class="card">
+        <div class="hd"><h2>Receipt register</h2><span class="tag" id="tagReg">0 receipts</span>
+          <button type="button" class="btn sm pri" id="bIssue">Save receipt to register</button></div>
+        <div class="tw">
+          <table id="tReg">
+            <caption class="vh">Receipts already issued</caption>
+            <thead><tr>
+              <th scope="col">Number</th><th scope="col">Date</th><th scope="col">From / to</th>
+              <th scope="col">Invoice</th><th scope="col">Method</th>
+              <th scope="col" class="n">Amount</th><th scope="col"><span class="vh">Actions</span></th>
+            </tr></thead>
+            <tbody id="regBody"></tbody>
+            <tfoot><tr>
+              <td colspan="5">Total recorded</td><td class="n" id="fReg">—</td><td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft"><p class="mini">Saving bumps the next receipt number and keeps the payer and invoice so the next part
+          payment takes two seconds. Loading a saved receipt edits it in place.</p></div>
+      </section>
+
+      <p class="swipe mini noprint">Tables scroll sideways on a narrow screen.</p>
+    </div>
+
+    <!-- ══ results ══════════════════════════════════════════════════ -->
+    <div>
+      <section class="card sticky res">
+        <div class="hd"><h2>This receipt</h2><span class="chip" id="chipType">Payment</span></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k" id="heroK">Amount received</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">—</div>
+          </div>
+          <div class="stat bal" id="balStat">
+            <div class="k" id="balK">Balance on invoice after this payment</div>
+            <div class="v" id="balV">—</div>
+            <div class="u" id="balU">—</div>
+          </div>
+          <div class="bar" id="barWrap" hidden><i id="barFill" style="width:0%"></i></div>
+          <div class="sgrid">
+            <div class="stat"><div class="k">Invoice total</div><div class="v" id="sInv">—</div></div>
+            <div class="stat"><div class="k">Paid to date</div><div class="v" id="sPaid">—</div></div>
+          </div>
+          <div class="blk">
+            <span class="lbl">Settlement</span>
+            <div class="ln"><span class="k">Invoice total</span><span class="v" id="lInv">—</span></div>
+            <div class="ln"><span class="k">Previously received<small id="lPriorNote">from the register</small></span><span class="v" id="lPrior">—</span></div>
+            <div class="ln"><span class="k">This receipt</span><span class="v" id="lThis">—</span></div>
+            <div class="ln tot"><span class="k">Balance now outstanding</span><span class="v" id="lBal">—</span></div>
+          </div>
+          <div class="note" id="statusNote">—</div>
+          <div class="blk" id="histBlk" hidden>
+            <span class="lbl" id="histLbl">Payment history</span>
+            <div class="tw"><table id="tHist">
+              <caption class="vh">Every receipt recorded against this invoice, with the running balance</caption>
+              <thead><tr><th scope="col">Receipt</th><th scope="col">Date</th>
+                <th scope="col" class="n">Amount</th><th scope="col" class="n">Balance</th></tr></thead>
+              <tbody id="histBody"></tbody>
+            </table></div>
+          </div>
+          <div class="blk" id="cashBlk" hidden>
+            <span class="lbl">Cash</span>
+            <div class="ln"><span class="k">Tendered</span><span class="v" id="lTend">—</span></div>
+            <div class="ln"><span class="k">Change given</span><span class="v" id="lChange">—</span></div>
+          </div>
+        </div>
+        <div class="ft">
+          <span class="mini" id="ftLine">—</span>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ══ document ═════════════════════════════════════════════════════ -->
+<div id="docwrap" class="printonly">
+  <section class="doc docA" id="docA4" aria-label="Receipt document"></section>
+  <section class="doc docT" id="docT" aria-label="Thermal receipt"></section>
+</div>
+
+<footer class="app noprint" style="padding-top:0;color:var(--muted);font-size:12px;line-height:1.55">
+  Balance after this payment = invoice total − (previously received + this receipt), with refunds counted as negative.
+  Money is rounded to 2 decimal places at each step. Nothing is sent anywhere: every figure stays in this browser's local storage.
+  A receipt is evidence of money received; it is not a tax invoice and this tool does not calculate VAT or sales tax.
+</footer>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.receipt-generator.v1';
+function $(s,r){return (r||document).querySelector(s)}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+
+/* ── helpers ─────────────────────────────────────────────────────── */
+function num(v){
+  if(typeof v==='number')return isFinite(v)?v:0;
+  var s=String(v==null?'':v).replace(/[\s,]/g,'').replace(/[^0-9.eE+-]/g,'');
+  var n=parseFloat(s); return isFinite(n)?n:0;
+}
+function isBlank(v){return String(v==null?'':v).trim()===''}
+function r2(n){var x=Math.round((num(n)+(num(n)>=0?1e-9:-1e-9))*100)/100; return x===0?0:x}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'})}
+function nl(s){return esc(s).replace(/\r?\n/g,'<br>')}
+function sym(){return S.cur.sym==='custom'?(String(S.cur.custom||'').trim()||'¤'):S.cur.sym}
+function grp(s){
+  var p=s.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.');
+}
+/* display money — never NaN, never -0, always 2dp */
+function money(v){
+  if(v==null||typeof v!=='number'||!isFinite(v))return '—';
+  var n=r2(v),neg=n<0,s=grp(Math.abs(n).toFixed(2));
+  return (neg?'−':'')+sym()+s;
+}
+/* plain money for CSV / JSON */
+function m2(v){var n=r2(v); return (n===0?0:n).toFixed(2)}
+function pad(n,w){var s=String(Math.max(0,Math.floor(num(n))));while(s.length<w)s='0'+s;return s}
+function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1,2)+'-'+pad(d.getDate(),2)}
+function uid(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function dmy(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return iso||'—';
+  var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],p=iso.split('-');
+  return String(+p[2])+' '+M[+p[1]-1]+' '+p[0];
+}
+var METHODS={
+  cash:['Cash','Received by'],
+  card:['Card','Card type / last 4 digits'],
+  transfer:['Bank transfer','Transaction reference'],
+  cheque:['Cheque','Cheque number'],
+  dd:['Direct debit','Mandate reference'],
+  other:['Other','Reference']
+};
+function methodName(k){return (METHODS[k]||METHODS.other)[0]}
+
+/* ── state ───────────────────────────────────────────────────────── */
+function blankState(){
+  return {
+    sample:false, v:1,
+    cur:{sym:'£',code:'GBP',custom:''},
+    biz:{name:'',addr:'',phone:'',email:'',tax:'',logo:''},
+    payer:{name:'',addr:'',contact:'',ref:''},
+    rc:{id:uid(),no:'',date:today(),time:'',type:'payment',method:'cash',mref:'',by:'',
+        thanks:'Thank you — payment received with thanks.',notes:''},
+    lines:[{desc:'',ref:'',amt:''}],
+    inv:{no:'',date:'',total:'',po:'',manual:false,prior:''},
+    cash:{tendered:''},
+    seq:{prefix:'RCT-',next:1,pad:4},
+    print:{size:'a4',history:true,sign:true},
+    reg:[]
+  };
+}
+function sampleState(){
+  var S0=blankState();
+  S0.sample=true;
+  S0.biz={name:'Ardent Studio Ltd',addr:'14 Kiln Row\nSheffield S1 4QT\nUnited Kingdom',
+          phone:'0114 496 0182',email:'accounts@ardentstudio.co.uk',tax:'VAT GB 418 2290 55',logo:''};
+  S0.payer={name:'Halloway & Finch LLP',addr:'3 Cotton Yard\nLeeds LS2 7DL',
+            contact:'payables@hallowayfinch.co.uk',ref:'C-0416'};
+  S0.rc={id:uid(),no:'RCT-0118',date:'2026-09-03',time:'11:20',type:'payment',method:'transfer',
+         mref:'FT26090312',by:'D. Okafor',
+         thanks:'Thank you — payment received with thanks.',
+         notes:'Stage 3 begins on receipt of the final balance.'};
+  S0.lines=[
+    {desc:'Stage 2 design fees',ref:'INV-2048',amt:'1860.00'},
+    {desc:'Print production deposit',ref:'INV-2048',amt:'500.00'}
+  ];
+  S0.inv={no:'INV-2048',date:'2026-08-14',total:'4860.00',po:'PO-77120',manual:false,prior:''};
+  S0.cash={tendered:''};
+  S0.seq={prefix:'RCT-',next:119,pad:4};
+  S0.print={size:'a4',history:true,sign:true};
+  S0.reg=[{
+    id:uid(),no:'RCT-0117',date:'2026-08-20',time:'',type:'payment',method:'transfer',mref:'FT26082004',
+    by:'D. Okafor',payer:'Halloway & Finch LLP',payerRef:'C-0416',invoice:'INV-2048',invDate:'2026-08-14',
+    invTotal:'4860.00',amount:1500,cur:'£',code:'GBP',
+    lines:[{desc:'Deposit on acceptance of quote',ref:'INV-2048',amt:'1500.00'}],
+    notes:'',thanks:'Thank you — payment received with thanks.',tendered:''
+  }];
+  return S0;
+}
+function normalise(o){
+  var B=blankState(),k;
+  if(!o||typeof o!=='object')return B;
+  function mrg(dst,src){for(var q in dst){if(src&&typeof src==='object'&&src[q]!=null&&typeof src[q]!=='object')dst[q]=src[q];}return dst}
+  var S1=B;
+  mrg(S1.cur,o.cur); mrg(S1.biz,o.biz); mrg(S1.payer,o.payer); mrg(S1.rc,o.rc);
+  mrg(S1.inv,o.inv); mrg(S1.cash,o.cash); mrg(S1.seq,o.seq); mrg(S1.print,o.print);
+  S1.sample=!!o.sample;
+  if(o.inv&&typeof o.inv.manual==='boolean')S1.inv.manual=o.inv.manual;
+  if(o.print){if(typeof o.print.history==='boolean')S1.print.history=o.print.history;
+              if(typeof o.print.sign==='boolean')S1.print.sign=o.print.sign;}
+  if(['a4','letter','thermal'].indexOf(S1.print.size)<0)S1.print.size='a4';
+  if(!METHODS[S1.rc.method])S1.rc.method='cash';
+  if(S1.rc.type!=='refund')S1.rc.type='payment';
+  if(!S1.rc.id)S1.rc.id=uid();
+  S1.lines=[];
+  if(o.lines&&o.lines.length){
+    for(k=0;k<o.lines.length;k++){
+      var L=o.lines[k]||{};
+      S1.lines.push({desc:String(L.desc==null?'':L.desc),ref:String(L.ref==null?'':L.ref),
+                     amt:String(L.amt==null?'':L.amt)});
+    }
+  }
+  if(!S1.lines.length)S1.lines=[{desc:'',ref:'',amt:''}];
+  S1.reg=[];
+  if(o.reg&&o.reg.length){
+    for(k=0;k<o.reg.length;k++){
+      var e=o.reg[k]||{},E={};
+      E.id=String(e.id||uid()); E.no=String(e.no||''); E.date=String(e.date||'');
+      E.time=String(e.time||''); E.type=e.type==='refund'?'refund':'payment';
+      E.method=METHODS[e.method]?e.method:'other'; E.mref=String(e.mref||''); E.by=String(e.by||'');
+      E.payer=String(e.payer||''); E.payerRef=String(e.payerRef||'');
+      E.invoice=String(e.invoice||''); E.invDate=String(e.invDate||''); E.invTotal=String(e.invTotal||'');
+      E.amount=r2(num(e.amount)); E.cur=String(e.cur||'£'); E.code=String(e.code||'');
+      E.notes=String(e.notes||''); E.thanks=String(e.thanks||''); E.tendered=String(e.tendered||'');
+      E.lines=[];
+      if(e.lines&&e.lines.length)for(var j=0;j<e.lines.length;j++){
+        var l2=e.lines[j]||{};
+        E.lines.push({desc:String(l2.desc==null?'':l2.desc),ref:String(l2.ref==null?'':l2.ref),
+                      amt:String(l2.amt==null?'':l2.amt)});
+      }
+      S1.reg.push(E);
+    }
+  }
+  if(o.biz&&typeof o.biz.logo==='string'&&/^data:image\//.test(o.biz.logo))S1.biz.logo=o.biz.logo;
+  return S1;
+}
+var S=null;
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY); if(!raw)return null;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object')return null;
+    return normalise(o);
+  }catch(e){return null}
+}
+var storageWarned=false;
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S))}
+  catch(e){
+    if(!storageWarned){storageWarned=true;
+      var n=$('#logoMsg'); if(n){n.textContent='This browser refused to save (private mode or storage full). The tool still works, but it will not remember on reload.';n.style.color='var(--bad)';}
+    }
+  }
+}
+
+/* ── computation ─────────────────────────────────────────────────── */
+function fmtNo(){return String(S.seq.prefix||'')+pad(S.seq.next,Math.min(10,Math.max(1,Math.floor(num(S.seq.pad))||1)))}
+function invKey(s){return String(s==null?'':s).trim().toUpperCase()}
+function autoPrior(){
+  var key=invKey(S.inv.no); if(!key)return 0;
+  var t=0;
+  for(var i=0;i<S.reg.length;i++){
+    var e=S.reg[i];
+    if(e.id===S.rc.id)continue;
+    if(invKey(e.invoice)!==key)continue;
+    t+=num(e.amount);
+  }
+  return r2(t);
+}
+function compute(){
+  var C={},i,gross=0;
+  C.rows=[];
+  for(i=0;i<S.lines.length;i++){
+    var a=r2(num(S.lines[i].amt));
+    C.rows.push({desc:S.lines[i].desc,ref:S.lines[i].ref,amt:a,blank:isBlank(S.lines[i].amt)});
+    gross+=a;
+  }
+  C.gross=r2(gross);                                  /* positive figure typed in  */
+  C.sign=S.rc.type==='refund'?-1:1;
+  C.amount=r2(C.gross*C.sign);                        /* signed receipt amount     */
+  C.invNo=String(S.inv.no||'').trim();
+  C.invTotal=r2(num(S.inv.total));
+  C.hasInv=C.invNo!==''&&C.invTotal>0;
+  C.autoPrior=autoPrior();
+  C.prior=S.inv.manual?r2(num(S.inv.prior)):C.autoPrior;
+  C.paid=r2(C.prior+C.amount);                        /* paid to date incl. this   */
+  C.balance=C.hasInv?r2(C.invTotal-C.paid):null;      /* remaining after payment   */
+  C.pct=(C.hasInv&&C.invTotal>0)?(C.paid/C.invTotal)*100:null;
+  /* cash */
+  C.cash=S.rc.method==='cash'&&S.rc.type!=='refund';
+  C.tendered=isBlank(S.cash.tendered)?null:r2(num(S.cash.tendered));
+  C.change=(C.cash&&C.tendered!=null)?r2(C.tendered-C.gross):null;
+  /* status */
+  if(!C.hasInv){C.status='none';}
+  else if(C.balance>0.004){C.status='part';}
+  else if(C.balance<-0.004){C.status='over';}
+  else {C.status='full';}
+  C.over=(C.status==='over')?r2(-C.balance):0;
+  return C;
+}
+
+/* ── field binding ───────────────────────────────────────────────── */
+function gpath(p){var o=S,a=p.split('.'),i;for(i=0;i<a.length;i++){if(o==null)return '';o=o[a[i]];}return o==null?'':o}
+function spath(p,v){var o=S,a=p.split('.'),i;for(i=0;i<a.length-1;i++)o=o[a[i]];o[a[a.length-1]]=v}
+function bindOut(){
+  $$('[data-b]').forEach(function(el){
+    var p=el.getAttribute('data-b'),v=gpath(p);
+    if(el.type==='checkbox')el.checked=!!v; else el.value=v==null?'':String(v);
+  });
+  $$('input[name="rtype"]').forEach(function(r){r.checked=(r.value===S.rc.type)});
+  $$('input[name="psize"]').forEach(function(r){r.checked=(r.value===S.print.size)});
+  $('#wCustom').hidden=(S.cur.sym!=='custom');
+  syncLogo();
+}
+function bindIn(){
+  $$('[data-b]').forEach(function(el){
+    var ev=(el.tagName==='SELECT'||el.type==='checkbox'||el.type==='date'||el.type==='time')?'change':'input';
+    el.addEventListener(ev,function(){
+      var p=el.getAttribute('data-b');
+      spath(p,el.type==='checkbox'?el.checked:el.value);
+      if(p==='cur.sym')$('#wCustom').hidden=(S.cur.sym!=='custom');
+      if(p==='rc.method'){renderMethod();}
+      if(p==='inv.manual'){if(S.inv.manual&&isBlank(S.inv.prior))S.inv.prior=m2(autoPrior());bindOut();}
+      dirty();
+    });
+    if(el.tagName!=='SELECT'&&el.type!=='checkbox')el.addEventListener('blur',validate);
+  });
+  $$('input[name="rtype"]').forEach(function(r){
+    r.addEventListener('change',function(){if(r.checked){S.rc.type=r.value;renderMethod();dirty();}});
+  });
+  $$('input[name="psize"]').forEach(function(r){
+    r.addEventListener('change',function(){if(r.checked){S.print.size=r.value;applyPageSize();dirty();}});
+  });
+}
+function dirty(){S.sample=false;banner();save();refresh();}
+
+/* ── validation ──────────────────────────────────────────────────── */
+function mark(id,el,msg){
+  var e=$(id);
+  if(e){e.hidden=!msg;e.textContent=msg||'';}
+  if(el)el.classList.toggle('inv',!!msg);
+  return !msg;
+}
+function validate(){
+  var ok=true;
+  ok=mark('#e-no',$('#iNo'),isBlank(S.rc.no)?'A receipt number is required — use "Use next number now".':'')&&ok;
+  ok=mark('#e-date',$('#iDate'),isBlank(S.rc.date)?'Enter the date the money was received.':'')&&ok;
+  ok=mark('#e-bname',$('#iBName'),isBlank(S.biz.name)?'Add your business name so the receipt stands alone.':'')&&ok;
+  ok=mark('#e-pname',$('#iPName'),isBlank(S.payer.name)?'Enter who the money came from.':'')&&ok;
+  var it=$('#iInvTot');
+  ok=mark('#e-invtot',it,(!isBlank(S.inv.total)&&num(S.inv.total)<0)?'The invoice total cannot be negative.':'')&&ok;
+  var C=compute(),tm='';
+  if(C.cash&&C.tendered!=null&&C.tendered<C.gross-0.004)tm='Cash tendered is less than the amount received.';
+  mark('#e-tend',$('#iTend'),tm);
+  $$('#lineBody tr').forEach(function(tr,i){
+    var inp=$('.amtIn',tr),e=$('.err',tr);
+    var bad=inp&&!isBlank(inp.value)&&!/^-?\d*\.?\d*$/.test(String(inp.value).trim());
+    if(e){e.hidden=!bad;e.textContent=bad?'Numbers only.':''}
+    if(inp)inp.classList.toggle('inv',!!bad);
+    if(bad)ok=false;
+  });
+  return ok;
+}
+
+/* ── lines table ─────────────────────────────────────────────────── */
+function renderLines(){
+  var tb=$('#lineBody'),html='',i;
+  for(i=0;i<S.lines.length;i++){
+    var L=S.lines[i];
+    html+='<tr data-i="'+i+'">'+
+      '<td class="idx">'+(i+1)+'</td>'+
+      '<td class="desc-c"><label class="vh" for="ld'+i+'">Description, line '+(i+1)+'</label>'+
+        '<input id="ld'+i+'" data-k="desc" value="'+esc(L.desc)+'" autocomplete="off" placeholder="What the payment covers"></td>'+
+      '<td class="ref-c"><label class="vh" for="lr'+i+'">Reference, line '+(i+1)+'</label>'+
+        '<input id="lr'+i+'" data-k="ref" value="'+esc(L.ref)+'" autocomplete="off"></td>'+
+      '<td class="n w-amt"><label class="vh" for="la'+i+'">Amount, line '+(i+1)+'</label>'+
+        '<input id="la'+i+'" class="amtIn" data-k="amt" inputmode="decimal" value="'+esc(L.amt)+'" autocomplete="off">'+
+        '<span class="err" hidden></span></td>'+
+      '<td><button type="button" class="btn ico sm rm" data-i="'+i+'" title="Remove line '+(i+1)+'" '+
+        'aria-label="Remove line '+(i+1)+'">&times;</button></td></tr>';
+  }
+  tb.innerHTML=html;
+  $$('#lineBody input').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var tr=inp.closest('tr'),i=+tr.getAttribute('data-i');
+      S.lines[i][inp.getAttribute('data-k')]=inp.value; dirty();
+    });
+    inp.addEventListener('blur',validate);
+  });
+  $$('#lineBody .rm').forEach(function(b){
+    b.addEventListener('click',function(){
+      var i=+b.getAttribute('data-i');
+      S.lines.splice(i,1);
+      if(!S.lines.length)S.lines=[{desc:'',ref:'',amt:''}];
+      renderLines(); dirty();
+    });
+  });
+}
+$('#bAdd').addEventListener('click',function(){
+  S.lines.push({desc:'',ref:S.inv.no||'',amt:''});
+  renderLines(); dirty();
+  var last=$$('#lineBody input[data-k="desc"]').pop(); if(last)last.focus();
+});
+
+/* ── register table ──────────────────────────────────────────────── */
+function renderReg(){
+  var tb=$('#regBody'),html='',i,t=0;
+  if(!S.reg.length){
+    html='<tr class="regempty"><td colspan="7">No receipts saved yet. Fill the form in and press <b>Save receipt to register</b>.</td></tr>';
+  }else{
+    for(i=0;i<S.reg.length;i++){
+      var e=S.reg[i]; t+=num(e.amount);
+      var amt=r2(num(e.amount));
+      html+='<tr>'+
+        '<td class="mono">'+esc(e.no||'—')+(e.id===S.rc.id?' <span class="chip">editing</span>':'')+'</td>'+
+        '<td>'+esc(dmy(e.date))+'</td>'+
+        '<td>'+esc(e.payer||'—')+'</td>'+
+        '<td class="mono">'+esc(e.invoice||'—')+'</td>'+
+        '<td>'+esc(methodName(e.method))+'</td>'+
+        '<td class="n"'+(amt<0?' style="color:var(--bad)"':'')+'>'+esc((amt<0?'−':'')+(e.cur||sym())+grp(Math.abs(amt).toFixed(2)))+'</td>'+
+        '<td class="r" style="white-space:nowrap">'+
+          '<button type="button" class="btn ico sm ld" data-i="'+i+'" aria-label="Load receipt '+esc(e.no)+'" title="Load">&#8599;</button> '+
+          '<button type="button" class="btn ico sm dl" data-i="'+i+'" aria-label="Delete receipt '+esc(e.no)+'" title="Delete">&times;</button>'+
+        '</td></tr>';
+    }
+  }
+  tb.innerHTML=html;
+  $('#fReg').textContent=S.reg.length?money(r2(t)):'—';
+  $('#tagReg').textContent=S.reg.length+(S.reg.length===1?' receipt':' receipts');
+  $$('#regBody .ld').forEach(function(b){b.addEventListener('click',function(){loadEntry(+b.getAttribute('data-i'))})});
+  $$('#regBody .dl').forEach(function(b){b.addEventListener('click',function(){
+    var i=+b.getAttribute('data-i'),e=S.reg[i];
+    if(!window.confirm('Delete receipt '+(e.no||'')+' from the register? The invoice balance will be recalculated.'))return;
+    S.reg.splice(i,1); renderReg(); dirty();
+  })});
+}
+function loadEntry(i){
+  var e=S.reg[i]; if(!e)return;
+  S.rc.id=e.id; S.rc.no=e.no; S.rc.date=e.date; S.rc.time=e.time; S.rc.type=e.type;
+  S.rc.method=e.method; S.rc.mref=e.mref; S.rc.by=e.by; S.rc.notes=e.notes; S.rc.thanks=e.thanks||S.rc.thanks;
+  S.payer.name=e.payer; S.payer.ref=e.payerRef;
+  S.inv.no=e.invoice; S.inv.date=e.invDate; S.inv.total=e.invTotal;
+  S.cash.tendered=e.tendered||'';
+  S.lines=(e.lines&&e.lines.length)?e.lines.map(function(l){return{desc:l.desc,ref:l.ref,amt:l.amt}}):[{desc:'',ref:'',amt:''}];
+  renderLines(); renderReg(); bindOut(); renderMethod(); dirty();
+  window.scrollTo({top:0,behavior:'auto'});
+}
+$('#bIssue').addEventListener('click',function(){
+  if(!validate()){
+    var bad=$('.inv'); if(bad)bad.focus();
+    return;
+  }
+  var C=compute();
+  var snap={
+    id:S.rc.id,no:S.rc.no,date:S.rc.date,time:S.rc.time,type:S.rc.type,method:S.rc.method,
+    mref:S.rc.mref,by:S.rc.by,payer:S.payer.name,payerRef:S.payer.ref,
+    invoice:S.inv.no,invDate:S.inv.date,invTotal:String(S.inv.total||''),
+    amount:C.amount,cur:sym(),code:S.cur.code,
+    lines:S.lines.map(function(l){return{desc:l.desc,ref:l.ref,amt:l.amt}}),
+    notes:S.rc.notes,thanks:S.rc.thanks,tendered:S.cash.tendered
+  };
+  var found=-1,i;
+  for(i=0;i<S.reg.length;i++)if(S.reg[i].id===snap.id)found=i;
+  if(found>=0){S.reg[found]=snap;}
+  else{
+    S.reg.push(snap);
+    var n=parseInt(String(S.rc.no).replace(/\D+/g,''),10);
+    S.seq.next=(isFinite(n)?n+1:num(S.seq.next)+1);
+    /* start the next receipt, keeping the payer and the invoice link */
+    S.rc.id=uid(); S.rc.no=fmtNo(); S.rc.date=today(); S.rc.time=''; S.rc.mref='';
+    S.lines=[{desc:'',ref:S.inv.no||'',amt:''}];
+    S.cash.tendered='';
+  }
+  renderLines(); renderReg(); bindOut(); dirty();
+  var f=$('#ld0'); if(f)f.focus();
+});
+
+/* ── logo ────────────────────────────────────────────────────────── */
+function syncLogo(){
+  var p=$('#logoPrev');
+  if(S.biz.logo){p.innerHTML='<img alt="Business logo preview" src="'+esc(S.biz.logo)+'">';$('#bLogoX').hidden=false;}
+  else{p.innerHTML='<span class="ph">No logo</span>';$('#bLogoX').hidden=true;}
+}
+$('#bLogo').addEventListener('click',function(){$('#fLogo').click()});
+$('#bLogoX').addEventListener('click',function(){S.biz.logo='';syncLogo();dirty()});
+$('#fLogo').addEventListener('change',function(){
+  var f=this.files&&this.files[0]; this.value='';
+  if(!f)return;
+  if(f.size>900000){$('#logoMsg').textContent='That image is over 900 KB — choose a smaller one so it saves reliably.';
+    $('#logoMsg').style.color='var(--bad)';return;}
+  var fr=new FileReader();
+  fr.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var mw=360,mh=140,sc=Math.min(1,mw/img.width,mh/img.height);
+      var cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(img.width*sc)); cv.height=Math.max(1,Math.round(img.height*sc));
+      try{
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        S.biz.logo=cv.toDataURL('image/png');
+      }catch(e){S.biz.logo=String(fr.result||'')}
+      $('#logoMsg').style.color=''; $('#logoMsg').textContent='Logo saved in this browser.';
+      syncLogo(); dirty();
+    };
+    img.onerror=function(){$('#logoMsg').textContent='That file could not be read as an image.';$('#logoMsg').style.color='var(--bad)'};
+    img.src=String(fr.result||'');
+  };
+  fr.readAsDataURL(f);
+});
+
+/* ── method-dependent UI ─────────────────────────────────────────── */
+function renderMethod(){
+  var m=METHODS[S.rc.method]||METHODS.other;
+  $('#lblMref').textContent=m[1];
+  $('#cCash').hidden=!(S.rc.method==='cash'&&S.rc.type!=='refund');
+  $('#hPayer').textContent=S.rc.type==='refund'?'Refund paid to':'Received from';
+  $('#heroK').textContent=S.rc.type==='refund'?'Amount refunded':'Amount received';
+}
+
+/* ── page size ───────────────────────────────────────────────────── */
+function applyPageSize(){
+  var s=S.print.size;
+  var css=s==='thermal'?'@page{size:72mm auto;margin:3mm 2mm}'
+        :s==='letter'?'@page{size:Letter;margin:14mm}'
+        :'@page{size:A4;margin:14mm}';
+  $('#pageStyle').textContent=css;
+  document.documentElement.setAttribute('data-psize',s);
+}
+
+/* ── render results ──────────────────────────────────────────────── */
+function refresh(){
+  var C=compute();
+
+  $('#fLines').textContent=money(C.amount);
+  $('#tagNo').textContent=(S.rc.no||'no number')+' · '+dmy(S.rc.date);
+  $('#tagInv').textContent=C.invNo?C.invNo:'not linked';
+  $('#nextPreview').textContent='Next: '+fmtNo();
+  $('#chipType').textContent=S.rc.type==='refund'?'Refund':'Payment';
+  $('#chipType').className='chip '+(S.rc.type==='refund'?'bad':'ok');
+
+  /* hero */
+  $('#heroV').textContent=money(C.amount);
+  var mn=methodName(S.rc.method);
+  $('#heroU').textContent=(S.rc.type==='refund'?'Refunded by ':'Received by ')+mn.toLowerCase()+
+    (S.rc.date?' on '+dmy(S.rc.date):'')+(S.cur.code?' · '+S.cur.code:'');
+
+  /* balance */
+  var bs=$('#balStat'),bv=$('#balV'),bu=$('#balU'),bk=$('#balK'),note=$('#statusNote');
+  bs.className='stat bal';
+  if(C.status==='none'){
+    bk.textContent='Balance on invoice after this payment';
+    bv.textContent='—';
+    bu.textContent='Enter an invoice number and its total to track the balance.';
+    note.className='note'; note.textContent='No invoice linked. The receipt will still print and record the amount received.';
+  }else if(C.status==='full'){
+    bs.className='stat bal ok'; bk.textContent='Balance on '+C.invNo+' after this payment';
+    bv.textContent=money(0);
+    bu.textContent='Paid in full.';
+    note.className='note'; note.style.borderColor='var(--ok)';
+    note.innerHTML='<strong>Invoice '+esc(C.invNo)+' is settled in full.</strong> '+
+      money(C.paid)+' received against a total of '+money(C.invTotal)+'.';
+  }else if(C.status==='over'){
+    bs.className='stat bal warnb'; bk.textContent='Overpayment on '+C.invNo;
+    bv.textContent=money(C.over);
+    bu.textContent='Received more than the invoice total.';
+    note.className='note warn';
+    note.innerHTML='<strong>Overpaid by '+money(C.over)+'.</strong> Invoice '+esc(C.invNo)+' is settled and there is '+
+      money(C.over)+' of credit to refund or carry forward. The receipt prints this as a credit balance.';
+  }else{
+    bs.className='stat bal'; bk.textContent='Balance on '+C.invNo+' after this payment';
+    bv.textContent=money(C.balance);
+    bu.textContent='Still outstanding'+(C.pct!=null?' — '+C.pct.toFixed(1)+'% of the invoice settled.':'.');
+    note.className='note';
+    note.innerHTML='<strong>Part payment.</strong> '+money(C.paid)+' of '+money(C.invTotal)+' received; '+
+      money(C.balance)+' remains outstanding on invoice '+esc(C.invNo)+'.';
+  }
+  if(C.status!=='full')note.style.borderColor='';
+
+  /* progress bar */
+  var bw=$('#barWrap');
+  if(C.pct==null||!isFinite(C.pct)){bw.hidden=true;}
+  else{
+    bw.hidden=false;
+    var p=Math.max(0,Math.min(100,C.pct));
+    $('#barFill').style.width=p.toFixed(2)+'%';
+    bw.className='bar'+(C.pct>100.004?' over':'');
+    if(C.pct>100.004)$('#barFill').style.width='100%';
+  }
+
+  $('#sInv').textContent=C.hasInv?money(C.invTotal):'—';
+  $('#sPaid').textContent=C.hasInv?money(C.paid):money(C.amount);
+  $('#lInv').textContent=C.hasInv?money(C.invTotal):'—';
+  $('#lPrior').textContent=C.hasInv||C.prior!==0?money(C.prior):'—';
+  $('#lPriorNote').textContent=S.inv.manual?'entered by hand':'summed from the register';
+  $('#lThis').textContent=money(C.amount);
+  $('#lThis').parentNode.className='ln'+(C.amount<0?' neg':'');
+  $('#lBal').textContent=C.hasInv?money(C.balance):'—';
+  $('#lBal').parentNode.className='ln tot'+(C.hasInv&&C.balance<0?' neg':'');
+  $('#hPrior').textContent=S.inv.manual?'Entered by hand. The register total for '+(C.invNo||'this invoice')+' is '+money(C.autoPrior)+'.'
+    :'Summed automatically from other receipts in the register with the same invoice number.';
+  $('#iPrior').disabled=!S.inv.manual;
+  if(!S.inv.manual)$('#iPrior').value=m2(C.autoPrior);
+
+  /* cash */
+  var cb=$('#cashBlk');
+  cb.hidden=!C.cash;
+  $('#oDue').value=money(C.gross);
+  $('#oChange').value=(C.change==null)?'—':money(C.change);
+  $('#lTend').textContent=(C.tendered==null)?'—':money(C.tendered);
+  $('#lChange').textContent=(C.change==null)?'—':money(C.change);
+  if(C.change!=null)$('#lChange').parentNode.className='ln'+(C.change<0?' neg':'');
+
+  $('#ftLine').textContent=(S.rc.no||'—')+' · '+(S.payer.name||'no payer')+' · '+mn+
+    (C.hasInv?' · against '+C.invNo:'');
+  $('#barV').textContent=C.hasInv?(C.status==='over'?'+'+money(C.over):money(C.balance)):money(C.amount);
+  $('#bar').querySelector('.k').textContent=C.hasInv?(C.status==='over'?'Overpaid by':'Balance after'):'This receipt';
+
+  renderHist(C);
+  renderDoc(C);
+}
+
+function renderHist(C){
+  var wrap=$('#histBlk');
+  if(!C.hasInv){wrap.hidden=true;return}
+  var rows=historyRows(C);
+  if(rows.length<2){wrap.hidden=true;return}
+  wrap.hidden=false;
+  $('#histLbl').textContent='Payment history — '+C.invNo;
+  var h='',i;
+  for(i=0;i<rows.length;i++){
+    var R=rows[i];
+    h+='<tr'+(R.cur?' style="font-weight:650"':'')+'>'+
+       '<td class="mono">'+esc(R.no)+(R.cur?' <span class="chip">now</span>':'')+'</td>'+
+       '<td>'+esc(dmy(R.date))+'</td>'+
+       '<td class="n">'+esc(money(R.amt))+'</td>'+
+       '<td class="n">'+esc(money(R.bal))+'</td></tr>';
+  }
+  $('#histBody').innerHTML=h;
+}
+
+/* ── the document ────────────────────────────────────────────────── */
+function historyRows(C){
+  /* every register receipt against this invoice, plus the one on screen */
+  var key=invKey(C.invNo),out=[],i;
+  if(!key)return out;
+  for(i=0;i<S.reg.length;i++){
+    var e=S.reg[i];
+    if(invKey(e.invoice)!==key)continue;
+    if(e.id===S.rc.id)continue;
+    out.push({no:e.no,date:e.date,method:methodName(e.method),amt:r2(num(e.amount)),cur:false});
+  }
+  out.sort(function(a,b){return String(a.date).localeCompare(String(b.date))||String(a.no).localeCompare(String(b.no))});
+  out.push({no:S.rc.no||'—',date:S.rc.date,method:methodName(S.rc.method),amt:C.amount,cur:true});
+  var run=0;
+  for(i=0;i<out.length;i++){run=r2(run+out[i].amt);out[i].run=run;out[i].bal=r2(C.invTotal-run);}
+  return out;
+}
+var FINE='This receipt records money received by the business named above, on the date stated. '+
+  'It is not a VAT or sales-tax invoice and no tax has been calculated on it. '+
+  'Amounts paid by cheque or transfer are receipted subject to funds clearing.';
+
+function renderDoc(C){
+  var b=S.biz,p=S.payer,ref=(S.rc.type==='refund');
+  var whoLines=[b.addr,b.phone,b.email,b.tax].filter(function(x){return !isBlank(x)}).join('\n');
+  var mm=METHODS[S.rc.method]||METHODS.other;
+  var when=dmy(S.rc.date)+(isBlank(S.rc.time)?'':' at '+S.rc.time);
+
+  /* ── A4 / Letter ────────────────────────────────────────────── */
+  var h='';
+  h+='<div class="d-hd"><div class="who">'+
+      (b.logo?'<img class="logo" alt="" src="'+esc(b.logo)+'">':'')+
+      '<strong>'+esc(b.name||'Your business name')+'</strong>'+nl(whoLines)+'</div>'+
+     '<div class="d-ttl"><div class="t'+(ref?' ref':'')+'">'+(ref?'Refund Receipt':'Receipt')+'</div>'+
+     '<table><tbody>'+
+       '<tr><td>Receipt no.</td><td class="mono">'+esc(S.rc.no||'—')+'</td></tr>'+
+       '<tr><td>Date</td><td>'+esc(when)+'</td></tr>'+
+       '<tr><td>Method</td><td>'+esc(mm[0])+'</td></tr>'+
+       (isBlank(S.rc.mref)?'':'<tr><td>'+esc(mm[1])+'</td><td class="mono">'+esc(S.rc.mref)+'</td></tr>')+
+       (isBlank(S.cur.code)?'':'<tr><td>Currency</td><td>'+esc(S.cur.code)+'</td></tr>')+
+     '</tbody></table></div></div>';
+
+  h+='<div class="d-band"><div class="k">'+(ref?'Total refunded':'Total received')+
+       '<small>'+esc(ref?'Paid out by ':'Received by ')+esc(mm[0].toLowerCase())+' on '+esc(dmy(S.rc.date))+'</small></div>'+
+     '<div class="v">'+esc(money(C.amount))+'</div></div>';
+
+  h+='<div class="d-cols">'+
+      '<div><span class="lbl">'+(ref?'Refund paid to':'Received from')+'</span><div class="who"><b>'+
+        esc(p.name||'—')+'</b>'+(isBlank(p.addr)?'':'<br>'+nl(p.addr))+
+        (isBlank(p.contact)?'':'<br>'+esc(p.contact))+
+        (isBlank(p.ref)?'':'<br>Account ref: '+esc(p.ref))+'</div></div>'+
+      '<div><span class="lbl">In respect of</span><div class="who">'+
+        (C.invNo?('<b>Invoice '+esc(C.invNo)+'</b>'+(isBlank(S.inv.date)?'':'<br>dated '+esc(dmy(S.inv.date)))):
+                 '<b>No invoice reference</b>')+
+        (isBlank(S.inv.po)?'':'<br>Your reference: '+esc(S.inv.po))+
+        (isBlank(S.rc.by)?'':'<br>'+(ref?'Issued by: ':'Received by: ')+esc(S.rc.by))+'</div></div>'+
+     '</div>';
+
+  h+='<table class="g"><thead><tr><th scope="col">Description</th><th scope="col">Reference</th>'+
+     '<th scope="col" class="n">Amount</th></tr></thead><tbody>';
+  var any=false,i;
+  for(i=0;i<C.rows.length;i++){
+    var R=C.rows[i];
+    if(isBlank(R.desc)&&R.blank)continue;
+    any=true;
+    h+='<tr><td>'+esc(R.desc||'—')+'</td><td class="mono">'+esc(R.ref||'')+'</td>'+
+       '<td class="n">'+esc(money(r2(R.amt*C.sign)))+'</td></tr>';
+  }
+  if(!any)h+='<tr><td colspan="3">'+(ref?'Refund':'Payment')+' received</td></tr>';
+  h+='</tbody><tfoot><tr><td colspan="2">'+(ref?'Total refunded':'Total received on this receipt')+'</td>'+
+     '<td class="n">'+esc(money(C.amount))+'</td></tr></tfoot></table>';
+
+  if(C.cash&&C.tendered!=null){
+    h+='<div class="d-sum"><div class="r"><span>Cash tendered</span><span>'+esc(money(C.tendered))+'</span></div>'+
+       '<div class="r"><span>Amount due</span><span>'+esc(money(C.gross))+'</span></div>'+
+       '<div class="r tot"><span>Change given</span><span>'+esc(money(C.change))+'</span></div></div>';
+  }
+
+  if(C.hasInv){
+    h+='<div class="d-sum">'+
+       '<div class="r"><span>Invoice '+esc(C.invNo)+' total</span><span>'+esc(money(C.invTotal))+'</span></div>'+
+       '<div class="r"><span>Previously received</span><span>'+esc(money(C.prior))+'</span></div>'+
+       '<div class="r"><span>'+(ref?'This refund':'This receipt')+'</span><span>'+esc(money(C.amount))+'</span></div>'+
+       '<div class="r"><span>Total received to date</span><span>'+esc(money(C.paid))+'</span></div>'+
+       '<div class="r tot"><span>'+(C.status==='over'?'Credit balance':'Balance now due')+'</span><span>'+
+         esc(C.status==='over'?money(C.over):money(C.balance))+'</span></div></div>';
+    if(C.status==='full')h+='<p class="d-note"><b>Invoice '+esc(C.invNo)+' is now paid in full.</b></p>';
+    if(C.status==='over')h+='<p class="d-note"><b>Overpayment.</b> '+esc(money(C.over))+
+      ' has been received above the invoice total and is held as a credit to be refunded or set against the next invoice.</p>';
+  }
+
+  if(S.print.history&&C.hasInv){
+    var hr=historyRows(C);
+    if(hr.length>1){
+      h+='<h3 style="margin-top:18px">Payment history — invoice '+esc(C.invNo)+'</h3>';
+      h+='<table class="g"><thead><tr><th scope="col">Receipt</th><th scope="col">Date</th>'+
+         '<th scope="col">Method</th><th scope="col" class="n">Amount</th>'+
+         '<th scope="col" class="n">Balance</th></tr></thead><tbody>';
+      for(i=0;i<hr.length;i++){
+        h+='<tr><td class="mono">'+esc(hr[i].no)+(hr[i].cur?' *':'')+'</td><td>'+esc(dmy(hr[i].date))+'</td>'+
+           '<td>'+esc(hr[i].method)+'</td><td class="n">'+esc(money(hr[i].amt))+'</td>'+
+           '<td class="n">'+esc(money(hr[i].bal))+'</td></tr>';
+      }
+      h+='</tbody></table><p class="d-note" style="border:0;padding-left:0;font-size:11.5px;color:#555">* this receipt</p>';
+    }
+  }
+
+  var msg=[S.rc.thanks,S.rc.notes].filter(function(x){return !isBlank(x)}).join('\n');
+  if(msg)h+='<p class="d-note">'+nl(msg)+'</p>';
+  if(S.print.sign){
+    h+='<div class="d-sign"><div>Signature — for and on behalf of '+esc(b.name||'the business')+'</div>'+
+       '<div>Print name'+(isBlank(S.rc.by)?'':' — '+esc(S.rc.by))+'</div><div>Date</div></div>';
+  }
+  h+='<p class="d-fine"><b>Please note.</b> '+esc(FINE)+'</p>';
+  $('#docA4').innerHTML=h;
+
+  /* ── 80 mm thermal slip ─────────────────────────────────────── */
+  var t='';
+  if(b.logo)t+='<img class="logo" alt="" src="'+esc(b.logo)+'">';
+  t+='<div class="c big">'+esc((b.name||'YOUR BUSINESS').toUpperCase())+'</div>';
+  if(!isBlank(b.addr))t+='<div class="c sm">'+nl(b.addr)+'</div>';
+  var cont=[b.phone,b.email].filter(function(x){return !isBlank(x)}).join('  ');
+  if(cont)t+='<div class="c sm">'+esc(cont)+'</div>';
+  if(!isBlank(b.tax))t+='<div class="c sm">'+esc(b.tax)+'</div>';
+  t+='<div class="hr"></div>';
+  t+='<div class="c b">'+(ref?'REFUND RECEIPT':'PAYMENT RECEIPT')+'</div>';
+  t+='<div class="r"><span>No.</span><span>'+esc(S.rc.no||'—')+'</span></div>';
+  t+='<div class="r"><span>Date</span><span>'+esc(when)+'</span></div>';
+  t+='<div class="r"><span>'+(ref?'Paid to':'From')+'</span><span>'+esc((p.name||'—').slice(0,22))+'</span></div>';
+  if(!isBlank(p.ref))t+='<div class="r"><span>Acct</span><span>'+esc(p.ref)+'</span></div>';
+  t+='<div class="hr"></div>';
+  for(i=0;i<C.rows.length;i++){
+    var R2=C.rows[i];
+    if(isBlank(R2.desc)&&R2.blank)continue;
+    t+='<div class="r li"><span class="d">'+esc(R2.desc||'Payment')+(isBlank(R2.ref)?'':' ('+esc(R2.ref)+')')+'</span>'+
+       '<span>'+esc(money(r2(R2.amt*C.sign)))+'</span></div>';
+  }
+  t+='<div class="hr"></div>';
+  t+='<div class="r tot"><span>'+(ref?'REFUNDED':'TOTAL')+'</span><span>'+esc(money(C.amount))+'</span></div>';
+  t+='<div class="r"><span>Method</span><span>'+esc(mm[0])+'</span></div>';
+  if(!isBlank(S.rc.mref))t+='<div class="r"><span>Ref</span><span>'+esc(S.rc.mref)+'</span></div>';
+  if(!isBlank(S.cur.code))t+='<div class="r"><span>Currency</span><span>'+esc(S.cur.code)+'</span></div>';
+  if(C.cash&&C.tendered!=null){
+    t+='<div class="r"><span>Tendered</span><span>'+esc(money(C.tendered))+'</span></div>';
+    t+='<div class="r"><span>Change</span><span>'+esc(money(C.change))+'</span></div>';
+  }
+  if(C.hasInv){
+    t+='<div class="hr"></div>';
+    t+='<div class="r"><span>Invoice</span><span>'+esc(C.invNo)+'</span></div>';
+    t+='<div class="r"><span>Invoice total</span><span>'+esc(money(C.invTotal))+'</span></div>';
+    t+='<div class="r"><span>Prev. received</span><span>'+esc(money(C.prior))+'</span></div>';
+    t+='<div class="r"><span>Paid to date</span><span>'+esc(money(C.paid))+'</span></div>';
+    t+='<div class="r tot"><span>'+(C.status==='over'?'CREDIT':'BALANCE')+'</span><span>'+
+       esc(C.status==='over'?money(C.over):money(C.balance))+'</span></div>';
+    if(C.status==='full')t+='<div class="c b">PAID IN FULL</div>';
+    if(C.status==='over')t+='<div class="c b">OVERPAID — CREDIT HELD</div>';
+  }
+  if(!isBlank(S.rc.by))t+='<div class="r"><span>Served by</span><span>'+esc(S.rc.by)+'</span></div>';
+  t+='<div class="hr"></div>';
+  if(msg)t+='<div class="c">'+nl(msg)+'</div>';
+  t+='<div class="hr"></div>';
+  t+='<div class="sm">'+esc(FINE)+'</div>';
+  $('#docT').innerHTML=t;
+}
+
+/* ── export ──────────────────────────────────────────────────────── */
+function dl(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=u;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a);URL.revokeObjectURL(u)},400);
+  }catch(e){}
+}
+function cq(v){
+  var s=String(v==null?'':v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvOf(rows){
+  var out=[],i,j;
+  for(i=0;i<rows.length;i++){
+    var cells=[];
+    for(j=0;j<rows[i].length;j++)cells.push(cq(rows[i][j]));
+    out.push(cells.join(','));
+  }
+  return '﻿'+out.join('\r\n')+'\r\n';
+}
+function safeName(s){return String(s||'receipt').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'')||'receipt'}
+$('#bCsv').addEventListener('click',function(){
+  var C=compute(),R=[],i;
+  R.push(['Solvix Toolkit — Payment receipt']);
+  R.push(['Receipt number',S.rc.no]);
+  R.push(['Type',S.rc.type==='refund'?'Refund out':'Payment in']);
+  R.push(['Date',S.rc.date]);
+  R.push(['Time',S.rc.time]);
+  R.push(['Method',methodName(S.rc.method)]);
+  R.push(['Method reference',S.rc.mref]);
+  R.push(['Received / issued by',S.rc.by]);
+  R.push(['From / to',S.payer.name]);
+  R.push(['Account reference',S.payer.ref]);
+  R.push(['Business',S.biz.name]);
+  R.push(['Tax registration',S.biz.tax]);
+  R.push(['Currency symbol',sym()]);
+  R.push(['Currency code',S.cur.code]);
+  R.push([]);
+  R.push(['Line','Description','Reference','Amount']);
+  for(i=0;i<C.rows.length;i++)R.push([i+1,C.rows[i].desc,C.rows[i].ref,m2(C.rows[i].amt*C.sign)]);
+  R.push(['','','Total on this receipt',m2(C.amount)]);
+  if(C.cash&&C.tendered!=null){
+    R.push([]);
+    R.push(['Cash tendered',m2(C.tendered)]);
+    R.push(['Change given',m2(C.change)]);
+  }
+  R.push([]);
+  R.push(['Invoice settlement']);
+  R.push(['Invoice number',C.invNo]);
+  R.push(['Invoice date',S.inv.date]);
+  R.push(['Invoice total',C.hasInv?m2(C.invTotal):'']);
+  R.push(['Previously received',m2(C.prior)]);
+  R.push(['This receipt',m2(C.amount)]);
+  R.push(['Total received to date',m2(C.paid)]);
+  R.push(['Balance after this payment',C.hasInv?m2(C.balance):'']);
+  R.push(['Percent settled',(C.pct!=null&&isFinite(C.pct))?C.pct.toFixed(2):'']);
+  R.push(['Status',C.status==='none'?'Not linked to an invoice':
+                   C.status==='full'?'Paid in full':
+                   C.status==='over'?'Overpaid by '+m2(C.over):'Part paid — balance outstanding']);
+  R.push([]);
+  R.push(['Receipt register']);
+  R.push(['Number','Date','Type','From / to','Invoice','Method','Reference','Amount','Currency']);
+  for(i=0;i<S.reg.length;i++){
+    var e=S.reg[i];
+    R.push([e.no,e.date,e.type==='refund'?'Refund out':'Payment in',e.payer,e.invoice,
+            methodName(e.method),e.mref,m2(e.amount),e.code||e.cur]);
+  }
+  R.push([]);
+  R.push(['Note',FINE]);
+  dl(safeName(S.rc.no||'receipt')+'.csv','text/csv;charset=utf-8',csvOf(R));
+});
+$('#bJson').addEventListener('click',function(){
+  dl(safeName(S.rc.no||'receipt')+'.json','application/json',JSON.stringify(S,null,2));
+});
+$('#bImport').addEventListener('click',function(){$('#fImport').click()});
+$('#fImport').addEventListener('change',function(){
+  var f=this.files&&this.files[0]; this.value='';
+  if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result||''));
+      if(!o||typeof o!=='object')throw 0;
+      S=normalise(o);
+      boot(true);
+      window.scrollTo({top:0,behavior:'auto'});
+    }catch(e){
+      var n=$('#statusNote'); n.className='note bad';
+      n.textContent='That file could not be read as a Solvix receipt backup.';
+    }
+  };
+  fr.readAsText(f);
+});
+
+/* ── print / preview ─────────────────────────────────────────────── */
+$('#bPrint').addEventListener('click',function(){validate();refresh();applyPageSize();window.print()});
+$('#bPreview').addEventListener('click',function(){
+  var d=$('#docwrap'),on=!d.classList.contains('show');
+  d.classList.toggle('show',on);
+  this.setAttribute('aria-pressed',String(on));
+  this.textContent=on?'Hide document':'Preview document';
+  if(on)d.scrollIntoView({block:'start'});
+});
+
+/* ── clear ───────────────────────────────────────────────────────── */
+function wipe(msg,fresh){
+  if(!window.confirm(msg))return;
+  S=fresh;
+  try{localStorage.removeItem(KEY)}catch(e){}
+  boot(true);
+  window.scrollTo({top:0,behavior:'auto'});
+}
+$('#bClear').addEventListener('click',function(){
+  wipe('Clear everything — this receipt, your business details and the whole receipt register — from this browser?',blankState());
+});
+$('#bClearSample').addEventListener('click',function(){
+  wipe('Replace the sample with a blank receipt? Nothing else is stored yet.',blankState());
+});
+
+/* ── boot ────────────────────────────────────────────────────────── */
+function banner(){$('#sampleBanner').hidden=!S.sample}
+function abh(){
+  var h=document.querySelector('.appbar');
+  if(h)document.documentElement.style.setProperty('--abh',h.offsetHeight+'px');
+}
+window.addEventListener('resize',abh);
+function boot(persist){
+  renderLines(); renderReg(); bindOut(); renderMethod(); applyPageSize();
+  banner(); validate(); refresh(); abh();
+  if(persist)save();
+}
+S=load();
+if(!S){S=sampleState();}
+bindIn();
+boot(false);
+save();
+})();
+</script>
+</body>
+</html>

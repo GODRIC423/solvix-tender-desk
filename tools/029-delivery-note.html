@@ -1,0 +1,1661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delivery Note &amp; Packing Slip — Solvix Toolkit</title>
+<meta name="description" content="Build a numbered delivery note and packing slip: ordered against shipped quantities with back-orders computed for you, package counts, gross and volumetric weight, carrier and tracking, special handling flags, a recipient signature and print-name block, and a printable document. Prices omitted by convention, with a toggle to include them.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Cpath d='M16 4.6l10.4 4.8v13.2L16 27.4 5.6 22.6V9.4z' fill='%23fff'/%3E%3Cpath d='M5.6 9.4L16 14.2l10.4-4.8M16 14.2v13.2' stroke='%233F4A9E' stroke-width='1.7' fill='none' stroke-linejoin='round'/%3E%3Cpath d='M10.8 7l10.4 4.8v4' stroke='%23c9cdec' stroke-width='1.7' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#3F4A9E; --accent-ink:#31397B; --accent-wash:#EAECF8; --on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#818BE0; --accent-ink:#A2AAEE; --accent-wash:#1C2038; --on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#818BE0; --accent-ink:#A2AAEE; --accent-wash:#1C2038; --on-accent:#0B1017}
+
+.app{padding-bottom:44px}
+.wrap{padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(296px,.52fr)}
+@media(max-width:1000px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>div{min-width:0}
+[hidden]{display:none!important}
+.card+.card{margin-top:14px}
+.hd .tag{font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--muted)}
+.sticky{top:calc(var(--abh,58px) + 10px)}
+.fg{display:grid;gap:10px;align-items:end}
+.fg.c2{grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+.fg.c3{grid-template-columns:repeat(auto-fit,minmax(122px,1fr))}
+.fg+.fg{margin-top:10px}
+.vh{position:absolute!important;left:-9999px;top:auto;width:1px;height:1px;padding:0;margin:0;overflow:hidden;white-space:nowrap;border:0}
+.samp{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.samp .btn{margin-left:auto}
+.mini{font:11.5px/1.45 var(--sans);color:var(--muted)}
+.spacer{margin-left:auto}
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12px/1 var(--sans);padding:7px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* item + package tables */
+.dt td,.dt th{padding:6px 4px}
+.dt td.n,.dt th.n{white-space:nowrap;padding-left:2px;padding-right:5px}
+.dt input[type=number]{-moz-appearance:textfield}
+.dt input[type=number]::-webkit-outer-spin-button,
+.dt input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.dt input,.dt select{padding:5px 4px}
+.dt .idx{color:var(--muted);font:600 12px/1 var(--mono);width:22px;text-align:center;padding-left:6px!important}
+.w-sku{width:92px}.w-q{width:56px}.w-u{width:64px}.w-m{width:72px}.w-d{width:52px}.w-t{width:98px}
+.desc-c{min-width:150px;width:34%}
+.desc-c input,.w-sku input,.w-u input,.dt select{text-align:left;font-family:var(--sans)}
+.w-sku input{font-family:var(--mono);font-size:12.5px}
+td .err{margin-top:2px;display:block;white-space:normal;max-width:130px}
+.st{font:600 10.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.st-ok{color:var(--ok)} .st-p{color:var(--warn)} .st-b{color:var(--bad)} .st-o{color:var(--accent-ink)}
+.swipe{display:none;margin-top:8px}
+@media(max-width:1000px){.swipe{display:block}}
+.regempty td{color:var(--muted);text-align:center;padding:18px}
+.flagbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:9px 14px}
+
+/* results panel */
+.res .stat+.stat{margin-top:8px}
+.res .stat.hero .v{font-size:34px}
+.res .stat.hero .u{display:block;margin-top:4px;color:var(--accent-ink)}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.sgrid .stat{margin-top:0}
+.ln{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13.5px;border-bottom:1px dotted var(--line)}
+.ln:last-child{border-bottom:0}
+.ln .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln .k small{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.ln.tot{font-weight:650;border-top:1px solid var(--line-hard);border-bottom:0;margin-top:3px;padding-top:8px}
+.ln.neg .v{color:var(--bad)}
+.blk{margin-top:13px}
+.blk>.lbl{margin-bottom:5px;display:block}
+.meter{height:9px;border-radius:5px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:7px}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:4px 0 0 4px;transition:width .18s}
+.meter.warn i{background:var(--warn)}
+.meter.bad i{background:var(--bad)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+
+.mbar{display:none}
+@media(max-width:1000px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,96px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 10px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 20px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .mbar .s{font:600 11px/1.1 var(--sans);color:var(--accent-ink)}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+  .sgrid{grid-template-columns:1fr}
+}
+
+/* ══ the printed / previewed delivery note ═════════════════════════ */
+#docwrap{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px);display:none}
+#docwrap.show{display:block}
+.doc{background:#fff;color:#111;border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 30px 30px;max-width:190mm;margin:0 auto 40px;box-shadow:var(--sh);font-size:13px;line-height:1.5}
+.doc h3{color:#111}
+.doc-hd{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;
+  border-bottom:2px solid #111;padding-bottom:12px}
+.doc-hd .who{font-size:12.5px;white-space:pre-line;color:#333;min-width:0}
+.doc-hd .who strong{display:block;font-size:15.5px;color:#111;margin-bottom:3px}
+.doc-ttl{text-align:right}
+.doc-ttl .t{font:700 21px/1.1 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:#111}
+.doc-ttl .t2{font:600 10.5px/1.3 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:#555;margin-top:3px}
+.doc-ttl .no{font:700 17px/1.3 var(--mono);margin-top:6px;color:#111}
+.doc-ttl .dt{font-size:12.5px;color:#444;margin-top:3px}
+.doc-meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.doc-meta.c3{grid-template-columns:1fr 1fr 1fr;gap:12px}
+.doc-meta .box{border:1px solid #bbb;padding:10px 12px;border-radius:3px}
+.doc-meta .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-meta .b{white-space:pre-line;font-size:12.5px;color:#111}
+.doc .kv{display:flex;gap:8px;font-size:12.5px;padding:1px 0;color:#111}
+.doc .kv span:first-child{color:#666;min-width:104px}
+.doc .kv span:last-child{font-family:var(--mono);font-size:12px}
+.doc-meta.c3 .kv{display:block;padding:2px 0}
+.doc-meta.c3 .kv span:first-child{display:block;min-width:0;font:600 9px/1.4 var(--sans);
+  letter-spacing:.07em;text-transform:uppercase;color:#777}
+.doc-meta.c3 .kv span:last-child{display:block;font-size:12px;line-height:1.35}
+.doc-flags{margin-top:14px;border:1.5px solid #111;border-radius:3px;padding:9px 12px;display:flex;
+  gap:8px;flex-wrap:wrap;align-items:center}
+.doc-flags .fk{font:700 10px/1.3 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:#111;margin-right:2px}
+.doc-flags .fc{font:700 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  border:1px solid #111;border-radius:2px;padding:4px 7px;color:#111}
+.doc table{margin-top:14px;font-size:12px}
+.doc th{background:#eee;color:#333;border-bottom:1px solid #999;padding:7px 8px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc td{padding:6px 8px;border-bottom:1px solid #ddd;color:#111}
+.doc td.n{white-space:nowrap}
+.doc tbody tr:hover{background:transparent}
+.doc tfoot td{background:#f4f4f4;border-top:1px solid #999;color:#111;font-weight:650;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .bo{font-weight:700}
+.doc-sec{margin-top:16px}
+.doc-sec>h3{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:6px}
+.doc-bot{display:grid;grid-template-columns:minmax(0,1fr) minmax(232px,272px);gap:18px;margin-top:16px;align-items:start}
+.doc-bot>div{min-width:0}
+.doc-tot{border:1px solid #999;border-radius:3px;overflow:hidden}
+.doc-tot .r{display:flex;justify-content:space-between;gap:12px;padding:6px 11px;font-size:12.5px;border-bottom:1px solid #ddd;color:#111}
+.doc-tot .r:last-child{border-bottom:0}
+.doc-tot .r.s{background:#f4f4f4;font-weight:650;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tot .r.g{background:#111;color:#fff;font-weight:700;font-size:13.5px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-tot .r .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.doc-box{border:1px solid #bbb;border-radius:3px;padding:10px 12px;font-size:12px;color:#111}
+.doc-box+.doc-box{margin-top:10px}
+.doc-box .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666;margin-bottom:4px}
+.doc-box .b{white-space:pre-line}
+.sigwrap{border:1.5px solid #111;border-radius:3px;padding:12px 14px;margin-top:16px;break-inside:avoid}
+.sigwrap>h3{font:700 11px/1.3 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:#111;margin-bottom:3px}
+.sigwrap .lead{font-size:11px;color:#444;line-height:1.45;margin-bottom:10px}
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sig .s .k{font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666}
+.sig .nm{font-size:13px;font-weight:650;color:#111;min-height:16px;margin-top:3px}
+.sig .rule{border-bottom:1px solid #555;margin-top:16px}
+.sig .cap{font-size:10px;color:#666;margin-top:3px}
+.cond{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;border-top:1px solid #ddd;padding-top:10px}
+.cond .c{display:flex;gap:6px;align-items:center;font-size:11.5px;color:#111}
+.cond .bx{width:13px;height:13px;border:1.4px solid #111;display:inline-grid;place-items:center;
+  font:700 11px/1 var(--sans);flex:none}
+.doc-warn{margin-top:16px;border:1px solid #999;background:#f6f6f6;padding:10px 12px;border-radius:3px;
+  font-size:10.5px;line-height:1.45;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-warn strong{color:#000}
+.doc-ft{margin-top:14px;border-top:1px solid #ccc;padding-top:8px;font-size:10.5px;color:#555;
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(max-width:640px){.doc{padding:18px 16px}.doc-meta,.doc-meta.c3,.doc-bot,.sig{grid-template-columns:1fr}.doc-ttl{text-align:left}}
+@media print{
+  #docwrap{display:block!important;max-width:none;padding:0}
+  .doc{border:0;box-shadow:none;padding:0;max-width:none;margin:0;font-size:9.6pt;color:#000}
+  .doc-hd{border-bottom:2px solid #000;padding-bottom:8px}
+  .doc-ttl .t{font-size:19px}
+  .doc-meta{margin-top:10px;gap:10px}
+  .doc-meta .box{padding:7px 9px}
+  .doc-flags{margin-top:10px;padding:7px 10px}
+  .doc table{margin-top:10px;font-size:8.6pt}
+  .doc th{padding:5px 6px}
+  .doc td{padding:4px 6px}
+  .doc-sec{margin-top:10px}
+  .doc-bot{margin-top:10px;gap:12px}
+  .doc-tot .r{padding:4px 9px}
+  .doc-box{padding:7px 10px}
+  .sigwrap{margin-top:11px;padding:9px 11px}
+  .doc-warn{margin-top:10px;padding:7px 10px;font-size:8pt;break-inside:avoid}
+  .doc-ft{margin-top:9px;padding-top:6px;font-size:8pt}
+  .wrap{padding-top:0}
+}
+</style>
+</head>
+<body>
+
+<div class="app noprint" id="shell">
+<header class="appbar" id="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">DN</div>
+    <div style="min-width:0">
+      <h1>Delivery Note &amp; Packing Slip</h1>
+      <div class="sub">ORDERED vs SHIPPED · PACKAGES · SIGNATURE</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn" id="bPreview" aria-pressed="false">Preview document</button>
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">Save JSON</button>
+    <button type="button" class="btn" id="bImport">Load JSON</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fJson" accept="application/json,.json" class="vh" tabindex="-1" aria-hidden="true">
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="mbar" aria-hidden="true">
+    <span class="k">Order filled</span>
+    <span class="v num" id="mHero">—</span>
+    <span class="s" id="mHero2"></span>
+  </div>
+
+  <div class="note" id="sampleBanner" style="margin-bottom:12px">
+    <div class="samp">
+      <span><strong>Sample data loaded.</strong> A part-delivered joinery order on one pallet and eight cartons. Change anything, or start from a blank note.</span>
+      <button type="button" class="btn sm dgr" id="bBlank">Start blank</button>
+    </div>
+  </div>
+
+  <div class="note warn" style="margin-bottom:14px">
+    <strong>What a signed delivery note does and does not prove.</strong> A signature records that the stated
+    <strong>number of packages</strong> was handed over at that address, date and time — not that the contents were
+    counted, tested or accepted, and not who pays for a shortage or for damage. Your contract of sale and the carrier's
+    terms decide that. This note is not a customs document and not a dangerous-goods declaration: the handling flags are
+    instructions to the driver only. Write any shortage or damage on the note <em>before</em> signing and tell the carrier
+    inside their claim window. Cross-border, ADR/IATA/IMDG or temperature-controlled loads need the proper paperwork from
+    your carrier or freight forwarder.
+  </div>
+
+  <div class="split">
+    <div>
+
+      <!-- ── Note details ── -->
+      <section class="card">
+        <div class="hd"><h2>Delivery note</h2><span class="tag" id="noTag">DN-0000</span></div>
+        <div class="bd">
+          <div class="fg c3">
+            <div class="f"><label for="iPrefix">Number prefix</label>
+              <input id="iPrefix" type="text" maxlength="12" autocomplete="off"></div>
+            <div class="f"><label for="iSeq">Note number</label>
+              <input id="iSeq" type="number" min="0" step="1" inputmode="numeric">
+              <span class="err" id="eSeq" hidden></span></div>
+            <div class="f"><label for="iPad">Digits</label>
+              <input id="iPad" type="number" min="1" max="8" step="1" inputmode="numeric"></div>
+          </div>
+          <div class="fg c3">
+            <div class="f"><label for="iDate">Despatch date</label>
+              <input id="iDate" type="date"><span class="err" id="eDate" hidden></span></div>
+            <div class="f"><label for="iTime">Despatch time</label>
+              <input id="iTime" type="time"></div>
+            <div class="f"><label for="iEta">Expected delivery</label>
+              <input id="iEta" type="date"><span class="err" id="eEta" hidden></span></div>
+          </div>
+          <div class="fg c2">
+            <div class="f"><label for="iOrder">Sales order no.</label>
+              <input id="iOrder" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iPo">Customer order / PO no.</label>
+              <input id="iPo" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iInv">Invoice no. (if raised)</label>
+              <input id="iInv" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iAcct">Account no.</label>
+              <input id="iAcct" type="text" autocomplete="off"></div>
+          </div>
+          <div class="fg c3">
+            <div class="f"><label for="iDel">This is delivery no.</label>
+              <input id="iDel" type="number" min="1" step="1" inputmode="numeric"></div>
+            <div class="f"><label for="iDelOf">Out of (total drops)</label>
+              <input id="iDelOf" type="number" min="1" step="1" inputmode="numeric"></div>
+            <div class="f"><label for="iRoute">Route / run</label>
+              <input id="iRoute" type="text" autocomplete="off"></div>
+          </div>
+          <p class="hint" style="margin-top:8px">“Delivery 1 of 2” tells the recipient more is coming. The note number advances on its own when you clear the form for the next drop.</p>
+        </div>
+      </section>
+
+      <!-- ── Addresses ── -->
+      <section class="card">
+        <div class="hd"><h2>Addresses</h2></div>
+        <div class="bd">
+          <fieldset>
+            <legend>Despatched by</legend>
+            <div class="fg c2">
+              <div class="f"><label for="iFromName">Business name</label>
+                <input id="iFromName" type="text" autocomplete="off"><span class="err" id="eFromName" hidden></span></div>
+              <div class="f"><label for="iFromReg">Company / VAT reg.</label>
+                <input id="iFromReg" type="text" autocomplete="off"></div>
+            </div>
+            <div class="f" style="margin-top:10px"><label for="iFromAddr">Address</label>
+              <textarea id="iFromAddr" rows="3"></textarea></div>
+            <div class="fg c3" style="margin-top:10px">
+              <div class="f"><label for="iFromContact">Despatch contact</label>
+                <input id="iFromContact" type="text" autocomplete="off"></div>
+              <div class="f"><label for="iFromPhone">Phone</label>
+                <input id="iFromPhone" type="text" inputmode="tel" autocomplete="off"></div>
+              <div class="f"><label for="iFromEmail">Email</label>
+                <input id="iFromEmail" type="text" inputmode="email" autocomplete="off">
+                <span class="err" id="eFromEmail" hidden></span></div>
+            </div>
+          </fieldset>
+
+          <fieldset style="margin-top:12px">
+            <legend>Deliver to (ship-to)</legend>
+            <div class="fg c2">
+              <div class="f"><label for="iShipName">Name / site</label>
+                <input id="iShipName" type="text" autocomplete="off"><span class="err" id="eShipName" hidden></span></div>
+              <div class="f"><label for="iShipContact">Site contact</label>
+                <input id="iShipContact" type="text" autocomplete="off"></div>
+            </div>
+            <div class="f" style="margin-top:10px"><label for="iShipAddr">Delivery address</label>
+              <textarea id="iShipAddr" rows="3"></textarea></div>
+            <div class="fg c2" style="margin-top:10px">
+              <div class="f"><label for="iShipPhone">Phone</label>
+                <input id="iShipPhone" type="text" inputmode="tel" autocomplete="off"></div>
+              <div class="f"><label for="iShipWin">Delivery window / access</label>
+                <input id="iShipWin" type="text" autocomplete="off"></div>
+            </div>
+          </fieldset>
+
+          <fieldset style="margin-top:12px">
+            <legend>Invoice to (sold-to)</legend>
+            <label class="check" style="margin-bottom:10px">
+              <input type="checkbox" id="iSoldSame">
+              <span>Same as the delivery address</span></label>
+            <div id="soldFields">
+              <div class="f"><label for="iSoldName">Account name</label>
+                <input id="iSoldName" type="text" autocomplete="off"></div>
+              <div class="f" style="margin-top:10px"><label for="iSoldAddr">Invoice address</label>
+                <textarea id="iSoldAddr" rows="3"></textarea></div>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- ── Carrier ── -->
+      <section class="card">
+        <div class="hd"><h2>Carrier &amp; tracking</h2></div>
+        <div class="bd">
+          <div class="fg c2">
+            <div class="f"><label for="iCarrier">Carrier</label>
+              <input id="iCarrier" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iService">Service</label>
+              <input id="iService" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iTrack">Tracking / consignment no.</label>
+              <input id="iTrack" type="text" autocomplete="off" style="font-family:var(--mono)"></div>
+            <div class="f"><label for="iVehicle">Vehicle reg.</label>
+              <input id="iVehicle" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iDriver">Driver</label>
+              <input id="iDriver" type="text" autocomplete="off"></div>
+            <div class="f"><label for="iSeal">Seal no. (if sealed)</label>
+              <input id="iSeal" type="text" autocomplete="off"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Special handling ── -->
+      <section class="card">
+        <div class="hd"><h2>Special handling</h2><span class="tag" id="flagTag">none set</span></div>
+        <div class="bd">
+          <div class="flagbox">
+            <label class="check"><input type="checkbox" id="fFragile"><span>Fragile — handle with care</span></label>
+            <label class="check"><input type="checkbox" id="fUpright"><span>This way up — keep upright</span></label>
+            <label class="check"><input type="checkbox" id="fNoStack"><span>Do not stack</span></label>
+            <label class="check"><input type="checkbox" id="fHeavy"><span>Heavy — two-person lift</span></label>
+            <label class="check"><input type="checkbox" id="fTemp"><span>Temperature controlled</span></label>
+            <label class="check"><input type="checkbox" id="fDry"><span>Keep dry</span></label>
+            <label class="check"><input type="checkbox" id="fTail"><span>Tail lift required</span></label>
+            <label class="check"><input type="checkbox" id="fHaz"><span>Dangerous goods declared</span></label>
+          </div>
+          <div class="fg c2" style="margin-top:12px">
+            <div class="f"><label for="iTempRange">Temperature range</label>
+              <input id="iTempRange" type="text" autocomplete="off" placeholder="e.g. 2–8 °C"></div>
+            <div class="f"><label for="iUn">UN number / class</label>
+              <input id="iUn" type="text" autocomplete="off" placeholder="e.g. UN1263 Class 3 PG III">
+              <span class="err" id="eUn" hidden></span></div>
+          </div>
+          <div class="f" style="margin-top:10px"><label for="iHandling">Handling instructions printed on the note</label>
+            <textarea id="iHandling" rows="2"></textarea></div>
+          <p class="hint" style="margin-top:8px">These flags print in a boxed band across the note. They tell the driver what to do — they are not a dangerous-goods declaration.</p>
+        </div>
+      </section>
+
+      <!-- ── Line items ── -->
+      <section class="card">
+        <div class="hd"><h2>Goods</h2>
+          <span class="tag" id="lineTag">0 lines</span>
+          <button type="button" class="btn sm" id="bAddLine">+ Add line</button>
+        </div>
+        <div class="bd">
+          <div class="row" style="margin-bottom:10px">
+            <label class="check"><input type="checkbox" id="iPrices"><span>Include prices on the packing slip</span></label>
+            <span class="spacer"></span>
+            <div class="f" style="max-width:150px" id="curWrap" hidden>
+              <label class="vh" for="iCur">Currency</label>
+              <select id="iCur">
+                <option value="GBP">GBP — £</option>
+                <option value="USD">USD — $</option>
+                <option value="EUR">EUR — €</option>
+                <option value="AUD">AUD — $</option>
+                <option value="CAD">CAD — $</option>
+                <option value="CUSTOM">Custom symbol</option>
+              </select></div>
+            <div class="f" style="max-width:86px" id="symWrap" hidden>
+              <label class="vh" for="iSym">Symbol</label>
+              <input id="iSym" type="text" maxlength="4" autocomplete="off"></div>
+            <div class="f" style="max-width:128px" id="fmtWrap" hidden>
+              <label class="vh" for="iFmt">Number format</label>
+              <select id="iFmt">
+                <option value="en">1,234.56</option>
+                <option value="eu">1.234,56</option>
+                <option value="fr">1 234,56</option>
+              </select></div>
+          </div>
+          <p class="hint" style="margin-bottom:10px">A packing slip normally leaves prices off, so whoever unloads the van never sees what you charge. Tick the box only if the customer has asked for a priced note.</p>
+          <div class="tw">
+            <table class="dt" id="tLines">
+              <caption class="lbl" style="text-align:left;padding:0 0 7px">Back-ordered is calculated: ordered − shipped, never below zero. Ship more than was ordered and the line is flagged over-shipped.</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="idx"><span class="vh">Line</span>#</th>
+                  <th scope="col" class="w-sku">SKU / code</th>
+                  <th scope="col" class="desc-c">Description</th>
+                  <th scope="col" class="w-u">Unit</th>
+                  <th scope="col" class="n w-q">Ordered</th>
+                  <th scope="col" class="n w-q">Shipped</th>
+                  <th scope="col" class="n w-q">Back-ord.</th>
+                  <th scope="col" class="n w-m pcol" hidden>Unit price</th>
+                  <th scope="col" class="n w-m pcol" hidden>Value</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="vh">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody id="lineBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="4">Totals</td>
+                  <td class="n" id="tOrd">—</td>
+                  <td class="n" id="tShp">—</td>
+                  <td class="n" id="tBack">—</td>
+                  <td class="n pcol" hidden></td>
+                  <td class="n pcol" id="tVal" hidden>—</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="hint swipe">Swipe the table sideways to reach every column.</p>
+        </div>
+      </section>
+
+      <!-- ── Packages ── -->
+      <section class="card">
+        <div class="hd"><h2>Packages</h2>
+          <span class="tag" id="packTag">0 packages</span>
+          <button type="button" class="btn sm" id="bAddPack">+ Add package</button>
+        </div>
+        <div class="bd">
+          <div class="row" style="margin-bottom:10px">
+            <span class="lbl" style="margin-right:2px">Units</span>
+            <div class="seg" role="group" aria-label="Measurement units">
+              <button type="button" id="bMetric" aria-pressed="true">Metric (kg / cm)</button>
+              <button type="button" id="bImp" aria-pressed="false">Imperial (lb / in)</button>
+            </div>
+            <span class="spacer"></span>
+            <div class="f" style="max-width:210px">
+              <label for="iDiv">Volumetric divisor</label>
+              <select id="iDiv"></select>
+            </div>
+          </div>
+          <div class="tw">
+            <table class="dt" id="tPacks">
+              <caption class="lbl" style="text-align:left;padding:0 0 7px">Weight is per package. Volumetric weight = L × W × H ÷ divisor; chargeable weight is the greater of gross and volumetric.</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="idx"><span class="vh">Package</span>#</th>
+                  <th scope="col" class="w-t">Type</th>
+                  <th scope="col" class="w-sku">Reference / label</th>
+                  <th scope="col" class="n w-d">Qty</th>
+                  <th scope="col" class="n w-m">Weight ea. <span class="mu">kg</span></th>
+                  <th scope="col" class="n w-d">L <span class="lu">cm</span></th>
+                  <th scope="col" class="n w-d">W <span class="lu">cm</span></th>
+                  <th scope="col" class="n w-d">H <span class="lu">cm</span></th>
+                  <th scope="col" class="n w-m">Total <span class="mu">kg</span></th>
+                  <th scope="col"><span class="vh">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody id="packBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3">Totals</td>
+                  <td class="n" id="tPkQty">—</td>
+                  <td></td><td></td><td></td><td></td>
+                  <td class="n" id="tPkWt">—</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="hint swipe">Swipe the table sideways to reach every column.</p>
+        </div>
+      </section>
+
+      <!-- ── Notes & signature ── -->
+      <section class="card">
+        <div class="hd"><h2>Notes &amp; goods received</h2></div>
+        <div class="bd">
+          <div class="f"><label for="iNotes">Notes to the recipient</label>
+            <textarea id="iNotes" rows="3"></textarea></div>
+          <div class="f" style="margin-top:10px"><label for="iBack">Back-order statement</label>
+            <input id="iBack" type="text" autocomplete="off">
+            <span class="hint">Shown under the goods table whenever anything is short.</span></div>
+          <fieldset style="margin-top:12px">
+            <legend>Received by — fill in on delivery</legend>
+            <p class="hint" style="margin-bottom:10px">Leave these blank and the printed note gives ruled lines to sign by hand. Fill them in if you are recording a completed delivery after the fact.</p>
+            <div class="fg c2">
+              <div class="f"><label for="iSigName">Print name</label>
+                <input id="iSigName" type="text" autocomplete="off"></div>
+              <div class="f"><label for="iSigRole">Position / company</label>
+                <input id="iSigRole" type="text" autocomplete="off"></div>
+              <div class="f"><label for="iSigDate">Date received</label>
+                <input id="iSigDate" type="date"></div>
+              <div class="f"><label for="iSigTime">Time received</label>
+                <input id="iSigTime" type="time"></div>
+            </div>
+            <div class="f" style="margin-top:10px"><label for="iCond">Condition on arrival</label>
+              <select id="iCond">
+                <option value="">— not yet recorded —</option>
+                <option value="ok">Accepted — packages received in good condition</option>
+                <option value="damaged">Received damaged</option>
+                <option value="short">Received short</option>
+                <option value="refused">Refused / returned to sender</option>
+              </select></div>
+            <div class="f" style="margin-top:10px"><label for="iCondNote">Damage / shortage detail</label>
+              <textarea id="iCondNote" rows="2"></textarea></div>
+          </fieldset>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── Results ── -->
+    <div>
+      <section class="card sticky res">
+        <div class="hd"><h2>This delivery</h2><span class="tag" id="statusTag"></span></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k">Order filled — units shipped ÷ units ordered</div>
+            <div class="v" id="sHero">—</div>
+            <div class="u" id="sHeroSub">—</div>
+            <div class="meter" id="meter"><i style="width:0%"></i></div>
+          </div>
+          <div class="sgrid">
+            <div class="stat"><div class="k">Units ordered</div><div class="v" id="sOrd">—</div></div>
+            <div class="stat"><div class="k">Units shipped</div><div class="v" id="sShp">—</div></div>
+          </div>
+          <div class="sgrid">
+            <div class="stat"><div class="k">Back-ordered</div><div class="v" id="sBack">—</div>
+              <div class="u" id="sBackSub">&nbsp;</div></div>
+            <div class="stat"><div class="k">Lines complete</div><div class="v" id="sLines">—</div>
+              <div class="u" id="sLinesSub">&nbsp;</div></div>
+          </div>
+
+          <div class="blk">
+            <span class="lbl">Consignment</span>
+            <div class="ln"><span class="k">Packages</span><span class="v" id="rPk">—</span></div>
+            <div class="ln"><span class="k">Gross weight</span><span class="v" id="rGross">—</span></div>
+            <div class="ln"><span class="k">Volume</span><span class="v" id="rVol">—</span></div>
+            <div class="ln"><span class="k">Volumetric weight<small id="rVolWSub">L × W × H ÷ 5000</small></span><span class="v" id="rVolW">—</span></div>
+            <div class="ln tot"><span class="k">Chargeable weight<small>the greater of the two, before your carrier's own rounding</small></span><span class="v" id="rChg">—</span></div>
+          </div>
+
+          <div class="blk" id="valBlk" hidden>
+            <span class="lbl">Value of goods shipped</span>
+            <div class="ln"><span class="k">Shipped</span><span class="v" id="rValShp">—</span></div>
+            <div class="ln"><span class="k">Back-ordered (to follow)</span><span class="v" id="rValBack">—</span></div>
+            <div class="ln tot"><span class="k">Ordered</span><span class="v" id="rValOrd">—</span></div>
+            <p class="mini" style="margin-top:6px">Goods value only — this is not an invoice and carries no tax or carriage.</p>
+          </div>
+
+          <div class="blk">
+            <span class="lbl">Handling flags</span>
+            <div class="chips" id="rFlags"><span class="mini">None set.</span></div>
+          </div>
+        </div>
+        <div class="ft">
+          <span class="mini" id="ftNote">Print or export when you are happy — everything is saved in this browser.</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="mini" style="margin-top:18px;padding-top:10px;border-top:1px solid var(--line)">
+    Back-ordered = max(ordered − shipped, 0) per line. Gross weight = Σ(package qty × weight each). Volumetric weight =
+    Σ(qty × L × W × H) ÷ divisor (5000 is the common IATA air-freight divisor for cm/kg; 139 the usual in/lb equivalent) —
+    confirm the divisor and the rounding your own carrier applies. Chargeable weight = the greater of gross and volumetric.
+    Values, where shown, exclude tax and carriage. Everything is stored in this browser only; nothing is sent anywhere.
+  </footer>
+</main>
+</div>
+
+<div id="docwrap"><div class="doc" id="doc"></div></div>
+
+<script>
+"use strict";
+(function(){
+var KEY="solvix.delivery-note.v1";
+var $=function(s){return document.querySelector(s)};
+var LB_PER_KG=2.2046226218, IN_PER_CM=0.3937007874;
+var DIVS={metric:[{v:5000,t:"5000 — IATA air (cm³/kg)"},{v:6000,t:"6000 — road / courier (cm³/kg)"},{v:4000,t:"4000 — express (cm³/kg)"}],
+          imperial:[{v:139,t:"139 — IATA air (in³/lb)"},{v:166,t:"166 — road / courier (in³/lb)"},{v:194,t:"194 — express (in³/lb)"}]};
+var SYMS={GBP:"£",USD:"$",EUR:"€",AUD:"$",CAD:"$"};
+var PKTYPES=["Pallet","Carton","Crate","Box","Tube","Roll","Bag","Drum","Envelope","Bundle","Cage","Other"];
+
+/* ── helpers ────────────────────────────────────────────────────── */
+function num(v){ if(v===""||v===null||v===undefined) return NaN; var n=Number(v); return isFinite(n)?n:NaN; }
+function n0(v){ var n=num(v); return isFinite(n)?n:0; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]}); }
+function round(v,dp){ var f=Math.pow(10,dp); return Math.round((v+Number.EPSILON)*f)/f; }
+function grp(intPart,fmt){
+  var sep = fmt==="eu" ? "." : fmt==="fr" ? " " : ",";
+  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g,sep);
+}
+function fmtN(v,dp,fmt){
+  if(v===null||v===undefined||!isFinite(v)) return "—";
+  if(Object.is(v,-0)) v=0;
+  var neg=v<0; v=Math.abs(round(v,dp));
+  var s=v.toFixed(dp), parts=s.split("."), dec=fmt==="en"?".":",";
+  var out=grp(parts[0],fmt)+(parts[1]?dec+parts[1]:"");
+  return (neg?"−":"")+out;
+}
+/* quantities: whole numbers plain, otherwise up to 3dp with trailing zeros trimmed */
+function fmtQ(v,fmt){
+  if(!isFinite(v)) return "—";
+  if(Math.abs(v-Math.round(v))<1e-9) return fmtN(Math.round(v),0,fmt);
+  var s=fmtN(v,3,fmt);
+  return s.replace(/([.,]\d*?)0+$/,"$1").replace(/[.,]$/,"");
+}
+function money(v){
+  if(!isFinite(v)) return "—";
+  return S.sym+fmtN(v,2,S.fmt);
+}
+function fmtDate(iso){
+  if(!iso) return "";
+  var p=String(iso).split("-"); if(p.length!==3) return iso;
+  var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  if(isNaN(d.getTime())) return iso;
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return d.getUTCDate()+" "+M[d.getUTCMonth()]+" "+d.getUTCFullYear();
+}
+function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addDaysISO(iso,n){
+  var p=String(iso).split("-"); if(p.length!==3) return iso;
+  var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function docNo(){
+  var seq=num(S.doc.seq), pad=Math.max(1,Math.min(8,Math.round(n0(S.doc.pad)||4)));
+  var body=isFinite(seq)?String(Math.max(0,Math.round(seq))).padStart(pad,"0"):"".padStart(pad,"0");
+  return (S.doc.prefix||"")+body;
+}
+function massU(){ return S.units==="imperial"?"lb":"kg"; }
+function lenU(){ return S.units==="imperial"?"in":"cm"; }
+function volU(){ return S.units==="imperial"?"ft³":"m³"; }
+function volDivisorPerUnit(){ return S.units==="imperial"?1728:1000000; }
+
+/* ── state ──────────────────────────────────────────────────────── */
+var S=null;
+function blankState(){
+  var t=todayISO();
+  return {
+    v:1, sample:false,
+    doc:{prefix:"DN-",seq:1,pad:4,date:t,time:"",eta:"",order:"",po:"",inv:"",acct:"",del:1,delOf:1,route:""},
+    from:{name:"",reg:"",addr:"",contact:"",phone:"",email:""},
+    ship:{name:"",contact:"",addr:"",phone:"",win:""},
+    sold:{same:true,name:"",addr:""},
+    car:{name:"",service:"",track:"",vehicle:"",driver:"",seal:""},
+    flags:{fragile:false,upright:false,nostack:false,heavy:false,temp:false,dry:false,tail:false,haz:false},
+    tempRange:"", un:"", handling:"",
+    prices:false, cur:"GBP", sym:SYMS.GBP, fmt:"en",
+    units:"metric", div:5000,
+    lines:[{sku:"",desc:"",unit:"ea",ord:"",shp:"",price:""}],
+    packs:[{type:"Carton",ref:"",qty:"",wt:"",l:"",w:"",h:""}],
+    notes:"", backNote:"",
+    sig:{name:"",role:"",date:"",time:"",cond:"",note:""}
+  };
+}
+function sampleState(){
+  var s=blankState(), t=todayISO();
+  s.sample=true;
+  s.doc={prefix:"DN-",seq:1042,pad:4,date:t,time:"07:40",eta:addDaysISO(t,1),
+         order:"SO-88412",po:"VI-2026-0771",inv:"INV-20416",acct:"VER-0042",del:1,delOf:2,route:"North run 3"};
+  s.from={name:"Harlow & Pike Supply Co.",reg:"Co. 08841207 · VAT GB 214 5567 09",
+          addr:"Unit 12 Brookfield Industrial Estate\nSalthouse Road\nNorthampton NN4 7YB",
+          contact:"Despatch office",phone:"01604 552 118",email:"despatch@harlowpike.co.uk"};
+  s.ship={name:"Verity Interiors Ltd — Calder Wharf site",contact:"Dan Whitfield (site manager)",
+          addr:"Site office, 44 Calder Wharf\nHunslet Road\nLeeds LS10 1RT",
+          phone:"07700 900 412",win:"07:00–11:00, rear gate, banksman on site"};
+  s.sold={same:false,name:"Verity Interiors Ltd — Accounts",addr:"3 Kingsgate\nWellington Street\nLeeds LS1 2HH"};
+  s.car={name:"Palletways",service:"Next-day economy pallet",track:"PW7734920185",vehicle:"YK71 XKV",driver:"M. Osei",seal:"S-40218"};
+  s.flags={fragile:true,upright:false,nostack:true,heavy:true,temp:false,dry:true,tail:true,haz:false};
+  s.handling="Panels are edge-sensitive — unload with two people and stand on edge. Deliver to rear gate only.";
+  s.lines=[
+    {sku:"FX-100-WH",desc:"White faced MDF panel 2440 × 1220 × 18 mm",unit:"sheet",ord:"40",shp:"40",price:"28.50"},
+    {sku:"ADH-500",desc:"Contact adhesive, 5 L",unit:"tin",ord:"12",shp:"12",price:"34.20"},
+    {sku:"EDG-22WH",desc:"Edge banding 22 mm white, 50 m roll",unit:"roll",ord:"8",shp:"5",price:"18.75"},
+    {sku:"HNG-CL35",desc:"Concealed hinge 35 mm clip-on (pack of 10)",unit:"pack",ord:"25",shp:"25",price:"9.40"},
+    {sku:"SCR-4X40",desc:"Wood screw 4 × 40 mm, box of 500",unit:"box",ord:"10",shp:"10",price:"12.60"},
+    {sku:"HDL-BR160",desc:"Brushed brass bar handle 160 mm",unit:"ea",ord:"60",shp:"45",price:"7.85"},
+    {sku:"SIL-CLR",desc:"Clear silicone sealant 310 ml",unit:"tube",ord:"24",shp:"24",price:"4.30"}
+  ];
+  s.packs=[
+    {type:"Pallet",ref:"PLT-1 / PW7734920185-1",qty:"1",wt:"285",l:"120",w:"100",h:"160"},
+    {type:"Carton",ref:"CTN 1–6",qty:"6",wt:"12.4",l:"60",w:"40",h:"35"},
+    {type:"Carton",ref:"CTN 7–8",qty:"2",wt:"7.8",l:"40",w:"30",h:"25"}
+  ];
+  s.notes="Balance of order (15 handles, 3 rolls of edging) is on back-order and follows on delivery 2 of 2.";
+  s.backNote="Back-ordered items will follow within 5 working days — no further order is needed.";
+  return s;
+}
+
+/* ── persistence ────────────────────────────────────────────────── */
+var saveT=null;
+function save(){
+  if(saveT) clearTimeout(saveT);
+  saveT=setTimeout(function(){
+    try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ /* storage blocked — tool still works */ }
+  },140);
+}
+function load(){
+  var raw=null;
+  try{ raw=localStorage.getItem(KEY); }catch(e){ raw=null; }
+  if(!raw) return null;
+  try{ var o=JSON.parse(raw); return (o&&typeof o==="object")?o:null; }catch(e){ return null; }
+}
+function merge(base,o){
+  if(!o||typeof o!=="object") return base;
+  Object.keys(base).forEach(function(k){
+    if(!(k in o)) return;
+    var b=base[k], v=o[k];
+    if(Array.isArray(b)){ if(Array.isArray(v)) base[k]=v; }
+    else if(b&&typeof b==="object"){ base[k]=merge(b,v); }
+    else if(v!==null&&typeof v!=="object"){ base[k]=v; }
+  });
+  return base;
+}
+function adopt(o){
+  var b=blankState();
+  S=merge(b,o);
+  if(!Array.isArray(S.lines)||!S.lines.length) S.lines=[{sku:"",desc:"",unit:"ea",ord:"",shp:"",price:""}];
+  if(!Array.isArray(S.packs)||!S.packs.length) S.packs=[{type:"Carton",ref:"",qty:"",wt:"",l:"",w:"",h:""}];
+  S.lines=S.lines.map(function(l){ l=l||{}; return {sku:l.sku||"",desc:l.desc||"",unit:l.unit||"",ord:l.ord===0?"0":(l.ord||""),shp:l.shp===0?"0":(l.shp||""),price:l.price===0?"0":(l.price||"")}; });
+  S.packs=S.packs.map(function(p){ p=p||{}; return {type:p.type||"Carton",ref:p.ref||"",qty:p.qty===0?"0":(p.qty||""),wt:p.wt===0?"0":(p.wt||""),l:p.l||"",w:p.w||"",h:p.h||""}; });
+  if(S.units!=="imperial") S.units="metric";
+  var ok=DIVS[S.units].some(function(d){return d.v===n0(S.div)});
+  if(!ok) S.div=DIVS[S.units][0].v;
+}
+
+/* ── computation ────────────────────────────────────────────────── */
+function compute(){
+  var r={ord:0,shp:0,back:0,over:0,valOrd:0,valShp:0,valBack:0,
+          done:0,part:0,bo:0,ovr:0,priced:0,lines:[],packs:[],
+          pkQty:0,gross:0,vol:0,volW:0,chg:0,anyQty:false,anyWt:false,anyDim:false};
+  S.lines.forEach(function(l){
+    var o=num(l.ord), s=num(l.shp), p=num(l.price);
+    var oV=isFinite(o)&&o>=0?o:0, sV=isFinite(s)&&s>=0?s:0;
+    var back=Math.max(0,oV-sV), over=Math.max(0,sV-oV);
+    var used=(l.sku||l.desc||isFinite(o)||isFinite(s));
+    var st= over>0?"over" : (sV===0&&oV>0)?"bo" : back>0?"part" : (oV>0||sV>0)?"done":"empty";
+    if(isFinite(o)||isFinite(s)) r.anyQty=true;
+    r.ord+=oV; r.shp+=sV; r.back+=back; r.over+=over;
+    if(isFinite(p)&&p>=0){ r.valOrd+=oV*p; r.valShp+=sV*p; r.valBack+=back*p; r.priced++; }
+    if(used&&st!=="empty"){
+      if(st==="done") r.done++; else if(st==="part") r.part++; else if(st==="bo") r.bo++; else if(st==="over") r.ovr++;
+    }
+    r.lines.push({back:back,over:over,st:st,used:used,
+      val:(isFinite(p)&&p>=0)?sV*p:NaN, ord:oV, shp:sV, price:isFinite(p)?p:NaN});
+  });
+  r.counted=r.done+r.part+r.bo+r.ovr;
+  var perU=volDivisorPerUnit(), div=n0(S.div)||DIVS[S.units][0].v;
+  S.packs.forEach(function(p){
+    var q=num(p.qty), w=num(p.wt), L=num(p.l), W=num(p.w), H=num(p.h);
+    var qV=isFinite(q)&&q>=0?q:0, wV=isFinite(w)&&w>=0?w:0;
+    var tw=qV*wV;
+    var each=(isFinite(L)&&isFinite(W)&&isFinite(H)&&L>0&&W>0&&H>0)?L*W*H:NaN;
+    var volEach=isFinite(each)?each/perU:NaN;
+    var vwEach=isFinite(each)?each/div:NaN;
+    if(isFinite(q)) r.anyQty=true;
+    if(isFinite(w)) r.anyWt=true;
+    if(isFinite(each)) r.anyDim=true;
+    r.pkQty+=qV; r.gross+=tw;
+    if(isFinite(volEach)) r.vol+=qV*volEach;
+    if(isFinite(vwEach)) r.volW+=qV*vwEach;
+    r.packs.push({tw:tw, volEach:volEach, vwEach:vwEach, qty:qV});
+  });
+  r.chg=Math.max(r.gross,r.volW);
+  r.fill = r.ord>0 ? (r.shp/r.ord)*100 : NaN;
+  return r;
+}
+
+/* ── rendering: input tables ────────────────────────────────────── */
+function lineRow(i){
+  var l=S.lines[i];
+  var tr=document.createElement("tr");
+  tr.setAttribute("data-i",String(i));
+  tr.innerHTML=
+    '<td class="idx">'+(i+1)+'</td>'+
+    '<td class="w-sku"><label class="vh" for="l'+i+'sku">SKU line '+(i+1)+'</label><input id="l'+i+'sku" data-k="sku" type="text" autocomplete="off"></td>'+
+    '<td class="desc-c"><label class="vh" for="l'+i+'desc">Description line '+(i+1)+'</label><input id="l'+i+'desc" data-k="desc" type="text" autocomplete="off"></td>'+
+    '<td class="w-u"><label class="vh" for="l'+i+'unit">Unit line '+(i+1)+'</label><input id="l'+i+'unit" data-k="unit" type="text" autocomplete="off"></td>'+
+    '<td class="n w-q"><label class="vh" for="l'+i+'ord">Ordered line '+(i+1)+'</label><input id="l'+i+'ord" data-k="ord" type="number" min="0" step="any" inputmode="decimal"><span class="err" hidden></span></td>'+
+    '<td class="n w-q"><label class="vh" for="l'+i+'shp">Shipped line '+(i+1)+'</label><input id="l'+i+'shp" data-k="shp" type="number" min="0" step="any" inputmode="decimal"><span class="err" hidden></span></td>'+
+    '<td class="n w-q c-back">—</td>'+
+    '<td class="n w-m pcol" hidden><label class="vh" for="l'+i+'price">Unit price line '+(i+1)+'</label><input id="l'+i+'price" data-k="price" type="number" min="0" step="0.01" inputmode="decimal"><span class="err" hidden></span></td>'+
+    '<td class="n w-m pcol c-val" hidden>—</td>'+
+    '<td class="c-st"></td>'+
+    '<td><button type="button" class="btn ico sm bDel" aria-label="Remove line '+(i+1)+'">×</button></td>';
+  tr.querySelector('[data-k=sku]').value=l.sku;
+  tr.querySelector('[data-k=desc]').value=l.desc;
+  tr.querySelector('[data-k=unit]').value=l.unit;
+  tr.querySelector('[data-k=ord]').value=l.ord;
+  tr.querySelector('[data-k=shp]').value=l.shp;
+  tr.querySelector('[data-k=price]').value=l.price;
+  return tr;
+}
+function packRow(i){
+  var p=S.packs[i];
+  var opts=PKTYPES.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>'}).join("");
+  var tr=document.createElement("tr");
+  tr.setAttribute("data-i",String(i));
+  tr.innerHTML=
+    '<td class="idx">'+(i+1)+'</td>'+
+    '<td class="w-t"><label class="vh" for="p'+i+'type">Type package '+(i+1)+'</label><select id="p'+i+'type" data-k="type">'+opts+'</select></td>'+
+    '<td class="w-sku"><label class="vh" for="p'+i+'ref">Reference package '+(i+1)+'</label><input id="p'+i+'ref" data-k="ref" type="text" autocomplete="off"></td>'+
+    '<td class="n w-d"><label class="vh" for="p'+i+'qty">Quantity package '+(i+1)+'</label><input id="p'+i+'qty" data-k="qty" type="number" min="0" step="1" inputmode="numeric"><span class="err" hidden></span></td>'+
+    '<td class="n w-m"><label class="vh" for="p'+i+'wt">Weight each package '+(i+1)+'</label><input id="p'+i+'wt" data-k="wt" type="number" min="0" step="any" inputmode="decimal"><span class="err" hidden></span></td>'+
+    '<td class="n w-d"><label class="vh" for="p'+i+'l">Length package '+(i+1)+'</label><input id="p'+i+'l" data-k="l" type="number" min="0" step="any" inputmode="decimal"></td>'+
+    '<td class="n w-d"><label class="vh" for="p'+i+'w">Width package '+(i+1)+'</label><input id="p'+i+'w" data-k="w" type="number" min="0" step="any" inputmode="decimal"></td>'+
+    '<td class="n w-d"><label class="vh" for="p'+i+'h">Height package '+(i+1)+'</label><input id="p'+i+'h" data-k="h" type="number" min="0" step="any" inputmode="decimal"></td>'+
+    '<td class="n w-m c-tw">—</td>'+
+    '<td><button type="button" class="btn ico sm bDel" aria-label="Remove package '+(i+1)+'">×</button></td>';
+  var sel=tr.querySelector('[data-k=type]');
+  if(PKTYPES.indexOf(p.type)<0){ sel.insertAdjacentHTML("beforeend",'<option value="'+esc(p.type)+'">'+esc(p.type)+'</option>'); }
+  sel.value=p.type;
+  tr.querySelector('[data-k=ref]').value=p.ref;
+  tr.querySelector('[data-k=qty]').value=p.qty;
+  tr.querySelector('[data-k=wt]').value=p.wt;
+  tr.querySelector('[data-k=l]').value=p.l;
+  tr.querySelector('[data-k=w]').value=p.w;
+  tr.querySelector('[data-k=h]').value=p.h;
+  return tr;
+}
+function renderLines(){
+  var b=$("#lineBody"); b.textContent="";
+  S.lines.forEach(function(_,i){ b.appendChild(lineRow(i)); });
+}
+function renderPacks(){
+  var b=$("#packBody"); b.textContent="";
+  S.packs.forEach(function(_,i){ b.appendChild(packRow(i)); });
+}
+
+/* ── validation ─────────────────────────────────────────────────── */
+function markCell(inp,msg){
+  var sp=inp.parentNode.querySelector(".err");
+  if(msg){ inp.classList.add("inv"); if(sp){ sp.textContent=msg; sp.hidden=false; } }
+  else { inp.classList.remove("inv"); if(sp){ sp.textContent=""; sp.hidden=true; } }
+}
+function validateNumCell(inp){
+  var v=inp.value.trim();
+  if(v===""){ markCell(inp,""); return; }
+  var n=Number(v);
+  if(!isFinite(n)) markCell(inp,"Not a number");
+  else if(n<0) markCell(inp,"Cannot be negative");
+  else markCell(inp,"");
+}
+function fieldErr(id,msg){
+  var e=document.getElementById(id), inp=document.getElementById(id.replace(/^e/,"i"));
+  if(!e) return;
+  if(msg){ e.textContent=msg; e.hidden=false; if(inp) inp.classList.add("inv"); }
+  else { e.textContent=""; e.hidden=true; if(inp) inp.classList.remove("inv"); }
+}
+function validateHeader(){
+  var seq=num(S.doc.seq);
+  fieldErr("eSeq", (S.doc.seq!=="" && (!isFinite(seq)||seq<0)) ? "Enter a whole number of 0 or more." : "");
+  fieldErr("eDate", S.doc.date?"":"A despatch date is needed on a delivery note.");
+  var d=S.doc.date, e=S.doc.eta;
+  fieldErr("eEta", (d&&e&&e<d) ? "Expected delivery is before despatch." : "");
+  fieldErr("eFromName", S.from.name.trim()?"":"The sender's name must appear on the note.");
+  fieldErr("eShipName", S.ship.name.trim()?"":"Say who the goods are going to.");
+  var em=S.from.email.trim();
+  fieldErr("eFromEmail", (em&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em))?"Check this email address.":"");
+  fieldErr("eUn", (S.flags.haz&&!S.un.trim())?"Dangerous goods declared — add the UN number and class.":"");
+}
+
+/* ── main render ────────────────────────────────────────────────── */
+function calc(){
+  var r=compute(), f=S.fmt;
+  /* per-row cells */
+  var rows=$("#lineBody").children;
+  for(var i=0;i<rows.length;i++){
+    var L=r.lines[i]; if(!L) continue;
+    var tr=rows[i];
+    tr.querySelector(".c-back").textContent = L.used?fmtQ(L.back,f):"—";
+    var v=tr.querySelector(".c-val");
+    v.textContent = isFinite(L.val)?money(L.val):"—";
+    var st=tr.querySelector(".c-st"), t="", c="";
+    if(L.st==="done"){t="Complete";c="st-ok";}
+    else if(L.st==="part"){t="Part −"+fmtQ(L.back,f);c="st-p";}
+    else if(L.st==="bo"){t="Back-order";c="st-b";}
+    else if(L.st==="over"){t="Over +"+fmtQ(L.over,f);c="st-o";}
+    st.innerHTML = t?'<span class="st '+c+'">'+esc(t)+'</span>':"";
+  }
+  var prows=$("#packBody").children;
+  for(var j=0;j<prows.length;j++){
+    var P=r.packs[j]; if(!P) continue;
+    prows[j].querySelector(".c-tw").textContent = P.tw>0?fmtN(P.tw,2,f):"—";
+  }
+  /* table feet */
+  $("#tOrd").textContent = r.anyQty?fmtQ(r.ord,f):"—";
+  $("#tShp").textContent = r.anyQty?fmtQ(r.shp,f):"—";
+  $("#tBack").textContent = r.anyQty?fmtQ(r.back,f):"—";
+  $("#tVal").textContent = r.priced?money(r.valShp):"—";
+  $("#tPkQty").textContent = r.pkQty>0?fmtQ(r.pkQty,f):"—";
+  $("#tPkWt").textContent = r.gross>0?fmtN(r.gross,2,f)+" "+massU():"—";
+  $("#lineTag").textContent = S.lines.length+(S.lines.length===1?" line":" lines");
+  $("#packTag").textContent = r.pkQty>0 ? fmtQ(r.pkQty,f)+(r.pkQty===1?" package":" packages") : S.packs.length+" rows";
+  $("#noTag").textContent = docNo();
+
+  /* hero */
+  var fill=r.fill;
+  var heroTxt = isFinite(fill)?fmtN(fill,1,f)+"%":"—";
+  $("#sHero").textContent=heroTxt;
+  $("#mHero").textContent=heroTxt;
+  var sub = r.ord>0 ? fmtQ(r.shp,f)+" of "+fmtQ(r.ord,f)+" units shipped"
+          : (r.shp>0 ? fmtQ(r.shp,f)+" units shipped, none ordered" : "Enter ordered and shipped quantities");
+  $("#sHeroSub").textContent=sub;
+  $("#mHero2").textContent = r.ord>0 ? fmtQ(r.back,f)+" back-ord." : "";
+  var m=$("#meter"), pct=isFinite(fill)?Math.max(0,Math.min(100,fill)):0;
+  m.firstElementChild.style.width=pct+"%";
+  m.className="meter"+(!isFinite(fill)?"":fill>=100?"":fill>=75?" warn":" bad");
+
+  $("#sOrd").textContent = r.anyQty?fmtQ(r.ord,f):"—";
+  $("#sShp").textContent = r.anyQty?fmtQ(r.shp,f):"—";
+  $("#sBack").textContent = r.anyQty?fmtQ(r.back,f):"—";
+  $("#sBackSub").innerHTML = r.back>0 ? "units to follow" : (r.over>0?("over-shipped "+esc(fmtQ(r.over,f))):"&nbsp;");
+  $("#sLines").textContent = r.counted?(r.done+" of "+r.counted):"—";
+  var lparts=[];
+  if(r.part) lparts.push(r.part+" part");
+  if(r.bo) lparts.push(r.bo+" back-ordered");
+  if(r.ovr) lparts.push(r.ovr+" over");
+  $("#sLinesSub").innerHTML = lparts.length?esc(lparts.join(" · ")):"&nbsp;";
+
+  var stag=$("#statusTag");
+  if(!r.counted){ stag.textContent=""; }
+  else if(r.back>0){ stag.innerHTML='<span class="chip warn">Part delivery</span>'; }
+  else if(r.over>0){ stag.innerHTML='<span class="chip bad">Over-shipped</span>'; }
+  else { stag.innerHTML='<span class="chip ok">Complete</span>'; }
+
+  $("#rPk").textContent = r.pkQty>0?fmtQ(r.pkQty,f):"—";
+  $("#rGross").textContent = r.anyWt&&r.gross>0?fmtN(r.gross,2,f)+" "+massU():"—";
+  $("#rVol").textContent = r.anyDim&&r.vol>0?fmtN(r.vol,3,f)+" "+volU():"—";
+  $("#rVolW").textContent = r.anyDim&&r.volW>0?fmtN(r.volW,2,f)+" "+massU():"—";
+  $("#rVolWSub").textContent = "L × W × H ("+lenU()+") ÷ "+n0(S.div);
+  $("#rChg").textContent = (r.chg>0)?fmtN(r.chg,2,f)+" "+massU():"—";
+
+  $("#valBlk").hidden=!S.prices;
+  if(S.prices){
+    $("#rValShp").textContent = r.priced?money(r.valShp):"—";
+    $("#rValBack").textContent = r.priced?money(r.valBack):"—";
+    $("#rValOrd").textContent = r.priced?money(r.valOrd):"—";
+  }
+
+  var fl=flagList();
+  $("#rFlags").innerHTML = fl.length ? fl.map(function(x){return '<span class="chip '+(x.k==="haz"?"bad":"warn")+'">'+esc(x.t)+'</span>'}).join("") : '<span class="mini">None set.</span>';
+  $("#flagTag").textContent = fl.length ? fl.length+(fl.length===1?" flag set":" flags set") : "none set";
+
+  validateHeader();
+  renderDoc(r);
+  return r;
+}
+function flagList(){
+  var F=S.flags, out=[];
+  if(F.fragile) out.push({k:"fragile",t:"Fragile"});
+  if(F.upright) out.push({k:"upright",t:"This way up"});
+  if(F.nostack) out.push({k:"nostack",t:"Do not stack"});
+  if(F.heavy) out.push({k:"heavy",t:"Heavy — two-person lift"});
+  if(F.temp) out.push({k:"temp",t:"Temp controlled"+(S.tempRange.trim()?" "+S.tempRange.trim():"")});
+  if(F.dry) out.push({k:"dry",t:"Keep dry"});
+  if(F.tail) out.push({k:"tail",t:"Tail lift required"});
+  if(F.haz) out.push({k:"haz",t:"Dangerous goods"+(S.un.trim()?" — "+S.un.trim():"")});
+  return out;
+}
+
+/* ── the document ───────────────────────────────────────────────── */
+function renderDoc(r){
+  var f=S.fmt, P=S.prices, mu=massU(), lu=lenU();
+  var soldName=S.sold.same?S.ship.name:S.sold.name, soldAddr=S.sold.same?S.ship.addr:S.sold.addr;
+  var h=[];
+  h.push('<div class="doc-hd">');
+  h.push('<div class="who"><strong>'+esc(S.from.name||"Your business name")+'</strong>'+esc(S.from.addr||"")+
+         (S.from.reg?'\n'+esc(S.from.reg):'')+
+         (S.from.phone?'\nTel '+esc(S.from.phone):'')+
+         (S.from.email?'\n'+esc(S.from.email):'')+'</div>');
+  h.push('<div class="doc-ttl"><div class="t">Delivery Note</div><div class="t2">Packing Slip'+(P?'':' · prices omitted')+'</div>'+
+         '<div class="no">'+esc(docNo())+'</div>'+
+         '<div class="dt">Despatched '+esc(fmtDate(S.doc.date)||"—")+(S.doc.time?' at '+esc(S.doc.time):'')+'</div>'+
+         (S.doc.eta?'<div class="dt">Expected '+esc(fmtDate(S.doc.eta))+'</div>':'')+
+         (n0(S.doc.delOf)>1?'<div class="dt">Delivery '+esc(fmtQ(n0(S.doc.del),f))+' of '+esc(fmtQ(n0(S.doc.delOf),f))+'</div>':'')+
+         '</div></div>');
+
+  h.push('<div class="doc-meta"><div class="box"><div class="k">Deliver to</div><div class="b"><strong>'+
+    esc(S.ship.name||"—")+'</strong>\n'+esc(S.ship.addr||"")+
+    (S.ship.contact?'\nContact: '+esc(S.ship.contact):'')+
+    (S.ship.phone?'\nTel '+esc(S.ship.phone):'')+
+    (S.ship.win?'\nAccess: '+esc(S.ship.win):'')+'</div></div>');
+  h.push('<div class="box"><div class="k">Invoice to</div><div class="b"><strong>'+
+    esc(soldName||"—")+'</strong>\n'+esc(soldAddr||"")+'</div></div></div>');
+
+  var meta=[["Sales order",S.doc.order],["Customer order / PO",S.doc.po],["Invoice no.",S.doc.inv],
+            ["Account no.",S.doc.acct],["Carrier",S.car.name],["Service",S.car.service],
+            ["Tracking / consignment",S.car.track],["Vehicle",S.car.vehicle],["Driver",S.car.driver],
+            ["Seal no.",S.car.seal],["Route / run",S.doc.route]].filter(function(x){return String(x[1]||"").trim()});
+  if(meta.length){
+    h.push('<div class="doc-meta c3">');
+    var per=Math.ceil(meta.length/3);
+    for(var c=0;c<3;c++){
+      var chunk=meta.slice(c*per,(c+1)*per);
+      h.push('<div class="box">'+(chunk.length?chunk.map(function(x){
+        return '<div class="kv"><span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>'}).join(""):'&nbsp;')+'</div>');
+    }
+    h.push('</div>');
+  }
+
+  var fl=flagList();
+  if(fl.length||S.handling.trim()){
+    h.push('<div class="doc-flags"><span class="fk">Handling</span>'+
+      fl.map(function(x){return '<span class="fc">'+esc(x.t)+'</span>'}).join("")+
+      (S.handling.trim()?'<span style="font-size:11.5px;flex:1 1 200px">'+esc(S.handling.trim())+'</span>':'')+'</div>');
+  }
+
+  /* goods table */
+  h.push('<div class="doc-sec"><h3>Goods</h3><table><thead><tr>'+
+    '<th scope="col">#</th><th scope="col">SKU</th><th scope="col">Description</th><th scope="col">Unit</th>'+
+    '<th scope="col" class="n">Ordered</th><th scope="col" class="n">Shipped</th><th scope="col" class="n">Back-ordered</th>'+
+    (P?'<th scope="col" class="n">Unit price</th><th scope="col" class="n">Value</th>':'')+
+    '</tr></thead><tbody>');
+  var shown=0;
+  S.lines.forEach(function(l,i){
+    var L=r.lines[i];
+    if(!L.used) return;
+    shown++;
+    h.push('<tr><td class="n">'+shown+'</td><td class="n">'+esc(l.sku||"")+'</td><td>'+esc(l.desc||"")+
+      (L.st==="over"?' <em>(over-shipped)</em>':'')+'</td><td>'+esc(l.unit||"")+'</td>'+
+      '<td class="n">'+fmtQ(L.ord,f)+'</td><td class="n">'+fmtQ(L.shp,f)+'</td>'+
+      '<td class="n'+(L.back>0?' bo':'')+'">'+(L.back>0?fmtQ(L.back,f):"–")+'</td>'+
+      (P?'<td class="n">'+(isFinite(L.price)?money(L.price):"–")+'</td><td class="n">'+(isFinite(L.val)?money(L.val):"–")+'</td>':'')+
+      '</tr>');
+  });
+  if(!shown) h.push('<tr><td colspan="'+(P?9:7)+'" style="text-align:center;color:#777">No goods lines entered.</td></tr>');
+  h.push('</tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">'+fmtQ(r.ord,f)+'</td><td class="n">'+fmtQ(r.shp,f)+
+    '</td><td class="n">'+fmtQ(r.back,f)+'</td>'+(P?'<td></td><td class="n">'+money(r.valShp)+'</td>':'')+'</tr></tfoot></table>');
+  if(r.back>0&&S.backNote.trim()) h.push('<p style="font-size:11.5px;margin-top:7px;color:#333"><strong>Back-order:</strong> '+esc(S.backNote.trim())+'</p>');
+  h.push('</div>');
+
+  /* packages + totals */
+  var pk=[];
+  pk.push('<div class="doc-sec"><h3>Packages in this consignment</h3><table><thead><tr>'+
+    '<th scope="col">#</th><th scope="col">Type</th><th scope="col">Reference</th><th scope="col" class="n">Qty</th>'+
+    '<th scope="col" class="n">Weight ea. ('+mu+')</th><th scope="col" class="n">Dimensions ('+lu+')</th>'+
+    '<th scope="col" class="n">Total ('+mu+')</th></tr></thead><tbody>');
+  var ps=0;
+  S.packs.forEach(function(p,i){
+    var Pk=r.packs[i];
+    var any=String(p.ref||"").trim()||n0(p.qty)>0||n0(p.wt)>0;
+    if(!any) return;
+    ps++;
+    var dims=(num(p.l)>0&&num(p.w)>0&&num(p.h)>0)?(fmtQ(num(p.l),f)+" × "+fmtQ(num(p.w),f)+" × "+fmtQ(num(p.h),f)):"–";
+    pk.push('<tr><td class="n">'+ps+'</td><td>'+esc(p.type||"")+'</td><td>'+esc(p.ref||"")+'</td>'+
+      '<td class="n">'+fmtQ(Pk.qty,f)+'</td><td class="n">'+(n0(p.wt)>0?fmtN(num(p.wt),2,f):"–")+'</td>'+
+      '<td class="n">'+dims+'</td><td class="n">'+(Pk.tw>0?fmtN(Pk.tw,2,f):"–")+'</td></tr>');
+  });
+  if(!ps) pk.push('<tr><td colspan="7" style="text-align:center;color:#777">No packages entered.</td></tr>');
+  pk.push('</tbody><tfoot><tr><td colspan="3">Totals</td><td class="n">'+fmtQ(r.pkQty,f)+'</td><td></td><td></td>'+
+    '<td class="n">'+(r.gross>0?fmtN(r.gross,2,f):"–")+'</td></tr></tfoot></table></div>');
+
+  var tot=[];
+  tot.push('<div class="doc-tot">');
+  tot.push('<div class="r s"><span>Total packages</span><span class="v">'+fmtQ(r.pkQty,f)+'</span></div>');
+  tot.push('<div class="r"><span>Gross weight</span><span class="v">'+(r.gross>0?fmtN(r.gross,2,f)+" "+mu:"–")+'</span></div>');
+  if(r.vol>0) tot.push('<div class="r"><span>Volume</span><span class="v">'+fmtN(r.vol,3,f)+" "+volU()+'</span></div>');
+  if(r.volW>0) tot.push('<div class="r"><span>Volumetric ('+n0(S.div)+')</span><span class="v">'+fmtN(r.volW,2,f)+" "+mu+'</span></div>');
+  if(r.chg>0) tot.push('<div class="r s"><span>Chargeable weight</span><span class="v">'+fmtN(r.chg,2,f)+" "+mu+'</span></div>');
+  tot.push('<div class="r"><span>Units ordered</span><span class="v">'+fmtQ(r.ord,f)+'</span></div>');
+  tot.push('<div class="r"><span>Units back-ordered</span><span class="v">'+fmtQ(r.back,f)+'</span></div>');
+  tot.push('<div class="r g"><span>Units shipped</span><span class="v">'+fmtQ(r.shp,f)+'</span></div>');
+  if(P) tot.push('<div class="r s"><span>Value of goods shipped</span><span class="v">'+money(r.valShp)+'</span></div>');
+  tot.push('</div>');
+  if(P) tot.push('<div class="doc-box" style="margin-top:10px"><div class="k">Note on prices</div><div class="b">Values are for the goods shipped and exclude tax and carriage. This is a delivery note, not an invoice, and is not a request for payment.</div></div>');
+
+  var left=[];
+  if(S.notes.trim()) left.push('<div class="doc-box" style="margin-top:0"><div class="k">Notes</div><div class="b">'+esc(S.notes.trim())+'</div></div>');
+  left.push('<div class="doc-box"'+(S.notes.trim()?'':' style="margin-top:0"')+'><div class="k">Checked and packed by</div><div class="b">'+
+    esc(S.from.contact||"—")+(S.from.phone?" · "+esc(S.from.phone):"")+'</div></div>');
+
+  h.push(pk.join(""));
+  h.push('<div class="doc-bot"><div>'+left.join("")+'</div><div>'+tot.join("")+'</div></div>');
+
+  /* signature */
+  var cond=S.sig.cond;
+  function bx(v,label){ return '<span class="c"><span class="bx">'+(cond===v?"✕":"")+'</span>'+label+'</span>'; }
+  h.push('<div class="sigwrap"><h3>Goods received</h3>'+
+    '<p class="lead">Signing confirms that the number of packages shown above was received at this address. It does not confirm that the contents have been checked, counted or accepted. Note any shortage or damage here before signing.</p>'+
+    '<div class="sig">'+
+      '<div class="s"><div class="k">Received by (print name)</div><div class="nm">'+esc(S.sig.name||"")+'</div>'+
+        (S.sig.name?'':'<div class="rule"></div>')+
+        '<div class="cap">'+(S.sig.role?esc(S.sig.role):"Position / company")+'</div></div>'+
+      '<div class="s"><div class="k">Signature</div><div class="nm">&nbsp;</div><div class="rule"></div>'+
+        '<div class="cap">Sign here on delivery</div></div>'+
+      '<div class="s"><div class="k">Date received</div><div class="nm">'+esc(fmtDate(S.sig.date)||"")+'</div>'+
+        (S.sig.date?'':'<div class="rule"></div>')+'<div class="cap">DD / MM / YYYY</div></div>'+
+      '<div class="s"><div class="k">Time received</div><div class="nm">'+esc(S.sig.time||"")+'</div>'+
+        (S.sig.time?'':'<div class="rule"></div>')+'<div class="cap">24-hour clock</div></div>'+
+    '</div>'+
+    '<div class="cond">'+bx("ok","Received in good condition")+bx("damaged","Received damaged")+
+      bx("short","Received short")+bx("refused","Refused / returned")+'</div>'+
+    (S.sig.note.trim()?'<div style="margin-top:9px;font-size:11.5px"><strong>Detail:</strong> '+esc(S.sig.note.trim())+'</div>':
+      '<div style="margin-top:11px"><div class="k" style="font:600 9.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#666">Damage / shortage detail</div><div class="rule" style="margin-top:14px;border-bottom:1px solid #555"></div><div class="rule" style="margin-top:16px;border-bottom:1px solid #555"></div></div>')+
+    '</div>');
+
+  h.push('<div class="doc-warn"><strong>What this document proves.</strong> A signature records that the stated number of packages '+
+    'was handed over at the address, date and time shown. It is not confirmation that the contents have been counted, tested or '+
+    'accepted as fit for purpose, and it does not decide who bears the cost of a shortage or of damage — the contract of sale and the '+
+    'carrier’s terms govern that. This note is not a customs document, not a certificate of origin and not a dangerous-goods '+
+    'declaration; the handling marks above are instructions to the carrier only. Shortages or damage must be written on this note '+
+    'before signing and reported to the carrier within their claim period.'+
+    (P?'':' Prices are deliberately omitted, as is normal on a packing slip.')+'</div>');
+
+  h.push('<div class="doc-ft"><span>'+esc(docNo())+' · '+esc(S.from.name||"")+
+    (S.doc.order?' · Order '+esc(S.doc.order):'')+'</span><span>Retain this note with your delivery records</span></div>');
+
+  $("#doc").innerHTML=h.join("");
+}
+
+/* ── binding ────────────────────────────────────────────────────── */
+function bindText(id,get,set){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var ev=(el.tagName==="SELECT"||el.type==="checkbox"||el.type==="date"||el.type==="time")?"change":"input";
+  el.addEventListener(ev,function(){
+    set(el.type==="checkbox"?el.checked:el.value);
+    S.sample=false; hideSample();
+    afterEdit();
+  });
+  if(el.type!=="checkbox"&&el.tagName!=="SELECT") el.addEventListener("blur",function(){ validateHeader(); });
+}
+function afterEdit(){ calc(); save(); }
+function hideSample(){ var b=$("#sampleBanner"); if(b&&!S.sample) b.hidden=true; }
+
+function fillForm(){
+  var d=S.doc;
+  $("#iPrefix").value=d.prefix; $("#iSeq").value=d.seq; $("#iPad").value=d.pad;
+  $("#iDate").value=d.date; $("#iTime").value=d.time; $("#iEta").value=d.eta;
+  $("#iOrder").value=d.order; $("#iPo").value=d.po; $("#iInv").value=d.inv; $("#iAcct").value=d.acct;
+  $("#iDel").value=d.del; $("#iDelOf").value=d.delOf; $("#iRoute").value=d.route;
+  $("#iFromName").value=S.from.name; $("#iFromReg").value=S.from.reg; $("#iFromAddr").value=S.from.addr;
+  $("#iFromContact").value=S.from.contact; $("#iFromPhone").value=S.from.phone; $("#iFromEmail").value=S.from.email;
+  $("#iShipName").value=S.ship.name; $("#iShipContact").value=S.ship.contact; $("#iShipAddr").value=S.ship.addr;
+  $("#iShipPhone").value=S.ship.phone; $("#iShipWin").value=S.ship.win;
+  $("#iSoldSame").checked=!!S.sold.same; $("#iSoldName").value=S.sold.name; $("#iSoldAddr").value=S.sold.addr;
+  $("#soldFields").hidden=!!S.sold.same;
+  $("#iCarrier").value=S.car.name; $("#iService").value=S.car.service; $("#iTrack").value=S.car.track;
+  $("#iVehicle").value=S.car.vehicle; $("#iDriver").value=S.car.driver; $("#iSeal").value=S.car.seal;
+  $("#fFragile").checked=S.flags.fragile; $("#fUpright").checked=S.flags.upright; $("#fNoStack").checked=S.flags.nostack;
+  $("#fHeavy").checked=S.flags.heavy; $("#fTemp").checked=S.flags.temp; $("#fDry").checked=S.flags.dry;
+  $("#fTail").checked=S.flags.tail; $("#fHaz").checked=S.flags.haz;
+  $("#iTempRange").value=S.tempRange; $("#iUn").value=S.un; $("#iHandling").value=S.handling;
+  $("#iPrices").checked=!!S.prices; $("#iCur").value=S.cur; $("#iSym").value=S.sym; $("#iFmt").value=S.fmt;
+  $("#iNotes").value=S.notes; $("#iBack").value=S.backNote;
+  $("#iSigName").value=S.sig.name; $("#iSigRole").value=S.sig.role; $("#iSigDate").value=S.sig.date;
+  $("#iSigTime").value=S.sig.time; $("#iCond").value=S.sig.cond; $("#iCondNote").value=S.sig.note;
+  syncPrices(); syncUnits();
+  renderLines(); renderPacks();
+  $("#sampleBanner").hidden=!S.sample;
+}
+function syncPrices(){
+  var on=!!S.prices;
+  $("#curWrap").hidden=!on; $("#fmtWrap").hidden=!on;
+  $("#symWrap").hidden=!(on&&S.cur==="CUSTOM");
+  Array.prototype.forEach.call(document.querySelectorAll(".pcol"),function(c){ c.hidden=!on; });
+}
+function syncUnits(){
+  var imp=S.units==="imperial";
+  $("#bMetric").setAttribute("aria-pressed",imp?"false":"true");
+  $("#bImp").setAttribute("aria-pressed",imp?"true":"false");
+  Array.prototype.forEach.call(document.querySelectorAll(".mu"),function(e){ e.textContent=massU(); });
+  Array.prototype.forEach.call(document.querySelectorAll(".lu"),function(e){ e.textContent=lenU(); });
+  var sel=$("#iDiv");
+  sel.innerHTML=DIVS[S.units].map(function(d){return '<option value="'+d.v+'">'+esc(d.t)+'</option>'}).join("");
+  if(!DIVS[S.units].some(function(d){return d.v===n0(S.div)})) S.div=DIVS[S.units][0].v;
+  sel.value=String(S.div);
+}
+function switchUnits(to){
+  if(S.units===to) return;
+  var fromImp=S.units==="imperial";
+  var kM=fromImp?(1/LB_PER_KG):LB_PER_KG;      /* mass factor to new system */
+  var kL=fromImp?(1/IN_PER_CM):IN_PER_CM;      /* length factor to new system */
+  S.packs.forEach(function(p){
+    ["wt"].forEach(function(k){ var n=num(p[k]); if(isFinite(n)) p[k]=String(round(n*kM,3)); });
+    ["l","w","h"].forEach(function(k){ var n=num(p[k]); if(isFinite(n)) p[k]=String(round(n*kL,3)); });
+  });
+  var oldList=DIVS[S.units], idx=0;
+  for(var i=0;i<oldList.length;i++){ if(oldList[i].v===n0(S.div)) idx=i; }
+  S.units=to; S.div=DIVS[to][idx].v;
+  syncUnits(); renderPacks(); S.sample=false; hideSample(); afterEdit();
+}
+
+function wire(){
+  bindText("iPrefix",0,function(v){S.doc.prefix=v});
+  bindText("iSeq",0,function(v){S.doc.seq=v});
+  bindText("iPad",0,function(v){S.doc.pad=v});
+  bindText("iDate",0,function(v){S.doc.date=v});
+  bindText("iTime",0,function(v){S.doc.time=v});
+  bindText("iEta",0,function(v){S.doc.eta=v});
+  bindText("iOrder",0,function(v){S.doc.order=v});
+  bindText("iPo",0,function(v){S.doc.po=v});
+  bindText("iInv",0,function(v){S.doc.inv=v});
+  bindText("iAcct",0,function(v){S.doc.acct=v});
+  bindText("iDel",0,function(v){S.doc.del=v});
+  bindText("iDelOf",0,function(v){S.doc.delOf=v});
+  bindText("iRoute",0,function(v){S.doc.route=v});
+  bindText("iFromName",0,function(v){S.from.name=v});
+  bindText("iFromReg",0,function(v){S.from.reg=v});
+  bindText("iFromAddr",0,function(v){S.from.addr=v});
+  bindText("iFromContact",0,function(v){S.from.contact=v});
+  bindText("iFromPhone",0,function(v){S.from.phone=v});
+  bindText("iFromEmail",0,function(v){S.from.email=v});
+  bindText("iShipName",0,function(v){S.ship.name=v});
+  bindText("iShipContact",0,function(v){S.ship.contact=v});
+  bindText("iShipAddr",0,function(v){S.ship.addr=v});
+  bindText("iShipPhone",0,function(v){S.ship.phone=v});
+  bindText("iShipWin",0,function(v){S.ship.win=v});
+  bindText("iSoldSame",0,function(v){S.sold.same=v; $("#soldFields").hidden=!!v;});
+  bindText("iSoldName",0,function(v){S.sold.name=v});
+  bindText("iSoldAddr",0,function(v){S.sold.addr=v});
+  bindText("iCarrier",0,function(v){S.car.name=v});
+  bindText("iService",0,function(v){S.car.service=v});
+  bindText("iTrack",0,function(v){S.car.track=v});
+  bindText("iVehicle",0,function(v){S.car.vehicle=v});
+  bindText("iDriver",0,function(v){S.car.driver=v});
+  bindText("iSeal",0,function(v){S.car.seal=v});
+  bindText("fFragile",0,function(v){S.flags.fragile=v});
+  bindText("fUpright",0,function(v){S.flags.upright=v});
+  bindText("fNoStack",0,function(v){S.flags.nostack=v});
+  bindText("fHeavy",0,function(v){S.flags.heavy=v});
+  bindText("fTemp",0,function(v){S.flags.temp=v});
+  bindText("fDry",0,function(v){S.flags.dry=v});
+  bindText("fTail",0,function(v){S.flags.tail=v});
+  bindText("fHaz",0,function(v){S.flags.haz=v});
+  bindText("iTempRange",0,function(v){S.tempRange=v});
+  bindText("iUn",0,function(v){S.un=v});
+  bindText("iHandling",0,function(v){S.handling=v});
+  bindText("iNotes",0,function(v){S.notes=v});
+  bindText("iBack",0,function(v){S.backNote=v});
+  bindText("iSigName",0,function(v){S.sig.name=v});
+  bindText("iSigRole",0,function(v){S.sig.role=v});
+  bindText("iSigDate",0,function(v){S.sig.date=v});
+  bindText("iSigTime",0,function(v){S.sig.time=v});
+  bindText("iCond",0,function(v){S.sig.cond=v});
+  bindText("iCondNote",0,function(v){S.sig.note=v});
+  bindText("iPrices",0,function(v){S.prices=v; syncPrices();});
+  bindText("iCur",0,function(v){ S.cur=v; if(v!=="CUSTOM"){ S.sym=SYMS[v]||"£"; $("#iSym").value=S.sym; } syncPrices(); });
+  bindText("iSym",0,function(v){S.sym=v});
+  bindText("iFmt",0,function(v){S.fmt=v});
+  bindText("iDiv",0,function(v){S.div=n0(v)||DIVS[S.units][0].v; $("#rVolWSub").textContent="L × W × H ("+lenU()+") ÷ "+n0(S.div);});
+
+  $("#bMetric").addEventListener("click",function(){ switchUnits("metric"); });
+  $("#bImp").addEventListener("click",function(){ switchUnits("imperial"); });
+
+  /* line table */
+  var lb=$("#lineBody");
+  lb.addEventListener("input",function(e){
+    var inp=e.target; if(!inp.dataset||!inp.dataset.k) return;
+    var i=+inp.closest("tr").getAttribute("data-i");
+    S.lines[i][inp.dataset.k]=inp.value;
+    if(inp.type==="number") validateNumCell(inp);
+    S.sample=false; hideSample(); afterEdit();
+  });
+  lb.addEventListener("blur",function(e){
+    if(e.target.type==="number") validateNumCell(e.target);
+  },true);
+  lb.addEventListener("click",function(e){
+    var b=e.target.closest(".bDel"); if(!b) return;
+    var i=+b.closest("tr").getAttribute("data-i");
+    if(S.lines.length<=1) S.lines=[{sku:"",desc:"",unit:"",ord:"",shp:"",price:""}];
+    else S.lines.splice(i,1);
+    S.sample=false; hideSample(); renderLines(); afterEdit();
+  });
+  $("#bAddLine").addEventListener("click",function(){
+    S.lines.push({sku:"",desc:"",unit:"ea",ord:"",shp:"",price:""});
+    S.sample=false; hideSample(); renderLines(); afterEdit();
+    var rows=$("#lineBody").children, last=rows[rows.length-1];
+    if(last) last.querySelector('[data-k=sku]').focus();
+  });
+
+  /* package table */
+  var pb=$("#packBody");
+  pb.addEventListener("input",function(e){
+    var inp=e.target; if(!inp.dataset||!inp.dataset.k) return;
+    var i=+inp.closest("tr").getAttribute("data-i");
+    S.packs[i][inp.dataset.k]=inp.value;
+    if(inp.type==="number") validateNumCell(inp);
+    S.sample=false; hideSample(); afterEdit();
+  });
+  pb.addEventListener("change",function(e){
+    var inp=e.target; if(inp.tagName!=="SELECT") return;
+    var i=+inp.closest("tr").getAttribute("data-i");
+    S.packs[i].type=inp.value; S.sample=false; hideSample(); afterEdit();
+  });
+  pb.addEventListener("blur",function(e){
+    if(e.target.type==="number") validateNumCell(e.target);
+  },true);
+  pb.addEventListener("click",function(e){
+    var b=e.target.closest(".bDel"); if(!b) return;
+    var i=+b.closest("tr").getAttribute("data-i");
+    if(S.packs.length<=1) S.packs=[{type:"Carton",ref:"",qty:"",wt:"",l:"",w:"",h:""}];
+    else S.packs.splice(i,1);
+    S.sample=false; hideSample(); renderPacks(); afterEdit();
+  });
+  $("#bAddPack").addEventListener("click",function(){
+    S.packs.push({type:"Carton",ref:"",qty:"",wt:"",l:"",w:"",h:""});
+    S.sample=false; hideSample(); renderPacks(); afterEdit();
+    var rows=$("#packBody").children, last=rows[rows.length-1];
+    if(last) last.querySelector('[data-k=ref]').focus();
+  });
+
+  /* actions */
+  $("#bPreview").addEventListener("click",function(){
+    var on=$("#docwrap").classList.toggle("show");
+    this.setAttribute("aria-pressed",on?"true":"false");
+    this.textContent=on?"Hide document":"Preview document";
+    if(on) $("#docwrap").scrollIntoView({block:"start"});
+  });
+  $("#bPrint").addEventListener("click",function(){ window.print(); });
+  $("#bCsv").addEventListener("click",exportCSV);
+  $("#bJson").addEventListener("click",exportJSON);
+  $("#bImport").addEventListener("click",function(){ $("#fJson").click(); });
+  $("#fJson").addEventListener("change",importJSON);
+  $("#bBlank").addEventListener("click",function(){
+    S=blankState(); fillForm(); afterEdit(); $("#sampleBanner").hidden=true;
+  });
+  $("#bClear").addEventListener("click",function(){
+    if(!window.confirm("Clear every field and delete the saved copy in this browser? This cannot be undone.")) return;
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    var next=blankState();
+    S=next; fillForm(); afterEdit(); $("#sampleBanner").hidden=true;
+    $("#iPrefix").focus();
+  });
+}
+
+/* ── exports ────────────────────────────────────────────────────── */
+function dl(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download=name; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },800);
+  }catch(e){ /* download blocked */ }
+}
+function q(s){ s=String(s===null||s===undefined?"":s); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function csvRow(a){ return a.map(q).join(","); }
+function safeName(){ return (docNo()||"delivery-note").replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")||"delivery-note"; }
+function exportCSV(){
+  var r=compute(), P=S.prices, mu=massU(), lu=lenU(), L=[];
+  L.push(csvRow(["Delivery note / packing slip"]));
+  L.push(csvRow(["Note number",docNo()]));
+  L.push(csvRow(["Despatch date",S.doc.date]));
+  L.push(csvRow(["Despatch time",S.doc.time]));
+  L.push(csvRow(["Expected delivery",S.doc.eta]));
+  L.push(csvRow(["Delivery","of",S.doc.del,S.doc.delOf]));
+  L.push(csvRow(["Sales order",S.doc.order]));
+  L.push(csvRow(["Customer order / PO",S.doc.po]));
+  L.push(csvRow(["Invoice no.",S.doc.inv]));
+  L.push(csvRow(["Account no.",S.doc.acct]));
+  L.push(csvRow(["Despatched by",S.from.name]));
+  L.push(csvRow(["Despatch address",String(S.from.addr||"").replace(/\n/g,", ")]));
+  L.push(csvRow(["Deliver to",S.ship.name]));
+  L.push(csvRow(["Delivery address",String(S.ship.addr||"").replace(/\n/g,", ")]));
+  L.push(csvRow(["Site contact",S.ship.contact]));
+  L.push(csvRow(["Invoice to",S.sold.same?S.ship.name:S.sold.name]));
+  L.push(csvRow(["Carrier",S.car.name]));
+  L.push(csvRow(["Service",S.car.service]));
+  L.push(csvRow(["Tracking / consignment",S.car.track]));
+  L.push(csvRow(["Vehicle",S.car.vehicle]));
+  L.push(csvRow(["Driver",S.car.driver]));
+  L.push(csvRow(["Seal no.",S.car.seal]));
+  L.push(csvRow(["Handling flags",flagList().map(function(x){return x.t}).join("; ")]));
+  L.push(csvRow(["Handling instructions",String(S.handling||"").replace(/\n/g," ")]));
+  L.push(csvRow(["Units",S.units==="imperial"?"imperial (lb / in)":"metric (kg / cm)"]));
+  L.push(csvRow(["Volumetric divisor",n0(S.div)]));
+  if(P) L.push(csvRow(["Currency",S.cur==="CUSTOM"?S.sym:S.cur]));
+  L.push("");
+
+  var hdr=["Line","SKU","Description","Unit","Ordered","Shipped","Back-ordered","Status"];
+  if(P) hdr=hdr.concat(["Unit price","Shipped value"]);
+  L.push(csvRow(["GOODS"]));
+  L.push(csvRow(hdr));
+  var n=0;
+  S.lines.forEach(function(l,i){
+    var X=r.lines[i]; if(!X.used) return; n++;
+    var st = X.st==="done"?"Complete":X.st==="part"?"Part":X.st==="bo"?"Back-order":X.st==="over"?"Over-shipped":"";
+    var row=[n,l.sku,l.desc,l.unit,X.ord,X.shp,X.back,st];
+    if(P) row=row.concat([isFinite(X.price)?round(X.price,2):"",isFinite(X.val)?round(X.val,2):""]);
+    L.push(csvRow(row));
+  });
+  var trow=["","","Totals","",round(r.ord,3),round(r.shp,3),round(r.back,3),""];
+  if(P) trow=trow.concat(["",round(r.valShp,2)]);
+  L.push(csvRow(trow));
+  L.push("");
+
+  L.push(csvRow(["PACKAGES"]));
+  L.push(csvRow(["#","Type","Reference","Qty","Weight each ("+mu+")","L ("+lu+")","W ("+lu+")","H ("+lu+")",
+                 "Total weight ("+mu+")","Volume ("+volU()+")","Volumetric weight ("+mu+")"]));
+  var m=0;
+  S.packs.forEach(function(p,i){
+    var K=r.packs[i];
+    var any=String(p.ref||"").trim()||n0(p.qty)>0||n0(p.wt)>0; if(!any) return; m++;
+    L.push(csvRow([m,p.type,p.ref,K.qty,p.wt,p.l,p.w,p.h,round(K.tw,3),
+      isFinite(K.volEach)?round(K.volEach*K.qty,4):"",isFinite(K.vwEach)?round(K.vwEach*K.qty,3):""]));
+  });
+  L.push(csvRow(["","","Totals",round(r.pkQty,3),"","","","",round(r.gross,3),round(r.vol,4),round(r.volW,3)]));
+  L.push("");
+
+  L.push(csvRow(["SUMMARY"]));
+  L.push(csvRow(["Units ordered",round(r.ord,3)]));
+  L.push(csvRow(["Units shipped",round(r.shp,3)]));
+  L.push(csvRow(["Units back-ordered",round(r.back,3)]));
+  L.push(csvRow(["Order filled (%)",r.ord>0?round(r.fill,2):""]));
+  L.push(csvRow(["Total packages",round(r.pkQty,3)]));
+  L.push(csvRow(["Gross weight ("+mu+")",round(r.gross,3)]));
+  L.push(csvRow(["Volume ("+volU()+")",round(r.vol,4)]));
+  L.push(csvRow(["Volumetric weight ("+mu+")",round(r.volW,3)]));
+  L.push(csvRow(["Chargeable weight ("+mu+")",round(r.chg,3)]));
+  if(P) L.push(csvRow(["Value of goods shipped",round(r.valShp,2)]));
+  L.push("");
+  L.push(csvRow(["Received by",S.sig.name]));
+  L.push(csvRow(["Position / company",S.sig.role]));
+  L.push(csvRow(["Date received",S.sig.date]));
+  L.push(csvRow(["Time received",S.sig.time]));
+  L.push(csvRow(["Condition on arrival",S.sig.cond]));
+  L.push(csvRow(["Damage / shortage detail",String(S.sig.note||"").replace(/\n/g," ")]));
+  L.push("");
+  L.push(csvRow(["A signature records receipt of the stated number of packages only, not that the contents were checked or accepted."]));
+
+  dl(safeName()+".csv","text/csv;charset=utf-8","\uFEFF"+L.join("\r\n")+"\r\n");
+}
+function exportJSON(){
+  dl(safeName()+".json","application/json",JSON.stringify(S,null,2));
+}
+function importJSON(e){
+  var file=e.target.files&&e.target.files[0];
+  if(!file) return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    var o=null;
+    try{ o=JSON.parse(String(fr.result)); }catch(err){ o=null; }
+    if(!o||typeof o!=="object"){ $("#ftNote").textContent="That file was not a delivery note saved by this tool."; return; }
+    adopt(o); S.sample=false; fillForm(); afterEdit();
+    $("#sampleBanner").hidden=true;
+    $("#ftNote").textContent="Loaded "+docNo()+" from file.";
+  };
+  fr.readAsText(file);
+  e.target.value="";
+}
+
+/* ── boot ───────────────────────────────────────────────────────── */
+function measureBar(){
+  var ab=$("#appbar");
+  if(ab) document.documentElement.style.setProperty("--abh",ab.getBoundingClientRect().height+"px");
+}
+var stored=load();
+if(stored) adopt(stored); else adopt(sampleState());
+fillForm();
+wire();
+calc();
+if(!stored) save();
+measureBar();
+window.addEventListener("resize",measureBar);
+})();
+</script>
+</body>
+</html>

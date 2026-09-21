@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Allergen Matrix &mdash; dish-by-allergen grid for the 14 major allergens, built from your recipes</title>
+<meta name="description" content="Build a dish-by-allergen matrix for the 14 major allergens from an ingredient library, so changing one ingredient updates every dish that uses it. Marks contains, may contain and free from, checks a menu against a guest's allergens, and prints both a customer-facing matrix and a kitchen view naming the ingredient behind every flag. Saves in your browser, exports CSV and JSON.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2'%3E%3Crect x='6' y='6' width='20' height='20' rx='2.4'/%3E%3Cpath d='M6 13h20M13 6v20'/%3E%3C/g%3E%3Ccircle cx='19.5' cy='19.5' r='2.6' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ Allergen Matrix — Retail & Hospitality ═══════════════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#DA818B;--accent-ink:#E79DA6;--accent-wash:#331A1F;--on-accent:#170B0D}}
+:root[data-theme="dark"]{--accent:#DA818B;--accent-ink:#E79DA6;--accent-wash:#331A1F;--on-accent:#170B0D}
+
+.app>*+*{margin-top:14px}
+.topnote{margin-top:14px}
+.topnote .lastline{display:block;margin-top:5px;font-size:12.5px}
+.topnote .pnx{display:none}
+@media print{.topnote .pnx{display:inline!important}}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.results{order:-1}}
+.stack,.split>*{min-width:0}
+.tw{position:relative}
+.results .stat.hero .v{font-size:29px}
+.stat.hero .u{color:var(--accent-ink)}
+.samplebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13.5px}
+.samplebar .txt{margin-right:auto}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+.seg button{font:600 12.5px/1 var(--sans);padding:8px 11px;border:0;background:var(--raise);color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-hard)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* guest picker */
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:5px 12px}
+.agrid .check{font-size:13px;line-height:1.3}
+.slist{list-style:none;margin:0;padding:0;font-size:13.5px}
+.slist li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 8px;padding:6px 0;border-bottom:1px dotted var(--line)}
+.slist li:last-child{border-bottom:0}
+.slist .nm{grid-column:2;min-width:0;font-weight:600}
+.slist .rz{grid-column:2;font-size:11.5px;color:var(--muted)}
+.slist .rz:empty{display:none}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:6px;grid-column:1;grid-row:1}
+.dot.g{background:var(--ok)} .dot.a{background:var(--warn)} .dot.r{background:var(--bad)}
+
+/* ingredient library */
+.itab th.ac{text-align:center;padding:9px 3px;width:34px}
+.itab td.ac{text-align:center;padding:4px 3px}
+.itab td.nm{min-width:190px} .itab td.sp{min-width:150px} .itab td.vf{min-width:140px}
+.cyc{width:30px;height:26px;padding:0;border:1px solid var(--line);border-radius:3px;background:var(--raise);
+  color:var(--faint);font:700 13px/1 var(--mono);cursor:pointer}
+.cyc:hover{border-color:var(--accent)}
+.cyc[data-v="2"]{background:var(--bad-wash);border-color:var(--bad);color:var(--bad)}
+.cyc[data-v="1"]{background:var(--warn-wash);border-color:var(--warn);color:var(--warn)}
+abbr[title]{text-decoration:none;cursor:help}
+
+/* dishes */
+.dish{border:1px solid var(--line);border-radius:4px;padding:10px 11px;background:var(--raise)}
+.dish+.dish{margin-top:10px}
+.dish-hd{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:8px;align-items:end}
+@media(max-width:560px){.dish-hd{grid-template-columns:minmax(0,1fr)}.dish-hd .btn{justify-self:start}}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.ichip{display:inline-flex;align-items:center;gap:3px;background:var(--sunk);border:1px solid var(--line);
+  border-radius:99px;padding:3px 4px 3px 10px;font-size:12.5px}
+.ichip.unv{border-color:var(--warn);background:var(--warn-wash);color:var(--warn)}
+.ichip button{border:0;background:transparent;cursor:pointer;color:var(--muted);font:700 14px/1 var(--mono);padding:1px 5px;border-radius:99px}
+.ichip button:hover{color:var(--bad);background:var(--bad-wash)}
+.addwrap{display:flex;gap:6px;align-items:center;margin-top:9px;flex-wrap:wrap}
+.addwrap select{max-width:280px}
+details.cc{margin-top:9px;border-top:1px dotted var(--line);padding-top:8px}
+details.cc summary{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+details.cc .agrid{margin-top:9px}
+.dflags{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+
+/* matrix */
+.mx{font-size:13.5px}
+.mx th.ac{text-align:center;padding:9px 3px;width:36px}
+.mx td.cell{text-align:center;padding:6px 3px;min-width:36px}
+.mx td.dn{min-width:190px;font-weight:600}
+.mx td.dn,.mx thead th:first-child{position:sticky;left:0;z-index:2;background:var(--surface)}
+.mx thead th:first-child{z-index:3;background:var(--sunk)}
+.mx td.dn::after,.mx thead th:first-child::after{content:"";position:absolute;top:0;right:0;bottom:-1px;width:1px;background:var(--line)}
+.itab td.nm,.itab thead th:first-child{position:sticky;left:0;z-index:2;background:var(--surface)}
+.itab thead th:first-child{z-index:3;background:var(--sunk)}
+.mx tr.secrow th{background:var(--accent-wash);color:var(--accent-ink);font-size:10.5px;letter-spacing:.09em;
+  border-bottom:1px solid var(--line);padding:7px 10px}
+.mx tr.secrow th span{position:sticky;left:10px;display:inline-block}
+.mk{font:700 15px/1.2 var(--mono);display:block}
+.c2 .mk{color:var(--bad)} .c1 .mk{color:var(--warn)} .c0 .mk{color:var(--faint)}
+td.c2{background:var(--bad-wash)} td.c1{background:var(--warn-wash)}
+.cz{display:none;font:400 10px/1.25 var(--sans);color:var(--ink-2);margin-top:3px;word-break:break-word}
+.v-kitchen .cz{display:block}
+.v-kitchen .mx td.cell{min-width:112px}
+.v-kitchen .mx th.ac{width:112px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 16px;font-size:12px;color:var(--ink-2)}
+.legend b{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.legend span{color:var(--muted)}
+.keyrow{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;align-items:center}
+.keyrow .mk{display:inline-block;vertical-align:-1px}
+
+/* print document */
+.doc{border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px}
+.doc-t{display:flex;gap:18px;align-items:flex-start;justify-content:space-between}
+.doc-venue{font:700 17pt/1.15 var(--sans)}
+.doc-sub{font:600 10.5pt/1.3 var(--sans);margin-top:3px}
+.doc-meta{font:9.5pt/1.5 var(--sans);text-align:right}
+.doc-meta span{color:#555;display:inline-block;min-width:74px}
+.doc-note{font:8.5pt/1.35 var(--sans);margin-top:6px}
+.pnotes{font:9.5pt/1.4 var(--sans);margin-top:6px}
+footer.foot{font-size:12px;color:var(--muted);line-height:1.5;padding-top:4px}
+
+@media print{
+  @page{size:landscape}
+  :root{--accent:#000;--accent-ink:#000;--accent-wash:#fff;--bad-wash:#fff;--warn-wash:#fff;--ok-wash:#fff}
+  thead{display:table-header-group}
+  #matrixCard,#ingCard{break-inside:auto}
+  body:not(.v-kitchen) .mx .chip{display:none}
+  .mx .chip{border:1px solid #888;background:#fff!important;color:#000!important}
+  .app>*+*{margin-top:6mm}
+  .topnote{border:1px solid #000;border-left:4px solid #000;background:#fff!important;font-size:9pt;padding:6px 9px}
+  .mx{font-size:9pt}
+  .mx td.dn{font-size:9.5pt}
+  .mx td.cell{padding:3px 2px}
+  td.c2,td.c1{background:#fff!important}
+  .mk{color:#000!important;font-size:11pt}
+  .cz{font-size:7pt;color:#333}
+  .cyc{border:0;background:#fff!important;color:#000!important;width:auto;height:auto}
+  .mx tr.secrow th{background:#e8e8e8!important;color:#000!important}
+  .legend{font-size:8.5pt;grid-template-columns:repeat(3,1fr)}
+  .keyrow{font-size:9pt}
+  .card{margin-bottom:6mm}
+  .tw{overflow:visible}
+  .v-kitchen .mx td.cell,.v-kitchen .mx th.ac{min-width:0}
+  .mx td.dn{min-width:0}
+  .mx td.dn,.mx thead th:first-child,.itab td.nm,.itab thead th:first-child{position:static;background:none}
+  .mx td.dn::after,.mx thead th:first-child::after{display:none}
+  body:not(.v-kitchen) .kprint{display:none!important}
+  body:not(.has-guest) .guestdoc{display:none!important}
+  .slist{font-size:9.5pt;columns:2;column-gap:14mm}
+  .slist li{break-inside:avoid}
+  footer.foot{font-size:8.5pt;color:#333;border-top:1px solid #bbb;margin-top:4mm;padding-top:2mm}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="appbar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">AM</div>
+      <div>
+        <h1>Allergen Matrix</h1>
+        <div class="sub">14 allergens &middot; EU FIC Annex II</div>
+      </div>
+    </div>
+    <div class="row noprint">
+      <button type="button" class="btn pri" id="btnPrint">Print matrix</button>
+      <button type="button" class="btn" id="btnCsv">CSV</button>
+      <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+    </div>
+  </header>
+
+  <!-- printed document header ------------------------------------------------>
+  <div class="printonly doc">
+    <div class="doc-t">
+      <div>
+        <div class="doc-venue" id="pVenue">&mdash;</div>
+        <div class="doc-sub">Allergen matrix &mdash; <span id="pView">customer view</span></div>
+      </div>
+      <div class="doc-meta">
+        <div><span>Menu</span> <b id="pMenu">&mdash;</b></div>
+        <div><span>Effective</span> <b id="pDate">&mdash;</b></div>
+        <div><span>Prepared by</span> <b id="pBy">&mdash;</b></div>
+        <div><span>Review by</span> <b id="pReview">&mdash;</b></div>
+      </div>
+    </div>
+    <div class="doc-note" id="pNotes"></div>
+  </div>
+
+  <!-- the notice, on screen without scrolling and on every printed page ------->
+  <div class="note bad topnote" id="notice">
+    <strong>Verification is the operator&rsquo;s responsibility.</strong>
+    This matrix reports only what has been entered into it &mdash; it is not checked against any supplier
+    specification, and &ldquo;free from&rdquo; here means &ldquo;not present in the ingredients recorded&rdquo;,
+    not &ldquo;guaranteed absent&rdquo;. Confirm every ingredient against the current supplier specification,
+    re-check after any recipe or supplier change, and always speak to the guest before serving.
+    <span class="printonly pnx">A shared kitchen &mdash; shared fryers, oil, grills, utensils or surfaces &mdash;
+    can transfer any allergen, so no dish can be treated as free from an allergen on the strength of its recipe
+    alone. Recipe changes, substitutions and supplier reformulation are not detected by this document.</span>
+    <span class="lastline">Not legal advice &mdash; for your obligations consult your environmental health
+    officer or food safety adviser.</span>
+  </div>
+
+  <div class="card noprint" id="sampleCard">
+    <div class="bd samplebar">
+      <span class="chip warn">Sample data</span>
+      <span class="txt">A ten-dish bistro menu is loaded so you can see how the matrix works. Edit it, or start clean.</span>
+      <button type="button" class="btn sm" id="btnBlank">Start a blank matrix</button>
+    </div>
+  </div>
+
+  <div class="split">
+    <!-- ═══ left: the working inputs ═══════════════════════════════════════ -->
+    <div class="stack">
+
+      <section class="card noprint">
+        <div class="hd"><h2>Menu &amp; document details</h2></div>
+        <div class="bd grid cols-2">
+          <div class="f"><label for="mVenue">Business / venue</label>
+            <input id="mVenue" data-meta="venue" autocomplete="organization"></div>
+          <div class="f"><label for="mMenu">Menu or service</label>
+            <input id="mMenu" data-meta="menu"></div>
+          <div class="f"><label for="mBy">Prepared by</label>
+            <input id="mBy" data-meta="by"></div>
+          <div class="f"><label for="mDate">Effective from</label>
+            <input id="mDate" data-meta="date" type="date"></div>
+          <div class="f"><label for="mReview">Review by</label>
+            <input id="mReview" data-meta="review" type="date"></div>
+          <div class="f"><label for="mNotes">Notes shown on the printed document</label>
+            <input id="mNotes" data-meta="notes" placeholder="e.g. Fryers are shared. Ask staff before ordering."></div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd">
+          <h2>Dishes</h2>
+          <span class="chip" id="dishCount">0 dishes</span>
+          <button type="button" class="btn sm" id="btnAddDish">+ Add dish</button>
+        </div>
+        <div class="bd" id="dishList"></div>
+      </section>
+
+
+      <section class="card noprint">
+        <div class="hd"><h2>Backup &amp; export</h2></div>
+        <div class="bd stack">
+          <div class="row">
+            <button type="button" class="btn sm" id="btnCsvMatrix">CSV &mdash; matrix + sources</button>
+            <button type="button" class="btn sm" id="btnCsvIng">CSV &mdash; ingredient register</button>
+            <button type="button" class="btn sm" id="btnJson">Export JSON</button>
+            <button type="button" class="btn sm" id="btnImport">Import JSON</button>
+            <input type="file" id="fileJson" accept="application/json,.json" hidden>
+          </div>
+          <p class="hint" id="ioMsg">Everything is stored in this browser only. Export JSON to move the
+            library to another machine or to keep a dated copy with your food safety records.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ right: the live answer ═════════════════════════════════════════ -->
+    <div class="results">
+      <section class="card sticky noprint">
+        <div class="hd"><h2>Guest allergen check</h2></div>
+        <div class="bd stack">
+          <div class="stat hero">
+            <div class="k">Safe to serve this guest</div>
+            <div class="v" id="heroV">&mdash;</div>
+            <div class="u" id="heroU">Tick the guest&rsquo;s allergens below</div>
+          </div>
+
+          <fieldset class="noprint">
+            <legend>Guest cannot have</legend>
+            <div class="agrid" id="guestGrid"></div>
+            <div class="row" style="margin-top:10px">
+              <label class="check" style="flex:1;min-width:200px">
+                <input type="checkbox" id="strict">
+                <span>Treat &ldquo;may contain&rdquo; as unsafe (recommended)</span>
+              </label>
+              <button type="button" class="btn sm" id="btnGuestClear">Clear selection</button>
+            </div>
+          </fieldset>
+
+          <div id="guestLists"></div>
+
+          <div class="grid cols-2 noprint">
+            <div class="stat"><div class="k">Contains flags</div><div class="v" id="sContains">&mdash;</div><div class="u">declared on the menu</div></div>
+            <div class="stat"><div class="k">May-contain flags</div><div class="v" id="sMay">&mdash;</div><div class="u">cross-contact risk</div></div>
+            <div class="stat"><div class="k">Free from all 14</div><div class="v" id="sFree">&mdash;</div><div class="u">dishes with no flag</div></div>
+            <div class="stat"><div class="k">Specs on file</div><div class="v" id="sVer">&mdash;</div><div class="u">ingredients verified</div></div>
+          </div>
+          <div class="note warn noprint" id="unvNote" hidden></div>
+        </div>
+        <div class="ft noprint">
+          <span class="hint" id="savedAt">Saved automatically in this browser.</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card kprint" id="ingCard">
+    <div class="hd">
+      <h2>Ingredient library</h2>
+      <span class="chip" id="ingCount">0 ingredients</span>
+      <button type="button" class="btn sm noprint" id="btnAddIng">+ Add ingredient</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="hint noprint" style="padding:10px 16px 0">
+        Click a cell to cycle it: blank &rarr; <b>&#9679;</b> contains &rarr; <b>&#9650;</b> may contain.
+        Change an ingredient once and every dish that uses it updates.
+      </div>
+      <div class="tw"><table class="itab" id="ingTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ═══ the matrix — the deliverable ══════════════════════════════════════ -->
+  <section class="card" id="matrixCard">
+    <div class="hd">
+      <h2>Allergen matrix</h2>
+      <div class="seg noprint" role="group" aria-label="Matrix view">
+        <button type="button" id="vCustomer" aria-pressed="true">Customer view</button>
+        <button type="button" id="vKitchen" aria-pressed="false">Kitchen view</button>
+      </div>
+      <button type="button" class="btn sm noprint" id="btnPrint2">Print this view</button>
+    </div>
+    <div class="bd" style="padding:0">
+      <div class="tw"><table class="mx" id="mxTable"></table></div>
+      <div id="mxEmpty"></div>
+    </div>
+    <div class="ft" style="display:block">
+      <div class="keyrow" style="margin-bottom:8px">
+        <span class="c2"><span class="mk">&#9679;</span></span> <b>Contains</b> &mdash; allergen is an ingredient
+        <span class="c1"><span class="mk">&#9650;</span></span> <b>May contain</b> &mdash; cross-contact risk
+        <span class="c0"><span class="mk">&ndash;</span></span> <b>Free from</b> &mdash; not present in the recorded ingredients
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </section>
+
+  <!-- guest check, printed only when a guest selection is active ------------- -->
+  <div class="printonly guestdoc card">
+    <div class="bd">
+      <h2 style="margin-bottom:8px">Guest allergen check</h2>
+      <p class="pnotes" id="gdocHead"></p>
+      <div id="gdocBody" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    Columns are the 14 allergens named in Annex II of Regulation (EU) No 1169/2011, retained in UK law and
+    enforced through the Food Information Regulations 2014 &mdash; sulphur dioxide and sulphites are declarable at
+    concentrations above 10&nbsp;mg/kg or 10&nbsp;mg/litre expressed as SO&#8322;. A dish inherits the highest status
+    of any ingredient in it (contains beats may contain beats free from), plus any cross-contact you record for
+    its preparation. Statuses are those entered by the operator; nothing here is verified automatically.
+    Food prepacked for direct sale must also carry a full ingredient list (Natasha&rsquo;s Law) &mdash; this matrix
+    does not replace that label.
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+var KEY="solvix.allergen-matrix.v1";
+var N=14;
+var ALLERGENS=[
+ {id:"gluten", ab:"GLU", name:"Cereals containing gluten", note:"wheat, rye, barley, oats, spelt, kamut"},
+ {id:"crust",  ab:"CRU", name:"Crustaceans", note:"prawns, crab, lobster, crayfish"},
+ {id:"eggs",   ab:"EGG", name:"Eggs", note:""},
+ {id:"fish",   ab:"FSH", name:"Fish", note:""},
+ {id:"peanut", ab:"PNT", name:"Peanuts", note:""},
+ {id:"soya",   ab:"SOY", name:"Soybeans", note:""},
+ {id:"milk",   ab:"MLK", name:"Milk", note:"including lactose"},
+ {id:"nuts",   ab:"NUT", name:"Nuts", note:"almond, hazelnut, walnut, cashew, pecan, Brazil, pistachio, macadamia"},
+ {id:"celery", ab:"CEL", name:"Celery", note:"including celeriac"},
+ {id:"mustard",ab:"MUS", name:"Mustard", note:""},
+ {id:"sesame", ab:"SES", name:"Sesame", note:""},
+ {id:"sulph",  ab:"SUL", name:"Sulphur dioxide &amp; sulphites", note:"above 10 mg/kg or 10 mg/l"},
+ {id:"lupin",  ab:"LUP", name:"Lupin", note:""},
+ {id:"mollusc",ab:"MOL", name:"Molluscs", note:"mussels, oysters, squid, snails"}
+];
+var GLYPH={0:"–",1:"▲",2:"●"};
+var WORD={0:"Free from",1:"May contain",2:"Contains"};
+var CSVW={0:"FREE FROM",1:"MAY CONTAIN",2:"CONTAINS"};
+
+/* ── helpers ─────────────────────────────────────────────────────────── */
+function $(s,r){return (r||document).querySelector(s);}
+function el(t,c,tx){var e=document.createElement(t); if(c)e.className=c; if(tx!=null)e.textContent=tx; return e;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function uid(p){return p+Math.random().toString(36).slice(2,8)+(Date.now()%100000).toString(36);}
+function idx(id){for(var i=0;i<N;i++){if(ALLERGENS[i].id===id)return i;} return -1;}
+function A(o){var a=[],i;for(i=0;i<N;i++)a.push(0);for(var k in o){var j=idx(k);if(j>=0)a[j]=o[k];}return a;}
+function X(list){var a=[],i;for(i=0;i<N;i++)a.push(false);(list||[]).forEach(function(k){var j=idx(k);if(j>=0)a[j]=true;});return a;}
+function today(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function addDays(iso,n){var d=new Date(iso+"T00:00:00");if(isNaN(d))return "";d.setDate(d.getDate()+n);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function fmtDate(iso){
+  if(!iso)return "—";
+  var d=new Date(iso+"T00:00:00"); if(isNaN(d.getTime()))return "—";
+  var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return d.getDate()+" "+M[d.getMonth()]+" "+d.getFullYear();
+}
+function listWords(arr){
+  if(!arr.length)return "";
+  if(arr.length===1)return arr[0];
+  return arr.slice(0,-1).join(", ")+" and "+arr[arr.length-1];
+}
+function plural(n,s,p){return n+" "+(n===1?s:(p||s+"s"));}
+
+/* ── sample data ─────────────────────────────────────────────────────── */
+function sample(){
+  function I(id,n,sup,ver,o){return {id:id,name:n,supplier:sup,verified:!!ver,a:A(o||{})};}
+  function D(id,n,sec,ing,cross){return {id:id,name:n,section:sec,ing:ing,cross:X(cross)};}
+  var ings=[
+    I("i1","Plain wheat flour","Millstone Bakery Supply",1,{gluten:2}),
+    I("i2","Gluten-free flour blend","FreeFrom Mills",1,{lupin:2,nuts:1}),
+    I("i3","Panko breadcrumbs","Kanto Foods",1,{gluten:2,sesame:1}),
+    I("i4","Unsalted butter","Dale Dairy",1,{milk:2}),
+    I("i5","Whole milk","Dale Dairy",1,{milk:2}),
+    I("i6","Mature cheddar","Dale Dairy",1,{milk:2}),
+    I("i7","Free-range eggs","Hensfield Farm",1,{eggs:2}),
+    I("i8","Sourdough loaf","Corner Street Bakery",0,{gluten:2,sesame:1}),
+    I("i9","Atlantic cod fillet","Quayside Fish",1,{fish:2}),
+    I("i10","King prawns","Quayside Fish",1,{crust:2,mollusc:1}),
+    I("i11","Rope-grown mussels","Quayside Fish",1,{mollusc:2,crust:1}),
+    I("i12","Light soy sauce","Kanto Foods",1,{soya:2,gluten:2}),
+    I("i13","Toasted sesame oil","Kanto Foods",1,{sesame:2}),
+    I("i14","Smooth peanut butter","Nutworks",1,{peanut:2,nuts:1}),
+    I("i15","Flaked almonds","Nutworks",0,{nuts:2,peanut:1,sesame:1}),
+    I("i16","Celery sticks","Green Row Produce",1,{celery:2}),
+    I("i17","Dijon mustard","Maison Bex",1,{mustard:2,sulph:1}),
+    I("i18","Dry white wine","Cellar Nine",1,{sulph:2}),
+    I("i19","Rice noodles","Kanto Foods",1,{gluten:1}),
+    I("i20","Chicken breast","Foldyard Poultry",1,{}),
+    I("i21","Vine tomatoes","Green Row Produce",1,{}),
+    I("i22","Brown onions","Green Row Produce",1,{}),
+    I("i23","Maris Piper potatoes","Green Row Produce",1,{}),
+    I("i24","Rapeseed oil","Green Row Produce",1,{}),
+    I("i25","Salad leaves","Green Row Produce",1,{}),
+    I("i26","Fine polenta","Corner Street Bakery",0,{gluten:1}),
+    I("i27","Caster sugar","Pantry Wholesale",1,{}),
+    I("i28","Garlic","Green Row Produce",1,{}),
+    I("i29","Sea salt & black pepper","Pantry Wholesale",1,{})
+  ];
+  var dishes=[
+    D("d1","Sourdough & salted butter","Starters",["i8","i4"],[]),
+    D("d2","Chicken satay skewers","Starters",["i20","i14","i12","i13","i28"],[]),
+    D("d3","Roast tomato & celery soup","Starters",["i21","i22","i16","i24","i29"],[]),
+    D("d4","Beer-battered cod & chips","Mains",["i9","i1","i23","i24","i29"],["crust"]),
+    D("d5","King prawn linguine","Mains",["i10","i1","i18","i28","i21","i24"],[]),
+    D("d6","Moules mariniere","Mains",["i11","i18","i4","i16","i28"],[]),
+    D("d7","Cheddar & red onion quiche","Mains",["i1","i4","i7","i5","i6","i17","i22"],[]),
+    D("d8","Rice noodle stir-fry","Mains",["i19","i12","i13","i20","i22","i28"],[]),
+    D("d9","Garden salad","Sides",["i25","i21","i24","i29"],[]),
+    D("d10","Almond & lemon polenta cake","Desserts",["i15","i7","i4","i26","i2","i27"],[])
+  ];
+  return {
+    v:1, sample:true, view:"customer", strict:true,
+    guest:X(["peanut","nuts"]),
+    meta:{venue:"The Fennel & Fig", menu:"Autumn all-day menu", by:"K. Ellery, Head Chef",
+          date:today(), review:addDays(today(),90),
+          notes:"Fryers, grill and pasta water are shared. Please tell your server about any allergy before ordering."},
+    ings:ings, dishes:dishes
+  };
+}
+function blank(){
+  return {v:1, sample:false, view:"customer", strict:true, guest:X([]),
+    meta:{venue:"", menu:"", by:"", date:today(), review:addDays(today(),90), notes:""},
+    ings:[], dishes:[]};
+}
+
+/* ── state ───────────────────────────────────────────────────────────── */
+var S=blank();
+function normalise(o){
+  var b=blank(); if(!o||typeof o!=="object")return b;
+  var s={v:1, sample:!!o.sample, view:(o.view==="kitchen"?"kitchen":"customer"),
+         strict:o.strict===false?false:true, guest:[], meta:{}, ings:[], dishes:[]};
+  for(var i=0;i<N;i++)s.guest.push(!!(o.guest&&o.guest[i]));
+  ["venue","menu","by","date","review","notes"].forEach(function(k){
+    s.meta[k]=typeof (o.meta||{})[k]==="string"?o.meta[k]:b.meta[k];});
+  (Array.isArray(o.ings)?o.ings:[]).forEach(function(g){
+    if(!g||typeof g!=="object")return;
+    var a=[];for(var i=0;i<N;i++){var v=g.a&&g.a[i];a.push(v===2?2:(v===1?1:0));}
+    s.ings.push({id:String(g.id||uid("i")),name:String(g.name||""),supplier:String(g.supplier||""),
+                 verified:!!g.verified,a:a});});
+  (Array.isArray(o.dishes)?o.dishes:[]).forEach(function(d){
+    if(!d||typeof d!=="object")return;
+    var c=[];for(var i=0;i<N;i++)c.push(!!(d.cross&&d.cross[i]));
+    var ing=(Array.isArray(d.ing)?d.ing:[]).map(String).filter(function(id){
+      return s.ings.some(function(g){return g.id===id;});});
+    s.dishes.push({id:String(d.id||uid("d")),name:String(d.name||""),section:String(d.section||""),
+                   ing:ing,cross:c});});
+  return s;
+}
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S));
+       $("#savedAt").textContent="Saved in this browser · "+new Date().toLocaleTimeString();
+  }catch(e){ $("#savedAt").textContent="Browser storage unavailable — export JSON to keep this work."; }
+}
+function load(){
+  try{ var raw=localStorage.getItem(KEY); if(!raw)return null; return normalise(JSON.parse(raw)); }
+  catch(e){ return null; }
+}
+
+/* ── the calculation ─────────────────────────────────────────────────── */
+function ingById(id){ for(var i=0;i<S.ings.length;i++){ if(S.ings[i].id===id) return S.ings[i]; } return null; }
+
+function computeRows(){
+  return S.dishes.map(function(d){
+    var st=[],cz=[],i;
+    for(i=0;i<N;i++){ st.push(0); cz.push([]); }
+    var unv=[];
+    d.ing.forEach(function(id){
+      var g=ingById(id); if(!g) return;
+      var nm=g.name.trim()||"(unnamed ingredient)";
+      if(!g.verified && unv.indexOf(nm)<0) unv.push(nm);
+      for(var k=0;k<N;k++){
+        if(g.a[k]>0){ if(g.a[k]>st[k]) st[k]=g.a[k]; cz[k].push({n:nm,v:g.a[k]}); }
+      }
+    });
+    for(i=0;i<N;i++){
+      if(d.cross[i]){ if(st[i]<1) st[i]=1; cz[i].push({n:"Cross-contact in preparation",v:1}); }
+    }
+    return {d:d, st:st, cz:cz, unv:unv};
+  });
+}
+/* verdict for a guest: 0 = clear, 1 = may contain only, 2 = contains */
+function guestVerdict(row){
+  var worst=0;
+  for(var k=0;k<N;k++){ if(S.guest[k] && row.st[k]>worst) worst=row.st[k]; }
+  return worst;
+}
+function guestReasons(row){
+  var out=[];
+  for(var k=0;k<N;k++){
+    if(S.guest[k] && row.st[k]>0){
+      var names=row.cz[k].filter(function(c){return c.v===row.st[k];}).map(function(c){return c.n;});
+      out.push(WORD[row.st[k]].toLowerCase()+" "+stripTags(ALLERGENS[k].name).toLowerCase()+
+               (names.length?" ("+names.join(", ")+")":""));
+    }
+  }
+  return out;
+}
+function stripTags(s){ return String(s).replace(/&amp;/g,"&"); }
+function selectedGuestNames(){
+  var out=[]; for(var k=0;k<N;k++){ if(S.guest[k]) out.push(stripTags(ALLERGENS[k].name).toLowerCase()); }
+  return out;
+}
+
+/* ── rendering: ingredient library ───────────────────────────────────── */
+function renderIngs(){
+  var t=$("#ingTable"); t.innerHTML="";
+  var thead=el("thead"), tr=el("tr");
+  tr.appendChild(elTh("Ingredient","")); tr.appendChild(elTh("Supplier","")); tr.appendChild(elTh("Spec",""));
+  ALLERGENS.forEach(function(a){
+    var th=el("th","ac"); th.scope="col";
+    var ab=el("abbr",null,a.ab); ab.title=stripTags(a.name)+(a.note?" ("+stripTags(a.note)+")":"");
+    th.appendChild(ab); tr.appendChild(th);
+  });
+  var thx=el("th","noprint"); thx.scope="col"; thx.appendChild(el("span","sr","Remove")); tr.appendChild(thx);
+  thead.appendChild(tr); t.appendChild(thead);
+
+  var tb=el("tbody");
+  if(!S.ings.length){
+    var r=el("tr"), td=el("td"); td.colSpan=N+4;
+    td.appendChild(el("div","empty","No ingredients yet. Add one to start building dishes."));
+    r.appendChild(td); tb.appendChild(r);
+  }
+  S.ings.forEach(function(g){
+    var r=el("tr");
+    var tdN=el("td","nm");
+    var inN=el("input"); inN.value=g.name; inN.id="ing-"+g.id; inN.setAttribute("aria-label","Ingredient name");
+    inN.placeholder="Ingredient name";
+    inN.addEventListener("input",function(){ g.name=inN.value; inN.classList.remove("inv"); recalc(); renderAllChips(); });
+    inN.addEventListener("blur",function(){ inN.classList.toggle("inv",!inN.value.trim()); });
+    tdN.appendChild(inN); r.appendChild(tdN);
+
+    var tdS=el("td","sp");
+    var inS=el("input"); inS.value=g.supplier; inS.setAttribute("aria-label","Supplier for "+(g.name||"ingredient"));
+    inS.placeholder="Supplier";
+    inS.addEventListener("input",function(){ g.supplier=inS.value; save(); });
+    tdS.appendChild(inS); r.appendChild(tdS);
+
+    var tdV=el("td","vf");
+    var sel=el("select"); sel.setAttribute("aria-label","Supplier specification status");
+    [["1","Spec on file"],["0","Not verified"]].forEach(function(o){
+      var op=el("option",null,o[1]); op.value=o[0]; sel.appendChild(op); });
+    sel.value=g.verified?"1":"0";
+    sel.addEventListener("change",function(){ g.verified=sel.value==="1"; recalc(); renderAllChips(); });
+    tdV.appendChild(sel); r.appendChild(tdV);
+
+    ALLERGENS.forEach(function(a,k){
+      var td=el("td","ac");
+      var b=el("button","cyc"); b.type="button"; b.setAttribute("data-v",String(g.a[k]));
+      b.textContent=GLYPH[g.a[k]];
+      b.title=stripTags(a.name)+": "+WORD[g.a[k]];
+      b.setAttribute("aria-label",(g.name||"ingredient")+" — "+stripTags(a.name)+": "+WORD[g.a[k]]+". Click to change.");
+      b.addEventListener("click",function(){
+        g.a[k]=g.a[k]===0?2:(g.a[k]===2?1:0);
+        b.setAttribute("data-v",String(g.a[k])); b.textContent=GLYPH[g.a[k]];
+        b.title=stripTags(a.name)+": "+WORD[g.a[k]];
+        b.setAttribute("aria-label",(g.name||"ingredient")+" — "+stripTags(a.name)+": "+WORD[g.a[k]]+". Click to change.");
+        recalc();
+      });
+      td.appendChild(b); r.appendChild(td);
+    });
+
+    var tdX=el("td","noprint");
+    var bx=el("button","btn ico sm","×"); bx.type="button";
+    bx.title="Remove "+(g.name||"ingredient");
+    bx.setAttribute("aria-label","Remove ingredient "+(g.name||""));
+    bx.addEventListener("click",function(){ removeIng(g); });
+    tdX.appendChild(bx); r.appendChild(tdX);
+    tb.appendChild(r);
+  });
+  t.appendChild(tb);
+  $("#ingCount").textContent=plural(S.ings.length,"ingredient");
+}
+function elTh(txt,cls){ var th=el("th",cls,txt); th.scope="col"; return th; }
+
+function removeIng(g){
+  var used=S.dishes.filter(function(d){return d.ing.indexOf(g.id)>=0;});
+  var msg="Remove “"+(g.name||"this ingredient")+"” from the library?";
+  if(used.length) msg+="\n\nIt is used in "+plural(used.length,"dish","dishes")+" and will be taken out of "+
+    (used.length===1?"that dish":"those dishes")+" too.";
+  if(!window.confirm(msg)) return;
+  S.ings=S.ings.filter(function(x){return x!==g;});
+  S.dishes.forEach(function(d){ d.ing=d.ing.filter(function(id){return id!==g.id;}); });
+  renderIngs(); renderDishes(); recalc();
+}
+
+/* ── rendering: dishes ───────────────────────────────────────────────── */
+function renderDishes(){
+  var wrap=$("#dishList"); wrap.innerHTML="";
+  if(!S.dishes.length){
+    wrap.appendChild(el("div","empty","No dishes yet. Add a dish, then tick the ingredients that go into it."));
+  }
+  S.dishes.forEach(function(d){
+    var box=el("div","dish"); box.setAttribute("data-d",d.id);
+    var hd=el("div","dish-hd");
+
+    var f1=el("div","f");
+    var l1=el("label",null,"Dish"); l1.htmlFor="dn-"+d.id; f1.appendChild(l1);
+    var i1=el("input"); i1.id="dn-"+d.id; i1.value=d.name; i1.placeholder="Dish name";
+    i1.addEventListener("input",function(){ d.name=i1.value; i1.classList.remove("inv"); e1.textContent=""; recalc(); });
+    i1.addEventListener("blur",function(){
+      var bad=!i1.value.trim(); i1.classList.toggle("inv",bad);
+      e1.textContent=bad?"Give the dish a name so it can appear on the matrix.":"";
+    });
+    f1.appendChild(i1);
+    var e1=el("div","err"); f1.appendChild(e1);
+    hd.appendChild(f1);
+
+    var f2=el("div","f");
+    var l2=el("label",null,"Menu section"); l2.htmlFor="ds-"+d.id; f2.appendChild(l2);
+    var i2=el("input"); i2.id="ds-"+d.id; i2.value=d.section; i2.placeholder="Mains";
+    i2.setAttribute("list","sections");
+    i2.addEventListener("input",function(){ d.section=i2.value; recalc(); });
+    i2.addEventListener("blur",function(){ renderMatrix(computeRows()); });
+    f2.appendChild(i2); hd.appendChild(f2);
+
+    var bx=el("button","btn sm dgr","Remove"); bx.type="button";
+    bx.setAttribute("aria-label","Remove dish "+(d.name||""));
+    bx.addEventListener("click",function(){
+      if(!window.confirm("Remove “"+(d.name||"this dish")+"” from the matrix?")) return;
+      S.dishes=S.dishes.filter(function(x){return x!==d;});
+      renderDishes(); recalc();
+    });
+    hd.appendChild(bx);
+    box.appendChild(hd);
+
+    var chips=el("div","chips"); chips.setAttribute("data-chips",d.id); box.appendChild(chips);
+
+    var add=el("div","addwrap");
+    var lab=el("label","sr","Add an ingredient to "+(d.name||"this dish")); lab.htmlFor="add-"+d.id;
+    var sel=el("select"); sel.id="add-"+d.id;
+    add.appendChild(lab); add.appendChild(sel);
+    var hint=el("span","hint","Add the ingredients this dish is made from.");
+    add.appendChild(hint);
+    sel.addEventListener("change",function(){
+      if(!sel.value) return;
+      if(d.ing.indexOf(sel.value)<0) d.ing.push(sel.value);
+      sel.value=""; renderChips(d); recalc();
+    });
+    box.appendChild(add);
+
+    var det=el("details","cc");
+    var sum=el("summary",null,"Cross-contact from preparation or shared equipment");
+    det.appendChild(sum);
+    var g=el("div","agrid");
+    ALLERGENS.forEach(function(a,k){
+      var lb=el("label","check");
+      var cb=el("input"); cb.type="checkbox"; cb.checked=!!d.cross[k];
+      cb.addEventListener("change",function(){ d.cross[k]=cb.checked; recalc(); });
+      var sp=el("span"); sp.innerHTML=a.name;
+      lb.appendChild(cb); lb.appendChild(sp); g.appendChild(lb);
+    });
+    det.appendChild(g);
+    if(d.cross.some(Boolean)) det.open=false;
+    box.appendChild(det);
+
+    var flags=el("div","dflags"); flags.setAttribute("data-flags",d.id); box.appendChild(flags);
+
+    wrap.appendChild(box);
+    renderChips(d);
+  });
+  $("#dishCount").textContent=plural(S.dishes.length,"dish","dishes");
+  renderIngOptions();
+}
+function renderIngOptions(){
+  var opts=S.ings.slice().sort(function(a,b){return (a.name||"").localeCompare(b.name||"");});
+  S.dishes.forEach(function(d){
+    var sel=document.getElementById("add-"+d.id); if(!sel) return;
+    sel.innerHTML="";
+    var o0=el("option",null,S.ings.length?"+ Add ingredient…":"No ingredients in the library yet");
+    o0.value=""; sel.appendChild(o0);
+    opts.forEach(function(g){
+      if(d.ing.indexOf(g.id)>=0) return;
+      var o=el("option",null,(g.name||"(unnamed)")+(g.verified?"":" — no spec on file")); o.value=g.id; sel.appendChild(o);
+    });
+  });
+}
+function renderChips(d){
+  var box=document.querySelector('[data-chips="'+d.id+'"]'); if(!box) return;
+  box.innerHTML="";
+  if(!d.ing.length){
+    var w=el("span","chip warn","No ingredients yet"); box.appendChild(w);
+  }
+  d.ing.forEach(function(id){
+    var g=ingById(id); if(!g) return;
+    var c=el("span","ichip"+(g.verified?"":" unv"));
+    c.appendChild(document.createTextNode(g.name||"(unnamed)"));
+    if(!g.verified) c.title="No supplier specification on file for this ingredient.";
+    var b=el("button",null,"×"); b.type="button";
+    b.setAttribute("aria-label","Remove "+(g.name||"ingredient")+" from "+(d.name||"dish"));
+    b.addEventListener("click",function(){
+      d.ing=d.ing.filter(function(x){return x!==id;});
+      renderChips(d); renderIngOptions(); recalc();
+    });
+    c.appendChild(b); box.appendChild(c);
+  });
+  renderIngOptions();
+}
+function renderAllChips(){ S.dishes.forEach(renderChips); }
+
+function renderDishFlags(rows){
+  rows.forEach(function(r){
+    var box=document.querySelector('[data-flags="'+r.d.id+'"]'); if(!box) return;
+    box.innerHTML="";
+    var any=false;
+    for(var k=0;k<N;k++){
+      if(r.st[k]===0) continue; any=true;
+      var c=el("span","chip "+(r.st[k]===2?"bad":"warn"));
+      c.innerHTML=(r.st[k]===2?"● ":"▲ ")+ALLERGENS[k].name;
+      box.appendChild(c);
+    }
+    if(!any && r.d.ing.length) box.appendChild(el("span","chip ok","Free from all 14"));
+    if(r.unv.length){
+      var u=el("span","chip warn","Unverified: "+r.unv.length);
+      u.title="No supplier spec on file for: "+r.unv.join(", ");
+      box.appendChild(u);
+    }
+  });
+}
+
+/* ── rendering: the matrix ───────────────────────────────────────────── */
+function renderMatrix(rows){
+  var t=$("#mxTable"), emptyBox=$("#mxEmpty");
+  t.innerHTML=""; emptyBox.innerHTML="";
+  if(!rows.length){
+    t.style.display="none";
+    emptyBox.appendChild(el("div","empty","Add a dish to build the matrix."));
+    return;
+  }
+  t.style.display="";
+  var thead=el("thead"), tr=el("tr");
+  var th0=el("th",null,"Dish"); th0.scope="col"; tr.appendChild(th0);
+  ALLERGENS.forEach(function(a){
+    var th=el("th","ac"); th.scope="col";
+    var ab=el("abbr",null,a.ab); ab.title=stripTags(a.name)+(a.note?" ("+stripTags(a.note)+")":"");
+    th.appendChild(ab); tr.appendChild(th);
+  });
+  thead.appendChild(tr); t.appendChild(thead);
+
+  var tb=el("tbody"), lastSec=null;
+  rows.forEach(function(r){
+    var sec=(r.d.section||"").trim();
+    if(sec!==lastSec){
+      lastSec=sec;
+      var sr=el("tr","secrow"), sth=el("th");
+      sth.appendChild(el("span",null,sec||"Unsectioned"));
+      sth.colSpan=N+1; sth.scope="colgroup"; sr.appendChild(sth); tb.appendChild(sr);
+    }
+    var row=el("tr");
+    var td=el("td","dn");
+    td.appendChild(document.createTextNode(r.d.name.trim()||"(unnamed dish)"));
+    if(r.unv.length){
+      var m=el("span","chip warn"); m.textContent="check spec"; m.style.marginLeft="6px";
+      m.title="No supplier specification on file for: "+r.unv.join(", ");
+      td.appendChild(m);
+    }
+    row.appendChild(td);
+    for(var k=0;k<N;k++){
+      var c=el("td","cell c"+r.st[k]);
+      var mk=el("span","mk",GLYPH[r.st[k]]); mk.setAttribute("aria-hidden","true");
+      c.appendChild(mk);
+      c.appendChild(el("span","sr",stripTags(ALLERGENS[k].name)+": "+WORD[r.st[k]]));
+      var names=r.cz[k].map(function(x){return x.n+(x.v===1&&r.st[k]===2?" (may)":"");});
+      if(names.length){
+        c.appendChild(el("span","cz",names.join(", ")));
+        c.title=stripTags(ALLERGENS[k].name)+" — "+WORD[r.st[k]]+": "+names.join(", ");
+      }else{
+        c.title=stripTags(ALLERGENS[k].name)+" — "+WORD[r.st[k]];
+      }
+      row.appendChild(c);
+    }
+    tb.appendChild(row);
+  });
+  t.appendChild(tb);
+}
+function renderLegend(){
+  var g=$("#legend"); if(g.childNodes.length) return;
+  ALLERGENS.forEach(function(a){
+    var d=el("div");
+    d.innerHTML="<b>"+a.ab+"</b> "+a.name+(a.note?" <span>"+a.note+"</span>":"");
+    g.appendChild(d);
+  });
+}
+
+/* ── rendering: results ──────────────────────────────────────────────── */
+function renderResults(rows){
+  var total=rows.length;
+  var clear=0, caution=0, blocked=0, contains=0, may=0, freeAll=0;
+  rows.forEach(function(r){
+    var v=guestVerdict(r);
+    if(v===0)clear++; else if(v===1)caution++; else blocked++;
+    var anyFlag=false;
+    for(var k=0;k<N;k++){ if(r.st[k]===2){contains++;anyFlag=true;} else if(r.st[k]===1){may++;anyFlag=true;} }
+    if(!anyFlag && r.d.ing.length) freeAll++;
+  });
+  var picked=selectedGuestNames();
+  var safe=S.strict?clear:(clear+caution);
+
+  var heroV=$("#heroV"), heroU=$("#heroU");
+  if(!total){
+    heroV.textContent="—";
+    heroU.textContent="Add a dish to check the menu against a guest.";
+  }else{
+    heroV.textContent=safe+" of "+total;
+    if(!picked.length){
+      heroU.textContent="No guest allergens ticked — every dish shown.";
+    }else{
+      heroU.textContent="dishes free from "+listWords(picked)+
+        (S.strict?" (“may contain” counted as unsafe)":" (“may contain” allowed)");
+    }
+  }
+  $("#sContains").textContent=total?String(contains):"—";
+  $("#sMay").textContent=total?String(may):"—";
+  $("#sFree").textContent=total?String(freeAll):"—";
+  var verified=S.ings.filter(function(g){return g.verified;}).length;
+  $("#sVer").textContent=S.ings.length?(Math.round(verified/S.ings.length*100)+"%"):"—";
+
+  var unvNames=S.ings.filter(function(g){return !g.verified;}).map(function(g){return g.name.trim()||"(unnamed)";});
+  var un=$("#unvNote");
+  if(unvNames.length){
+    un.hidden=false;
+    un.innerHTML="<strong>"+plural(unvNames.length,"ingredient")+" without a supplier specification on file:</strong> "+
+      esc(unvNames.join(", "))+". Every dish using "+(unvNames.length===1?"it":"them")+" is marked &ldquo;check spec&rdquo;.";
+  }else{ un.hidden=true; un.textContent=""; }
+
+  // guest lists
+  var box=$("#guestLists"); box.innerHTML="";
+  if(total && picked.length){
+    var ul=el("ul","slist");
+    rows.forEach(function(r){
+      var v=guestVerdict(r);
+      var li=el("li");
+      var dot=el("span","dot "+(v===0?"g":(v===1?"a":"r"))); li.appendChild(dot);
+      var nm=el("span","nm",r.d.name.trim()||"(unnamed dish)"); li.appendChild(nm);
+      var rz=el("span","rz");
+      rz.textContent=v===0?"clear":guestReasons(r).join("; ");
+      if(v===0) rz.style.color="var(--ok)";
+      li.appendChild(rz);
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    var h=el("p","hint");
+    h.textContent="Green = free from the ticked allergens. Amber = may contain only. Red = contains.";
+    h.style.marginTop="8px";
+    box.appendChild(h);
+  }else if(total){
+    box.appendChild(el("p","hint","Tick what the guest cannot have and every dish is scored against it instantly."));
+  }
+  document.body.classList.toggle("has-guest",picked.length>0);
+  renderGuestDoc(rows,picked,safe,total);
+}
+function renderGuestDoc(rows,picked,safe,total){
+  var head=$("#gdocHead"), body=$("#gdocBody");
+  if(!picked.length){ head.textContent=""; body.innerHTML=""; return; }
+  head.innerHTML="Checked against: <b>"+esc(listWords(picked))+"</b>. "+
+    (S.strict?"&ldquo;May contain&rdquo; is counted as unsafe.":"&ldquo;May contain&rdquo; dishes are shown as caution.")+
+    " <b>"+safe+" of "+total+"</b> dishes suitable. Confirm with the kitchen before serving.";
+  body.innerHTML="";
+  var ul=el("ul","slist");
+  rows.forEach(function(r){
+    var v=guestVerdict(r);
+    var li=el("li");
+    li.appendChild(el("span","nm",(v===0?"✓ ":(v===1?"▲ ":"✕ "))+(r.d.name.trim()||"(unnamed dish)")));
+    var rz=el("span","rz",v===0?"suitable":guestReasons(r).join("; "));
+    li.appendChild(rz); ul.appendChild(li);
+  });
+  body.appendChild(ul);
+}
+
+/* ── print header ────────────────────────────────────────────────────── */
+function renderPrintHeader(){
+  $("#pVenue").textContent=S.meta.venue.trim()||"Allergen matrix";
+  $("#pMenu").textContent=S.meta.menu.trim()||"—";
+  $("#pBy").textContent=S.meta.by.trim()||"—";
+  $("#pDate").textContent=fmtDate(S.meta.date);
+  $("#pReview").textContent=fmtDate(S.meta.review);
+  $("#pView").textContent=S.view==="kitchen"?"kitchen view (shows the ingredient behind every flag)":"customer view";
+  var n=S.meta.notes.trim();
+  $("#pNotes").textContent=n?n:"";
+}
+
+/* ── recalc / render orchestration ───────────────────────────────────── */
+function recalc(){
+  var rows=computeRows();
+  renderMatrix(rows);
+  renderDishFlags(rows);
+  renderResults(rows);
+  renderPrintHeader();
+  save();
+}
+function renderAll(){
+  document.body.classList.toggle("v-kitchen",S.view==="kitchen");
+  $("#vCustomer").setAttribute("aria-pressed",String(S.view==="customer"));
+  $("#vKitchen").setAttribute("aria-pressed",String(S.view==="kitchen"));
+  ["venue","menu","by","date","review","notes"].forEach(function(k){
+    var i=document.querySelector('[data-meta="'+k+'"]'); if(i) i.value=S.meta[k];
+  });
+  $("#strict").checked=!!S.strict;
+  renderGuestGrid();
+  renderIngs();
+  renderDishes();
+  renderLegend();
+  $("#sampleCard").hidden=!S.sample;
+  recalc();
+}
+function renderGuestGrid(){
+  var g=$("#guestGrid");
+  if(!g.childNodes.length){
+    ALLERGENS.forEach(function(a,k){
+      var lb=el("label","check");
+      var cb=el("input"); cb.type="checkbox"; cb.id="g-"+a.id; cb.setAttribute("data-g",String(k));
+      cb.addEventListener("change",function(){ S.guest[k]=cb.checked; recalc(); });
+      var sp=el("span"); sp.innerHTML=a.name;
+      lb.appendChild(cb); lb.appendChild(sp); g.appendChild(lb);
+    });
+  }
+  for(var k=0;k<N;k++){
+    var cb=g.querySelector('[data-g="'+k+'"]'); if(cb) cb.checked=!!S.guest[k];
+  }
+}
+
+/* ── CSV / JSON ──────────────────────────────────────────────────────── */
+function q(v){
+  var s=(v==null?"":String(v));
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvRow(arr){ return arr.map(q).join(",")+"\r\n"; }
+function download(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download=name; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+    msg("Downloaded "+name);
+  }catch(e){ msg("Could not start the download in this browser."); }
+}
+function msg(t){ var m=$("#ioMsg"); m.textContent=t; }
+function slug(){
+  var s=(S.meta.venue||"allergen-matrix").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  return (s||"allergen-matrix")+"-"+(S.meta.date||today());
+}
+var NOTICE_TEXT="Verification is the operator's responsibility. This matrix reports only what has been entered "+
+  "into it; it is not checked against supplier specifications and cannot guarantee the absence of an allergen "+
+  "where equipment, oil or surfaces are shared. Confirm every ingredient against the current supplier "+
+  "specification and speak to the guest before serving.";
+
+function csvMatrix(){
+  var rows=computeRows(), out="";
+  out+=csvRow(["Allergen matrix",S.meta.venue]);
+  out+=csvRow(["Menu",S.meta.menu]);
+  out+=csvRow(["Effective from",fmtDate(S.meta.date)]);
+  out+=csvRow(["Review by",fmtDate(S.meta.review)]);
+  out+=csvRow(["Prepared by",S.meta.by]);
+  if(S.meta.notes) out+=csvRow(["Notes",S.meta.notes]);
+  out+=csvRow(["Standard","14 allergens of Annex II, Regulation (EU) No 1169/2011"]);
+  out+=csvRow(["Notice",NOTICE_TEXT]);
+  out+="\r\n";
+  out+=csvRow(["Dish","Section"].concat(ALLERGENS.map(function(a){return stripTags(a.name);})));
+  rows.forEach(function(r){
+    out+=csvRow([r.d.name.trim()||"(unnamed dish)",r.d.section].concat(r.st.map(function(v){return CSVW[v];})));
+  });
+  out+="\r\n";
+  out+=csvRow(["ALLERGEN SOURCES (KITCHEN DETAIL)"]);
+  out+=csvRow(["Dish","Allergen","Status","Source ingredients","Unverified ingredients in dish"]);
+  rows.forEach(function(r){
+    for(var k=0;k<N;k++){
+      if(r.st[k]===0) continue;
+      out+=csvRow([r.d.name.trim()||"(unnamed dish)",stripTags(ALLERGENS[k].name),CSVW[r.st[k]],
+        r.cz[k].map(function(c){return c.n+" ["+WORD[c.v].toLowerCase()+"]";}).join("; "),
+        r.unv.join("; ")]);
+    }
+  });
+  download(slug()+"-matrix.csv","﻿"+out,"text/csv;charset=utf-8");
+}
+function csvIngredients(){
+  var out="";
+  out+=csvRow(["Ingredient allergen register",S.meta.venue]);
+  out+=csvRow(["Effective from",fmtDate(S.meta.date)]);
+  out+=csvRow(["Notice",NOTICE_TEXT]);
+  out+="\r\n";
+  out+=csvRow(["Ingredient","Supplier","Supplier spec"].concat(ALLERGENS.map(function(a){return stripTags(a.name);})));
+  S.ings.forEach(function(g){
+    out+=csvRow([g.name.trim()||"(unnamed)",g.supplier,g.verified?"On file":"NOT VERIFIED"]
+      .concat(g.a.map(function(v){return CSVW[v];})));
+  });
+  download(slug()+"-ingredients.csv","﻿"+out,"text/csv;charset=utf-8");
+}
+function exportJson(){
+  download(slug()+".json",JSON.stringify(S,null,2),"application/json");
+}
+function importJson(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=="object"||!Array.isArray(o.ings)||!Array.isArray(o.dishes))
+        throw new Error("not an allergen matrix file");
+      if(!window.confirm("Replace the current library with "+o.ings.length+" ingredients and "+
+        o.dishes.length+" dishes from this file?")) { msg("Import cancelled."); return; }
+      S=normalise(o); renderAll();
+      msg("Imported "+plural(S.ings.length,"ingredient")+" and "+plural(S.dishes.length,"dish","dishes")+".");
+    }catch(e){ msg("That file could not be read as an allergen matrix export ("+e.message+")."); }
+  };
+  fr.onerror=function(){ msg("The file could not be read."); };
+  fr.readAsText(file);
+}
+
+/* ── wiring ──────────────────────────────────────────────────────────── */
+document.addEventListener("input",function(ev){
+  var t=ev.target;
+  if(t&&t.getAttribute&&t.getAttribute("data-meta")){
+    S.meta[t.getAttribute("data-meta")]=t.value;
+    renderPrintHeader(); save();
+  }
+});
+$("#strict").addEventListener("change",function(){ S.strict=this.checked; recalc(); });
+$("#btnGuestClear").addEventListener("click",function(){
+  for(var k=0;k<N;k++)S.guest[k]=false; renderGuestGrid(); recalc();
+});
+$("#btnAddDish").addEventListener("click",function(){
+  S.dishes.push({id:uid("d"),name:"",section:(S.dishes.length?S.dishes[S.dishes.length-1].section:"Mains"),
+    ing:[],cross:X([])});
+  renderDishes(); recalc();
+  var last=S.dishes[S.dishes.length-1];
+  var i=document.getElementById("dn-"+last.id); if(i) i.focus();
+});
+$("#btnAddIng").addEventListener("click",function(){
+  S.ings.push({id:uid("i"),name:"",supplier:"",verified:false,a:A({})});
+  renderIngs(); renderIngOptions(); recalc();
+  var last=S.ings[S.ings.length-1];
+  var i=document.getElementById("ing-"+last.id); if(i) i.focus();
+});
+function setView(v){ S.view=v; document.body.classList.toggle("v-kitchen",v==="kitchen");
+  $("#vCustomer").setAttribute("aria-pressed",String(v==="customer"));
+  $("#vKitchen").setAttribute("aria-pressed",String(v==="kitchen"));
+  renderPrintHeader(); save(); }
+$("#vCustomer").addEventListener("click",function(){ setView("customer"); });
+$("#vKitchen").addEventListener("click",function(){ setView("kitchen"); });
+$("#btnPrint").addEventListener("click",function(){ window.print(); });
+$("#btnPrint2").addEventListener("click",function(){ window.print(); });
+$("#btnCsv").addEventListener("click",csvMatrix);
+$("#btnCsvMatrix").addEventListener("click",csvMatrix);
+$("#btnCsvIng").addEventListener("click",csvIngredients);
+$("#btnJson").addEventListener("click",exportJson);
+$("#btnImport").addEventListener("click",function(){ $("#fileJson").click(); });
+$("#fileJson").addEventListener("change",function(){
+  if(this.files&&this.files[0]) importJson(this.files[0]);
+  this.value="";
+});
+$("#btnBlank").addEventListener("click",function(){
+  if(!window.confirm("Clear the sample menu and start with an empty matrix?")) return;
+  S=blank(); renderAll(); msg("Started a blank matrix.");
+});
+$("#btnClear").addEventListener("click",function(){
+  if(!window.confirm("Delete every dish, ingredient and detail saved in this browser?\n\nThis cannot be undone. Export JSON first if you want a copy.")) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S=blank(); renderAll(); msg("All data cleared.");
+});
+window.addEventListener("beforeprint",renderPrintHeader);
+
+/* datalist for menu sections */
+(function(){
+  var dl=document.createElement("datalist"); dl.id="sections";
+  ["Starters","Mains","Sides","Desserts","Sandwiches","Breakfast","Kids","Drinks"].forEach(function(s){
+    var o=document.createElement("option"); o.value=s; dl.appendChild(o);
+  });
+  document.body.appendChild(dl);
+})();
+
+/* boot */
+var loaded=load();
+S=loaded?loaded:sample();
+renderAll();
+})();
+</script>
+</body>
+</html>

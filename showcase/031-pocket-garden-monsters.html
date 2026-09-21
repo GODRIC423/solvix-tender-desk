@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Monsters of the Garden — a Game Boy bug hunt</title>
+<meta name="description" content="A playable handheld-console page: catch ten garden bugs in forty-five seconds on a 160×144 four-shade green screen framed in a chunky grey Game Boy shell, with a six-entry pixel bestiary.">
+<meta name="theme-color" content="#9BBC0F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%239BBC0F'/%3E%3Cpath fill='%230F380F' d='M3 0h2v1H3zM2 1h4v1H2zM1 2h6v4H1zM2 6h4v1H2z'/%3E%3Cpath fill='%239BBC0F' d='M2 3h1v1H2zM5 3h1v1H5zM3 4h2v1H3z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g0:#0F380F;--g1:#306230;--g2:#8BAC0F;--g3:#9BBC0F;
+  --shell:#C4BEBB;--shell-l:#ebe7e5;--shell-d:#a39d9a;--shell-dd:#6f6a68;--shell-x:#3a3736;
+  --ink:#2b2827;--ink-2:#4b4745;--mag:#A0148C;--mag-d:#6f0e61;--mag-l:#c93fb3;
+  --bg:#dcd8d6;--paper:#e9e6e4;
+}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-behavior:smooth}
+body{
+  margin:0;color:var(--ink);font-family:'Press Start 2P','Courier New',monospace;font-size:12px;line-height:2;
+  background:var(--bg) radial-gradient(#c9c4c1 1px,transparent 1.2px) 0 0/8px 8px;
+  -webkit-text-size-adjust:100%;overflow-x:hidden;
+}
+a{color:var(--mag)}
+a:hover{color:var(--mag-d)}
+:focus-visible{outline:3px solid var(--mag);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+
+/* ---------- masthead band ---------- */
+.band{position:relative;background:var(--ink);padding:24px 20px 150px;overflow:hidden}
+.band::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(#0000 0 3px,rgba(155,188,15,.055) 3px 4px);pointer-events:none}
+.band::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:repeating-linear-gradient(90deg,var(--g0) 0 9px,var(--g1) 9px 18px)}
+.mast{position:relative;z-index:1;text-align:center;max-width:840px;margin:0 auto}
+.eyebrow{display:inline-block;margin:0 0 14px;font-size:9px;line-height:1;color:var(--shell-l);background:var(--mag);padding:8px 13px 9px;box-shadow:4px 4px 0 var(--mag-d)}
+.eyebrow b{font-weight:400;color:#fff}
+h1{margin:0;font-size:clamp(20px,4.4vw,38px);line-height:1.3;font-weight:400;color:var(--g3);text-shadow:.1em .1em 0 var(--mag)}
+h1 small{display:block;font-size:.42em;color:var(--g2);text-shadow:.13em .13em 0 var(--g1);margin-top:11px}
+.lede{max-width:840px;margin:18px auto 0;font-size:10px;line-height:2;color:var(--g2)}
+
+/* ---------- stage ---------- */
+.stage{position:relative;z-index:2;display:grid;grid-template-columns:1fr minmax(0,420px) 1fr;align-items:center;gap:clamp(16px,2.6vw,42px);max-width:1220px;margin:-132px auto 0;padding:0 20px}
+
+/* cartridge */
+.cart{justify-self:end;width:clamp(168px,17vw,214px);rotate:-7deg;filter:drop-shadow(0 16px 20px rgba(43,40,39,.4))}
+.cart-body{background:var(--shell);clip-path:polygon(0 0,70% 0,100% 12%,100% 100%,0 100%);padding:13px 13px 0;
+  box-shadow:inset 3px 3px 0 var(--shell-l),inset -4px -4px 0 var(--shell-d)}
+.cart-label{background:var(--paper);border:3px solid var(--ink);padding:9px 8px 11px;text-align:center}
+.cl-top{margin:0 0 9px;font-size:7px;line-height:1;color:var(--shell-l);background:var(--ink);padding:5px 0 6px}
+.cl-art{background:var(--g3);border:2px solid var(--g0);padding:7px 0;margin:0 0 10px;display:flex;justify-content:center;gap:9px}
+.cl-art canvas{width:20px;height:20px;image-rendering:pixelated;display:block}
+.cl-name{margin:0;font-size:9px;line-height:1.8;color:var(--mag-d)}
+.cl-sub{margin:7px 0 0;font-size:7px;line-height:1.5;color:var(--ink-2)}
+.cl-code{margin:9px 0 0;font-size:7px;line-height:1.5;color:var(--ink-2);border-top:2px dotted var(--shell-d);padding-top:8px}
+.cart-ridges{height:24px;margin:13px -13px 0;background:repeating-linear-gradient(90deg,var(--shell-d) 0 5px,var(--shell) 5px 13px)}
+
+/* live session placard */
+.session{justify-self:start;width:clamp(184px,18vw,236px);background:var(--shell);border:3px solid var(--shell-x);
+  border-radius:6px 6px 20px 6px;box-shadow:inset 3px 3px 0 var(--shell-l),inset -3px -3px 0 var(--shell-d),7px 7px 0 var(--shell-dd);padding:12px}
+.s-head{margin:0 0 11px;font-size:8px;line-height:1;color:var(--shell-l);background:var(--mag);padding:7px 9px 8px}
+.s-lcd{margin:0;background:var(--g3);border:3px solid var(--g0);color:var(--g0);padding:9px 8px;display:flex;justify-content:space-between;gap:8px;font-size:8px;line-height:1.4}
+.s-lcd b{font-weight:400}
+.s-rows{margin:11px 0 0}
+.s-rows div{display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-top:2px dotted var(--shell-dd);font-size:8px;line-height:1.5}
+.s-rows dt{color:var(--ink-2)}
+.s-rows dd{margin:0;color:var(--mag-d)}
+.s-hint{margin:12px 0 2px;padding-top:11px;border-top:2px solid var(--shell-d);font-size:7px;line-height:2.1;color:var(--ink-2)}
+@media (max-width:1080px){
+  .stage{grid-template-columns:minmax(0,420px);justify-content:center;gap:36px;margin-top:-132px}
+  .shell{order:1}
+  .session{order:2;justify-self:center;width:min(100%,340px)}
+  .cart{order:3;justify-self:center;width:196px;rotate:-4deg}
+}
+
+.shell{
+  position:relative;justify-self:center;width:100%;background:var(--shell);
+  border-radius:14px 14px 78px 14px;padding:16px 20px 30px;
+  box-shadow:inset 3px 3px 0 var(--shell-l),inset -4px -4px 0 var(--shell-d),0 3px 0 var(--shell-dd),0 34px 50px -18px rgba(43,40,39,.55);
+  user-select:none;-webkit-user-select:none;
+}
+.shell:focus{outline:none}
+.shell:focus-visible{outline:3px solid var(--mag);outline-offset:6px}
+.groove{position:relative;height:9px;margin:0 -6px 14px;border-top:3px solid var(--shell-d);border-bottom:3px solid var(--shell-l)}
+.groove span{position:absolute;right:14px;top:-16px;font-size:7px;color:var(--ink-2)}
+.bezel{
+  position:relative;background:#4b4745;border-radius:10px 10px 44px 10px;padding:26px 30px 24px;
+  box-shadow:inset 0 3px 0 #625d5a,inset 0 -3px 0 #2c2928;
+}
+.bezel-top{display:flex;align-items:center;gap:10px;margin:-14px 0 12px;font-size:6px;color:#c4bebb;line-height:1}
+.bezel-top .stripes{flex:1;height:6px;border-top:2px solid var(--mag);border-bottom:2px solid var(--mag-d)}
+.bezel-top .stripes.r{flex:0 0 28px}
+.led-wrap{position:absolute;left:11px;top:44%;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:6px;color:#c4bebb;line-height:1}
+.led{width:9px;height:9px;border-radius:50%;background:var(--mag-d);box-shadow:inset 0 1px 0 #7a1a6c;transition:background .2s,box-shadow .2s}
+.shell[data-mode="play"] .led{background:var(--mag-l);box-shadow:0 0 8px 2px rgba(201,63,179,.7)}
+#screen{display:block;width:100%;aspect-ratio:160/144;image-rendering:pixelated;image-rendering:crisp-edges;background:var(--g3);touch-action:none;cursor:crosshair}
+
+.brand{display:flex;align-items:baseline;gap:10px;margin:11px 6px 4px;font-size:13px;color:var(--ink-2);line-height:1}
+.brand em{font-style:normal;color:var(--mag);display:inline-block;transform:skewX(-10deg)}
+.brand small{font-size:7px;color:var(--ink-2);margin-left:auto}
+
+.controls{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"dpad gap ab" "ss ss ss" "sp sp sp";align-items:center;margin-top:6px}
+.controls button{font-family:inherit;border:0;padding:0;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;position:relative}
+.dpad{grid-area:dpad;display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(3,38px);filter:drop-shadow(0 3px 0 #201e1d)}
+.dpad button,.dpad .hub{background:var(--shell-x);box-shadow:inset 0 -4px 0 #201e1d,inset 0 2px 0 #56514f}
+.dpad .up{grid-area:1/2;border-radius:5px 5px 0 0}
+.dpad .left{grid-area:2/1;border-radius:5px 0 0 5px}
+.dpad .hub{grid-area:2/2;box-shadow:none;position:relative}
+.dpad .hub::after{content:"";position:absolute;inset:10px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#2a2827,#3a3736 70%)}
+.dpad .right{grid-area:2/3;border-radius:0 5px 5px 0}
+.dpad .down{grid-area:3/2;border-radius:0 0 5px 5px}
+.dpad button::before{content:"";position:absolute;left:50%;top:50%;width:0;height:0;translate:-50% -55%}
+.dpad .up::before{border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #8c8684}
+.dpad .down::before{border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #8c8684}
+.dpad .left::before{border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:8px solid #8c8684}
+.dpad .right::before{border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:8px solid #8c8684}
+.dpad button.held,.dpad button:active{box-shadow:inset 0 -1px 0 #201e1d,inset 0 3px 0 #201e1d;translate:0 2px}
+.dpad button:focus-visible{outline:3px solid var(--g3);outline-offset:-3px}
+
+.ab{grid-area:ab;display:flex;gap:16px;align-items:flex-start;rotate:-24deg;margin:0 6px 0 0}
+.ab button{width:54px;height:54px;border-radius:50%;background:var(--mag);color:transparent;font-size:0;
+  box-shadow:inset 0 -6px 0 var(--mag-d),inset 0 3px 0 var(--mag-l),0 4px 0 var(--mag-d)}
+.ab .b{margin-top:26px}
+.ab button::after{content:attr(data-label);position:absolute;left:100%;bottom:-8px;translate:-45% 0;font-size:10px;color:var(--ink-2)}
+.ab button.held,.ab button:active{box-shadow:inset 0 -2px 0 var(--mag-d),inset 0 3px 0 var(--mag-d),0 1px 0 var(--mag-d);translate:0 3px}
+.ab button:focus-visible,.ss button:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+
+.ss{grid-area:ss;justify-self:start;display:flex;gap:26px;margin:20px 0 8px 54px;rotate:-24deg}
+.ss button{width:48px;height:13px;border-radius:7px;background:#6f6a68;color:transparent;font-size:0;box-shadow:inset 0 -3px 0 #4b4745,inset 0 2px 0 #8c8684,0 2px 0 #3a3736}
+.ss button::after{content:attr(data-label);position:absolute;left:50%;top:18px;translate:-50% 0;font-size:7px;color:var(--ink-2)}
+.ss button.held,.ss button:active{box-shadow:inset 0 -1px 0 #4b4745,inset 0 2px 0 #4b4745;translate:0 2px}
+
+.speaker{grid-area:sp;justify-self:end;width:118px;height:58px;margin:4px 10px 0 0;rotate:-24deg;
+  background:repeating-linear-gradient(90deg,transparent 0 10px,#8c8684 10px 16px,transparent 16px 20px);
+  -webkit-mask:linear-gradient(#000 0 0);border-radius:10px}
+.speaker i{position:absolute;inset:0;background:repeating-linear-gradient(#0000 0 4px,var(--shell) 4px 5px);opacity:.35}
+
+/* ---------- sections ---------- */
+section{padding:64px 0 0}
+.sec-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.sec-head h2{margin:0;font-size:15px;line-height:1;font-weight:400;padding:10px 14px;background:var(--ink);color:var(--g3);box-shadow:5px 5px 0 var(--mag)}
+.sec-head .num{font-size:9px;color:var(--ink-2)}
+.sec-head .tag{font-size:9px;color:var(--g1);margin-left:auto}
+
+.manual{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.pane{background:var(--paper);border:3px solid var(--ink);box-shadow:7px 7px 0 var(--shell-d);padding:20px 22px 16px}
+.pane h3{margin:0 0 12px;font-size:11px;font-weight:400;color:var(--mag);line-height:1.6}
+.pane ul{list-style:none;margin:0;padding:0}
+.pane li{display:grid;grid-template-columns:142px 1fr;gap:10px;align-items:start;padding:8px 0;border-top:2px dotted var(--shell-d);font-size:10px;line-height:1.9}
+.pane li:first-child{border-top:0}
+.pane p{margin:0;font-size:10px;line-height:2.1}
+.pane p+p{margin-top:10px}
+kbd{font-family:inherit;font-size:8px;display:inline-block;padding:3px 5px 4px;background:#fff;border:2px solid var(--ink);border-bottom-width:4px;border-radius:3px;line-height:1;margin:2px 3px 2px 0;color:var(--ink)}
+.pane p.tip{margin:18px 0 0;padding:12px 14px 13px;background:var(--g3);border:3px solid var(--g0);color:var(--g0);font-size:9px;line-height:2}
+.pane p.tip b{display:block;font-weight:400;margin-bottom:6px;color:var(--g1)}
+.cap{color:var(--ink);font-size:9px;line-height:1.9}
+.cap i{font-style:normal;color:var(--mag)}
+
+.dex{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.card{background:var(--shell);border:3px solid var(--shell-x);border-radius:8px 8px 22px 8px;box-shadow:inset 3px 3px 0 var(--shell-l),inset -3px -3px 0 var(--shell-d),7px 7px 0 var(--shell-dd);padding:10px 10px 14px;display:flex;flex-direction:column}
+.mini{background:var(--g3);border:3px solid #2c2928;padding:14px 12px;display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:center;color:var(--g0)}
+.mini canvas{width:64px;height:64px;image-rendering:pixelated;display:block}
+.mini .no{font-size:7px;color:var(--g0);margin:0 0 7px;line-height:1.4}
+.mini h3{margin:0 0 10px;font-size:11px;font-weight:400;line-height:1}
+.stat{display:grid;grid-template-columns:38px 1fr;gap:6px;align-items:center;font-size:7px;line-height:1;margin-top:5px}
+.pips{display:flex;gap:2px}
+.pips i{width:8px;height:5px;background:var(--g2);border:1px solid var(--g1)}
+.pips i.on{background:var(--g0);border-color:var(--g0)}
+.card p{margin:14px 6px 0;font-size:9px;line-height:2;color:var(--ink);flex:1}
+.tally{display:flex;justify-content:space-between;margin:12px 6px 0;font-size:8px;color:var(--ink-2);line-height:1.6}
+.tally b{font-weight:400;color:var(--mag-d)}
+
+.notes{display:grid;grid-template-columns:1.4fr 1fr;gap:28px;align-items:start}
+.notes p{margin:0 0 16px;font-size:10px;line-height:2.2}
+.notes>div:first-child{max-width:56ch}
+.spec{list-style:none;margin:0;padding:0;background:var(--g3);border:3px solid var(--g0);color:var(--g0);box-shadow:7px 7px 0 var(--g1)}
+.spec li{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-top:2px solid var(--g2);font-size:8px;line-height:1.7}
+.spec li:first-child{border-top:0}
+.spec li span:last-child{text-align:right;color:var(--g0)}
+
+.darkband{position:relative;margin-top:78px;padding:58px 0 68px;background:var(--ink);border-top:5px solid var(--g0);border-bottom:5px solid var(--g0)}
+.darkband::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(#0000 0 3px,rgba(155,188,15,.05) 3px 4px);pointer-events:none}
+.darkband>.wrap{position:relative}
+.darkband .sec-head h2{background:var(--g0);box-shadow:5px 5px 0 var(--mag)}
+.darkband .sec-head .num{color:var(--shell-d)}
+.darkband .sec-head .tag{color:var(--g2)}
+
+.swatches{margin-top:26px;background:var(--shell);border:3px solid var(--shell-x);box-shadow:7px 7px 0 var(--shell-dd);padding:15px 15px 12px}
+.swatches h3{margin:0 0 13px;font-size:9px;font-weight:400;line-height:1.7;color:var(--mag-d)}
+.swatches ol{list-style:none;margin:0;padding:0}
+.swatches li{display:grid;grid-template-columns:24px 66px 1fr;gap:11px;align-items:center;padding:7px 0;font-size:8px;line-height:1.6;color:var(--ink);border-top:2px dotted var(--shell-dd)}
+.swatches li:first-child{border-top:0}
+.swatches .chip{height:22px;border:2px solid var(--ink)}
+.swatches li i{font-style:normal;color:var(--ink-2)}
+.c0{background:var(--g0)}.c1{background:var(--g1)}.c2{background:var(--g2)}.c3{background:var(--g3)}
+
+footer{margin-top:72px;padding:28px 20px 44px;border-top:4px dotted var(--shell-d);text-align:center;font-size:8px;line-height:2.2;color:var(--ink-2)}
+footer p{margin:0}
+
+@media (max-width:760px){
+  .manual,.notes{grid-template-columns:1fr}
+  .dex{grid-template-columns:1fr 1fr}
+}
+@media (max-width:560px){
+  .band{padding:20px 16px 140px}
+  .stage{margin-top:-122px}
+  .dex{grid-template-columns:1fr}
+  .shell{padding:14px 16px 26px;border-radius:12px 12px 64px 12px}
+  .bezel{padding:22px 22px 20px}
+  .dpad{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,34px)}
+  .ab button{width:48px;height:48px}
+  .speaker{width:96px;height:50px}
+  .pane li{grid-template-columns:1fr}
+  .eyebrow .opt{display:none}
+  .ss{margin-left:40px}
+  section{padding-top:52px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<div class="band">
+  <header class="mast">
+    <p class="eyebrow">CARTRIDGE <b>No.031</b> &nbsp;·&nbsp; DMG-GDN-EUR<span class="opt"> &nbsp;·&nbsp; 1 PLAYER</span></p>
+    <h1>POCKET MONSTERS<small>OF THE GARDEN</small></h1>
+    <p class="lede">Forty-five seconds. Ten bugs. One net. A handheld field guide you can actually play, in the four shades of green a 1989 screen could show.</p>
+  </header>
+</div>
+
+<main>
+  <div class="stage">
+    <aside class="cart" aria-label="Game cartridge">
+      <div class="cart-body">
+        <div class="cart-label">
+          <p class="cl-top">GARDEN BOY</p>
+          <div class="cl-art" aria-hidden="true">
+            <canvas width="8" height="8" data-deco="ladybird"></canvas>
+            <canvas width="8" height="8" data-deco="bee"></canvas>
+            <canvas width="8" height="8" data-deco="beetle"></canvas>
+          </div>
+          <p class="cl-name">POCKET<br>MONSTERS</p>
+          <p class="cl-sub">OF THE GARDEN</p>
+          <p class="cl-code">DMG-GDN-EUR<br>© 1989 LAWN LAB</p>
+        </div>
+        <div class="cart-ridges" aria-hidden="true"></div>
+      </div>
+    </aside>
+
+    <div class="shell" id="shell" tabindex="0" role="application" aria-roledescription="game console" aria-label="Garden Boy console. Focus here and use the arrow keys, Z, X, Enter and Shift, or click the buttons below the screen." data-mode="title">
+      <div class="groove" aria-hidden="true"><span>◁OFF·ON▷</span></div>
+      <div class="bezel">
+        <div class="bezel-top" aria-hidden="true"><span class="stripes"></span><span>DOT MATRIX WITH GARDEN BUGS</span><span class="stripes r"></span></div>
+        <div class="led-wrap" aria-hidden="true"><span class="led"></span><span>BATT</span></div>
+        <canvas id="screen" width="160" height="144" role="img" aria-label="Game screen: a 160 by 144 pixel garden in four shades of green. Live status is announced below.">Your browser does not support canvas.</canvas>
+      </div>
+      <div class="brand" aria-hidden="true">GARDEN <em>BOY</em><small>160×144 · 4 SHADES</small></div>
+
+      <div class="controls">
+        <div class="dpad" role="group" aria-label="Directional pad">
+          <button type="button" class="up" data-btn="up" aria-label="Up"></button>
+          <button type="button" class="left" data-btn="left" aria-label="Left"></button>
+          <div class="hub" aria-hidden="true"></div>
+          <button type="button" class="right" data-btn="right" aria-label="Right"></button>
+          <button type="button" class="down" data-btn="down" aria-label="Down"></button>
+        </div>
+        <div class="ab" role="group" aria-label="Action buttons">
+          <button type="button" class="b" data-btn="b" data-label="B" aria-label="B button: dash">B</button>
+          <button type="button" class="a" data-btn="a" data-label="A" aria-label="A button: swing net">A</button>
+        </div>
+        <div class="ss" role="group" aria-label="Start and select">
+          <button type="button" data-btn="select" data-label="SELECT" aria-label="Select: back to title">SELECT</button>
+          <button type="button" data-btn="start" data-label="START" aria-label="Start: play or pause">START</button>
+        </div>
+        <div class="speaker" aria-hidden="true"><i></i></div>
+      </div>
+    </div>
+
+    <aside class="session" aria-label="Live session status">
+      <p class="s-head">SESSION</p>
+      <p class="s-lcd"><span>MODE</span><b data-ro="mode">TITLE</b></p>
+      <dl class="s-rows">
+        <div><dt>BUGS</dt><dd data-ro="bugs">00/10</dd></div>
+        <div><dt>TIME</dt><dd data-ro="time">45</dd></div>
+        <div><dt>SPECIES</dt><dd data-ro="seen">0/6</dd></div>
+        <div><dt>BEST</dt><dd data-ro="best">—</dd></div>
+      </dl>
+      <p class="s-hint">A SWINGS THE NET<br>B DASHES WHILE HELD<br>START BEGINS THE ROUND</p>
+    </aside>
+  </div>
+
+  <p class="sr-only" id="sr" aria-live="polite" role="status">Title screen. Press Start to begin.</p>
+
+  <div class="wrap">
+    <section id="manual" aria-labelledby="h-manual">
+      <div class="sec-head"><span class="num">01</span><h2 id="h-manual">OPERATION MANUAL</h2><span class="tag">READ BEFORE PLAY</span></div>
+      <div class="manual">
+        <article class="pane">
+          <h3>CONTROLS</h3>
+          <ul>
+            <li><span class="cap"><i>D-PAD</i><br><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move the net around the lawn. Diagonals work, slightly slower.</span></li>
+            <li><span class="cap"><i>A</i><br><kbd>Z</kbd> or <kbd>SPACE</kbd></span><span>Swing the net. Anything under the ring on the second frame of the swing is caught.</span></li>
+            <li><span class="cap"><i>B</i> (hold)<br><kbd>X</kbd></span><span>Dash at double speed while stamina lasts. The six pips in the top bar refill when you let go.</span></li>
+            <li><span class="cap"><i>START</i><br><kbd>ENTER</kbd></span><span>Begin a round, pause, resume, or play again from a results screen.</span></li>
+            <li><span class="cap"><i>SELECT</i><br><kbd>SHIFT</kbd></span><span>Abandon the round and return to the title screen.</span></li>
+          </ul>
+        </article>
+        <article class="pane">
+          <h3>RULES OF THE LAWN</h3>
+          <p>A round lasts forty-five seconds. Catch ten bugs before the timer in the top-right corner reaches zero and the round is won; the seconds you have left become your record.</p>
+          <p>Four bugs share the lawn at any time. Each catch draws the next species from a shuffled deck of six, so every species appears before any repeats. Newly arrived bugs blink for half a second and cannot be caught while they settle.</p>
+          <p>Some bugs fight back. Snails hide in their shell when the net comes close. Beetles feel you coming and bolt. Read the bestiary below before you blame the controls.</p>
+          <p class="tip"><b>TIP</b>The ring is the hitbox, not the handle. Park the ring over the bug and swing a beat early — the net only tests for a catch on the second frame.</p>
+        </article>
+      </div>
+    </section>
+
+  </div>
+
+  <section id="bestiary" class="darkband" aria-labelledby="h-dex">
+    <div class="wrap">
+      <div class="sec-head"><span class="num">02</span><h2 id="h-dex">BESTIARY</h2><span class="tag">6 ENTRIES · TALLIES UPDATE AS YOU PLAY</span></div>
+      <div class="dex" id="dex"></div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section id="notes" aria-labelledby="h-notes">
+      <div class="sec-head"><span class="num">03</span><h2 id="h-notes">FIELD NOTES</h2><span class="tag">WHY IT LOOKS LIKE THIS</span></div>
+      <div class="notes">
+        <div>
+          <p>The Garden is one hundred and sixty pixels wide and one hundred and forty-four tall, and it runs at sixty steps a second. Every sprite, every letter of the on-screen text and every blade of grass is drawn from four shades of green, the same four that the original 1989 handheld could show. Nothing that appears on the screen ever leaves that palette; even the win screen is just dark green on light green.</p>
+          <p>The shell that holds it borrows the DMG's warm grey and the magenta of its two face buttons. It is not a photograph and it is not a 3D model: it is one grey box, a lot of inset shadows, a couple of rotated pills and a speaker grille made of a repeating gradient.</p>
+          <p>The game itself is tiny by design. A net, a timer and a deck of six bugs that reshuffles whenever it empties, so no species can hide from you for long. Forty-five seconds is the whole round. Ten catches is the whole goal. It is meant to be finished at a bus stop, in the time it takes for the bus to arrive, and then played once more because the beetle got away.</p>
+          <p>Each species is a dozen lines of behaviour and nothing more. The ant holds a heading and bounces off the hedge. The moth is given a random shove every eighth frame. The beetle measures its distance to the net and runs the other way. Personality here is arithmetic — and you can still tell all six of them apart inside a single round.</p>
+        </div>
+        <div class="notes-side">
+        <ul class="spec" aria-label="Cartridge specification">
+          <li><span>INTERNAL RES</span><span>160 × 144 PX</span></li>
+          <li><span>PALETTE</span><span>4 SHADES OF GREEN</span></li>
+          <li><span>STEP RATE</span><span>60 / SEC</span></li>
+          <li><span>ROUND</span><span>45 SEC · 10 BUGS</span></li>
+          <li><span>SPECIES</span><span>6 · SHUFFLED DECK</span></li>
+          <li><span>ON-SCREEN TYPE</span><span>3 × 5 BITMAP</span></li>
+          <li><span>SAVE BATTERY</span><span>NONE · PLAY AGAIN</span></li>
+        </ul>
+        <div class="swatches">
+          <h3>THE ONLY FOUR COLOURS ON THE SCREEN</h3>
+          <ol>
+            <li><span class="chip c0" aria-hidden="true"></span><span>#0F380F</span><i>TYPE, OUTLINES, HUD BAR</i></li>
+            <li><span class="chip c1" aria-hidden="true"></span><span>#306230</span><i>SHADOW, NET MESH, SUBTITLES</i></li>
+            <li><span class="chip c2" aria-hidden="true"></span><span>#8BAC0F</span><i>GRASS TUFTS, WING PANELS</i></li>
+            <li><span class="chip c3" aria-hidden="true"></span><span>#9BBC0F</span><i>THE LAWN ITSELF</i></li>
+          </ol>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <p>GARDEN BOY is a fictional handheld drawn for a design showcase. No bugs were harmed; a few were pixelated.</p>
+  <p><a href="#shell">▲ BACK TO CONSOLE</a></p>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const PAL = ['#0F380F','#306230','#8BAC0F','#9BBC0F'];
+const W = 160, H = 144, HUD = 10, TAU = Math.PI * 2;
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const dist = (ax,ay,bx,by) => Math.hypot(ax-bx, ay-by);
+const pad2 = n => (n < 10 ? '0' : '') + n;
+
+/* ---------- 3x5 bitmap font ---------- */
+const FONT = {
+A:'010 101 111 101 101',B:'110 101 110 101 110',C:'011 100 100 100 011',D:'110 101 101 101 110',E:'111 100 110 100 111',
+F:'111 100 110 100 100',G:'011 100 101 101 011',H:'101 101 111 101 101',I:'111 010 010 010 111',J:'001 001 001 101 010',
+K:'101 101 110 101 101',L:'100 100 100 100 111',M:'101 111 111 101 101',N:'110 101 101 101 101',O:'010 101 101 101 010',
+P:'110 101 110 100 100',Q:'010 101 101 111 011',R:'110 101 110 101 101',S:'011 100 010 001 110',T:'111 010 010 010 010',
+U:'101 101 101 101 111',V:'101 101 101 101 010',W:'101 101 111 111 101',X:'101 101 010 101 101',Y:'101 101 010 010 010',
+Z:'111 001 010 100 111','0':'111 101 101 101 111','1':'010 110 010 010 111','2':'110 001 010 100 111','3':'111 001 011 001 111',
+'4':'101 101 111 001 001','5':'111 100 110 001 110','6':'011 100 111 101 111','7':'111 001 010 010 010','8':'111 101 111 101 111',
+'9':'111 101 111 001 110','!':'010 010 010 000 010','.':'000 000 000 000 010',':':'000 010 000 010 000','/':'001 001 010 100 100',
+'-':'000 000 111 000 000','?':'110 001 010 000 010','+':'000 010 111 010 000',"'":'010 010 000 000 000'
+};
+for (const k in FONT) FONT[k] = FONT[k].split(' ');
+
+/* ---------- sprites (8x8, '.'=clear, digit=palette index) ---------- */
+const SPR = {
+ladybird:['...00...','..0000..','.011110.','.010110.','.011110.','.011010.','.011110.','..0000..'],
+ant:     ['......0.','.....0..','.00.000.','0000000.','.00.000.','.0.0.0..','0..0..0.','........'],
+snail:   ['.....0.0','.....0.0','.000..00','02120.00','01210.00','02120000','.0000000','........'],
+shell:   ['........','........','.0000...','0212000.','0121200.','0212100.','.00000..','........'],
+bee:     ['.2....2.','.22..22.','..0000..','.011110.','.022220.','.011110.','..0000..','...00...'],
+moth:    ['..0..0..','.0.00.0.','02211220','02211220','.021120.','.022220.','..0..0..','........'],
+beetle:  ['.0....0.','..0..0..','..0000..','.011110.','00111100','.011110.','00111100','.0....0.']
+};
+
+const BUGS = [
+{id:'ladybird',name:'LADYBIRD',no:1,speed:1,wits:1,home:'ROSE LEAVES',
+ desc:'Slow, round and obliging. Ladybirds trundle along in one direction and only change their mind every second or so. The easiest catch in the garden, which is why every collector starts here.'},
+{id:'ant',name:'ANT',no:2,speed:3,wits:2,home:'THE PATH EDGE',
+ desc:'Never stops, never turns without a reason. Ants march in dead-straight lines and ricochet off the borders like a puck. Cut them off ahead of their path; chasing from behind never works.'},
+{id:'snail',name:'SNAIL',no:3,speed:1,wits:4,home:'UNDER THE HOSTA',
+ desc:'The slowest thing on the lawn and still the trickiest. Bring the net within a few pixels and the snail pulls into its shell, where it cannot be caught. Wait a second, let it stretch out, then strike.'},
+{id:'bee',name:'BEE',no:4,speed:4,wits:2,home:'LAVENDER ROW',
+ desc:'Fast and wobbly. Bees hold a heading but weave from side to side as they fly, so aim for the centre of the weave rather than the bee itself. They never sit still long enough to be boring.'},
+{id:'moth',name:'MOTH',no:5,speed:3,wits:3,home:'THE PORCH LIGHT',
+ desc:'Pure chaos with wings. Moths flutter in random bursts and drift wherever the air takes them, which makes them awkward to line up but easy to trap against a wall of the lawn.'},
+{id:'beetle',name:'STAG BEETLE',no:6,speed:5,wits:5,home:'THE LOG PILE',
+ desc:'Sits perfectly still, then bolts. Stag beetles sense the net at about twenty pixels and dash the opposite way for a second before resting again. Approach with a dash of your own and swing early.'}
+];
+
+/* ---------- canvases ---------- */
+const screen = document.getElementById('screen');
+const sctx = screen.getContext('2d');
+const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
+const g = buf.getContext('2d');
+
+function fit(){
+  const r = screen.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (screen.width !== w || screen.height !== h){ screen.width = w; screen.height = h; }
+  sctx.imageSmoothingEnabled = false;
+}
+function present(){ sctx.imageSmoothingEnabled = false; sctx.drawImage(buf, 0, 0, screen.width, screen.height); }
+
+function px(x,y,c){ g.fillStyle = PAL[c]; g.fillRect(x,y,1,1); }
+function sprite(ctx, sp, x, y, flip, pal){
+  pal = pal || PAL;
+  for (let r = 0; r < 8; r++){
+    const row = sp[r];
+    for (let k = 0; k < 8; k++){
+      const ch = row[k]; if (ch === '.') continue;
+      ctx.fillStyle = pal[+ch];
+      ctx.fillRect(x + (flip ? 7 - k : k), y + r, 1, 1);
+    }
+  }
+}
+function text(s, x, y, c, sc){
+  sc = sc || 1; s = String(s).toUpperCase(); g.fillStyle = PAL[c];
+  for (const ch of s){
+    const gl = FONT[ch];
+    if (gl) for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (gl[r][k] === '1') g.fillRect(x + k*sc, y + r*sc, sc, sc);
+    x += 4 * sc;
+  }
+}
+const tw = (s, sc) => s.length * 4 * (sc||1) - (sc||1);
+const ctext = (s, y, c, sc) => text(s, Math.round((W - tw(s, sc)) / 2), y, c, sc);
+
+/* grass background, pre-rendered once with a seeded RNG */
+const grass = document.createElement('canvas'); grass.width = W; grass.height = H;
+{
+  const gg = grass.getContext('2d');
+  let seed = 31; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  gg.fillStyle = PAL[3]; gg.fillRect(0,0,W,H);
+  gg.fillStyle = PAL[2];
+  for (let i = 0; i < 150; i++){
+    const x = Math.floor(rnd()*(W-3)), y = HUD + 1 + Math.floor(rnd()*(H-HUD-3));
+    gg.fillRect(x,y,1,1); gg.fillRect(x+2,y,1,1); gg.fillRect(x+1,y+1,1,1);
+  }
+  for (let i = 0; i < 12; i++){
+    const x = 2 + Math.floor(rnd()*(W-5)), y = HUD + 3 + Math.floor(rnd()*(H-HUD-6));
+    gg.fillStyle = PAL[2]; gg.fillRect(x-1,y,3,1); gg.fillRect(x,y-1,1,3);
+    gg.fillStyle = PAL[1]; gg.fillRect(x,y,1,1);
+  }
+  /* hedge: a dashed dark border so the lawn reads as a bounded field */
+  gg.fillStyle = PAL[1];
+  for (let x = 0; x < W; x += 2){ gg.fillRect(x,HUD,1,1); gg.fillRect(x+1,H-1,1,1); }
+  for (let y = HUD; y < H; y += 2){ gg.fillRect(0,y,1,1); gg.fillRect(W-1,y+1,1,1); }
+}
+
+/* ---------- state ---------- */
+const S = {
+  mode:'title', t:0, px:80, py:80, swing:0, stam:60, caught:0, time:45*60,
+  bugs:[], pops:[], deck:[], seen:{}, bestCaught:0, bestTime:-1, endTime:0
+};
+const held = {up:false,down:false,left:false,right:false,a:false,b:false,start:false,select:false};
+const shell = document.getElementById('shell');
+const sr = document.getElementById('sr');
+const ro = {}; document.querySelectorAll('[data-ro]').forEach(el => ro[el.dataset.ro] = el);
+let lastSr = '';
+function announce(msg){ if (msg !== lastSr){ sr.textContent = msg; lastSr = msg; } }
+
+function reshuffle(){
+  S.deck = BUGS.slice();
+  for (let i = S.deck.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [S.deck[i], S.deck[j]] = [S.deck[j], S.deck[i]]; }
+}
+function spawn(){
+  if (!S.deck.length) reshuffle();
+  const type = S.deck.pop();
+  let x = 0, y = 0;
+  for (let i = 0; i < 24; i++){
+    x = Math.floor(Math.random()*(W-8)); y = HUD + Math.floor(Math.random()*(H-HUD-8));
+    if (dist(x+4, y+4, S.px, S.py) > 34) break;
+  }
+  const ang = Math.random()*TAU;
+  S.bugs.push({type, x, y, vx:Math.cos(ang), vy:Math.sin(ang), ang, tm:Math.floor(Math.random()*40), settle:30, shellT:0, dash:0, flip:false});
+}
+function startGame(){
+  S.mode = 'play'; S.t = 0; S.px = 80; S.py = 84; S.swing = 0; S.stam = 60; S.caught = 0; S.time = 45*60;
+  S.bugs = []; S.pops = []; reshuffle();
+  for (let i = 0; i < 4; i++) spawn();
+  shell.dataset.mode = 'play';
+  announce('Round started. Forty-five seconds. Catch ten bugs.');
+}
+function endGame(win){
+  S.mode = win ? 'win' : 'lose'; S.endTime = Math.ceil(S.time/60);
+  if (win){ if (S.bestTime < 0 || S.endTime > S.bestTime) S.bestTime = S.endTime; }
+  S.bestCaught = Math.max(S.bestCaught, S.caught);
+  shell.dataset.mode = S.mode;
+  announce(win ? `You win! All ten caught with ${S.endTime} seconds to spare. Press Start to play again.` : `Time up. You caught ${S.caught} of ten. Press Start to try again.`);
+}
+function toTitle(){ S.mode = 'title'; S.t = 0; shell.dataset.mode = 'title'; announce('Title screen. Press Start to begin.'); }
+
+function press(name){
+  if (held[name]) return; held[name] = true;
+  const el = shell.querySelector(`[data-btn="${name}"]`); if (el) el.classList.add('held');
+  if (name === 'start'){
+    if (S.mode === 'title' || S.mode === 'win' || S.mode === 'lose') startGame();
+    else if (S.mode === 'play'){ S.mode = 'pause'; shell.dataset.mode = 'pause'; announce('Paused.'); }
+    else if (S.mode === 'pause'){ S.mode = 'play'; shell.dataset.mode = 'play'; announce('Resumed.'); }
+  } else if (name === 'select'){
+    toTitle();
+  } else if (name === 'a'){
+    if (S.mode === 'play'){ if (S.swing === 0) S.swing = 10; }
+    else if (S.mode === 'title' || S.mode === 'win' || S.mode === 'lose') startGame();
+    else if (S.mode === 'pause'){ S.mode = 'play'; shell.dataset.mode = 'play'; }
+  }
+}
+function release(name){
+  held[name] = false;
+  const el = shell.querySelector(`[data-btn="${name}"]`); if (el) el.classList.remove('held');
+}
+
+/* ---------- simulation ---------- */
+function moveBug(b){
+  b.tm++;
+  if (b.settle > 0){ b.settle--; return; }
+  const cx = b.x + 4, cy = b.y + 4, d = dist(cx, cy, S.px, S.py);
+  switch (b.type.id){
+    case 'ladybird':
+      if (b.tm % 75 === 0) b.ang = Math.random()*TAU;
+      b.vx = Math.cos(b.ang)*0.3; b.vy = Math.sin(b.ang)*0.3; break;
+    case 'ant':
+      b.vx = Math.cos(b.ang)*0.75; b.vy = Math.sin(b.ang)*0.75; break;
+    case 'snail':
+      if (d < 15) b.shellT = 45;
+      if (b.shellT > 0){ b.shellT--; b.vx = b.vy = 0; }
+      else { if (b.tm % 120 === 0) b.ang = Math.random()*TAU; b.vx = Math.cos(b.ang)*0.14; b.vy = Math.sin(b.ang)*0.14; }
+      break;
+    case 'bee': {
+      if (b.tm % 100 === 0) b.ang += (Math.random()-0.5)*1.6;
+      const wob = Math.sin(b.tm*0.25)*0.9;
+      b.vx = Math.cos(b.ang)*0.8 - Math.sin(b.ang)*wob; b.vy = Math.sin(b.ang)*0.8 + Math.cos(b.ang)*wob; break; }
+    case 'moth':
+      if (b.tm % 8 === 0){ b.vx += (Math.random()-0.5)*1.4; b.vy += (Math.random()-0.5)*1.4; }
+      b.vx *= 0.96; b.vy *= 0.96;
+      { const sp = Math.hypot(b.vx,b.vy); if (sp > 1.15){ b.vx = b.vx/sp*1.15; b.vy = b.vy/sp*1.15; } }
+      break;
+    case 'beetle':
+      if (b.dash > 0){ b.dash--; b.vx = Math.cos(b.ang)*1.7; b.vy = Math.sin(b.ang)*1.7; }
+      else {
+        b.vx = b.vy = 0;
+        if (d < 20){ b.ang = Math.atan2(cy - S.py, cx - S.px) + (Math.random()-0.5)*0.6; b.dash = 22; }
+        else if (b.tm % 70 === 0){ b.ang = Math.random()*TAU; b.dash = 14; }
+      }
+      break;
+  }
+  b.x += b.vx; b.y += b.vy;
+  if (b.x < 0 || b.x > W-8){ b.x = clamp(b.x,0,W-8); b.vx = -b.vx; b.ang = Math.PI - b.ang; }
+  if (b.y < HUD || b.y > H-8){ b.y = clamp(b.y,HUD,H-8); b.vy = -b.vy; b.ang = -b.ang; }
+  if (Math.abs(b.vx) > 0.05) b.flip = b.vx < 0;
+}
+function tryCatch(){
+  for (let i = 0; i < S.bugs.length; i++){
+    const b = S.bugs[i];
+    if (b.settle > 0 || (b.type.id === 'snail' && b.shellT > 0)) continue;
+    if (dist(b.x+4, b.y+4, S.px, S.py) < 7.5){
+      S.bugs.splice(i,1); S.caught++;
+      S.seen[b.type.id] = (S.seen[b.type.id]||0) + 1;
+      const tal = document.querySelector(`[data-tally="${b.type.id}"]`); if (tal) tal.textContent = pad2(S.seen[b.type.id]);
+      S.pops.push({x:b.x, y:b.y, t:32, spr:SPR[b.type.id], flip:b.flip});
+      announce(`Caught a ${b.type.name.toLowerCase()}. ${S.caught} of ten.`);
+      if (S.caught >= 10){ endGame(true); return; }
+      spawn();
+      return;
+    }
+  }
+}
+function step(){
+  S.t++;
+  if (S.mode !== 'play') return;
+  S.time--;
+  if (S.time <= 0){ S.time = 0; endGame(false); return; }
+  const dx = (held.right?1:0) - (held.left?1:0), dy = (held.down?1:0) - (held.up?1:0);
+  let sp = 1;
+  const dashing = held.b && S.stam > 0 && (dx || dy);
+  if (dashing){ sp = 2; S.stam -= 1; } else if (!held.b) S.stam = Math.min(60, S.stam + 0.35);
+  if (dx && dy) sp *= 0.75;
+  S.px = clamp(S.px + dx*sp, 5, W-5); S.py = clamp(S.py + dy*sp, HUD+5, H-5);
+  if (S.swing > 0){ S.swing--; if (S.swing === 8) tryCatch(); }
+  for (const b of S.bugs) moveBug(b);
+  for (const p of S.pops) p.t--;
+  S.pops = S.pops.filter(p => p.t > 0);
+}
+
+/* ---------- rendering ---------- */
+function drawNet(){
+  const x = Math.round(S.px), y = Math.round(S.py), sw = S.swing > 0, r = sw ? 5 : 4;
+  if (sw){
+    g.fillStyle = PAL[1];
+    for (let dy = -r+1; dy < r; dy++) for (let dx = -r+1; dx < r; dx++) if (((dx+dy)&1) === 0 && dx*dx+dy*dy < r*r) g.fillRect(x+dx, y+dy, 1, 1);
+  }
+  g.fillStyle = PAL[0];
+  for (let a = 0; a < 40; a++){ const t = a/40*TAU; g.fillRect(Math.round(x+Math.cos(t)*r), Math.round(y+Math.sin(t)*r), 1, 1); }
+  for (let i = 0; i < 5; i++) g.fillRect(x + r - 1 + i, y + r - 1 + i, 1, 1);
+  if (sw && S.swing > 5){ g.fillStyle = PAL[0]; g.fillRect(x-r-2, y-1, 1, 3); g.fillRect(x+r+2, y-1, 1, 3); }
+}
+function box(x,y,w,h){
+  g.fillStyle = PAL[0]; g.fillRect(x,y,w,h);
+  g.fillStyle = PAL[3]; g.fillRect(x+2,y+2,w-4,1); g.fillRect(x+2,y+h-3,w-4,1); g.fillRect(x+2,y+2,1,h-4); g.fillRect(x+w-3,y+2,1,h-4);
+}
+function drawTitle(){
+  g.fillStyle = PAL[3]; g.fillRect(0,0,W,H);
+  g.fillStyle = PAL[2];
+  for (let y = 0; y < H; y += 4) for (let x = (y/4)&1 ? 2 : 0; x < W; x += 4) g.fillRect(x,y,1,1);
+  g.fillStyle = PAL[0]; g.fillRect(0,0,W,3); g.fillRect(0,H-3,W,3);
+  g.fillStyle = PAL[1]; g.fillRect(0,3,W,1); g.fillRect(0,H-4,W,1);
+  ctext('POCKET', 14, 0, 2); ctext('MONSTERS', 28, 0, 2);
+  g.fillStyle = PAL[0]; g.fillRect(24, 42, W-48, 1);
+  ctext('OF THE GARDEN', 47, 1);
+  g.fillStyle = PAL[2]; g.fillRect(0, 76, W, 1);
+  g.fillStyle = PAL[1]; g.fillRect(0, 77, W, 1);
+  for (let i = 0; i < 6; i++){
+    const id = BUGS[i].id;
+    const fly = id === 'bee' || id === 'moth';
+    let x, y;
+    if (RM){ x = 12 + i*24; y = 84 - (fly ? 12 : 0); }
+    else { x = Math.round((W + 8) - ((S.t*0.55 + i*29) % (W + 24))); y = Math.round(84 - (fly ? 12 + Math.sin((S.t+i*20)/9)*2 : 0)); }
+    sprite(g, SPR[id], x, y, !RM);
+  }
+  const blink = RM || ((S.t >> 5) & 1);
+  if (blink) ctext('PRESS START', 104, 0);
+  ctext('A:NET  B:DASH', 118, 1);
+  const best = S.bestTime >= 0 ? `BEST 10 IN ${45-S.bestTime}S` : S.bestCaught ? `BEST ${pad2(S.bestCaught)}/10` : 'NO RECORD YET';
+  ctext(best, 132, 1);
+}
+function render(){
+  if (S.mode === 'title'){ drawTitle(); present(); return; }
+  g.drawImage(grass, 0, 0);
+  for (const b of S.bugs){
+    if (b.settle > 0 && ((b.settle >> 2) & 1)) continue;
+    const sp = (b.type.id === 'snail' && b.shellT > 0) ? SPR.shell : SPR[b.type.id];
+    sprite(g, sp, Math.round(b.x), Math.round(b.y), b.flip);
+  }
+  for (const p of S.pops){
+    const rise = Math.floor((32 - p.t) / 2);
+    if (p.t & 1) sprite(g, p.spr, Math.round(p.x), Math.round(p.y) - rise, p.flip);
+    if (p.t > 10) text('+1', Math.round(p.x)+1, Math.round(p.y) - rise - 7, 0);
+  }
+  drawNet();
+  /* HUD */
+  g.fillStyle = PAL[0]; g.fillRect(0,0,W,HUD);
+  text(`BUG ${pad2(S.caught)}/10`, 2, 2, 3);
+  text('B', 66, 2, 2);
+  for (let i = 0; i < 6; i++){ g.fillStyle = i < Math.ceil(S.stam/10) ? PAL[3] : PAL[1]; g.fillRect(71 + i*5, 3, 4, 4); }
+  const tl = `T ${pad2(Math.ceil(S.time/60))}`; text(tl, W - 2 - tw(tl), 2, S.time < 600 && (S.t>>4)&1 ? 2 : 3);
+  if (S.mode === 'pause'){ box(28,52,104,40); ctext('PAUSE', 60, 3, 2); ctext('START TO RESUME', 78, 2); }
+  else if (S.mode === 'win'){ box(14,40,132,68); ctext('YOU WIN', 48, 3, 2); ctext('ALL 10 CAUGHT', 66, 3); ctext(`${pad2(S.endTime)} SEC TO SPARE`, 78, 2); ctext('START:AGAIN', 94, 2); }
+  else if (S.mode === 'lose'){ box(14,40,132,68); ctext('TIME UP', 48, 3, 2); ctext(`CAUGHT ${pad2(S.caught)}/10`, 66, 3); ctext(S.caught >= 7 ? 'SO CLOSE!' : 'THE LAWN WINS', 78, 2); ctext('START:AGAIN', 94, 2); }
+  present();
+}
+
+/* ---------- readout ---------- */
+const roCache = {};
+function setRo(k, v){ if (roCache[k] !== v && ro[k]){ roCache[k] = v; ro[k].textContent = v; } }
+function updateReadout(){
+  setRo('mode', S.mode.toUpperCase());
+  setRo('bugs', `${pad2(S.caught)}/10`);
+  setRo('time', pad2(Math.ceil(S.time/60)));
+  setRo('best', S.bestTime >= 0 ? `10 IN ${45-S.bestTime}S` : S.bestCaught ? `${pad2(S.bestCaught)}/10` : '—');
+  setRo('seen', `${Object.keys(S.seen).length}/6`);
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), acc = 0, raf = 0;
+const STEP = 1000/60;
+function loop(now){
+  raf = requestAnimationFrame(loop);
+  acc += Math.min(120, now - last); last = now;
+  while (acc >= STEP){ step(); acc -= STEP; }
+  render(); updateReadout();
+}
+function startLoop(){ if (!raf){ last = performance.now(); acc = 0; raf = requestAnimationFrame(loop); } }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ cancelAnimationFrame(raf); raf = 0; if (S.mode === 'play'){ S.mode = 'pause'; shell.dataset.mode = 'pause'; } }
+  else startLoop();
+});
+
+/* ---------- input ---------- */
+const KEYMAP = {ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',z:'a',k:'a',' ':'a',x:'b',j:'b',Enter:'start',Shift:'select'};
+const keyName = e => KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+const active = () => S.mode === 'play' || shell.contains(document.activeElement);
+document.addEventListener('keydown', e => {
+  const ctl = e.target.closest && e.target.closest('button,a,input,textarea,select');
+  /* a focused control owns Enter/Space; anything outside the shell owns every key */
+  if (ctl && (e.key === 'Enter' || e.key === ' ' || !shell.contains(ctl))) return;
+  const k = keyName(e); if (!k || !active()) return;
+  e.preventDefault(); if (!e.repeat) press(k);
+});
+document.addEventListener('keyup', e => { const k = keyName(e); if (k && held[k]) release(k); });
+window.addEventListener('blur', () => { for (const k in held) if (held[k]) release(k); });
+
+shell.querySelectorAll('[data-btn]').forEach(btn => {
+  const name = btn.dataset.btn;
+  btn.addEventListener('pointerdown', e => { if (e.button !== 0 && e.pointerType === 'mouse') return; try{ btn.setPointerCapture(e.pointerId);}catch(_){} press(name); });
+  const up = () => release(name);
+  btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('lostpointercapture', up);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+  btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); if (!e.repeat) press(name); } });
+  btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); release(name); } });
+  btn.addEventListener('click', e => e.preventDefault());
+});
+screen.addEventListener('pointerdown', () => { shell.focus({preventScroll:true}); });
+
+/* ---------- bestiary DOM ---------- */
+{
+  const dex = document.getElementById('dex');
+  const pips = n => { let s = '<span class="pips" aria-hidden="true">'; for (let i = 1; i <= 5; i++) s += `<i class="${i <= n ? 'on' : ''}"></i>`; return s + '</span>'; };
+  dex.innerHTML = BUGS.map(b => `
+  <article class="card">
+    <div class="mini">
+      <canvas width="8" height="8" data-spr="${b.id}" role="img" aria-label="Pixel sprite of a ${b.name.toLowerCase()}"></canvas>
+      <div>
+        <p class="no">No.${pad2(b.no)} · ${b.home}</p>
+        <h3>${b.name}</h3>
+        <div class="stat"><span>SPEED</span>${pips(b.speed)}<span class="sr-only">${b.speed} of 5</span></div>
+        <div class="stat"><span>WITS</span>${pips(b.wits)}<span class="sr-only">${b.wits} of 5</span></div>
+      </div>
+    </div>
+    <p>${b.desc}</p>
+    <p class="tally"><span>THIS SESSION</span><span>CAUGHT ×<b data-tally="${b.id}">00</b></span></p>
+  </article>`).join('');
+  dex.querySelectorAll('canvas[data-spr]').forEach(c => sprite(c.getContext('2d'), SPR[c.dataset.spr], 0, 0, false));
+  document.querySelectorAll('canvas[data-deco]').forEach(c => sprite(c.getContext('2d'), SPR[c.dataset.deco], 0, 0, false));
+}
+
+/* ---------- boot ---------- */
+fit();
+if ('ResizeObserver' in window) new ResizeObserver(fit).observe(screen); else window.addEventListener('resize', fit);
+startLoop();
+})();
+</script>
+</body>
+</html>

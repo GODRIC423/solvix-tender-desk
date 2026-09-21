@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timesheet &amp; Hours Calculator — breaks, overtime bands &amp; pay</title>
+<meta name="description" content="Weekly timesheet for a whole crew: start and end times with shifts that cross midnight, unpaid breaks, clock rounding to 1, 5, 6 or 15 minutes, daily and weekly overtime and double-time bands allocated without double-counting, and gross pay by band. Prints a signed timesheet and exports CSV for payroll.">
+<meta name="theme-color" content="#3F4A9E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233F4A9E'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%23fff' stroke-width='2.4'/%3E%3Cpath d='M16 10.5V16l4 2.6' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#3F4A9E;--accent-ink:#31397B;--accent-wash:#EAECF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#8D97E4;--accent-ink:#AEB6EF;--accent-wash:#1D2140;--on-accent:#0A0D18}}
+:root[data-theme="dark"]{--accent:#8D97E4;--accent-ink:#AEB6EF;--accent-wash:#1D2140;--on-accent:#0A0D18}
+
+[hidden]{display:none!important}
+.app{max-width:1300px}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.split>.rail{min-width:0}
+@media(max-width:900px){.split>.rail{order:-1}}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.fgrid.wide{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.fgrid.det{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:520px){.span2{grid-column:span 1}}
+.msg{min-height:0;margin:0}
+.msg:not(:empty){margin-top:12px;padding:9px 12px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 13px/1.4 var(--sans);border:1px solid var(--ok)}
+.msg.bad:not(:empty){background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+.mini{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+
+/* rules */
+.rule{display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:8px;align-items:center;
+  padding:7px 0;border-bottom:1px dashed var(--line)}
+.rule:last-of-type{border-bottom:0}
+.rule .check{font-size:13.5px;line-height:1.35}
+.rule .check span{min-width:0}
+.rule .mult{font:11.5px/1.3 var(--mono);color:var(--muted);display:block}
+.rule input[type=number]{padding:6px 7px;font-size:13.5px}
+.rule.off .check span,.rule.off input{opacity:.5}
+
+/* shift tables */
+.sh{min-width:1018px;table-layout:fixed}
+.sh col.c-day{width:74px}.sh col.c-date{width:136px}.sh col.c-in{width:122px}
+.sh col.c-out{width:122px}.sh col.c-brk{width:76px}.sh col.c-wk{width:92px}
+.sh col.c-rg{width:70px}.sh col.c-ot{width:70px}.sh col.c-dt{width:70px}
+.sh col.c-nt{width:auto}.sh col.c-del{width:42px}
+.sh th:last-child,.sh td:last-child{padding-left:4px;padding-right:4px}
+.sh td{padding:5px 6px}
+.sh td.n{padding-right:9px;white-space:nowrap}
+.sh td.day{font:600 12px/1.3 var(--sans);color:var(--ink-2)}
+.sh td.day .dd{font:400 10.5px/1.3 var(--mono);color:var(--muted);display:block}
+.sh .rm{color:var(--muted);border:1px solid transparent;background:transparent;padding:4px 7px;
+  font:600 14px/1 var(--mono);cursor:pointer;border-radius:4px}
+.sh .rm:hover{background:var(--bad-wash);color:var(--bad);border-color:var(--bad)}
+.sh tbody tr.zero td.n{color:var(--faint)}
+.sh tbody tr.err td{background:var(--bad-wash)}
+.sh tbody tr.err:hover td{background:var(--bad-wash)}
+.sh td.wk{white-space:normal}
+.sh .flag{display:inline-block;font:600 9px/1.3 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+  padding:2px 4px;border-radius:3px;background:var(--warn-wash);color:var(--warn);margin-top:2px;vertical-align:1px}
+.sh .flag.b{background:var(--bad-wash);color:var(--bad)}
+.sh td.n b{font-weight:650}
+.emph{background:var(--sunk)}
+
+/* pay band table */
+.bands{width:100%;font-size:13.5px;margin-top:2px}
+.bands th{padding:6px 8px}
+.bands td{padding:6px 8px}
+.bands tfoot td{background:var(--accent-wash);border-top:2px solid var(--accent)}
+.emphead{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+.emphead .f{flex:1 1 130px}
+.emphead .f.nm{flex:2 1 210px}
+.empbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+@media(max-width:900px){
+  .sh{min-width:0;table-layout:auto;font-size:14px}
+  .sh colgroup{display:none}
+  .sh thead,.sh tfoot{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .sh tbody tr{display:block;border:1px solid var(--line-hard);border-radius:5px;margin-bottom:10px;background:var(--raise)}
+  .sh tbody tr:hover td{background:transparent}
+  .sh tbody tr.err{border-color:var(--bad)}
+  .sh tbody td{display:flex;gap:10px;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding:6px 9px;text-align:right}
+  .sh tbody td::before{content:attr(data-l);font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;
+    text-transform:uppercase;color:var(--muted);flex:0 0 auto;text-align:left}
+  .sh tbody td>*{max-width:64%;margin-left:auto}
+  .sh tbody tr td:last-child{border-bottom:0}
+  .sh td.day{background:var(--sunk);justify-content:flex-start}
+  .sh td.day::before{content:"Day"}
+  .sh td.day .dd{display:inline;margin-left:6px}
+  .sh td.na{display:none}
+  .sh .rm{border:1px solid var(--line-hard);padding:5px 14px;font-size:13px}
+  .sh tbody input{border-color:var(--line);background:var(--surface)}
+}
+
+/* summary rail */
+.duo{grid-template-columns:1fr 1fr}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:4px 0;
+  border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .l{color:var(--ink-2)}
+.kv .l i{font-style:normal;color:var(--muted);font-family:var(--mono);font-size:12px}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
+.sumlist{width:100%;font-size:13.5px}
+.sumlist td{padding:5px 0;border-bottom:1px dashed var(--line)}
+.sumlist td.n{font-size:13px}
+.sumlist tr:last-child td{border-bottom:0}
+.flags{display:flex;flex-direction:column;gap:7px}
+.flags .note{font-size:12.5px;padding:8px 10px}
+.sigline{border-bottom:1px solid var(--line-hard);height:26px;margin-top:4px}
+
+/* print document */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:2.5pt solid #000;padding-bottom:6pt;margin-bottom:9pt}
+.doc .lh .org{font-size:12.5pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.01em}
+.doc .lh .ref{font-family:var(--mono);font-size:9.5pt;margin-top:3pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:5pt 10pt;margin-bottom:9pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:22pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:4pt}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7.5pt;letter-spacing:.05em;text-transform:uppercase}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc tfoot td{font-weight:700;background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .emp{border:1pt solid #000;padding:6pt 7pt;margin-bottom:8pt;break-inside:avoid}
+.doc .emp .eh{display:flex;justify-content:space-between;gap:10pt;border-bottom:.75pt solid #000;
+  padding-bottom:3pt;margin-bottom:5pt}
+.doc .emp .eh .who{font-size:11pt;font-weight:700}
+.doc .emp .eh .role{font-size:8.5pt;color:#333}
+.doc .emp .eh .rt{text-align:right;font-size:8.5pt}
+.doc .emp .eh .rt b{font-family:var(--mono);font-size:10pt;display:block}
+.doc .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:8pt;align-items:start}
+.doc .totbox{border:1pt solid #000}
+.doc .totbox div{display:flex;justify-content:space-between;gap:14pt;padding:3pt 6pt;
+  border-bottom:.75pt solid #bbb;font-size:9pt}
+.doc .totbox div:last-child{border-bottom:0}
+.doc .totbox .big{font-weight:700;font-size:11pt;background:#eee!important;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc .totbox span.n{font-family:var(--mono)}
+.doc .sig{display:grid;grid-template-columns:1fr 1fr;gap:12pt;margin-top:6pt}
+.doc .sig .box b{display:block;font-size:7.5pt;letter-spacing:.09em;text-transform:uppercase;color:#444}
+.doc .sig .box .rule2{border-bottom:.75pt solid #000;height:22pt}
+.doc .sig .box .cap{font-size:7.5pt;color:#555;margin-top:2pt}
+.doc .decl{font-size:8.5pt;margin:6pt 0 0;line-height:1.45}
+.doc .disc{border:1pt solid #000;padding:5pt 7pt;margin-top:8pt;font-size:8pt;line-height:1.45}
+.doc .disc b{text-transform:uppercase;letter-spacing:.06em;font-size:8pt}
+.doc .rules{font-size:8.5pt;line-height:1.45;border:.75pt solid #666;padding:5pt 7pt;margin-bottom:8pt}
+.doc .rules b{font-size:7.5pt;letter-spacing:.09em;text-transform:uppercase;color:#444;display:block;margin-bottom:2pt}
+.doc .foot{font-size:7.5pt;color:#444;margin-top:8pt;text-align:center;border-top:.75pt solid #ccc;padding-top:4pt}
+@media print{ .doc .emp{break-inside:auto} .doc table{break-inside:auto} }
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">TS</div>
+    <div>
+      <h1>Timesheet &amp; Hours Calculator</h1>
+      <div class="sub">HOURS · BREAKS · OVERTIME · PAY</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint" style="padding-top:0">
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+  <div class="pagestack">
+
+    <div class="split">
+      <div class="stack" style="gap:14px">
+
+        <!-- ── sheet details ── -->
+        <section class="card">
+          <div class="hd">
+            <h2>Timesheet details</h2>
+            <span class="chip" id="sampleChip" hidden>Sample data</span>
+            <button type="button" class="btn sm" id="bBlank">Start a blank week</button>
+          </div>
+          <div class="bd stack" style="gap:12px">
+            <div class="fgrid det">
+              <div class="f span2"><label for="orgName">Employer / company</label>
+                <input id="orgName" type="text" autocomplete="organization"></div>
+              <div class="f"><label for="shRef">Timesheet reference</label>
+                <input id="shRef" type="text"></div>
+              <div class="f"><label for="wkStart">Week commencing</label>
+                <input id="wkStart" type="date">
+                <span class="err" id="eWk" hidden>Enter a valid week start date.</span></div>
+              <div class="f"><label for="dept">Department / site</label>
+                <input id="dept" type="text"></div>
+              <div class="f"><label for="prepBy">Prepared by</label>
+                <input id="prepBy" type="text" autocomplete="name"></div>
+              <div class="f"><label for="cur">Currency</label>
+                <select id="cur">
+                  <option value="£">£ Pound</option><option value="$">$ Dollar</option>
+                  <option value="€">€ Euro</option><option value="custom">Custom…</option>
+                </select></div>
+              <div class="f" id="curCustWrap" hidden><label for="curCust">Custom symbol</label>
+                <input id="curCust" type="text" maxlength="4" placeholder="CHF"></div>
+              <div class="f span2"><label for="notes">Notes for payroll</label>
+                <textarea id="notes" placeholder="Anything payroll needs to know about this week."></textarea></div>
+            </div>
+          </div>
+          <div class="ft"><span class="hint" id="weekSpan">—</span></div>
+        </section>
+
+        <!-- ── rules ── -->
+        <section class="card">
+          <div class="hd"><h2>Overtime &amp; rounding rules</h2>
+            <select id="preset" aria-label="Overtime rule preset" style="width:auto;max-width:230px">
+              <option value="daily-weekly">Daily 8 + weekly 40 (no double count)</option>
+              <option value="weekly">Weekly only — over 40</option>
+              <option value="daily">Daily only — over 8</option>
+              <option value="none">No overtime — flat rate</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+          <div class="bd">
+            <div class="rule" id="rDOT">
+              <label class="check"><input type="checkbox" id="dOtOn">
+                <span>Overtime after <b>N</b> hours in a day
+                  <em class="mult">paid at the ×1.5 band</em></span></label>
+              <input type="number" id="dOtHrs" min="0" max="24" step="0.25" inputmode="decimal" aria-label="Daily overtime threshold, hours">
+            </div>
+            <div class="rule" id="rDDT">
+              <label class="check"><input type="checkbox" id="dDtOn">
+                <span>Double time after <b>N</b> hours in a day
+                  <em class="mult">hours above this move to the ×2 band</em></span></label>
+              <input type="number" id="dDtHrs" min="0" max="24" step="0.25" inputmode="decimal" aria-label="Daily double time threshold, hours">
+            </div>
+            <div class="rule" id="rWOT">
+              <label class="check"><input type="checkbox" id="wOtOn">
+                <span>Overtime after <b>N</b> hours in the week
+                  <em class="mult">counts only hours not already paid as daily OT</em></span></label>
+              <input type="number" id="wOtHrs" min="0" max="168" step="0.5" inputmode="decimal" aria-label="Weekly overtime threshold, hours">
+            </div>
+            <div class="rule" id="rWDT">
+              <label class="check"><input type="checkbox" id="wDtOn">
+                <span>Double time after <b>N</b> hours in the week
+                  <em class="mult">top hours of the week move to the ×2 band</em></span></label>
+              <input type="number" id="wDtHrs" min="0" max="168" step="0.5" inputmode="decimal" aria-label="Weekly double time threshold, hours">
+            </div>
+            <div class="fgrid duo" style="margin-top:12px">
+              <div class="f"><label for="otMult">Overtime multiplier</label>
+                <input id="otMult" type="number" min="1" max="5" step="0.05" inputmode="decimal">
+                <span class="err" id="eOtMult" hidden>Must be 1 or more.</span></div>
+              <div class="f"><label for="dtMult">Double-time multiplier</label>
+                <input id="dtMult" type="number" min="1" max="5" step="0.05" inputmode="decimal">
+                <span class="err" id="eDtMult" hidden>Must be 1 or more.</span></div>
+              <div class="f"><label for="rndInc">Round each shift to</label>
+                <select id="rndInc">
+                  <option value="1">1 minute (no rounding)</option>
+                  <option value="5">5 minutes</option>
+                  <option value="6">6 minutes (0.1 h)</option>
+                  <option value="15">15 minutes (0.25 h)</option>
+                </select></div>
+              <div class="f"><label for="rndMode">Rounding direction</label>
+                <select id="rndMode">
+                  <option value="nearest">Nearest increment</option>
+                  <option value="up">Always up (favours worker)</option>
+                  <option value="down">Always down</option>
+                </select></div>
+            </div>
+            <p class="hint" style="margin-top:10px">Worked time = end − start (a shift ending at or before its
+              start time is treated as running past midnight) − unpaid break, then rounded. Bands are filled
+              lowest first, so no hour is ever paid twice.</p>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── summary rail ── -->
+      <div class="rail">
+        <section class="card sticky">
+          <div class="hd"><h2>Week summary</h2><span class="chip" id="empChip">0 staff</span></div>
+          <div class="bd stack" style="gap:11px">
+            <div class="stat hero">
+              <div class="k">Total gross pay — week</div>
+              <div class="v" id="sPay">—</div>
+              <div class="u" id="sPaySub">—</div>
+            </div>
+            <div class="grid duo" style="gap:10px">
+              <div class="stat"><div class="k">Total hours</div><div class="v" id="sHours" style="font-size:19px">—</div></div>
+              <div class="stat"><div class="k">Overtime hours</div><div class="v" id="sOtH" style="font-size:19px">—</div></div>
+            </div>
+            <div>
+              <div class="kv"><span class="l">Regular <i id="kRegH">—</i></span><span class="v" id="kRegP">—</span></div>
+              <div class="kv"><span class="l">Overtime <i id="kOtH">—</i></span><span class="v" id="kOtP">—</span></div>
+              <div class="kv"><span class="l">Double time <i id="kDtH">—</i></span><span class="v" id="kDtP">—</span></div>
+              <div class="kv"><span class="l">Overtime premium <i>extra vs base rate</i></span><span class="v" id="kPrem">—</span></div>
+              <div class="kv"><span class="l">Average cost per hour</span><span class="v" id="kAvg">—</span></div>
+            </div>
+            <div>
+              <div class="mini" style="margin-bottom:4px">By employee</div>
+              <table class="sumlist"><tbody id="empSum"></tbody></table>
+            </div>
+            <div class="flags" id="flags"></div>
+            <div class="note warn">
+              <strong>Gross pay only — not payroll or legal advice.</strong> This sheet applies the
+              thresholds, multipliers and rounding <em>you</em> set. It does not decide which wage-and-hour
+              rules apply to you, and it does not handle seventh-day or rest-break premiums, salaried or
+              exempt staff, shift and holiday premiums, tips, pensions, tax or any deduction. Check the
+              contracts and the overtime law in your jurisdiction, and confirm with your payroll adviser
+              before paying.
+            </div>
+          </div>
+          <div class="ft">
+            <span class="chip" id="cRnd">—</span>
+            <span class="chip ok" id="cRule">—</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ── employees ── -->
+    <div id="emps"></div>
+    <div class="empty" id="emptyEmps" hidden>No employees on this sheet — add one to start.</div>
+
+    <section class="card">
+      <div class="hd"><h2>Staff on this sheet</h2>
+        <button type="button" class="btn sm" id="bAddEmp">+ Add employee</button></div>
+      <div class="ft">
+        <span class="chip" id="cEmps">0 staff</span>
+        <span class="chip" id="cShifts">0 shifts</span>
+        <span class="chip" id="cHours">— h</span>
+        <span class="chip ok" id="cPay">—</span>
+        <span class="hint" style="margin-left:auto">Every change is saved in this browser automatically.</span>
+      </div>
+    </section>
+
+    <!-- ── approval ── -->
+    <section class="card">
+      <div class="hd"><h2>Approval</h2><span class="hint">Prints on the timesheet as a sign-off block.</span></div>
+      <div class="bd fgrid wide">
+        <div class="f"><label for="appBy">Approved by</label><input id="appBy" type="text"></div>
+        <div class="f"><label for="appRole">Job title</label><input id="appRole" type="text"></div>
+        <div class="f"><label for="appOn">Date approved</label><input id="appOn" type="date"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<section class="printonly doc" id="printdoc"></section>
+
+<footer class="app noprint" style="padding-top:0">
+  <p class="hint">
+    Worked time per shift = (end − start, carried past midnight when the end is at or before the start)
+    − unpaid break minutes, rounded to the increment you choose. Daily bands are applied to each day's
+    hours in order — regular, then the ×1.5 band, then the ×2 band — and the weekly threshold is then
+    tested against the hours still counted as regular, so no hour is counted in two bands. Pay =
+    regular&nbsp;×&nbsp;rate + overtime&nbsp;×&nbsp;rate&nbsp;×&nbsp;OT multiplier + double
+    time&nbsp;×&nbsp;rate&nbsp;×&nbsp;DT multiplier, each band rounded to 2 decimal places. Thresholds
+    and multipliers are the ones you enter, not statutory values. Gross pay before any deduction. Data
+    is saved only in this browser. Not payroll, tax or legal advice.
+  </p>
+</footer>
+
+<script>
+"use strict";
+(function(){
+const KEY='solvix.timesheet.v1';
+const $=function(s,r){return (r||document).querySelector(s);};
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAY3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/* ── helpers ─────────────────────────────────────────── */
+function r2(x){ if(typeof x!=='number'||!isFinite(x)) return 0;
+  var v=Math.round((x+(x>=0?1e-9:-1e-9))*100)/100; return Object.is(v,-0)?0:v; }
+function num(v){ if(v===''||v===null||v===undefined) return null;
+  var n=typeof v==='number'?v:parseFloat(String(v).replace(/[^0-9.eE+-]/g,''));
+  return (typeof n==='number'&&isFinite(n))?n:null; }
+function n0(v){ var n=num(v); return n===null?0:n; }
+function grp(s){ var p=String(s).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
+function sym(){ return S.currency==='custom' ? (S.currencyCustom||'') : S.currency; }
+function money(v,withSym){ if(typeof v!=='number'||!isFinite(v)) return '—';
+  var n=r2(v), s=grp(Math.abs(n).toFixed(2));
+  return (n<0?'-':'')+((withSym===false)?'':sym())+s; }
+function plain(v){ if(typeof v!=='number'||!isFinite(v)) return ''; return r2(v).toFixed(2); }
+function hrs(mins){ if(typeof mins!=='number'||!isFinite(mins)) return '—';
+  var h=mins/60; if(Math.abs(h)<0.005) h=0; return grp(h.toFixed(2)); }
+function hplain(mins){ if(typeof mins!=='number'||!isFinite(mins)) return ''; return (mins/60).toFixed(2); }
+function esc(s){ return String(s===null||s===undefined?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function uid(){ return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function todayISO(){ var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function isISO(s){ return typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(dObj(s)); }
+function dObj(iso){ var p=String(iso).split('-');
+  return new Date(+p[0],(+p[1])-1,+p[2],12,0,0); }
+function addDays(iso,n){ var d=dObj(iso); d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDate(iso){ if(!isISO(iso)) return '—';
+  var p=iso.split('-'); return String(+p[2])+' '+MONTHS[(+p[1])-1]+' '+p[0]; }
+function dowIdx(iso){ return isISO(iso)? dObj(iso).getDay() : -1; }
+function dow(iso){ var i=dowIdx(iso); return i<0?'—':DAY3[i]; }
+function pt(t){ if(typeof t!=='string') return null;
+  var m=/^(\d{1,2}):(\d{2})$/.exec(t.trim()); if(!m) return null;
+  var h=+m[1], mi=+m[2]; if(h>23||mi>59) return null; return h*60+mi; }
+function fmtT(t){ var v=pt(t); return v===null?'—':t; }
+function slug(s){ return (String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+  .replace(/^-|-$/g,'')||'timesheet').slice(0,50); }
+
+/* ── rounding ────────────────────────────────────────── */
+function roundMin(mins,inc,mode){
+  if(!isFinite(mins)) return 0;
+  var i=Math.round(inc); if(!(i>1)) return Math.round(mins);
+  var q=mins/i, r;
+  if(mode==='up') r=Math.ceil(q-1e-9);
+  else if(mode==='down') r=Math.floor(q+1e-9);
+  else r=Math.floor(q+0.5+1e-9);
+  return r*i;
+}
+
+/* ── state ───────────────────────────────────────────── */
+function wkShifts(start,rows){
+  return rows.map(function(r){
+    return {id:uid(),date:addDays(start,r[0]),inT:r[1],outT:r[2],brk:r[3],note:r[4]||''};
+  });
+}
+function sample(){
+  var st='2026-08-31';
+  return {
+    v:1, sample:true, currency:'£', currencyCustom:'',
+    org:{name:'Ashcroft Facilities Ltd', addr:'Unit 7, Calder Business Park\nWakefield WF2 7AW'},
+    sheet:{ref:'TS-2026-W36', start:st, dept:'Maintenance & cleaning — Calder depot',
+      prepBy:'Nina Okafor', notes:'Dana covered Wednesday nights while the depot alarm was reprogrammed.'},
+    rules:{preset:'daily-weekly', dOtOn:true, dOtHrs:8, dDtOn:true, dDtHrs:12,
+      wOtOn:true, wOtHrs:40, wDtOn:false, wDtHrs:60,
+      otMult:1.5, dtMult:2, rndInc:15, rndMode:'nearest'},
+    approval:{by:'Nina Okafor', role:'Operations Manager', on:''},
+    emps:[
+      {id:'e1',name:'Marcus Hale',ref:'AF-104',role:'Maintenance technician',rate:18.50,
+        shifts:wkShifts(st,[
+          [0,'07:30','16:30',30,''],
+          [1,'07:30','17:00',30,'Boiler callout, Unit 3'],
+          [2,'07:30','16:00',30,''],
+          [3,'07:30','18:15',45,'Roof survey overrun'],
+          [4,'07:30','15:30',30,'']
+        ])},
+      {id:'e2',name:'Dana Whitfield',ref:'AF-118',role:'Night security & cleaning',rate:22.00,
+        shifts:wkShifts(st,[
+          [0,'22:00','06:30',30,''],
+          [1,'22:00','06:30',30,''],
+          [2,'22:00','07:00',30,'Alarm engineer on site'],
+          [3,'22:00','06:30',30,''],
+          [5,'08:00','14:00',0,'Saturday deep clean']
+        ])},
+      {id:'e3',name:'Aisha Bello',ref:'AF-131',role:'Cleaning operative (part time)',rate:15.75,
+        shifts:wkShifts(st,[
+          [0,'09:00','13:00',0,''],
+          [2,'09:00','13:00',0,''],
+          [4,'09:00','14:30',15,'Stayed for the depot handover']
+        ])}
+    ]
+  };
+}
+function blankEmp(){
+  return {id:uid(),name:'',ref:'',role:'',rate:null,shifts:weekRows(S?S.sheet.start:todayISO())};
+}
+function weekRows(start){
+  var a=[]; for(var i=0;i<7;i++) a.push({id:uid(),date:addDays(start,i),inT:'',outT:'',brk:0,note:''});
+  return a;
+}
+function blank(){
+  var st=weekStartOf(todayISO());
+  return {
+    v:1, sample:false, currency:S?S.currency:'£', currencyCustom:S?S.currencyCustom:'',
+    org:{name:(S&&S.org?S.org.name:''), addr:(S&&S.org?S.org.addr:'')},
+    sheet:{ref:'', start:st, dept:'', prepBy:'', notes:''},
+    rules:S?JSON.parse(JSON.stringify(S.rules)):sample().rules,
+    approval:{by:'',role:'',on:''},
+    emps:[{id:uid(),name:'',ref:'',role:'',rate:null,shifts:weekRows(st)}]
+  };
+}
+function weekStartOf(iso){ var i=dowIdx(iso); if(i<0) return iso;
+  return addDays(iso,-((i+6)%7)); }
+
+var S=sample();
+
+/* ── persistence ─────────────────────────────────────── */
+var saveT=null;
+function save(){ if(saveT) clearTimeout(saveT);
+  saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} },120); }
+function saveNow(){ if(saveT){clearTimeout(saveT);saveT=null;}
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function migrate(o){
+  var d=sample();
+  o=o&&typeof o==='object'?o:{};
+  o.v=1;
+  o.currency=typeof o.currency==='string'?o.currency:'£';
+  o.currencyCustom=typeof o.currencyCustom==='string'?o.currencyCustom:'';
+  o.org=Object.assign({name:'',addr:''},o.org||{});
+  o.sheet=Object.assign({ref:'',start:todayISO(),dept:'',prepBy:'',notes:''},o.sheet||{});
+  if(!isISO(o.sheet.start)) o.sheet.start=weekStartOf(todayISO());
+  o.rules=Object.assign({},d.rules,o.rules||{});
+  o.approval=Object.assign({by:'',role:'',on:''},o.approval||{});
+  o.emps=Array.isArray(o.emps)?o.emps:[];
+  o.emps=o.emps.map(function(e){
+    e=e&&typeof e==='object'?e:{};
+    return {id:e.id||uid(), name:String(e.name||''), ref:String(e.ref||''), role:String(e.role||''),
+      rate:num(e.rate), shifts:(Array.isArray(e.shifts)?e.shifts:[]).map(function(s){
+        s=s&&typeof s==='object'?s:{};
+        return {id:s.id||uid(), date:isISO(s.date)?s.date:o.sheet.start,
+          inT:typeof s.inT==='string'?s.inT:'', outT:typeof s.outT==='string'?s.outT:'',
+          brk:n0(s.brk), note:String(s.note||'')};
+      })};
+  });
+  if(!o.emps.length) o.emps=[{id:uid(),name:'',ref:'',role:'',rate:null,shifts:[]}];
+  o.sample=!!o.sample;
+  return o;
+}
+function load(){
+  try{ var raw=localStorage.getItem(KEY); if(!raw) return false;
+    var o=JSON.parse(raw); if(!o||typeof o!=='object') return false;
+    S=migrate(o); return true;
+  }catch(e){ return false; }
+}
+
+/* ── calculation ─────────────────────────────────────── */
+function shiftMins(s){
+  var a=pt(s.inT), b=pt(s.outT);
+  if(a===null||b===null) return {raw:null,over:false};
+  var raw=b-a, over=false;
+  if(raw<0){ raw+=1440; over=true; }
+  return {raw:raw,over:over};
+}
+function thrMin(h){ var n=num(h); if(n===null||n<0) return null; return Math.round(n*60); }
+
+function calcEmp(emp){
+  var R=S.rules;
+  var inc=Math.round(n0(R.rndInc))||1, mode=R.rndMode||'nearest';
+  var rows=[], i;
+  for(i=0;i<emp.shifts.length;i++){
+    var s=emp.shifts[i], sm=shiftMins(s), br=Math.max(0,Math.round(n0(s.brk)));
+    var row={ref:s, idx:i, date:s.date, over:sm.over, brk:br, raw:sm.raw,
+      paid:0, err:'', reg:0, ot:0, dt:0, sort:(pt(s.inT)===null?99999:pt(s.inT))};
+    if(sm.raw===null){
+      row.err = (s.inT||s.outT) ? 'time' : '';
+      row.paid=0; row.blank=!(s.inT||s.outT);
+    }else if(br>sm.raw){
+      row.err='break'; row.paid=0;
+    }else{
+      row.paid=Math.max(0,roundMin(sm.raw-br,inc,mode));
+    }
+    rows.push(row);
+  }
+  /* group by day, allocate bands lowest first */
+  var byDate={};
+  for(i=0;i<rows.length;i++){
+    var k=isISO(rows[i].date)?rows[i].date:'0000-00-00';
+    (byDate[k]=byDate[k]||[]).push(rows[i]);
+  }
+  var dates=Object.keys(byDate).sort();
+  var otT=(R.dOtOn?thrMin(R.dOtHrs):null), dtT=(R.dDtOn?thrMin(R.dDtHrs):null);
+  if(otT===null) otT=Infinity; if(dtT===null) dtT=Infinity;
+  if(dtT<otT) dtT=otT;
+  var ordered=[], days=[];
+  for(var di=0;di<dates.length;di++){
+    var grpRows=byDate[dates[di]].slice().sort(function(a,b){return a.sort-b.sort;});
+    var cum=0, dayTot=0;
+    for(i=0;i<grpRows.length;i++){
+      var r=grpRows[i], m=r.paid, a0=cum, a1=cum+m;
+      r.reg=Math.max(0,Math.min(a1,otT)-Math.min(a0,otT));
+      r.ot =Math.max(0,Math.min(a1,dtT)-Math.max(a0,otT));
+      if(r.ot<0) r.ot=0;
+      r.dt =Math.max(0,a1-Math.max(a0,dtT));
+      cum=a1; dayTot+=m;
+      ordered.push(r);
+    }
+    days.push({date:dates[di],mins:dayTot,rows:grpRows});
+  }
+  /* weekly overtime: only hours still counted as regular */
+  var totReg=0,totOt=0,totDt=0,totAll=0;
+  for(i=0;i<ordered.length;i++){ totReg+=ordered[i].reg; totOt+=ordered[i].ot;
+    totDt+=ordered[i].dt; totAll+=ordered[i].paid; }
+  var wOtT=(R.wOtOn?thrMin(R.wOtHrs):null);
+  if(wOtT!==null && totReg>wOtT){
+    var move=totReg-wOtT;
+    for(i=ordered.length-1;i>=0&&move>0;i--){
+      var t=Math.min(move,ordered[i].reg);
+      ordered[i].reg-=t; ordered[i].ot+=t; move-=t;
+    }
+    totOt+=(totReg-wOtT); totReg=wOtT;
+  }
+  /* weekly double time: top hours of the week, taken from OT first then regular */
+  var wDtT=(R.wDtOn?thrMin(R.wDtHrs):null);
+  if(wDtT!==null && totAll>wDtT){
+    var need=(totAll-wDtT)-totDt;
+    if(need>0){
+      var fromOt=Math.min(need,totOt);
+      var rem=fromOt;
+      for(i=ordered.length-1;i>=0&&rem>0;i--){
+        var t2=Math.min(rem,ordered[i].ot); ordered[i].ot-=t2; ordered[i].dt+=t2; rem-=t2;
+      }
+      totOt-=fromOt; totDt+=fromOt; need-=fromOt;
+      if(need>0){
+        var fromReg=Math.min(need,totReg); rem=fromReg;
+        for(i=ordered.length-1;i>=0&&rem>0;i--){
+          var t3=Math.min(rem,ordered[i].reg); ordered[i].reg-=t3; ordered[i].dt+=t3; rem-=t3;
+        }
+        totReg-=fromReg; totDt+=fromReg;
+      }
+    }
+  }
+  var rate=num(emp.rate); var hasRate=(rate!==null&&rate>=0);
+  var otM=Math.max(0,n0(S.rules.otMult)), dtM=Math.max(0,n0(S.rules.dtMult));
+  var otRate=hasRate?r2(rate*otM):null, dtRate=hasRate?r2(rate*dtM):null;
+  var regPay=hasRate?r2((totReg/60)*rate):null;
+  var otPay =hasRate?r2((totOt/60)*rate*otM):null;
+  var dtPay =hasRate?r2((totDt/60)*rate*dtM):null;
+  var gross =hasRate?r2(regPay+otPay+dtPay):null;
+  var base  =hasRate?r2((totAll/60)*rate):null;
+  return {emp:emp, rows:rows, ordered:ordered, days:days,
+    reg:totReg, ot:totOt, dt:totDt, all:totAll,
+    rate:hasRate?rate:null, otRate:otRate, dtRate:dtRate,
+    regPay:regPay, otPay:otPay, dtPay:dtPay, gross:gross,
+    premium:(hasRate?r2(gross-base):null), hasRate:hasRate};
+}
+function calcAll(){
+  var out={emps:[], reg:0, ot:0, dt:0, all:0, gross:0, premium:0,
+    shifts:0, worked:0, anyRate:false, missingRate:0, overnight:0, errs:0, longest:0};
+  for(var i=0;i<S.emps.length;i++){
+    var c=calcEmp(S.emps[i]);
+    out.emps.push(c);
+    out.reg+=c.reg; out.ot+=c.ot; out.dt+=c.dt; out.all+=c.all;
+    if(c.hasRate){ out.anyRate=true; out.gross=r2(out.gross+c.gross); out.premium=r2(out.premium+c.premium); }
+    else if(c.all>0) out.missingRate++;
+    for(var j=0;j<c.rows.length;j++){
+      var r=c.rows[j];
+      if(r.paid>0||r.err) out.shifts++;
+      if(r.paid>0) out.worked++;
+      if(r.over&&r.paid>0) out.overnight++;
+      if(r.err) out.errs++;
+      if(r.paid>out.longest) out.longest=r.paid;
+    }
+  }
+  return out;
+}
+
+/* ── rendering ───────────────────────────────────────── */
+var msgT=null;
+function flash(t,bad){ var m=$('#msg'); m.textContent=t; m.className='msg'+(bad?' bad':'');
+  if(msgT) clearTimeout(msgT); msgT=setTimeout(function(){ m.textContent=''; },4200); }
+
+function setVal(id,v){ var el=$(id); if(el&&el.value!==String(v===null||v===undefined?'':v)) el.value=(v===null||v===undefined?'':v); }
+
+function renderTop(){
+  setVal('#orgName',S.org.name); setVal('#shRef',S.sheet.ref); setVal('#wkStart',S.sheet.start);
+  setVal('#dept',S.sheet.dept); setVal('#prepBy',S.sheet.prepBy); setVal('#notes',S.sheet.notes);
+  setVal('#cur',S.currency); setVal('#curCust',S.currencyCustom);
+  $('#curCustWrap').hidden = S.currency!=='custom';
+  setVal('#appBy',S.approval.by); setVal('#appRole',S.approval.role); setVal('#appOn',S.approval.on);
+  $('#sampleChip').hidden=!S.sample;
+  var R=S.rules;
+  $('#dOtOn').checked=!!R.dOtOn; setVal('#dOtHrs',R.dOtHrs);
+  $('#dDtOn').checked=!!R.dDtOn; setVal('#dDtHrs',R.dDtHrs);
+  $('#wOtOn').checked=!!R.wOtOn; setVal('#wOtHrs',R.wOtHrs);
+  $('#wDtOn').checked=!!R.wDtOn; setVal('#wDtHrs',R.wDtHrs);
+  setVal('#otMult',R.otMult); setVal('#dtMult',R.dtMult);
+  setVal('#rndInc',String(R.rndInc)); setVal('#rndMode',R.rndMode);
+  setVal('#preset',R.preset||'custom');
+  $('#dOtHrs').disabled=!R.dOtOn; $('#dDtHrs').disabled=!R.dDtOn;
+  $('#wOtHrs').disabled=!R.wOtOn; $('#wDtHrs').disabled=!R.wDtOn;
+  $('#rDOT').classList.toggle('off',!R.dOtOn); $('#rDDT').classList.toggle('off',!R.dDtOn);
+  $('#rWOT').classList.toggle('off',!R.wOtOn); $('#rWDT').classList.toggle('off',!R.wDtOn);
+  $('#eWk').hidden=isISO(S.sheet.start);
+  $('#weekSpan').textContent = isISO(S.sheet.start)
+    ? 'Week of '+DAYS[dowIdx(S.sheet.start)]+' '+fmtDate(S.sheet.start)+' to '+fmtDate(addDays(S.sheet.start,6))+'.'
+    : 'Enter the date the week starts.';
+}
+
+function ruleLabel(){
+  var R=S.rules, p=[];
+  if(R.dOtOn) p.push('over '+num(R.dOtHrs)+'h/day');
+  if(R.wOtOn) p.push('over '+num(R.wOtHrs)+'h/week');
+  if(R.dDtOn) p.push('×2 over '+num(R.dDtHrs)+'h/day');
+  if(R.wDtOn) p.push('×2 over '+num(R.wDtHrs)+'h/week');
+  return p.length?p.join(' · '):'No overtime rules';
+}
+function rndLabel(){
+  var R=S.rules, i=Math.round(n0(R.rndInc))||1;
+  if(i<=1) return 'No rounding';
+  var d=R.rndMode==='up'?'up':(R.rndMode==='down'?'down':'nearest');
+  return 'Round '+d+' · '+i+' min';
+}
+
+function empCard(c,n){
+  var e=c.emp;
+  var rowsHtml='';
+  var sorted=e.shifts;
+  for(var i=0;i<sorted.length;i++){
+    var s=sorted[i];
+    var r=null;
+    for(var k=0;k<c.rows.length;k++){ if(c.rows[k].ref===s){ r=c.rows[k]; break; } }
+    var flag='';
+    if(r.err==='break') flag='<br><span class="flag b" title="Unpaid break is longer than the shift">Break&nbsp;&gt;&nbsp;shift</span>';
+    else if(r.err==='time') flag='<br><span class="flag b" title="Enter both a start and an end time">Incomplete</span>';
+    else if(r.over) flag='<br><span class="flag" title="Ends the next calendar day">Next&nbsp;day</span>';
+    var cls=[]; if(r.err) cls.push('err'); else if(!r.paid) cls.push('zero');
+    rowsHtml+='<tr class="'+cls.join(' ')+'" data-e="'+esc(e.id)+'" data-s="'+esc(s.id)+'">'+
+      '<td class="day">'+esc(dow(s.date))+'<span class="dd">'+(isISO(s.date)?esc(String(+s.date.split('-')[2])+' '+MONTHS[(+s.date.split('-')[1])-1]):'—')+'</span></td>'+
+      '<td data-l="Date"><input type="date" data-f="date" value="'+esc(s.date)+'" aria-label="Shift date"></td>'+
+      '<td data-l="Start"><input type="time" data-f="inT" value="'+esc(s.inT)+'" aria-label="Start time"></td>'+
+      '<td data-l="End"><input type="time" data-f="outT" value="'+esc(s.outT)+'" aria-label="End time"></td>'+
+      '<td data-l="Break (min)"><input type="number" min="0" max="1440" step="5" inputmode="numeric" data-f="brk" value="'+esc(s.brk===null?'':s.brk)+'" aria-label="Unpaid break, minutes"></td>'+
+      '<td class="n wk" data-l="Worked"><b>'+(r.paid?hrs(r.paid):'—')+'</b>'+flag+'</td>'+
+      '<td class="n'+(r.reg?'':' na')+'" data-l="Regular">'+(r.reg?hrs(r.reg):'—')+'</td>'+
+      '<td class="n'+(r.ot?'':' na')+'" data-l="Overtime">'+(r.ot?hrs(r.ot):'—')+'</td>'+
+      '<td class="n'+(r.dt?'':' na')+'" data-l="Double time">'+(r.dt?hrs(r.dt):'—')+'</td>'+
+      '<td data-l="Note"><input type="text" data-f="note" value="'+esc(s.note)+'" aria-label="Note" placeholder="—"></td>'+
+      '<td data-l="Remove"><button type="button" class="rm" data-act="delshift" aria-label="Remove this shift">✕</button></td>'+
+      '</tr>';
+  }
+  if(!sorted.length) rowsHtml='<tr><td colspan="11" class="empty" style="padding:18px">No shifts yet — add one below.</td></tr>';
+  var otM=n0(S.rules.otMult), dtM=n0(S.rules.dtMult);
+  var bands='<table class="bands"><thead><tr><th scope="col">Pay band</th><th scope="col" class="n">Hours</th>'+
+    '<th scope="col" class="n">Rate</th><th scope="col" class="n">Amount</th></tr></thead><tbody>'+
+    '<tr><th scope="row">Regular</th><td class="n">'+hrs(c.reg)+'</td><td class="n">'+(c.hasRate?money(c.rate):'—')+'</td><td class="n">'+(c.hasRate?money(c.regPay):'—')+'</td></tr>'+
+    '<tr><th scope="row">Overtime ×'+esc(otM.toFixed(2).replace(/\.?0+$/,''))+'</th><td class="n">'+hrs(c.ot)+'</td><td class="n">'+(c.hasRate?money(c.otRate):'—')+'</td><td class="n">'+(c.hasRate?money(c.otPay):'—')+'</td></tr>'+
+    '<tr><th scope="row">Double time ×'+esc(dtM.toFixed(2).replace(/\.?0+$/,''))+'</th><td class="n">'+hrs(c.dt)+'</td><td class="n">'+(c.hasRate?money(c.dtRate):'—')+'</td><td class="n">'+(c.hasRate?money(c.dtPay):'—')+'</td></tr>'+
+    '</tbody><tfoot><tr><td>Gross pay for the week</td><td class="n">'+hrs(c.all)+'</td><td></td><td class="n">'+(c.hasRate?money(c.gross):'—')+'</td></tr></tfoot></table>';
+  return '<section class="card" data-emp="'+esc(e.id)+'">'+
+    '<div class="hd"><h2>'+(e.name?esc(e.name):'Employee '+n)+'</h2>'+
+      '<span class="chip">'+hrs(c.all)+' h</span>'+
+      (c.ot||c.dt?'<span class="chip warn">'+hrs(c.ot+c.dt)+' h premium</span>':'')+
+      '<span class="chip ok">'+(c.hasRate?money(c.gross):'rate needed')+'</span>'+
+      '<button type="button" class="btn sm dgr" data-act="delemp">Remove employee</button></div>'+
+    '<div class="bd stack" style="gap:12px">'+
+      '<div class="emphead">'+
+        '<div class="f nm"><label for="n-'+esc(e.id)+'">Employee name</label>'+
+          '<input id="n-'+esc(e.id)+'" type="text" data-ef="name" value="'+esc(e.name)+'" placeholder="Full name"></div>'+
+        '<div class="f"><label for="r-'+esc(e.id)+'">Employee no.</label>'+
+          '<input id="r-'+esc(e.id)+'" type="text" data-ef="ref" value="'+esc(e.ref)+'"></div>'+
+        '<div class="f nm"><label for="o-'+esc(e.id)+'">Job title</label>'+
+          '<input id="o-'+esc(e.id)+'" type="text" data-ef="role" value="'+esc(e.role)+'"></div>'+
+        '<div class="f"><label for="p-'+esc(e.id)+'">Base rate ('+esc(sym())+'/h)</label>'+
+          '<input id="p-'+esc(e.id)+'" type="number" min="0" step="0.01" inputmode="decimal" data-ef="rate" value="'+(e.rate===null||e.rate===undefined?'':esc(e.rate))+'">'+
+          '<span class="err" data-err="rate"'+(c.hasRate||!e.name?' hidden':'')+'>Enter an hourly rate to price this week.</span></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="tw"><table class="sh">'+
+      '<colgroup><col class="c-day"><col class="c-date"><col class="c-in"><col class="c-out"><col class="c-brk">'+
+      '<col class="c-wk"><col class="c-rg"><col class="c-ot"><col class="c-dt"><col class="c-nt"><col class="c-del"></colgroup>'+
+      '<thead><tr><th scope="col">Day</th><th scope="col">Date</th><th scope="col">Start</th><th scope="col">End</th>'+
+      '<th scope="col" class="n">Break min</th><th scope="col" class="n">Worked</th><th scope="col" class="n">Regular</th>'+
+      '<th scope="col" class="n">OT ×'+esc(otM.toFixed(2).replace(/\.?0+$/,''))+'</th><th scope="col" class="n">DT ×'+esc(dtM.toFixed(2).replace(/\.?0+$/,''))+'</th>'+
+      '<th scope="col">Note</th><th scope="col"><span class="lbl">Del</span></th></tr></thead>'+
+      '<tbody>'+rowsHtml+'</tbody>'+
+      '<tfoot><tr><td colspan="5" class="r">Week total</td>'+
+        '<td class="n">'+hrs(c.all)+'</td><td class="n">'+hrs(c.reg)+'</td><td class="n">'+hrs(c.ot)+'</td>'+
+        '<td class="n">'+hrs(c.dt)+'</td><td colspan="2"></td></tr></tfoot>'+
+    '</table></div>'+
+    '<div class="bd" style="padding-top:12px">'+bands+'</div>'+
+    '<div class="ft"><button type="button" class="btn sm" data-act="addshift">+ Add shift</button>'+
+      '<button type="button" class="btn sm" data-act="fillweek">Fill the 7 days</button>'+
+      '<span class="hint" style="margin-left:auto">'+esc(ruleLabel())+' · '+esc(rndLabel())+'</span></div>'+
+    '</section>';
+}
+
+function render(){
+  renderTop();
+  var T=calcAll();
+  /* employees */
+  var html='';
+  for(var i=0;i<T.emps.length;i++) html+=empCard(T.emps[i],i+1);
+  $('#emps').innerHTML=html;
+  $('#emptyEmps').hidden=T.emps.length>0;
+
+  /* rail */
+  var haveWork=T.all>0;
+  $('#sPay').textContent = T.anyRate? money(T.gross) : (haveWork?'rate needed':'—');
+  $('#sPaySub').textContent = haveWork
+    ? hrs(T.all)+' h across '+S.emps.length+' '+(S.emps.length===1?'person':'people')+
+      (T.missingRate?' · '+T.missingRate+' without a rate':'')
+    : 'Enter start and end times to price the week.';
+  $('#sHours').textContent = haveWork?hrs(T.all):'—';
+  $('#sOtH').textContent = haveWork?hrs(T.ot+T.dt):'—';
+  $('#kRegH').textContent = haveWork?hrs(T.reg)+' h':'—';
+  $('#kOtH').textContent = haveWork?hrs(T.ot)+' h':'—';
+  $('#kDtH').textContent = haveWork?hrs(T.dt)+' h':'—';
+  var regP=0,otP=0,dtP=0,any=false;
+  for(i=0;i<T.emps.length;i++){ var c=T.emps[i]; if(c.hasRate){ any=true; regP+=c.regPay; otP+=c.otPay; dtP+=c.dtPay; } }
+  $('#kRegP').textContent=any?money(regP):'—';
+  $('#kOtP').textContent=any?money(otP):'—';
+  $('#kDtP').textContent=any?money(dtP):'—';
+  $('#kPrem').textContent=any?money(T.premium):'—';
+  $('#kAvg').textContent=(any&&T.all>0)?money(T.gross/(T.all/60)):'—';
+  $('#empChip').textContent=S.emps.length+(S.emps.length===1?' person':' staff');
+
+  var sl='';
+  for(i=0;i<T.emps.length;i++){
+    var e=T.emps[i];
+    sl+='<tr><td>'+(e.emp.name?esc(e.emp.name):'<span class="hint">Unnamed</span>')+'</td>'+
+      '<td class="n">'+(e.all?hrs(e.all)+' h':'—')+'</td>'+
+      '<td class="n">'+(e.hasRate?money(e.gross):'—')+'</td></tr>';
+  }
+  $('#empSum').innerHTML = sl || '<tr><td colspan="3" class="hint">No staff yet.</td></tr>';
+
+  var fl='';
+  if(T.errs) fl+='<div class="note bad"><strong>'+T.errs+' shift'+(T.errs===1?'':'s')+' need'+(T.errs===1?'s':'')+' fixing.</strong> A break longer than the shift, or a missing start/end time — those rows are counted as zero.</div>';
+  if(T.missingRate) fl+='<div class="note warn"><strong>'+T.missingRate+' employee'+(T.missingRate===1?'':'s')+' worked but ha'+(T.missingRate===1?'s':'ve')+' no hourly rate.</strong> Their hours are counted; their pay is not.</div>';
+  if(T.overnight) fl+='<div class="note"><strong>'+T.overnight+' shift'+(T.overnight===1?'':'s')+' cross'+(T.overnight===1?'es':'')+' midnight.</strong> Worked time is carried into the next day, and the hours stay on the shift start date.</div>';
+  if(T.longest>=(16*60)) fl+='<div class="note warn"><strong>A shift of '+hrs(T.longest)+' hours is recorded.</strong> Check the start and end times — and any daily limit in the contract or local rules.</div>';
+  if(S.rules.rndMode==='down'&&Math.round(n0(S.rules.rndInc))>1) fl+='<div class="note warn"><strong>Rounding is set to always down.</strong> Rounding that only ever favours the employer is unlawful in many places. Use nearest, or round up.</div>';
+  $('#flags').innerHTML=fl;
+
+  $('#cRnd').textContent=rndLabel();
+  $('#cRule').textContent=ruleLabel();
+  $('#cEmps').textContent=S.emps.length+(S.emps.length===1?' person':' staff');
+  $('#cShifts').textContent=T.worked+' shift'+(T.worked===1?'':'s')+' worked';
+  $('#cHours').textContent=(haveWork?hrs(T.all):'—')+' h';
+  $('#cPay').textContent=T.anyRate?money(T.gross):'—';
+
+  buildDoc(T);
+  save();
+}
+
+/* ── print document ──────────────────────────────────── */
+function buildDoc(T){
+  var d=$('#printdoc');
+  var st=S.sheet.start, en=isISO(st)?addDays(st,6):'';
+  var R=S.rules;
+  var h='';
+  h+='<div class="lh"><div><div class="org">'+(S.org.name?esc(S.org.name):'&nbsp;')+'</div>'+
+     '<div class="oaddr">'+esc(S.org.addr)+'</div></div>'+
+     '<div class="ttl"><h2>WEEKLY TIMESHEET</h2>'+
+     '<div class="ref">'+(S.sheet.ref?esc(S.sheet.ref):'')+'</div>'+
+     '<div class="ref">'+(isISO(st)?esc(fmtDate(st)+' – '+fmtDate(en)):'')+'</div></div></div>';
+  h+='<div class="meta">'+
+     '<div><b>Week commencing</b><span>'+(isISO(st)?esc(DAY3[dowIdx(st)]+' '+fmtDate(st)):'—')+'</span></div>'+
+     '<div><b>Week ending</b><span>'+(isISO(st)?esc(DAY3[dowIdx(en)]+' '+fmtDate(en)):'—')+'</span></div>'+
+     '<div><b>Department / site</b><span>'+(S.sheet.dept?esc(S.sheet.dept):'—')+'</span></div>'+
+     '<div><b>Prepared by</b><span>'+(S.sheet.prepBy?esc(S.sheet.prepBy):'—')+'</span></div>'+
+     '<div><b>Staff on sheet</b><span>'+S.emps.length+'</span></div>'+
+     '<div><b>Total hours</b><span>'+hrs(T.all)+' h</span></div>'+
+     '<div><b>Total gross pay</b><span>'+(T.anyRate?esc(money(T.gross)):'—')+'</span></div>'+
+     '<div><b>Printed</b><span>'+esc(fmtDate(todayISO()))+'</span></div>'+
+     '</div>';
+  h+='<div class="rules"><b>Rules applied to this sheet</b>'+
+     'Worked time = end − start (a shift ending at or before its start is carried past midnight) − unpaid break, '+
+     'rounded '+(Math.round(n0(R.rndInc))>1?esc((R.rndMode==='up'?'up':R.rndMode==='down'?'down':'to the nearest')+' '+Math.round(n0(R.rndInc))+' minutes'):'to the minute')+'. '+
+     (R.dOtOn?('Overtime after '+esc(num(R.dOtHrs))+' h in a day. '):'')+
+     (R.dDtOn?('Double time after '+esc(num(R.dDtHrs))+' h in a day. '):'')+
+     (R.wOtOn?('Overtime after '+esc(num(R.wOtHrs))+' h in the week, counting only hours not already paid as daily overtime. '):'')+
+     (R.wDtOn?('Double time after '+esc(num(R.wDtHrs))+' h in the week. '):'')+
+     (!R.dOtOn&&!R.wOtOn&&!R.dDtOn&&!R.wDtOn?'No overtime bands — all hours at the base rate. ':'')+
+     'Overtime multiplier ×'+esc(n0(R.otMult))+', double time ×'+esc(n0(R.dtMult))+'. '+
+     'Amounts are gross, in '+esc(sym())+', before any deduction.</div>';
+
+  for(var i=0;i<T.emps.length;i++){
+    var c=T.emps[i], e=c.emp;
+    h+='<div class="emp"><div class="eh"><div><div class="who">'+(e.name?esc(e.name):'Employee '+(i+1))+'</div>'+
+       '<div class="role">'+esc([e.role,e.ref?('No. '+e.ref):''].filter(Boolean).join(' · ')||'&nbsp;')+'</div></div>'+
+       '<div class="rt">Base rate<b>'+(c.hasRate?esc(money(c.rate))+'/h':'—')+'</b></div></div>';
+    h+='<table><thead><tr><th>Day</th><th>Date</th><th>Start</th><th>End</th>'+
+       '<th class="n">Break</th><th class="n">Worked</th><th class="n">Reg</th><th class="n">OT</th><th class="n">DT</th><th>Note</th></tr></thead><tbody>';
+    var any=false;
+    for(var j=0;j<c.rows.length;j++){
+      var r=c.rows[j];
+      if(!r.paid && !r.err && !(r.ref.inT||r.ref.outT)) continue;
+      any=true;
+      h+='<tr><td>'+esc(dow(r.date))+'</td><td class="n">'+(isISO(r.date)?esc(fmtDate(r.date)):'—')+'</td>'+
+        '<td class="n">'+esc(fmtT(r.ref.inT))+'</td>'+
+        '<td class="n">'+esc(fmtT(r.ref.outT))+(r.over?' +1d':'')+'</td>'+
+        '<td class="n">'+(r.brk?esc(r.brk)+' m':'—')+'</td>'+
+        '<td class="n">'+(r.paid?hrs(r.paid):'0.00')+'</td>'+
+        '<td class="n">'+(r.reg?hrs(r.reg):'—')+'</td>'+
+        '<td class="n">'+(r.ot?hrs(r.ot):'—')+'</td>'+
+        '<td class="n">'+(r.dt?hrs(r.dt):'—')+'</td>'+
+        '<td>'+esc(r.err==='break'?'Break longer than the shift — counted as zero':(r.err==='time'?'Incomplete times — counted as zero':r.ref.note))+'</td></tr>';
+    }
+    if(!any) h+='<tr><td colspan="10">No shifts recorded.</td></tr>';
+    h+='</tbody><tfoot><tr><td colspan="5">Week total</td><td class="n">'+hrs(c.all)+'</td>'+
+       '<td class="n">'+hrs(c.reg)+'</td><td class="n">'+hrs(c.ot)+'</td><td class="n">'+hrs(c.dt)+'</td><td></td></tr></tfoot></table>';
+    h+='<div class="cols"><div><table><thead><tr><th>Pay band</th><th class="n">Hours</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead><tbody>'+
+       '<tr><td>Regular</td><td class="n">'+hrs(c.reg)+'</td><td class="n">'+(c.hasRate?esc(money(c.rate)):'—')+'</td><td class="n">'+(c.hasRate?esc(money(c.regPay)):'—')+'</td></tr>'+
+       '<tr><td>Overtime ×'+esc(n0(R.otMult))+'</td><td class="n">'+hrs(c.ot)+'</td><td class="n">'+(c.hasRate?esc(money(c.otRate)):'—')+'</td><td class="n">'+(c.hasRate?esc(money(c.otPay)):'—')+'</td></tr>'+
+       '<tr><td>Double time ×'+esc(n0(R.dtMult))+'</td><td class="n">'+hrs(c.dt)+'</td><td class="n">'+(c.hasRate?esc(money(c.dtRate)):'—')+'</td><td class="n">'+(c.hasRate?esc(money(c.dtPay)):'—')+'</td></tr>'+
+       '</tbody></table></div>'+
+       '<div class="totbox"><div><span>Hours worked</span><span class="n">'+hrs(c.all)+' h</span></div>'+
+       '<div class="big"><span>Gross pay</span><span class="n">'+(c.hasRate?esc(money(c.gross)):'—')+'</span></div></div></div>';
+    h+='<p class="decl">I certify that the hours shown above are a true record of the time I worked in this week.</p>'+
+       '<div class="sig"><div class="box"><b>Employee signature</b><div class="rule2"></div>'+
+       '<div class="cap">'+(e.name?esc(e.name):'&nbsp;')+' — date</div></div>'+
+       '<div class="box"><b>Supervisor signature</b><div class="rule2"></div><div class="cap">Checked and approved — date</div></div></div>';
+    h+='</div>';
+  }
+
+  h+='<h3 class="sec">Sheet summary</h3>';
+  h+='<table><thead><tr><th>Employee</th><th>No.</th><th class="n">Rate</th><th class="n">Regular h</th>'+
+     '<th class="n">OT h</th><th class="n">DT h</th><th class="n">Total h</th><th class="n">Gross pay</th></tr></thead><tbody>';
+  for(i=0;i<T.emps.length;i++){
+    var q=T.emps[i];
+    h+='<tr><td>'+(q.emp.name?esc(q.emp.name):'Employee '+(i+1))+'</td><td>'+esc(q.emp.ref||'—')+'</td>'+
+      '<td class="n">'+(q.hasRate?esc(money(q.rate)):'—')+'</td><td class="n">'+hrs(q.reg)+'</td>'+
+      '<td class="n">'+hrs(q.ot)+'</td><td class="n">'+hrs(q.dt)+'</td><td class="n">'+hrs(q.all)+'</td>'+
+      '<td class="n">'+(q.hasRate?esc(money(q.gross)):'—')+'</td></tr>';
+  }
+  h+='</tbody><tfoot><tr><td colspan="3">Totals</td><td class="n">'+hrs(T.reg)+'</td><td class="n">'+hrs(T.ot)+
+     '</td><td class="n">'+hrs(T.dt)+'</td><td class="n">'+hrs(T.all)+'</td><td class="n">'+
+     (T.anyRate?esc(money(T.gross)):'—')+'</td></tr></tfoot></table>';
+  h+='<div class="totrow" style="display:flex;justify-content:flex-end;margin-top:6pt">'+
+     '<div class="totbox" style="min-width:62mm">'+
+     '<div><span>Total hours</span><span class="n">'+hrs(T.all)+' h</span></div>'+
+     '<div><span>Of which overtime / double time</span><span class="n">'+hrs(T.ot+T.dt)+' h</span></div>'+
+     '<div class="big"><span>Total gross pay</span><span class="n">'+(T.anyRate?esc(money(T.gross)):'—')+'</span></div>'+
+     '</div></div>';
+  if(S.sheet.notes) h+='<h3 class="sec">Notes for payroll</h3><p style="font-size:9pt;white-space:pre-line;margin:0">'+esc(S.sheet.notes)+'</p>';
+  h+='<h3 class="sec">Approval</h3><div class="sig">'+
+     '<div class="box"><b>Approved for payroll by</b><div class="rule2"></div>'+
+     '<div class="cap">'+esc([S.approval.by,S.approval.role].filter(Boolean).join(' — ')||'Name and job title')+
+     (isISO(S.approval.on)?(' · '+esc(fmtDate(S.approval.on))):'')+'</div></div>'+
+     '<div class="box"><b>Received by payroll</b><div class="rule2"></div><div class="cap">Name — date</div></div></div>';
+  h+='<div class="disc"><b>Gross pay only — not payroll, tax or legal advice.</b> '+
+     'This timesheet applies the overtime thresholds, multipliers and rounding entered by the preparer. '+
+     'It does not determine which wage-and-hour rules apply to this employer, and it does not calculate '+
+     'seventh-day or rest-break premiums, salaried or exempt treatment, shift or holiday premiums, tips, '+
+     'pension contributions, tax or any other deduction. Hours must be checked against the actual records '+
+     'and the employment contract. Confirm the figures with a qualified payroll adviser before payment.</div>';
+  h+='<div class="foot">'+esc((S.org.name||'Weekly timesheet'))+' · '+
+     (S.sheet.ref?esc(S.sheet.ref)+' · ':'')+'prepared '+esc(fmtDate(todayISO()))+
+     ' · hours in decimal hours · currency '+esc(sym())+'</div>';
+  d.innerHTML=h;
+}
+
+/* ── events: top-level fields ────────────────────────── */
+function bindText(id,setter){
+  var el=$(id);
+  el.addEventListener('input',function(){ setter(el.value); S.sample=false; render(); });
+}
+bindText('#orgName',function(v){S.org.name=v;});
+bindText('#shRef',function(v){S.sheet.ref=v;});
+bindText('#dept',function(v){S.sheet.dept=v;});
+bindText('#prepBy',function(v){S.sheet.prepBy=v;});
+bindText('#notes',function(v){S.sheet.notes=v;});
+bindText('#appBy',function(v){S.approval.by=v;});
+bindText('#appRole',function(v){S.approval.role=v;});
+bindText('#appOn',function(v){S.approval.on=v;});
+bindText('#curCust',function(v){S.currencyCustom=v;});
+$('#cur').addEventListener('change',function(){ S.currency=$('#cur').value; render(); });
+
+$('#wkStart').addEventListener('change',function(){
+  var v=$('#wkStart').value;
+  if(!isISO(v)){ $('#eWk').hidden=false; $('#wkStart').classList.add('inv'); return; }
+  $('#eWk').hidden=true; $('#wkStart').classList.remove('inv');
+  var old=S.sheet.start;
+  S.sheet.start=v; S.sample=false;
+  if(isISO(old)){
+    var shift=Math.round((dObj(v)-dObj(old))/86400000);
+    if(shift!==0){
+      for(var i=0;i<S.emps.length;i++) for(var j=0;j<S.emps[i].shifts.length;j++){
+        var s=S.emps[i].shifts[j]; if(isISO(s.date)) s.date=addDays(s.date,shift);
+      }
+    }
+  }
+  render();
+});
+
+/* rules */
+function bindRuleNum(id,key,min,max){
+  var el=$(id);
+  el.addEventListener('input',function(){
+    var n=num(el.value);
+    if(n===null){ el.classList.add('inv'); return; }
+    if(n<min) n=min; if(n>max) n=max;
+    el.classList.remove('inv'); S.rules[key]=n; S.rules.preset='custom'; S.sample=false; render();
+  });
+  el.addEventListener('blur',function(){
+    var n=num(el.value); if(n===null){ el.value=S.rules[key]; el.classList.remove('inv'); render(); }
+  });
+}
+bindRuleNum('#dOtHrs','dOtHrs',0,24);
+bindRuleNum('#dDtHrs','dDtHrs',0,24);
+bindRuleNum('#wOtHrs','wOtHrs',0,168);
+bindRuleNum('#wDtHrs','wDtHrs',0,168);
+function bindMult(id,key,errId){
+  var el=$(id);
+  el.addEventListener('input',function(){
+    var n=num(el.value);
+    if(n===null||n<1){ el.classList.add('inv'); $(errId).hidden=false; if(n!==null&&n>=0){S.rules[key]=n;render();} return; }
+    if(n>5) n=5;
+    el.classList.remove('inv'); $(errId).hidden=true; S.rules[key]=n; S.sample=false; render();
+  });
+  el.addEventListener('blur',function(){
+    var n=num(el.value);
+    if(n===null||n<1){ S.rules[key]=(key==='otMult'?1.5:2); el.value=S.rules[key];
+      el.classList.remove('inv'); $(errId).hidden=true; render(); }
+  });
+}
+bindMult('#otMult','otMult','#eOtMult');
+bindMult('#dtMult','dtMult','#eDtMult');
+[['#dOtOn','dOtOn'],['#dDtOn','dDtOn'],['#wOtOn','wOtOn'],['#wDtOn','wDtOn']].forEach(function(p){
+  $(p[0]).addEventListener('change',function(){
+    S.rules[p[1]]=$(p[0]).checked; S.rules.preset='custom'; S.sample=false; render();
+  });
+});
+$('#rndInc').addEventListener('change',function(){ S.rules.rndInc=n0($('#rndInc').value)||1; S.sample=false; render(); });
+$('#rndMode').addEventListener('change',function(){ S.rules.rndMode=$('#rndMode').value; S.sample=false; render(); });
+$('#preset').addEventListener('change',function(){
+  var p=$('#preset').value, R=S.rules; R.preset=p;
+  if(p==='daily-weekly'){ R.dOtOn=true;R.dOtHrs=8;R.dDtOn=true;R.dDtHrs=12;R.wOtOn=true;R.wOtHrs=40;R.wDtOn=false; }
+  else if(p==='weekly'){ R.dOtOn=false;R.dDtOn=false;R.wOtOn=true;R.wOtHrs=40;R.wDtOn=false; }
+  else if(p==='daily'){ R.dOtOn=true;R.dOtHrs=8;R.dDtOn=true;R.dDtHrs=12;R.wOtOn=false;R.wDtOn=false; }
+  else if(p==='none'){ R.dOtOn=false;R.dDtOn=false;R.wOtOn=false;R.wDtOn=false; }
+  S.sample=false; render();
+});
+
+/* ── events: employee cards (delegated) ──────────────── */
+function findEmp(id){ for(var i=0;i<S.emps.length;i++) if(S.emps[i].id===id) return S.emps[i]; return null; }
+function empIdOf(el){ var c=el.closest('[data-emp]'); return c?c.getAttribute('data-emp'):null; }
+
+$('#emps').addEventListener('input',function(ev){
+  var el=ev.target;
+  var e=findEmp(empIdOf(el)); if(!e) return;
+  if(el.hasAttribute('data-ef')){
+    var f=el.getAttribute('data-ef');
+    if(f==='rate'){ var n=num(el.value); e.rate=(el.value===''?null:(n===null?null:Math.max(0,n))); }
+    else e[f]=el.value;
+    S.sample=false; softRender(el); return;
+  }
+  if(el.hasAttribute('data-f')){
+    var tr=el.closest('tr'), sid=tr?tr.getAttribute('data-s'):null;
+    var s=null; for(var i=0;i<e.shifts.length;i++) if(e.shifts[i].id===sid) s=e.shifts[i];
+    if(!s) return;
+    var g=el.getAttribute('data-f');
+    if(g==='brk'){ var b=num(el.value); s.brk=(el.value===''?0:Math.max(0,Math.min(1440,b===null?0:b))); }
+    else s[g]=el.value;
+    S.sample=false; softRender(el); return;
+  }
+});
+$('#emps').addEventListener('change',function(ev){
+  var el=ev.target;
+  if(el.type==='date'||el.type==='time'){ /* handled by input in most browsers; re-render to be safe */
+    if(el.hasAttribute('data-f')||el.hasAttribute('data-ef')) softRender(el);
+  }
+});
+$('#emps').addEventListener('click',function(ev){
+  var b=ev.target.closest('[data-act]'); if(!b) return;
+  var act=b.getAttribute('data-act');
+  var e=findEmp(empIdOf(b)); if(!e) return;
+  if(act==='delemp'){
+    if(S.emps.length===1 && !confirm('Remove the only employee on this sheet?')) return;
+    if(S.emps.length>1 && !confirm('Remove '+(e.name||'this employee')+' and all their shifts from the sheet?')) return;
+    S.emps=S.emps.filter(function(x){return x.id!==e.id;});
+    if(!S.emps.length) S.emps=[blankEmp()];
+    S.sample=false; render(); flash('Employee removed.');
+  }else if(act==='addshift'){
+    var last=e.shifts.length?e.shifts[e.shifts.length-1]:null;
+    var nd=last&&isISO(last.date)?last.date:S.sheet.start;
+    e.shifts.push({id:uid(),date:nd,inT:'',outT:'',brk:0,note:''});
+    S.sample=false; render(); focusRow(e.id,e.shifts[e.shifts.length-1].id);
+  }else if(act==='fillweek'){
+    var have={}; for(var i=0;i<e.shifts.length;i++) have[e.shifts[i].date]=true;
+    var added=0;
+    for(i=0;i<7;i++){ var d=addDays(S.sheet.start,i);
+      if(!have[d]){ e.shifts.push({id:uid(),date:d,inT:'',outT:'',brk:0,note:''}); added++; } }
+    e.shifts.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+    S.sample=false; render(); flash(added?added+' day'+(added===1?'':'s')+' added.':'All seven days are already on the sheet.');
+  }else if(act==='delshift'){
+    var tr=b.closest('tr'), sid=tr?tr.getAttribute('data-s'):null;
+    e.shifts=e.shifts.filter(function(x){return x.id!==sid;});
+    S.sample=false; render();
+  }
+});
+function focusRow(eid,sid){
+  var el=document.querySelector('[data-emp="'+eid+'"] tr[data-s="'+sid+'"] input[data-f="inT"]');
+  if(el) el.focus();
+}
+/* re-render without stealing focus from the field being typed in */
+var softT=null;
+function softRender(active){
+  if(softT) clearTimeout(softT);
+  var eid=empIdOf(active), tr=active.closest('tr'),
+      sid=tr?tr.getAttribute('data-s'):null,
+      fld=active.getAttribute('data-f')||active.getAttribute('data-ef'),
+      isTxt=(active.type==='text'), selS=null, selE=null;
+  /* selectionStart throws on number/date/time inputs in some browsers */
+  if(isTxt){ try{ selS=active.selectionStart; selE=active.selectionEnd; }catch(e){} }
+  render();
+  var sel = sid ? '[data-emp="'+eid+'"] tr[data-s="'+sid+'"] [data-f="'+fld+'"]'
+                : '[data-emp="'+eid+'"] [data-ef="'+fld+'"]';
+  var el=document.querySelector(sel);
+  if(el){ el.focus(); if(isTxt&&selS!==null){ try{ el.setSelectionRange(selS,selE); }catch(e){} } }
+}
+
+$('#bAddEmp').addEventListener('click',function(){
+  S.emps.push(blankEmp()); S.sample=false; render();
+  var cards=document.querySelectorAll('[data-emp]');
+  var last=cards[cards.length-1];
+  if(last){ var inp=last.querySelector('[data-ef="name"]'); if(inp){ inp.focus(); inp.scrollIntoView({block:'center'}); } }
+});
+$('#bBlank').addEventListener('click',function(){
+  if(!confirm('Start a blank week? The sheet on screen will be replaced.')) return;
+  S=blank(); render(); flash('Blank week ready.');
+});
+$('#bClear').addEventListener('click',function(){
+  if(!confirm('Delete this timesheet and everything saved in this browser? This cannot be undone.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  S=sample(); render(); flash('Cleared — the sample sheet is back.');
+});
+
+/* ── export ──────────────────────────────────────────── */
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime||'text/plain;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },2000);
+    return true;
+  }catch(e){ flash('Could not start the download: '+e.message,true); return false; }
+}
+function q(v){ var s=(v===null||v===undefined)?'':String(v);
+  return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function csvRow(a){ return a.map(q).join(',')+'\r\n'; }
+function buildCSV(){
+  var T=calcAll(), R=S.rules, o='';
+  var st=S.sheet.start, en=isISO(st)?addDays(st,6):'';
+  o+=csvRow(['Weekly timesheet']);
+  o+=csvRow(['Employer',S.org.name]);
+  o+=csvRow(['Timesheet reference',S.sheet.ref]);
+  o+=csvRow(['Week commencing',st]);
+  o+=csvRow(['Week ending',en]);
+  o+=csvRow(['Department / site',S.sheet.dept]);
+  o+=csvRow(['Prepared by',S.sheet.prepBy]);
+  o+=csvRow(['Currency',sym()]);
+  o+=csvRow(['Rounding increment (min)',Math.round(n0(R.rndInc))||1]);
+  o+=csvRow(['Rounding direction',R.rndMode]);
+  o+=csvRow(['Daily overtime after (h)',R.dOtOn?num(R.dOtHrs):'off']);
+  o+=csvRow(['Daily double time after (h)',R.dDtOn?num(R.dDtHrs):'off']);
+  o+=csvRow(['Weekly overtime after (h)',R.wOtOn?num(R.wOtHrs):'off']);
+  o+=csvRow(['Weekly double time after (h)',R.wDtOn?num(R.wDtHrs):'off']);
+  o+=csvRow(['Overtime multiplier',n0(R.otMult)]);
+  o+=csvRow(['Double time multiplier',n0(R.dtMult)]);
+  o+=csvRow(['Exported',todayISO()]);
+  o+='\r\n';
+  o+=csvRow(['SHIFT DETAIL']);
+  o+=csvRow(['Employee','Employee no.','Date','Day','Start','End','Ends next day','Unpaid break (min)',
+    'Worked hours','Regular hours','Overtime hours','Double time hours','Note','Exception']);
+  for(var i=0;i<T.emps.length;i++){
+    var c=T.emps[i];
+    for(var j=0;j<c.rows.length;j++){
+      var r=c.rows[j];
+      if(!r.paid && !r.err && !(r.ref.inT||r.ref.outT)) continue;
+      o+=csvRow([c.emp.name,c.emp.ref,r.date,dow(r.date),r.ref.inT,r.ref.outT,r.over?'Yes':'No',r.brk,
+        hplain(r.paid),hplain(r.reg),hplain(r.ot),hplain(r.dt),r.ref.note,
+        r.err==='break'?'Break longer than shift — counted as zero':(r.err==='time'?'Incomplete times — counted as zero':'')]);
+    }
+  }
+  o+='\r\n';
+  o+=csvRow(['EMPLOYEE SUMMARY']);
+  o+=csvRow(['Employee','Employee no.','Job title','Base rate','Regular hours','Regular pay',
+    'Overtime hours','Overtime rate','Overtime pay','Double time hours','Double time rate','Double time pay',
+    'Total hours','Gross pay']);
+  for(i=0;i<T.emps.length;i++){
+    var e=T.emps[i];
+    o+=csvRow([e.emp.name,e.emp.ref,e.emp.role,e.hasRate?plain(e.rate):'',
+      hplain(e.reg),e.hasRate?plain(e.regPay):'',
+      hplain(e.ot),e.hasRate?plain(e.otRate):'',e.hasRate?plain(e.otPay):'',
+      hplain(e.dt),e.hasRate?plain(e.dtRate):'',e.hasRate?plain(e.dtPay):'',
+      hplain(e.all),e.hasRate?plain(e.gross):'']);
+  }
+  o+='\r\n';
+  o+=csvRow(['TOTALS']);
+  o+=csvRow(['Regular hours',hplain(T.reg)]);
+  o+=csvRow(['Overtime hours',hplain(T.ot)]);
+  o+=csvRow(['Double time hours',hplain(T.dt)]);
+  o+=csvRow(['Total hours',hplain(T.all)]);
+  o+=csvRow(['Total gross pay',T.anyRate?plain(T.gross):'']);
+  o+=csvRow(['Overtime premium (extra over base rate)',T.anyRate?plain(T.premium):'']);
+  o+=csvRow(['Approved by',S.approval.by,'Job title',S.approval.role,'Date',S.approval.on]);
+  o+=csvRow(['Notes for payroll',S.sheet.notes]);
+  o+=csvRow(['Disclaimer','Gross pay only. Thresholds, multipliers and rounding are the preparer’s own settings. No deductions, tax, seventh-day or rest-break premiums. Not payroll, tax or legal advice — confirm with a qualified payroll adviser.']);
+  return o;
+}
+$('#bCsv').addEventListener('click',function(){
+  if(dl(slug(S.sheet.ref||('timesheet-'+S.sheet.start))+'.csv','﻿'+buildCSV(),'text/csv;charset=utf-8'))
+    flash('CSV exported for payroll import.');
+});
+$('#bJson').addEventListener('click',function(){
+  if(dl(slug(S.sheet.ref||('timesheet-'+S.sheet.start))+'.json',JSON.stringify(S,null,2),'application/json'))
+    flash('JSON saved — import it to restore this sheet exactly.');
+});
+$('#bImport').addEventListener('click',function(){ $('#fImport').click(); });
+$('#fImport').addEventListener('change',function(){
+  var f=$('#fImport').files&&$('#fImport').files[0]; if(!f) return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      if(!o||typeof o!=='object'||!Array.isArray(o.emps)) throw new Error('not a timesheet file');
+      S=migrate(o); render(); flash('Timesheet imported.');
+    }catch(err){ flash('That file could not be read as a timesheet: '+err.message,true); }
+    $('#fImport').value='';
+  };
+  fr.onerror=function(){ flash('That file could not be read.',true); $('#fImport').value=''; };
+  fr.readAsText(f);
+});
+$('#bPrint').addEventListener('click',function(){ saveNow(); window.print(); });
+
+/* ── boot ────────────────────────────────────────────── */
+if(!load()) S=sample();
+render();
+window.addEventListener('beforeunload',saveNow);
+})();
+</script>
+</body>
+</html>

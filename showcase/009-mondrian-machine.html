@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mondrian Machine — a De Stijl composition generator</title>
+<meta name="description" content="Press space or click to generate a new De Stijl composition. A short essay on Neoplasticism and the eleven rules the machine obeys.">
+<meta name="theme-color" content="#E63329">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23000'/%3E%3Crect x='4' y='4' width='34' height='22' fill='%23E63329'/%3E%3Crect x='42' y='4' width='18' height='38' fill='%23fff'/%3E%3Crect x='4' y='30' width='34' height='30' fill='%23fff'/%3E%3Crect x='42' y='46' width='18' height='14' fill='%23F7D842'/%3E%3Crect x='4' y='30' width='12' height='12' fill='%231E4DB7'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#E63329;--yellow:#F7D842;--blue:#1E4DB7;--black:#000;--white:#fff;
+  --bar:12px;
+  --panel:300px;
+  --ease:cubic-bezier(.7,0,.15,1);
+  --dur:900ms;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+html,body{background:var(--white);color:var(--black);font-family:Outfit,"Helvetica Neue",Arial,sans-serif;font-size:17px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+::selection{background:var(--yellow);color:var(--black)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:4px solid var(--blue);outline-offset:-4px}
+a{color:inherit;text-decoration:none}
+.skip{position:absolute;left:-999px;top:0;background:var(--yellow);padding:8px 12px;font-weight:700;z-index:99}
+.skip:focus{left:0}
+
+/* ---------- MACHINE (first screen) ---------- */
+.machine{display:grid;grid-template-columns:1fr var(--panel);height:100svh;min-height:560px;border-bottom:var(--bar) solid var(--black)}
+.stage{position:relative;background:var(--black);padding:var(--bar);cursor:pointer;outline-offset:-6px;user-select:none;-webkit-tap-highlight-color:transparent}
+.stage:focus-visible{outline:6px solid var(--yellow)}
+.comp{display:grid;width:100%;height:100%;gap:var(--bar);transition:grid-template-columns var(--dur) var(--ease),grid-template-rows var(--dur) var(--ease)}
+.cell{background:var(--white);transition:background-color var(--dur) var(--ease);position:relative}
+.cell::after{content:"";position:absolute;inset:0;background:var(--black);transform:scaleX(0);transform-origin:left;transition:transform 0s}
+.comp.flash .cell::after{transition:transform 260ms var(--ease)}
+.pulse{position:absolute;left:var(--bar);bottom:var(--bar);background:var(--black);color:var(--white);padding:7px 10px 6px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;pointer-events:none;display:flex;gap:14px}
+.pulse b{color:var(--yellow);font-weight:700}
+.stage .hint{position:absolute;right:var(--bar);top:var(--bar);background:var(--white);border:4px solid var(--black);padding:10px 12px 8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;pointer-events:none;transition:opacity .4s}
+.stage.used .hint{opacity:0}
+
+.panel{display:grid;grid-template-rows:auto 1fr auto;background:var(--white);border-left:var(--bar) solid var(--black);min-width:0;overflow:hidden}
+.panel > *{padding:22px 24px}
+.masthead{border-bottom:var(--bar) solid var(--black);background:var(--yellow)}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+h1{font-weight:900;font-size:clamp(40px,3.4vw,54px);line-height:.92;letter-spacing:-.035em;margin-top:8px}
+h1 span{display:block}
+.rules{overflow:auto;display:flex;flex-direction:column;gap:0}
+.rules h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:12px}
+.stat{display:grid;grid-template-columns:1fr auto;align-items:baseline;border-top:2px solid var(--black);padding:9px 0 8px;font-size:15px;font-weight:500}
+.stat:last-child{border-bottom:2px solid var(--black)}
+.stat output{font-weight:900;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:16px;border:3px solid var(--black)}
+.swatches div{aspect-ratio:1;position:relative;border-right:3px solid var(--black)}
+.swatches div:last-child{border-right:0}
+.readmore{margin-top:auto;padding-top:44px;font-size:15px;font-weight:500;line-height:1.35}
+.readmore span{display:block;font-weight:900;font-size:22px;letter-spacing:-.02em;margin-top:4px;border-bottom:4px solid var(--black);width:max-content}
+.readmore:hover span{border-color:var(--red);color:var(--red)}
+.swatches span{position:absolute;left:0;right:0;bottom:-24px;font-size:11px;font-weight:700;letter-spacing:.06em;text-align:center;font-variant-numeric:tabular-nums}
+.controls{display:grid;grid-template-columns:1fr;gap:var(--bar);padding:var(--bar);background:var(--black)}
+.btn{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px;text-align:left;padding:14px 16px 12px;min-height:72px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:-.01em;transition:transform .12s var(--ease),background-color .2s}
+.btn:active{transform:translate(2px,2px)}
+.btn kbd{font:inherit;font-size:11px;letter-spacing:.14em;text-transform:uppercase;border:2px solid currentColor;padding:3px 6px 2px;font-weight:700}
+.btn small{display:block;font-weight:400;font-size:12px;letter-spacing:.02em;margin-top:6px;opacity:.9}
+.btn-new{background:var(--red);color:var(--white)}
+.btn-new:hover{background:#c6241c}
+.btn-copy{background:var(--white);color:var(--black)}
+.btn-copy:hover{background:var(--yellow)}
+.btn-copy.done{background:var(--blue);color:var(--white)}
+.btn-copy.done kbd{opacity:0}
+
+/* ---------- ESSAY ---------- */
+.essay{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--bar);background:var(--black);padding:0 0 var(--bar)}
+.essay > *{background:var(--white);padding:36px 40px 40px;min-width:0}
+.essay h2{font-weight:900;letter-spacing:-.035em;line-height:.95;font-size:clamp(34px,4.6vw,72px)}
+.essay h3{font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:16px}
+.essay p{max-width:62ch;margin-bottom:1em}
+.essay p:last-child{margin-bottom:0}
+.essay .lead{font-size:clamp(20px,1.6vw,24px);font-weight:400;line-height:1.35;letter-spacing:-.01em}
+.c-title{grid-column:span 5;display:flex;flex-direction:column;justify-content:space-between;gap:28px;background:var(--red);color:var(--white)}
+.c-title .eyebrow{color:var(--white)}
+.c-lead{grid-column:span 7}
+.c-blue{grid-column:span 2;background:var(--blue);min-height:120px}
+.c-p1{grid-column:span 5}
+.c-p2{grid-column:span 5}
+.c-yellow{grid-column:span 3;background:var(--yellow);display:flex;align-items:flex-end}
+.c-yellow p{font-weight:700;font-size:15px;letter-spacing:.02em;line-height:1.35}
+.c-rules{grid-column:span 9}
+.c-black{grid-column:span 1;background:var(--black)}
+.c-quote{grid-column:span 5;display:flex;align-items:center}
+.c-quote blockquote{font-weight:900;font-size:clamp(26px,2.6vw,40px);line-height:1.02;letter-spacing:-.03em;max-width:20ch}
+.c-quote cite{display:block;font-style:normal;font-weight:500;font-size:14px;letter-spacing:.08em;text-transform:uppercase;margin-top:18px}
+.c-keys{grid-column:span 6}
+.c-p3{grid-column:span 7}
+.c-red{grid-column:span 5;background:var(--red)}
+.c-foot{grid-column:span 12;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:13px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;padding-top:22px;padding-bottom:22px}
+
+ol.law{list-style:none;counter-reset:law;display:grid;grid-template-columns:repeat(2,1fr);gap:0 40px}
+ol.law li{counter-increment:law;position:relative;padding:14px 0 16px 64px;border-top:2px solid var(--black);font-size:16px;line-height:1.4}
+ol.law li::before{content:counter(law,decimal-leading-zero);position:absolute;left:0;top:14px;font-weight:900;font-size:30px;line-height:.9;letter-spacing:-.03em}
+ol.law li strong{display:block;font-weight:700;margin-bottom:2px}
+
+.keys{display:grid;grid-template-columns:auto 1fr;gap:12px 20px;align-items:center;margin-top:8px}
+.keys kbd{font:inherit;font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;border:3px solid var(--black);padding:8px 12px 6px;min-width:64px;text-align:center;box-shadow:4px 4px 0 var(--black)}
+.keys span{font-size:16px}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:1100px){
+  :root{--panel:260px}
+  .essay > *{padding:28px 26px 30px}
+  .c-title{grid-column:span 12}
+  .c-lead{grid-column:span 12}
+  .c-blue{grid-column:span 3}
+  .c-p1{grid-column:span 9}
+  .c-p2{grid-column:span 8}
+  .c-yellow{grid-column:span 4}
+  .c-rules{grid-column:span 12}
+  .c-black{display:none}
+  .c-quote{grid-column:span 12}
+  .c-keys{grid-column:span 12}
+  .c-p3{grid-column:span 9}
+  .c-red{grid-column:span 3}
+}
+@media (max-width:760px){
+  :root{--bar:9px}
+  .machine{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;height:auto;min-height:100svh}
+  .stage{min-height:min(62svh,560px)}
+  .panel{border-left:0;border-top:var(--bar) solid var(--black);grid-template-rows:auto auto auto}
+  .panel > *{padding:18px 18px}
+  h1{font-size:clamp(38px,11vw,54px)}
+  .rules{padding-bottom:22px}
+  .readmore{padding-top:38px}
+  .stat output{font-size:20px}
+  .swatches{margin-top:12px}
+  .controls{grid-template-columns:1fr 1fr}
+  .btn{min-height:78px}
+  .essay > *{padding:24px 20px 26px}
+  .essay > *{grid-column:span 12 !important}
+  .c-blue,.c-black,.c-red{min-height:70px}
+  .c-black{display:none}
+  ol.law{grid-template-columns:1fr}
+  .c-quote blockquote{max-width:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .comp,.cell,.comp.flash .cell::after,.btn,.stage .hint{transition:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#essay">Skip to the essay</a>
+
+<header class="machine" aria-label="Composition generator">
+  <div class="stage" id="stage" tabindex="0" role="button" aria-label="Generate a new composition" aria-describedby="pulse">
+    <div class="comp" id="comp" aria-hidden="true"></div>
+    <div class="hint" aria-hidden="true">Click · Space</div>
+    <div class="pulse" id="pulse" aria-live="polite">No. <b id="num">001</b> <span>Seed <b id="seed">—</b></span></div>
+  </div>
+
+  <aside class="panel" aria-label="Rules panel">
+    <div class="masthead">
+      <p class="eyebrow">Neoplastic engine · since 1917</p>
+      <h1><span>Mondrian</span><span>Machine</span></h1>
+    </div>
+    <section class="rules" aria-label="Live rules">
+      <h2>This composition</h2>
+      <div class="stat"><span>Columns × rows</span><output id="o-grid">7 × 6</output></div>
+      <div class="stat"><span>Planes</span><output id="o-cells">0</output></div>
+      <div class="stat"><span>White share</span><output id="o-white">0%</output></div>
+      <div class="stat"><span>Largest plane</span><output id="o-big">0%</output></div>
+      <div class="stat"><span>Bar weight</span><output id="o-bar">12 px</output></div>
+      <h2 style="margin-top:26px">Palette · fixed</h2>
+      <div class="swatches" role="list" aria-label="Palette">
+        <div role="listitem" style="background:#E63329"><span>E63329</span></div>
+        <div role="listitem" style="background:#F7D842"><span>F7D842</span></div>
+        <div role="listitem" style="background:#1E4DB7"><span>1E4DB7</span></div>
+        <div role="listitem" style="background:#000"><span>000000</span></div>
+        <div role="listitem" style="background:#fff"><span>FFFFFF</span></div>
+      </div>
+      <a class="readmore" href="#essay">The generator obeys eleven rules. <span>Read them ↓</span></a>
+    </section>
+    <div class="controls">
+      <button class="btn btn-new" id="btn-new" type="button"><span>New composition<small>Redraw every plane</small></span><kbd>Space</kbd></button>
+      <button class="btn btn-copy" id="btn-copy" type="button"><span id="copy-label">Copy palette<small>Five hex values</small></span><kbd>C</kbd></button>
+    </div>
+  </aside>
+</header>
+
+<main class="essay" id="essay">
+  <section class="c-title">
+    <p class="eyebrow">Essay · Neoplasticism, mechanised</p>
+    <h2>A painting that <br>redraws itself</h2>
+  </section>
+  <section class="c-lead">
+    <p class="lead">In 1917 a handful of Dutch painters, architects and one very opinionated typographer decided that art had been carrying too much luggage. Piet Mondrian, Theo van Doesburg and Bart van der Leck stripped painting down to what they thought could not be removed: the horizontal, the vertical, the three primaries, and the two non-colours that hold them apart. They called it <em>Nieuwe Beelding</em>, the New Plastic, and their magazine was called De Stijl. The Style. Definite article.</p>
+  </section>
+  <div class="c-blue" aria-hidden="true"></div>
+  <section class="c-p1">
+    <h3>What the rules were for</h3>
+    <p>It is tempting to read Mondrian's grids as decoration, because they became decoration: dresses, coffee mugs, an entire Dutch railway station. But he meant them as a kind of moral argument. A diagonal, he thought, was a compromise; a curve was a sentimental detour; a mixed colour was a colour that had lost its nerve. Reduce everything to the perpendicular and the primary and what remains is pure relationship, the balance of unequal things. He called that <em>dynamic equilibrium</em>, and it took him weeks of repainting a single black bar a centimetre to the left to find it.</p>
+  </section>
+  <section class="c-p2">
+    <h3>Why a machine</h3>
+    <p>Mondrian would have hated this page. He broke with van Doesburg in 1925 over a single tilted line, and he never used a ruler-drawn grid; every bar was painted by hand and adjusted by eye. So why simulate him? Because the rules he wrote down turn out to be an unusually good specification. Most art movements leave behind a mood. Neoplasticism left behind constraints, and constraints are the one thing a computer is genuinely good at obeying.</p>
+    <p>What the machine cannot do is stop. Mondrian's compositions end at the exact moment the balance locks. This one just keeps proposing. That gap, between a proposal and a decision, is the whole difference between a generator and a painter, and it is worth watching for while you press the key.</p>
+  </section>
+  <aside class="c-yellow"><p>Mondrian never painted on a white canvas: his whites are five or six different whites, each mixed for its neighbours. The machine cheats. It has one.</p></aside>
+
+  <section class="c-rules">
+    <h3>The eleven rules the generator obeys</h3>
+    <ol class="law">
+      <li><strong>Rectilinear only.</strong> Every plane is a rectangle whose edges lie on the shared grid. There is no element on this page with a border-radius, including the favicon.</li>
+      <li><strong>Fixed track count, variable weight.</strong> The grid always has seven columns and six rows so that its templates can animate. Only the proportions change.</li>
+      <li><strong>Unequal tracks.</strong> Each track is drawn from a wide range of fractional units, so no two compositions share a rhythm and nothing is ever centred.</li>
+      <li><strong>Planes may span.</strong> A plane can cover up to five columns and four rows, but never the entire width. A painting needs more than one thing in it.</li>
+      <li><strong>Black is a bar, not a plane.</strong> The gaps between planes are the black lines. They have one weight, the way Mondrian's did after 1921.</li>
+      <li><strong>White dominates.</strong> Roughly three fifths to three quarters of the planes are white. Colour is punctuation, not prose.</li>
+      <li><strong>All three primaries appear.</strong> A composition without red, yellow and blue is regenerated before you see it.</li>
+      <li><strong>No colour touches itself.</strong> Two planes of the same primary never share an edge. The machine checks its neighbours before it commits.</li>
+      <li><strong>The largest plane is white.</strong> The biggest rectangle carries no colour, so weight comes from placement rather than area.</li>
+      <li><strong>One black plane, sometimes.</strong> At most a single small black plane may appear, as a full stop.</li>
+      <li><strong>Motion is transition.</strong> Nothing eases along a curve of position. Track sizes interpolate and colours cross-fade; the planes themselves snap into place.</li>
+    </ol>
+  </section>
+  <section class="c-quote">
+    <blockquote>
+      <p>“The straight line tells the truth.”</p>
+      <cite>Theo van Doesburg, De Stijl, 1918 · paraphrased into a slogan by everyone since</cite>
+    </blockquote>
+  </section>
+  <div class="c-black" aria-hidden="true"></div>
+  <section class="c-keys">
+    <h3>Controls</h3>
+    <div class="keys">
+      <kbd>Space</kbd><span>New composition (also click or tap the canvas)</span>
+      <kbd>C</kbd><span>Copy the five hex values to the clipboard</span>
+      <kbd>B</kbd><span>Cycle the bar weight between hairline, standard and heavy</span>
+      <kbd>←</kbd><span>Step back to the previous composition</span>
+    </div>
+  </section>
+
+  <section class="c-p3">
+    <h3>Reading a result</h3>
+    <p>Try this: generate until something makes you pause, then ask why. Usually it is one of three things. A tall red plane against a wide field of white feels loud because the grid is quiet. A blue plane pinned in a corner drags the eye off the canvas, which Mondrian did deliberately to suggest the painting continued past its edge. A yellow plane between two heavy black bars looks like light between shutters. None of this is in the code. The code only forbids; the meaning is what survives the forbidding.</p>
+    <p>That, in the end, was the De Stijl wager: that if you remove enough, what is left will have to mean something. A hundred years later, on a screen redrawing itself in under a second, it still mostly does.</p>
+  </section>
+  <div class="c-red" aria-hidden="true"></div>
+
+  <footer class="c-foot">
+    <span>Mondrian Machine · Showcase 009</span>
+    <span>Type: Outfit · Palette: five colours, no gradients, no curves</span>
+    <span><a href="#stage">Back to the machine ↑</a></span>
+  </footer>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  var COLS=7, ROWS=6;
+  var RED='#E63329', YEL='#F7D842', BLU='#1E4DB7', BLK='#000000', WHT='#FFFFFF';
+  var PAL=[RED,YEL,BLU,BLK,WHT];
+  var comp=document.getElementById('comp');
+  var stage=document.getElementById('stage');
+  var o={grid:document.getElementById('o-grid'),cells:document.getElementById('o-cells'),white:document.getElementById('o-white'),big:document.getElementById('o-big'),bar:document.getElementById('o-bar')};
+  var numEl=document.getElementById('num'), seedEl=document.getElementById('seed');
+  var btnNew=document.getElementById('btn-new'), btnCopy=document.getElementById('btn-copy'), copyLabel=document.getElementById('copy-label');
+  var pool=[]; var history=[]; var count=0; var barIdx=1; var BARS=[5,12,22];
+  var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* seeded PRNG (mulberry32) so a composition is reproducible from its seed */
+  function rng(seed){var a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+  function tracks(n,r){
+    var out=[];
+    for(var i=0;i<n;i++){var v=r();out.push(v<.3?1:v<.75?2+Math.floor(r()*3):5+Math.floor(r()*5));}
+    return out;
+  }
+
+  function layout(r){
+    var occ=[];for(var y=0;y<ROWS;y++){occ.push(new Array(COLS).fill(-1));}
+    var cells=[];
+    for(var y2=0;y2<ROWS;y2++)for(var x=0;x<COLS;x++){
+      if(occ[y2][x]!==-1)continue;
+      var maxW=1;while(x+maxW<COLS&&occ[y2][x+maxW]===-1&&maxW<5)maxW++;
+      var w=1+Math.floor(Math.pow(r(),.7)*maxW); if(w>=COLS)w=COLS-1;
+      var maxH=1;outer:while(y2+maxH<ROWS&&maxH<4){for(var k=0;k<w;k++){if(occ[y2+maxH][x+k]!==-1)break outer;}maxH++;}
+      var h=1+Math.floor(Math.pow(r(),.8)*maxH);
+      var id=cells.length;
+      for(var yy=0;yy<h;yy++)for(var xx=0;xx<w;xx++)occ[y2+yy][x+xx]=id;
+      cells.push({x:x,y:y2,w:w,h:h,c:WHT});
+    }
+    return {cells:cells,occ:occ};
+  }
+
+  function neighbours(c,occ){
+    var s={}; var x,y;
+    for(x=c.x;x<c.x+c.w;x++){ if(c.y>0)s[occ[c.y-1][x]]=1; if(c.y+c.h<ROWS)s[occ[c.y+c.h][x]]=1; }
+    for(y=c.y;y<c.y+c.h;y++){ if(c.x>0)s[occ[y][c.x-1]]=1; if(c.x+c.w<COLS)s[occ[y][c.x+c.w]]=1; }
+    delete s[-1]; return Object.keys(s).map(Number);
+  }
+
+  function colour(L,r,colT,rowT){
+    var cells=L.cells, occ=L.occ;
+    var area=function(c){var a=0,b=0,i;for(i=c.x;i<c.x+c.w;i++)a+=colT[i];for(i=c.y;i<c.y+c.h;i++)b+=rowT[i];return a*b;};
+    var biggest=0;for(var i=1;i<cells.length;i++)if(area(cells[i])>area(cells[biggest]))biggest=i;
+    var whiteShare=.58+r()*.18;
+    var blackUsed=false;
+    var order=cells.map(function(_,i){return i;}).sort(function(){return r()-.5;});
+    order.forEach(function(i){
+      var c=cells[i]; if(i===biggest){c.c=WHT;return;}
+      if(r()<whiteShare){c.c=WHT;return;}
+      var nb=neighbours(c,occ).map(function(j){return cells[j].c;});
+      var opts=[RED,YEL,BLU].filter(function(k){return nb.indexOf(k)===-1;});
+      if(!blackUsed&&c.w===1&&c.h===1&&r()<.22){c.c=BLK;blackUsed=true;return;}
+      c.c=opts.length?opts[Math.floor(r()*opts.length)]:WHT;
+    });
+    var have={};cells.forEach(function(c){have[c.c]=1;});
+    return have[RED]&&have[YEL]&&have[BLU];
+  }
+
+  function generate(seed){
+    var r=rng(seed), colT, rowT, L, ok=false, tries=0;
+    while(!ok&&tries<40){colT=tracks(COLS,r);rowT=tracks(ROWS,r);L=layout(r);ok=colour(L,r,colT,rowT);tries++;}
+    return {seed:seed,colT:colT,rowT:rowT,cells:L.cells};
+  }
+
+  function render(g){
+    comp.style.gridTemplateColumns=g.colT.map(function(v){return v+'fr';}).join(' ');
+    comp.style.gridTemplateRows=g.rowT.map(function(v){return v+'fr';}).join(' ');
+    while(pool.length<g.cells.length){var d=document.createElement('div');d.className='cell';comp.appendChild(d);pool.push(d);}
+    pool.forEach(function(el,i){
+      var c=g.cells[i];
+      if(!c){el.style.display='none';return;}
+      el.style.display='';
+      el.style.gridArea=(c.y+1)+' / '+(c.x+1)+' / span '+c.h+' / span '+c.w;
+      el.style.backgroundColor=c.c;
+    });
+    var whites=g.cells.filter(function(c){return c.c===WHT;}).length;
+    var sumC=g.colT.reduce(function(a,b){return a+b;},0), sumR=g.rowT.reduce(function(a,b){return a+b;},0);
+    var big=0;g.cells.forEach(function(c){var a=0,b=0,i;for(i=c.x;i<c.x+c.w;i++)a+=g.colT[i];for(i=c.y;i<c.y+c.h;i++)b+=g.rowT[i];big=Math.max(big,a*b/(sumC*sumR));});
+    o.grid.textContent=COLS+' × '+ROWS;
+    o.cells.textContent=g.cells.length;
+    o.white.textContent=Math.round(100*whites/g.cells.length)+'%';
+    o.big.textContent=Math.round(100*big)+'%';
+    seedEl.textContent=g.seed.toString(16).toUpperCase().padStart(8,'0');
+  }
+
+  function fresh(){
+    var seed=(Math.random()*4294967295)>>>0;
+    var g=generate(seed); history.push(g); if(history.length>50)history.shift();
+    count++; numEl.textContent=String(count).padStart(3,'0');
+    render(g); stage.classList.add('used');
+  }
+  function back(){
+    if(history.length<2)return;
+    history.pop(); render(history[history.length-1]);
+    count=Math.max(1,count-1); numEl.textContent=String(count).padStart(3,'0');
+  }
+  function cycleBar(){
+    barIdx=(barIdx+1)%BARS.length;
+    document.documentElement.style.setProperty('--bar',BARS[barIdx]+'px');
+    o.bar.textContent=BARS[barIdx]+' px';
+  }
+  var copyTimer;
+  function copyPalette(){
+    var text=PAL.join('\n');
+    var done=function(okFlag){
+      btnCopy.classList.add('done');
+      copyLabel.innerHTML=okFlag?'Copied<small>Red, yellow, blue, black, white</small>':'Select &amp; copy<small>'+PAL.join(' ')+'</small>';
+      clearTimeout(copyTimer);
+      copyTimer=setTimeout(function(){btnCopy.classList.remove('done');copyLabel.innerHTML='Copy palette<small>Five hex values</small>';},1800);
+    };
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){done(true);},function(){fallback();});
+    } else fallback();
+    function fallback(){
+      var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';
+      document.body.appendChild(ta);ta.select();var okFlag=false;try{okFlag=document.execCommand('copy');}catch(e){}document.body.removeChild(ta);done(okFlag);
+    }
+  }
+
+  stage.addEventListener('click',fresh);
+  btnNew.addEventListener('click',fresh);
+  btnCopy.addEventListener('click',copyPalette);
+  document.addEventListener('keydown',function(e){
+    if(e.metaKey||e.ctrlKey||e.altKey)return;
+    var tag=(e.target&&e.target.tagName)||'';
+    if(tag==='INPUT'||tag==='TEXTAREA')return;
+    if(e.code==='Space'){e.preventDefault();fresh();return;}
+    if(e.key==='Enter'&&e.target===stage){e.preventDefault();fresh();return;}
+    if(e.key==='c'||e.key==='C'){copyPalette();return;}
+    if(e.key==='b'||e.key==='B'){cycleBar();return;}
+    if(e.key==='ArrowLeft'){back();return;}
+  });
+
+  /* idle breathing: a slow automatic redraw while nobody has interacted yet, paused when hidden */
+  var idleTimer=null;
+  function schedule(){clearTimeout(idleTimer);if(reduced)return;idleTimer=setTimeout(function(){if(!document.hidden&&!stage.classList.contains('used')){var g=generate((Math.random()*4294967295)>>>0);history[history.length-1]=g;render(g);}schedule();},3800);}
+  document.addEventListener('visibilitychange',schedule);
+
+  /* first composition */
+  var g0=generate(0x1917DE57); history.push(g0); count=1; render(g0); schedule();
+})();
+</script>
+</body>
+</html>

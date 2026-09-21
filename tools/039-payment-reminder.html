@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Late Payment Chaser — escalating reminder letters with statutory interest</title>
+<meta name="description" content="Chase unpaid invoices: three escalating letters (polite reminder, formal notice, final demand before action) with UK statutory interest at 8% over the Bank of England base rate, the fixed compensation of £40/£70/£100 by debt size, or a contractual/US state rate entered manually. Daily accrual, running totals, debtor list saved locally, print/PDF letters, CSV and JSON export.">
+<meta name="theme-color" content="#5B4794">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235B4794'/%3E%3Cpath d='M8 6h13l5 5v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' fill='%23fff'/%3E%3Cpath d='M20 6v6h6' fill='%23EFEBF8'/%3E%3Cpath d='M15.1 24.2v-1.6c-1.1-.1-2-.4-2.7-.9l.6-1.7c.8.5 1.7.8 2.6.8 1 0 1.6-.4 1.6-1s-.5-.9-1.7-1.3c-1.7-.6-2.8-1.4-2.8-2.9 0-1.4.9-2.4 2.5-2.7v-1.6h1.6v1.5c1 .1 1.7.3 2.2.6l-.5 1.7c-.4-.2-1.1-.6-2.2-.6-1.1 0-1.4.5-1.4.9 0 .6.5.9 1.9 1.4 1.9.7 2.6 1.6 2.6 3 0 1.4-1 2.5-2.6 2.8v1.6z' fill='%235B4794'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific — Contracts & Documents ══════════════════════════ */
+:root{--accent:#5B4794;--accent-ink:#463774;--accent-wash:#EFEBF8;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#A290D5;--accent-ink:#C2B4E9;--accent-wash:#241E38;--on-accent:#0B1017}}
+:root[data-theme="dark"]{--accent:#A290D5;--accent-ink:#C2B4E9;--accent-wash:#241E38;--on-accent:#0B1017}
+
+[hidden]{display:none!important}
+.app{padding-bottom:40px}
+.topnote{margin:14px 0 12px}
+.topnote summary{cursor:pointer;font-weight:650;margin-top:6px;color:var(--warn)}
+.topnote p{font-size:13.5px;line-height:1.5}
+.bar{margin:0 0 12px;gap:8px}
+.bar .f{flex:1 1 240px;max-width:340px}
+.grid.g2{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.grid.g3{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.span2{grid-column:1/-1}
+#invTable{min-width:860px}
+#invTable td{padding:5px 7px}
+#invTable input{width:100%}
+#invTable .err{margin-top:2px}
+.stats{display:grid;gap:9px;grid-template-columns:1fr 1fr}
+.stats .wide{grid-column:1/-1}
+.stat.hero .v{font-size:31px;line-height:1.1}
+.stgrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.stgrow .btn{justify-content:center;text-align:center;font-size:12px;padding:8px 5px;line-height:1.25;white-space:normal;overflow-wrap:anywhere}
+.stgrow .btn[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-bottom:1px dotted var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted)}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* the letter document */
+.doc{max-width:900px;margin:16px auto 0}
+.doc>.bd{padding:clamp(18px,4vw,42px);font:15.5px/1.62 Georgia,"Times New Roman",Times,serif}
+.doc p{margin:0 0 13px}
+.lh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;
+  border-bottom:2px solid var(--accent);padding-bottom:12px;margin-bottom:20px}
+.lh .co{font:700 20px/1.2 var(--sans);letter-spacing:-.015em}
+.lh .meta{font:12px/1.55 var(--sans);color:var(--ink-2);white-space:pre-line}
+.lh .right{text-align:right;font:12px/1.55 var(--sans);color:var(--ink-2);white-space:pre-line}
+.addr{font:13.5px/1.5 var(--sans);white-space:pre-line;margin-bottom:16px}
+.docref{font:11.5px/1.5 var(--sans);color:var(--muted);letter-spacing:.03em;margin-bottom:14px}
+.subj{font:700 15px/1.35 var(--sans);text-transform:uppercase;letter-spacing:.05em;margin:0 0 16px;
+  border-left:4px solid var(--accent);padding-left:10px}
+.doc table{font-family:var(--sans);font-size:13px}
+.doc table th{background:var(--sunk)}
+.totbox{border:2px solid var(--accent);background:var(--accent-wash);padding:12px 15px;margin:16px 0;
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px}
+.totbox .lab{font:700 12px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink)}
+.totbox .amt{font:700 26px/1.1 var(--mono);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.paybox{border:1px solid var(--line-hard);padding:11px 14px;margin:14px 0;font:13px/1.6 var(--sans)}
+.paybox b{font-weight:650}
+.sig{margin-top:26px;font:13.5px/1.6 var(--sans)}
+.sig .line{border-bottom:1px solid var(--line-hard);width:230px;height:34px;margin-bottom:5px}
+.legal{font:11.5px/1.5 var(--sans);color:var(--ink-2);border-top:1px solid var(--line);padding-top:10px;margin-top:22px}
+.pfoot{font:11px/1.5 var(--sans);color:var(--muted);text-align:center;margin-top:10px}
+footer.foot{margin-top:22px;font:11.5px/1.6 var(--sans);color:var(--muted);text-align:center}
+#toast{display:none;margin:0 0 12px}
+@media(max-width:900px){.split{grid-template-columns:minmax(0,1fr)}#results{order:-1}.sticky{position:static}}
+.stack,.card,.tw{min-width:0}
+.tw{max-width:100%}
+@media(max-width:520px){.stats{grid-template-columns:1fr}.appbar .btn{flex:1 1 auto;justify-content:center}}
+@media print{
+  .doc{max-width:none;margin:0}
+  .card.doc{border:0}
+  .doc>.bd{padding:0}
+  .lh{border-bottom:2px solid #000}
+  .subj{border-left:4px solid #000}
+  .totbox{border:2px solid #000}
+  .doc table th{background:#eee!important}
+  :root{--accent:#4A3A78;--accent-ink:#3B2E60;--accent-wash:#F1EDF8}
+  .printonly.phead{border-bottom:1px solid #999;padding-bottom:5px;margin-bottom:10px;
+    font:9.5pt/1.4 var(--sans);color:#333;display:flex!important;justify-content:space-between;gap:16px}
+  .doc table th,.doc table td{white-space:nowrap;padding:6px 7px}
+  .doc table{font-size:9pt}
+}
+</style>
+</head>
+<body>
+<main class="app">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark">£!</div>
+    <div style="min-width:0">
+      <h1>Late Payment Chaser</h1>
+      <div class="sub">STATUTORY INTEREST · ESCALATING DEMAND LETTERS</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF letter</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">Export JSON</button>
+    <button type="button" class="btn" id="bImp">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImp" accept="application/json,.json" style="display:none">
+  </div>
+</header>
+
+
+  <div class="printonly phead" id="phead"></div>
+
+  <div class="note warn topnote noprint" id="disclaimer">
+    <strong>Not legal advice — check it before you send it.</strong> This tool drafts a demand for payment and
+    calculates the interest arithmetic. It does not preserve or create any legal right, and the rate, the
+    eligibility of the debt and the pre-action rules are yours to verify.
+    <details><summary>Read the full notice</summary>
+      <p style="margin-top:8px">Statutory interest and fixed compensation under the
+      <em>Late Payment of Commercial Debts (Interest) Act 1998</em> apply only to qualifying business-to-business
+      contracts. The base rate you must use is the Bank of England rate in force on the 31 December or 30 June
+      before the debt became late — check it and enter it below; this tool works offline and cannot look it up.</p>
+      <p style="margin-top:8px">If the debtor is an individual or a sole trader, the <em>Pre-Action Protocol for
+      Debt Claims</em> applies and requires a compliant Letter of Claim with an information sheet, reply form and
+      30 days to respond; this letter is not that document. Never threaten action you are not prepared to take.
+      Check every figure, and take advice from a solicitor or your accountant before starting recovery
+      proceedings.</p>
+    </details>
+  </div>
+
+  <div class="note noprint" id="toast" role="status"></div>
+
+  <div class="row bar noprint" id="debtorBar">
+    <div class="f" style="flex:1 1 260px">
+      <label for="debtorSel">Debtor / account being chased</label>
+      <select id="debtorSel"></select>
+    </div>
+    <button type="button" class="btn sm" id="bAddDebtor">+ Add debtor</button>
+    <button type="button" class="btn sm" id="bDupDebtor">Duplicate</button>
+    <button type="button" class="btn sm dgr" id="bDelDebtor">Delete debtor</button>
+    <span class="chip warn" id="sampleChip">Sample data — edit or clear</span>
+  </div>
+
+  <div class="split">
+    <div class="stack">
+
+      <section class="card noprint">
+        <div class="hd"><h2>1 · Your business (creditor)</h2><span class="chip" id="curChip">GBP £</span></div>
+        <div class="bd">
+          <div class="grid g2">
+            <div class="f span2"><label for="cName">Business name</label>
+              <input id="cName" data-cr="name" autocomplete="organization"><div class="err" id="e_cName"></div></div>
+            <div class="f span2"><label for="cAddr">Address</label>
+              <textarea id="cAddr" data-cr="addr" rows="3"></textarea></div>
+            <div class="f"><label for="cContact">Contact name</label><input id="cContact" data-cr="contact"></div>
+            <div class="f"><label for="cRole">Position</label><input id="cRole" data-cr="role"></div>
+            <div class="f"><label for="cEmail">Email</label><input id="cEmail" data-cr="email" type="email"></div>
+            <div class="f"><label for="cPhone">Telephone</label><input id="cPhone" data-cr="phone"></div>
+            <div class="f span2"><label for="cReg">Company / VAT registration</label><input id="cReg" data-cr="reg"></div>
+            <div class="f"><label for="curSel">Currency</label>
+              <select id="curSel">
+                <option value="GBP">£ — Pound sterling (GBP)</option>
+                <option value="USD">$ — US dollar (USD)</option>
+                <option value="EUR">€ — Euro (EUR)</option>
+                <option value="CUSTOM">Custom symbol…</option>
+              </select></div>
+            <div class="f"><label for="curCustom">Custom symbol</label>
+              <input id="curCustom" maxlength="4" placeholder="e.g. CHF"><div class="hint">Used when “Custom” is selected.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>2 · Debtor details</h2></div>
+        <div class="bd">
+          <div class="grid g2">
+            <div class="f span2"><label for="dName">Debtor business / person</label>
+              <input id="dName" data-db="name"><div class="err" id="e_dName"></div></div>
+            <div class="f"><label for="dAttn">For the attention of</label><input id="dAttn" data-db="attn"></div>
+            <div class="f"><label for="dEmail">Email</label><input id="dEmail" data-db="email" type="email"></div>
+            <div class="f span2"><label for="dAddr">Address</label><textarea id="dAddr" data-db="addr" rows="3"></textarea></div>
+            <div class="f"><label for="dAcct">Their account no. with you</label><input id="dAcct" data-db="acct"></div>
+            <div class="f"><label for="dRef">Letter reference</label><input id="dRef" data-db="ref"></div>
+            <div class="f span2 check" style="margin-top:2px">
+              <input type="checkbox" id="dSole" data-db="sole">
+              <label for="dSole" style="font:400 13.5px/1.45 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)">
+                Debtor is an individual or sole trader (triggers the Pre-Action Protocol for Debt Claims warning)</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>3 · Unpaid invoices</h2>
+          <button type="button" class="btn sm" id="bAddRow">+ Add invoice</button></div>
+        <div class="tw">
+          <table id="invTable">
+            <thead><tr>
+              <th scope="col">Invoice no.</th>
+              <th scope="col">Issued</th>
+              <th scope="col">Due</th>
+              <th scope="col" class="n">Invoiced</th>
+              <th scope="col" class="n">Paid</th>
+              <th scope="col" class="n">Days late</th>
+              <th scope="col" class="n">Interest</th>
+              <th scope="col" class="n">Comp.</th>
+              <th scope="col" class="n">Due now</th>
+              <th scope="col"><span class="lbl">Del</span></th>
+            </tr></thead>
+            <tbody id="invBody"></tbody>
+            <tfoot><tr>
+              <td colspan="3">Totals as at the calculation date</td>
+              <td class="n" id="fInvoiced">—</td>
+              <td class="n" id="fPaid">—</td>
+              <td class="n" id="fDays">—</td>
+              <td class="n" id="fInt">—</td>
+              <td class="n" id="fComp">—</td>
+              <td class="n" id="fTot">—</td>
+              <td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="ft"><span class="hint">Part payments go in “Paid”. Outstanding = invoiced − paid, floored at zero.
+          Days late counts whole days from the day after the due date to the calculation date.</span></div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>4 · Interest &amp; compensation</h2></div>
+        <div class="bd stack">
+          <div class="grid g2">
+            <div class="f span2"><label for="basis">Basis of the interest claim</label>
+              <select id="basis">
+                <option value="uk">UK statutory — Late Payment of Commercial Debts (Interest) Act 1998</option>
+                <option value="manual">Contractual rate, or US state statutory rate (entered manually)</option>
+              </select></div>
+          </div>
+          <div class="grid g3" id="ukFields">
+            <div class="f"><label for="margin">Statutory margin %</label>
+              <input id="margin" type="number" step="0.01" min="0"><div class="hint">The Act sets 8%.</div></div>
+            <div class="f"><label for="baseRate">BoE base rate %</label>
+              <input id="baseRate" type="number" step="0.01" min="0"><div class="err" id="e_baseRate"></div></div>
+            <div class="f"><label for="rateShow">Rate applied</label>
+              <input id="rateShow" readonly tabindex="-1"><div class="hint" id="refHint">&nbsp;</div></div>
+          </div>
+          <div class="grid g3" id="manualFields" hidden>
+            <div class="f"><label for="manualRate">Annual rate %</label>
+              <input id="manualRate" type="number" step="0.01" min="0"><div class="err" id="e_manualRate"></div></div>
+            <div class="f span2"><label for="manualBasis">Describe the basis (quoted in the letter)</label>
+              <input id="manualBasis" placeholder="e.g. clause 7.2 of our terms / Texas Fin. Code §302.002"></div>
+          </div>
+          <div class="grid g3">
+            <div class="f"><label for="dayCount">Day-count basis</label>
+              <select id="dayCount"><option value="365">365 days</option><option value="360">360 days</option></select></div>
+            <div class="f"><label for="asOf">Calculation date</label><input id="asOf" type="date"></div>
+            <div class="f"><label for="letterDate">Letter date</label><input id="letterDate" type="date"></div>
+            <div class="f"><label for="respondDays">Pay within (days of letter)</label>
+              <input id="respondDays" type="number" step="1" min="1"><div class="err" id="e_respondDays"></div></div>
+            <div class="f"><label for="deadlineShow">Payment deadline</label><input id="deadlineShow" readonly tabindex="-1"></div>
+            <div class="f"><label for="prevLetters">Previous chasers sent</label>
+              <input id="prevLetters" placeholder="e.g. 14 Jul and 4 Aug"></div>
+          </div>
+          <div class="check"><input type="checkbox" id="compOn">
+            <label for="compOn" style="font:400 13.5px/1.45 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)">
+              Claim the fixed sum for the cost of recovery on each debt — £40 under £1,000, £70 from £1,000 to £9,999.99, £100 at £10,000 and over (s.5A of the Act)</label></div>
+          <div class="check"><input type="checkbox" id="claimNow">
+            <label for="claimNow" style="font:400 13.5px/1.45 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)">
+              Demand the interest and compensation in this letter (untick to demand the principal only and reserve your rights)</label></div>
+          <div class="note warn" id="curWarn" hidden></div>
+          <div class="hint" id="beHint"></div>
+        </div>
+      </section>
+
+      <section class="card noprint">
+        <div class="hd"><h2>5 · Payment details &amp; sign-off</h2></div>
+        <div class="bd">
+          <div class="grid g2">
+            <div class="f"><label for="pBank">Bank</label><input id="pBank" data-pay="bank"></div>
+            <div class="f"><label for="pAcctName">Account name</label><input id="pAcctName" data-pay="acctName"></div>
+            <div class="f"><label for="pSort">Sort code / routing no.</label><input id="pSort" data-pay="sort"></div>
+            <div class="f"><label for="pAcct">Account number / IBAN</label><input id="pAcct" data-pay="acct"></div>
+            <div class="f span2"><label for="pRef">Payment reference to quote</label><input id="pRef" data-pay="ref"></div>
+            <div class="f span2"><label for="extraPara">Extra paragraph (optional, inserted before the sign-off)</label>
+              <textarea id="extraPara" rows="2"></textarea></div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /stack -->
+
+    <aside id="results">
+      <div class="card sticky noprint">
+        <div class="hd"><h2>Amount now due</h2><span class="chip" id="stageChip">—</span></div>
+        <div class="bd stack">
+          <div class="stats">
+            <div class="stat hero wide">
+              <div class="k">Total now due — <span id="heroDebtor">—</span></div>
+              <div class="v" id="heroTotal" aria-live="polite">—</div>
+              <div class="u" id="heroSub">—</div>
+            </div>
+            <div class="stat"><div class="k">Principal outstanding</div><div class="v" id="sPrincipal">—</div></div>
+            <div class="stat"><div class="k">Interest accrued</div><div class="v" id="sInterest">—</div></div>
+            <div class="stat"><div class="k">Fixed compensation</div><div class="v" id="sComp">—</div></div>
+            <div class="stat"><div class="k">Accruing per day</div><div class="v" id="sDaily">—</div></div>
+            <div class="stat wide"><div class="k">Oldest invoice overdue by</div><div class="v" id="sDays">—</div>
+              <div class="u" id="sDaysSub">—</div></div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:5px">Escalation stage</div>
+            <div class="stgrow">
+              <button type="button" class="btn sm" data-stage="1">1 · Reminder</button>
+              <button type="button" class="btn sm" data-stage="2">2 · Formal notice</button>
+              <button type="button" class="btn sm" data-stage="3">3 · Final demand</button>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <button type="button" class="btn sm" id="bAuto">Use suggested stage</button>
+              <span class="hint" id="autoHint">—</span>
+            </div>
+          </div>
+          <div>
+            <div class="kv"><span class="k">Rate applied</span><span class="v" id="kRate">—</span></div>
+            <div class="kv"><span class="k">Invoices chased</span><span class="v" id="kCount">—</span></div>
+            <div class="kv"><span class="k">Pay by</span><span class="v" id="kDeadline">—</span></div>
+            <div class="kv"><span class="k">Total if paid on that date</span><span class="v" id="kAtDeadline">—</span></div>
+          </div>
+        </div>
+        <div class="ft"><strong style="margin-right:auto">Total demanded</strong>
+          <strong class="num" id="ftTotal" style="font-size:17px">—</strong></div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="card doc" id="letter">
+    <div class="hd noprint"><h2>Letter — this is what prints</h2>
+      <span class="hint">Edit any field above and the letter updates.</span></div>
+    <div class="bd" id="letterBody"></div>
+  </section>
+
+  <footer class="foot noprint">
+    Simple interest, no compounding, accrued daily on the outstanding principal of each invoice and rounded to
+    the nearest penny per invoice. UK mode implements the Late Payment of Commercial Debts (Interest) Act 1998:
+    statutory interest of 8% above the Bank of England base rate, plus the s.5A fixed sums of £40 / £70 / £100 by
+    debt size. Manual mode applies whatever contractual or state statutory rate you enter. Figures are an aid to
+    negotiation and drafting, not legal advice.
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+var KEY='solvix.payment-reminder.v1';
+var $=function(id){return document.getElementById(id)};
+var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* ── helpers ─────────────────────────────────────────────── */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function escLines(s){return esc(s).replace(/\n/g,'<br>');}
+function n2(v){var x=parseFloat(v);return isFinite(x)?x:0;}
+function r2(x){return Math.round((x+Number.EPSILON)*100)/100;}
+function group(s){return s.replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function sym(){var c=S.currency;return c==='GBP'?'£':c==='USD'?'$':c==='EUR'?'€':(S.currencyCustom||'¤');}
+function money(x){
+  if(x===null||x===undefined||!isFinite(x))return '—';
+  if(Math.abs(x)<0.005)x=0;
+  var neg=x<0,p=Math.abs(x).toFixed(2).split('.');
+  return (neg?'-':'')+sym()+group(p[0])+'.'+p[1];
+}
+function pct(x){return (x===null||!isFinite(x))?'—':x.toFixed(2)+'%';}
+function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
+function todayISO(){var d=new Date();return iso(d);}
+function iso(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function parseISO(s){
+  if(!s||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+  var p=s.split('-'),d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  if(isNaN(d.getTime()))return null;
+  if(d.getUTCFullYear()!==+p[0]||d.getUTCMonth()!==+p[1]-1||d.getUTCDate()!==+p[2])return null;
+  return d;
+}
+function daysBetween(a,b){var A=parseISO(a),B=parseISO(b);
+  if(!A||!B)return null;return Math.round((B-A)/86400000);}
+function addDays(s,n){var d=parseISO(s);if(!d)return '';
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+function longDate(s){var d=parseISO(s);if(!d)return '—';
+  return d.getUTCDate()+' '+MONTHS[d.getUTCMonth()]+' '+d.getUTCFullYear();}
+function shortDate(s){var d=parseISO(s);if(!d)return '—';
+  return String(d.getUTCDate()).padStart(2,'0')+' '+MONTHS[d.getUTCMonth()].slice(0,3)+' '+d.getUTCFullYear();}
+
+/* ── state ───────────────────────────────────────────────── */
+function sampleState(){
+  var t=todayISO();
+  function mk(no,offDue,amt,paid){
+    return {id:uid(),no:no,issued:addDays(t,-(offDue+30)),due:addDays(t,-offDue),amount:amt,paid:paid};
+  }
+  return {
+    v:1, sample:true, currency:'GBP', currencyCustom:'',
+    creditor:{name:'Redwing Joinery Ltd',
+      addr:'14 Cornmill Yard\nHunslet\nLeeds LS9 8QT',
+      contact:'Alison Frayne', role:'Credit Control',
+      email:'accounts@redwingjoinery.co.uk', phone:'0113 496 2210',
+      reg:'Company no. 08841207 · VAT 174 9922 61'},
+    settings:{basis:'uk', margin:8, baseRate:4, manualRate:12, manualBasis:'clause 7.2 of our terms of business',
+      dayCount:365, asOf:t, letterDate:t, respondDays:14, compOn:true, claimNow:true,
+      prevLetters:'', extraPara:'',
+      pay:{bank:'Yorkshire Commercial Bank', acctName:'Redwing Joinery Ltd', sort:'40-22-16',
+        acct:'71284490', ref:'RJ-HALDEN'}},
+    debtors:[{
+      id:uid(), name:'Halden Property Group Ltd', attn:'Marcus Deane, Accounts Payable',
+      addr:'Unit 3 Ashcombe Court\nDenby Way\nWakefield WF1 5RT',
+      email:'ap@haldenpropertygroup.co.uk', acct:'HPG-114', ref:'LPC-2026-014',
+      sole:false, stage:0,
+      invoices:[mk('INV-2418',84,4850,0), mk('INV-2437',63,1260,260), mk('INV-2455',39,780,0)]
+    },{
+      id:uid(), name:'Bramfield Interiors Ltd', attn:'Accounts',
+      addr:'8 Foundry Row\nSheffield S3 8LN',
+      email:'accounts@bramfieldinteriors.co.uk', acct:'BIL-207', ref:'LPC-2026-015',
+      sole:false, stage:0,
+      invoices:[mk('INV-2461',12,1980,0)]
+    }],
+    activeId:null
+  };
+}
+var S=sampleState(); S.activeId=S.debtors[0].id;
+var errs={};
+
+function active(){
+  for(var i=0;i<S.debtors.length;i++) if(S.debtors[i].id===S.activeId) return S.debtors[i];
+  return S.debtors[0]||null;
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+}
+function load(){
+  var raw=null;
+  try{raw=localStorage.getItem(KEY);}catch(e){return;}
+  if(!raw)return;
+  try{
+    var o=JSON.parse(raw);
+    if(o&&o.debtors&&o.debtors.length&&o.creditor&&o.settings){S=normalise(o);}
+  }catch(e){}
+}
+function normalise(o){
+  var base=sampleState();
+  var s={v:1, sample:!!o.sample,
+    currency:o.currency||'GBP', currencyCustom:o.currencyCustom||'',
+    creditor:Object.assign({},base.creditor,o.creditor||{}),
+    settings:Object.assign({},base.settings,o.settings||{}),
+    debtors:[], activeId:o.activeId||null};
+  s.settings.pay=Object.assign({},base.settings.pay,(o.settings&&o.settings.pay)||{});
+  (o.debtors||[]).forEach(function(d){
+    var nd={id:d.id||uid(),name:d.name||'',attn:d.attn||'',addr:d.addr||'',email:d.email||'',
+      acct:d.acct||'',ref:d.ref||'',sole:!!d.sole,stage:+d.stage||0,invoices:[]};
+    (d.invoices||[]).forEach(function(v){
+      nd.invoices.push({id:v.id||uid(),no:v.no||'',issued:v.issued||'',due:v.due||'',
+        amount:n2(v.amount),paid:n2(v.paid)});
+    });
+    s.debtors.push(nd);
+  });
+  if(!s.debtors.length)s.debtors=base.debtors;
+  var ok=false;
+  s.debtors.forEach(function(d){if(d.id===s.activeId)ok=true;});
+  if(!ok)s.activeId=s.debtors[0].id;
+  return s;
+}
+
+/* ── the maths ───────────────────────────────────────────── */
+function annualRate(){
+  var st=S.settings;
+  if(st.basis==='uk')return (n2(st.margin)+n2(st.baseRate))/100;
+  return n2(st.manualRate)/100;
+}
+function ratePct(){return annualRate()*100;}
+function dayCount(){var d=n2(S.settings.dayCount);return d>0?d:365;}
+function fixedSum(out){
+  /* s.5A Late Payment of Commercial Debts (Interest) Act 1998 — GBP bands */
+  if(out<=0)return 0;
+  if(out<1000)return 40;
+  if(out<10000)return 70;
+  return 100;
+}
+/* Compute a debtor's position as at a given date. */
+function compute(d,onDate){
+  var res={rows:[],principal:0,interest:0,comp:0,total:0,invoiced:0,paid:0,
+           daily:0,maxDays:0,count:0,oldest:null};
+  if(!d)return res;
+  /* the s.5A fixed sums are a creature of the 1998 Act — never applied to a manual/contractual rate */
+  var rate=annualRate(), dc=dayCount(), compOn=(S.settings.basis==='uk')&&!!S.settings.compOn;
+  d.invoices.forEach(function(v){
+    var amt=n2(v.amount), pd=n2(v.paid);
+    var out=amt-pd; if(!(out>0))out=0;
+    var days=daysBetween(v.due,onDate);
+    if(days===null||days<0)days=0;
+    var daily=out*rate/dc;
+    var interest=r2(daily*days);
+    var comp=compOn?fixedSum(out):0;
+    var tot=r2(out+interest+comp);
+    res.rows.push({id:v.id,no:v.no,issued:v.issued,due:v.due,amount:amt,paid:pd,
+      out:out,days:days,daily:daily,interest:interest,comp:comp,total:tot});
+    res.invoiced+=amt; res.paid+=pd; res.principal+=out;
+    res.interest+=interest; res.comp+=comp; res.daily+=daily;
+    if(out>0){
+      res.count++;
+      if(days>res.maxDays){res.maxDays=days;res.oldest=v;}
+    }
+  });
+  res.invoiced=r2(res.invoiced); res.paid=r2(res.paid); res.principal=r2(res.principal);
+  res.interest=r2(res.interest); res.comp=r2(res.comp);
+  res.total=r2(res.principal+res.interest+res.comp);
+  res.demanded=S.settings.claimNow?res.total:res.principal;
+  return res;
+}
+function suggestedStage(maxDays){
+  if(maxDays<=14)return 1;
+  if(maxDays<=45)return 2;
+  return 3;
+}
+function stageOf(d,res){
+  if(d&&d.stage>=1&&d.stage<=3)return d.stage;
+  return suggestedStage(res.maxDays);
+}
+var STAGE_NAME=['','Payment reminder','Formal notice of overdue account','Final demand before legal action'];
+function deadline(){
+  var days=Math.max(1,Math.round(n2(S.settings.respondDays)||14));
+  return addDays(S.settings.letterDate,days);
+}
+/* Which Bank of England reference rate applies to a debt that became late on `dueISO`. */
+function refPeriod(dueISO){
+  var d=parseISO(dueISO);
+  if(!d)return null;
+  var y=d.getUTCFullYear(), m=d.getUTCMonth();
+  if(m<6)return {label:'31 December '+(y-1),applies:'1 January – 30 June '+y};
+  return {label:'30 June '+y,applies:'1 July – 31 December '+y};
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+function fillInputs(){
+  var c=S.creditor,st=S.settings,d=active();
+  document.querySelectorAll('[data-cr]').forEach(function(el){el.value=c[el.getAttribute('data-cr')]||'';});
+  document.querySelectorAll('[data-pay]').forEach(function(el){el.value=st.pay[el.getAttribute('data-pay')]||'';});
+  if(d){
+    document.querySelectorAll('[data-db]').forEach(function(el){
+      var k=el.getAttribute('data-db');
+      if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]||'';
+    });
+  }
+  $('curSel').value=S.currency; $('curCustom').value=S.currencyCustom||'';
+  $('curCustom').disabled=(S.currency!=='CUSTOM');
+  $('basis').value=st.basis;
+  $('margin').value=st.margin; $('baseRate').value=st.baseRate;
+  $('manualRate').value=st.manualRate; $('manualBasis').value=st.manualBasis||'';
+  $('dayCount').value=String(st.dayCount);
+  $('asOf').value=st.asOf; $('letterDate').value=st.letterDate;
+  $('respondDays').value=st.respondDays;
+  $('prevLetters').value=st.prevLetters||'';
+  $('extraPara').value=st.extraPara||'';
+  $('compOn').checked=!!st.compOn; $('claimNow').checked=!!st.claimNow;
+  $('ukFields').hidden=(st.basis!=='uk');
+  $('manualFields').hidden=(st.basis==='uk');
+  $('compOn').parentNode.style.display=(st.basis==='uk')?'':'none';
+}
+function renderDebtorSelect(){
+  var sel=$('debtorSel'),html='';
+  S.debtors.forEach(function(d){
+    html+='<option value="'+esc(d.id)+'">'+esc(d.name||'(unnamed debtor)')+'</option>';
+  });
+  sel.innerHTML=html; sel.value=S.activeId;
+  $('bDelDebtor').disabled=(S.debtors.length<=1);
+}
+function renderRows(){
+  var d=active(),body=$('invBody');
+  if(!d||!d.invoices.length){
+    body.innerHTML='<tr><td colspan="10"><div class="empty">No invoices yet — press “Add invoice”.</div></td></tr>';
+    return;
+  }
+  var html='';
+  d.invoices.forEach(function(v){
+    var i=esc(v.id);
+    html+='<tr data-id="'+i+'">'+
+      '<td><input data-f="no" value="'+esc(v.no)+'" aria-label="Invoice number"><div class="err" data-e="no"></div></td>'+
+      '<td><input data-f="issued" type="date" value="'+esc(v.issued)+'" aria-label="Invoice date"><div class="err" data-e="issued"></div></td>'+
+      '<td><input data-f="due" type="date" value="'+esc(v.due)+'" aria-label="Due date"><div class="err" data-e="due"></div></td>'+
+      '<td><input data-f="amount" type="number" step="0.01" min="0" value="'+esc(v.amount)+'" aria-label="Amount invoiced"><div class="err" data-e="amount"></div></td>'+
+      '<td><input data-f="paid" type="number" step="0.01" min="0" value="'+esc(v.paid)+'" aria-label="Amount paid"><div class="err" data-e="paid"></div></td>'+
+      '<td class="n" data-c="days">—</td><td class="n" data-c="interest">—</td>'+
+      '<td class="n" data-c="comp">—</td><td class="n" data-c="total">—</td>'+
+      '<td><button type="button" class="btn ico sm" data-del="'+i+'" aria-label="Delete invoice '+esc(v.no)+'">✕</button></td></tr>';
+  });
+  body.innerHTML=html;
+}
+function updateRowCells(res){
+  res.rows.forEach(function(r){
+    var tr=document.querySelector('#invBody tr[data-id="'+r.id+'"]');
+    if(!tr)return;
+    tr.querySelector('[data-c=days]').textContent=r.out>0?String(r.days):'—';
+    tr.querySelector('[data-c=interest]').textContent=money(r.interest);
+    tr.querySelector('[data-c=comp]').textContent=r.comp?money(r.comp):'—';
+    tr.querySelector('[data-c=total]').textContent=money(r.total);
+  });
+}
+
+function update(){
+  var d=active(), st=S.settings;
+  var res=compute(d,st.asOf);
+  var dl=deadline(), resDl=compute(d,dl);
+  var stage=stageOf(d,res);
+
+  updateRowCells(res);
+  $('fInvoiced').textContent=money(res.invoiced);
+  $('fPaid').textContent=money(res.paid);
+  $('fDays').textContent=res.count?String(res.maxDays)+' max':'—';
+  $('fInt').textContent=money(res.interest);
+  $('fComp').textContent=money(res.comp);
+  $('fTot').textContent=money(res.total);
+
+  $('curChip').textContent=(S.currency==='CUSTOM'?'CUSTOM ':S.currency+' ')+sym();
+  $('rateShow').value=pct(ratePct())+' p.a.';
+  $('deadlineShow').value=longDate(dl);
+
+  /* hero + stats */
+  $('heroDebtor').textContent=(d&&d.name)?d.name:'—';
+  $('heroTotal').textContent=res.count?money(res.demanded):'—';
+  $('heroSub').textContent=res.count
+    ? (st.claimNow?('principal '+money(res.principal)+' + interest '+money(res.interest)+(res.comp?' + fixed sums '+money(res.comp):'')):
+       'principal only — interest and compensation reserved')
+    : 'No unpaid invoices on this account.';
+  $('sPrincipal').textContent=res.count?money(res.principal):'—';
+  $('sInterest').textContent=res.count?money(res.interest):'—';
+  $('sComp').textContent=(st.basis!=='uk'||!st.compOn)?'—':(res.count?money(res.comp):'—');
+  $('sDaily').textContent=res.count?money(r2(res.daily)):'—';
+  $('sDays').textContent=res.count?(res.maxDays+(res.maxDays===1?' day':' days')):'—';
+  $('sDaysSub').textContent=res.oldest?('Invoice '+(res.oldest.no||'—')+' — due '+shortDate(res.oldest.due)):'—';
+  $('kRate').textContent=pct(ratePct())+' p.a.';
+  $('kCount').textContent=res.count?String(res.count):'0';
+  $('kDeadline').textContent=longDate(dl);
+  $('kAtDeadline').textContent=res.count?money(st.claimNow?resDl.total:resDl.principal):'—';
+  $('ftTotal').textContent=res.count?money(res.demanded):'—';
+  $('stageChip').textContent='Stage '+stage+' · '+STAGE_NAME[stage];
+  $('stageChip').className='chip '+(stage===3?'bad':stage===2?'warn':'ok');
+  $('autoHint').textContent=(d&&d.stage?'Manual override — suggested is stage '+suggestedStage(res.maxDays)
+    :'Auto: stage '+suggestedStage(res.maxDays)+' from '+res.maxDays+' days overdue');
+  document.querySelectorAll('.stgrow .btn').forEach(function(b){
+    b.setAttribute('aria-pressed', String(+b.getAttribute('data-stage')===stage));
+  });
+
+  /* base-rate reference hint */
+  if(st.basis==='uk'){
+    var rp=res.oldest?refPeriod(res.oldest.due):null;
+    $('refHint').textContent = pct(n2(st.margin))+' + '+pct(n2(st.baseRate))+' base';
+    $('beHint').innerHTML = rp
+      ? 'The oldest debt fell late in the '+esc(rp.applies)+' period, so the statutory rate uses the Bank of England base rate in force on <strong>'+esc(rp.label)+'</strong>. Verify that figure at bankofengland.co.uk before you send the letter — this tool cannot look it up offline.'
+      : 'Enter the Bank of England base rate in force on the 31 December or 30 June before the debt became late. Verify it at bankofengland.co.uk.';
+    var warn=$('curWarn');
+    if(S.currency!=='GBP'){
+      warn.hidden=false;
+      warn.innerHTML='<strong>Currency check.</strong> The fixed sums in the Act are £40, £70 and £100 sterling. You are working in '+esc(sym())+', so those figures are being shown in that symbol without conversion. Switch the currency to £ for a statutory-accurate demand.';
+    } else warn.hidden=true;
+  } else {
+    $('beHint').textContent='Manual mode applies the rate you enter, simple interest, '+dayCount()+'-day year. Check the contractual rate is enforceable, or that the state statutory rate is the right one for this debt.';
+    $('curWarn').hidden=true;
+  }
+
+  renderLetter(d,res,resDl,stage,dl);
+  renderPrintHead(d,res);
+  $('sampleChip').style.display=S.sample?'':'none';
+  save();
+}
+
+function renderPrintHead(d,res){
+  $('phead').innerHTML='<span>'+esc(S.creditor.name||'—')+' — statement of account &amp; demand for payment</span>'+
+    '<span>Ref '+esc((d&&d.ref)||'—')+' · prepared '+esc(longDate(S.settings.letterDate))+'</span>';
+}
+
+/* ── the letter ──────────────────────────────────────────── */
+function scheduleTable(res){
+  var h='<div class="tw"><table><thead><tr>'+
+    '<th scope="col">Invoice</th><th scope="col">Issued</th><th scope="col">Due</th>'+
+    '<th scope="col" class="n">Invoiced</th><th scope="col" class="n">Paid</th>'+
+    '<th scope="col" class="n">Outstanding</th><th scope="col" class="n">Days late</th>'+
+    '<th scope="col" class="n">Interest</th>'+(res.comp?'<th scope="col" class="n">Fixed sum</th>':'')+
+    '<th scope="col" class="n">Due</th></tr></thead><tbody>';
+  var any=false;
+  res.rows.forEach(function(r){
+    if(r.out<=0)return; any=true;
+    h+='<tr><td>'+esc(r.no||'—')+'</td><td>'+esc(shortDate(r.issued))+'</td><td>'+esc(shortDate(r.due))+'</td>'+
+      '<td class="n">'+money(r.amount)+'</td><td class="n">'+(r.paid?money(r.paid):'—')+'</td>'+
+      '<td class="n">'+money(r.out)+'</td><td class="n">'+r.days+'</td>'+
+      '<td class="n">'+money(r.interest)+'</td>'+(res.comp?'<td class="n">'+(r.comp?money(r.comp):'—')+'</td>':'')+
+      '<td class="n">'+money(r.total)+'</td></tr>';
+  });
+  if(!any)h+='<tr><td colspan="'+(res.comp?10:9)+'"><div class="empty">No outstanding invoices on this account.</div></td></tr>';
+  h+='</tbody><tfoot><tr><td colspan="'+(res.comp?5:5)+'">Totals</td>'+
+    '<td class="n">'+money(res.principal)+'</td><td class="n"></td>'+
+    '<td class="n">'+money(res.interest)+'</td>'+(res.comp?'<td class="n">'+money(res.comp)+'</td>':'')+
+    '<td class="n">'+money(res.total)+'</td></tr></tfoot></table></div>';
+  return h;
+}
+function basisSentence(){
+  var st=S.settings;
+  if(st.basis==='uk'){
+    return 'Interest is claimed under the Late Payment of Commercial Debts (Interest) Act 1998 at the statutory '+
+      'rate of '+pct(n2(st.margin))+' above the Bank of England base rate of '+pct(n2(st.baseRate))+', a total of '+
+      pct(ratePct())+' per year, calculated as simple interest on a '+dayCount()+'-day year.';
+  }
+  return 'Interest is claimed at '+pct(ratePct())+' per year'+
+    (st.manualBasis?' under '+st.manualBasis:'')+', calculated as simple interest on a '+dayCount()+'-day year.';
+}
+function bodyParagraphs(d,res,resDl,stage,dl){
+  var st=S.settings, P=[], amt=money(res.demanded), by=longDate(dl);
+  var daily=money(r2(res.daily));
+  var many=res.count!==1;
+  var theInv=many?('the '+res.count+' invoices listed below'):'the invoice listed below';
+  var prev=st.prevLetters?(' We wrote to you previously on '+st.prevLetters+'.'):'';
+
+  if(stage===1){
+    P.push('We are writing about '+theInv+', which '+(many?'are':'is')+' now past the agreed payment date. '+
+      'As at '+longDate(st.asOf)+' our records show '+money(res.principal)+' outstanding on your account'+
+      ((d&&d.acct)?' ('+d.acct+')':'')+'.');
+    P.push('We appreciate this may simply be an oversight, and if payment has already been sent please accept our thanks and ignore this letter. Otherwise, we would be grateful if you could arrange payment of '+amt+' by '+by+' using the details below.');
+    if(st.claimNow){
+      P.push('The figure above includes interest of '+money(res.interest)+
+        (res.comp?' and the fixed sum'+(many?'s':'')+' for the cost of recovery of '+money(res.comp):'')+
+        ', accrued to '+longDate(st.asOf)+'. '+basisSentence());
+    }else{
+      P.push('We have not applied interest or compensation at this stage, but we reserve our right to do so. '+basisSentence());
+    }
+    P.push('If there is a query on any invoice, please contact '+(S.creditor.contact||'us')+
+      (S.creditor.phone?' on '+S.creditor.phone:'')+(S.creditor.email?' or at '+S.creditor.email:'')+
+      ' so that we can resolve it quickly and keep the account in order.');
+  }else if(stage===2){
+    P.push('Despite the agreed payment terms, '+theInv+' remain'+(many?'':'s')+' unpaid.'+prev+
+      ' The oldest of these invoices is now '+res.maxDays+' days overdue and the account stands at '+
+      money(res.principal)+' in principal as at '+longDate(st.asOf)+'.');
+    P.push('This letter is a formal notice that payment in full of '+amt+' is required by '+by+'. '+
+      'Payment should be made to the account shown below, quoting the reference given.');
+    if(st.claimNow){
+      P.push('That figure comprises the principal of '+money(res.principal)+', interest of '+money(res.interest)+
+        (res.comp?' and the fixed sum'+(many?'s':'')+' for the cost of recovery of '+money(res.comp):'')+'. '+
+        basisSentence()+' Interest continues to accrue at '+daily+' per day, so if payment reaches us on '+by+
+        ' the sum required will be '+money(resDl.total)+'.');
+    }else{
+      P.push('We have not yet added interest or compensation to this account, and we reserve the right to do so in full. '+basisSentence());
+    }
+    P.push('If you dispute any part of this account, you must tell us in writing by '+by+', setting out what is disputed and why, so that we can deal with it. If we do not hear from you we will assume the debt is admitted and the account may be passed for recovery, with further costs claimed.');
+  }else{
+    P.push('FINAL DEMAND. '+theInv.charAt(0).toUpperCase()+theInv.slice(1)+' remain'+(many?'':'s')+
+      ' unpaid and the oldest is now '+res.maxDays+' days overdue.'+prev+
+      ' No satisfactory response has been received and the account is now in default.');
+    P.push('Unless payment in full of '+amt+' is received in cleared funds by '+by+
+      ', we intend to commence recovery without further notice to you. That may include instructing solicitors or a recovery agent and issuing a claim in the court, in which case we will claim the debt, interest continuing to accrue at '+
+      daily+' per day, and our costs of recovery.');
+    if(st.claimNow){
+      P.push('The sum demanded comprises the principal of '+money(res.principal)+', interest of '+money(res.interest)+
+        ' accrued to '+longDate(st.asOf)+
+        (res.comp?' and the fixed sum'+(many?'s':'')+' for the cost of recovery of '+money(res.comp):'')+
+        '. '+basisSentence()+' If payment is made on '+by+' the total required will be '+money(resDl.total)+'.');
+    }else{
+      P.push('The sum demanded is the outstanding principal only. Our right to claim interest and compensation is expressly reserved and will be pursued in full if this matter proceeds. '+basisSentence());
+    }
+    P.push('If you dispute this debt, or you are unable to pay in full and wish to propose terms, you must write to us by '+by+
+      ' setting out your position. We would prefer to resolve this by agreement, but we will not delay recovery further without a firm proposal.');
+    P.push('This letter is written without prejudice to our rights, all of which are reserved.');
+  }
+  if(st.extraPara&&st.extraPara.trim())P.push(st.extraPara.trim());
+  return P;
+}
+function renderLetter(d,res,resDl,stage,dl){
+  var c=S.creditor,st=S.settings;
+  var h='';
+  h+='<div class="lh"><div><div class="co">'+esc(c.name||'Your business name')+'</div>'+
+     '<div class="meta">'+escLines(c.addr||'')+'</div></div>'+
+     '<div class="right">'+(c.phone?esc(c.phone)+'\n':'')+(c.email?esc(c.email)+'\n':'')+
+     (c.reg?esc(c.reg):'')+'</div></div>';
+
+  h+='<div class="addr">'+esc((d&&d.name)||'Debtor name')+
+     ((d&&d.attn)?'\nFAO '+esc(d.attn):'')+
+     ((d&&d.addr)?'\n'+escLines(d.addr):'')+'</div>';
+
+  h+='<div class="docref">'+esc(longDate(st.letterDate))+
+     ((d&&d.ref)?' &nbsp;·&nbsp; Our ref '+esc(d.ref):'')+
+     ((d&&d.acct)?' &nbsp;·&nbsp; Account '+esc(d.acct):'')+
+     ' &nbsp;·&nbsp; Sent by post and by email</div>';
+
+  h+='<h2 class="subj">'+esc(STAGE_NAME[stage])+' — '+money(res.demanded)+' outstanding</h2>';
+
+  h+='<p>Dear '+esc((d&&d.attn)?d.attn.split(',')[0]:'Sir or Madam')+',</p>';
+  bodyParagraphs(d,res,resDl,stage,dl).forEach(function(p){h+='<p>'+esc(p)+'</p>';});
+
+  h+='<p style="margin-top:18px;font-weight:600">Schedule of unpaid invoices — calculated as at '+
+     esc(longDate(st.asOf))+'</p>'+scheduleTable(res);
+
+  h+='<div class="totbox"><span class="lab">Total payable by '+esc(longDate(dl))+
+     (st.claimNow?'':' (principal only)')+'</span><span class="amt">'+money(res.demanded)+'</span></div>';
+
+  if(res.count&&st.claimNow){
+    h+='<p style="font-size:13.5px;font-family:var(--sans)">Interest continues to accrue at '+
+       money(r2(res.daily))+' per day. If payment is made on '+esc(longDate(dl))+
+       ' the amount required will be '+money(resDl.total)+'.</p>';
+  }
+
+  var p=st.pay;
+  h+='<div class="paybox"><b>Payment details</b><br>'+
+     (p.bank?'Bank: '+esc(p.bank)+'<br>':'')+
+     (p.acctName?'Account name: '+esc(p.acctName)+'<br>':'')+
+     (p.sort?'Sort code / routing: '+esc(p.sort)+'<br>':'')+
+     (p.acct?'Account number / IBAN: '+esc(p.acct)+'<br>':'')+
+     (p.ref?'Please quote reference: <b>'+esc(p.ref)+'</b>':'')+'</div>';
+
+  h+='<p>Yours '+((d&&d.attn)?'sincerely':'faithfully')+',</p>'+
+     '<div class="sig"><div class="line"></div>'+esc(c.contact||'')+
+     (c.role?'<br>'+esc(c.role):'')+(c.name?'<br>'+esc(c.name):'')+'</div>';
+
+  var legal='';
+  if(st.basis==='uk'){
+    legal+='Interest and the fixed sums for the cost of recovery are claimed under the Late Payment of Commercial Debts (Interest) Act 1998, which applies to qualifying business-to-business contracts. Statutory interest runs at 8% above the Bank of England base rate in force on the 31 December or 30 June before the debt became late; the rate used here is '+pct(ratePct())+' per year. The fixed sums under s.5A are £40 for a debt under £1,000, £70 for a debt of £1,000 to £9,999.99 and £100 for a debt of £10,000 or more, per debt. Reasonable costs of recovery above the fixed sum may also be claimed.';
+  }else{
+    legal+='Interest is claimed at '+pct(ratePct())+' per year'+(st.manualBasis?' under '+esc(st.manualBasis):'')+
+      '. Where a contractual rate is not enforceable, the statutory rate applicable in the governing jurisdiction will be claimed instead.';
+  }
+  legal+='<br><br><strong>Notice.</strong> This letter was prepared with a calculation tool. The figures are simple interest computed on the invoice data entered above and are not legal advice, a court document, or a statutory demand. ';
+  if(d&&d.sole){
+    legal+='<strong>The debtor is recorded as an individual or sole trader, so the Pre-Action Protocol for Debt Claims applies: a compliant Letter of Claim must include the prescribed information sheet, reply form and financial statement, and allow 30 days for a response. This letter does not meet that requirement and must not be used as a Letter of Claim.</strong> ';
+  }
+  legal+='Verify every figure, and take advice from a solicitor before commencing proceedings.';
+  h+='<div class="legal">'+legal+'</div>';
+  h+='<div class="pfoot">'+esc(c.name||'')+((d&&d.ref)?' · '+esc(d.ref):'')+
+     ' · demand for payment · '+esc(longDate(st.letterDate))+'</div>';
+
+  $('letterBody').innerHTML=h;
+}
+
+/* ── validation ──────────────────────────────────────────── */
+function setErr(el,box,msg){
+  if(msg){el.classList.add('inv');if(box)box.textContent=msg;}
+  else{el.classList.remove('inv');if(box)box.textContent='';}
+}
+function validateRow(tr){
+  var d=active(); if(!d||!tr)return;
+  var id=tr.getAttribute('data-id'),v=null;
+  d.invoices.forEach(function(x){if(x.id===id)v=x;});
+  if(!v)return;
+  var q=function(f){return tr.querySelector('[data-f='+f+']')};
+  var e=function(f){return tr.querySelector('[data-e='+f+']')};
+  setErr(q('no'),e('no'), v.no.trim()?'':'Invoice number required.');
+  setErr(q('issued'),e('issued'), (!v.issued||parseISO(v.issued))?'':'Invalid date.');
+  var dueMsg='';
+  if(!v.due)dueMsg='Due date required.';
+  else if(!parseISO(v.due))dueMsg='Invalid date.';
+  else if(v.issued&&parseISO(v.issued)&&daysBetween(v.issued,v.due)<0)dueMsg='Due date is before the invoice date.';
+  setErr(q('due'),e('due'),dueMsg);
+  setErr(q('amount'),e('amount'), n2(v.amount)>0?'':'Enter an amount above zero.');
+  var paidMsg='';
+  if(n2(v.paid)<0)paidMsg='Cannot be negative.';
+  else if(n2(v.paid)>n2(v.amount))paidMsg='Paid exceeds the invoice — outstanding treated as zero.';
+  setErr(q('paid'),e('paid'),paidMsg);
+}
+function validateAll(){
+  document.querySelectorAll('#invBody tr[data-id]').forEach(validateRow);
+  setErr($('cName'),$('e_cName'),S.creditor.name.trim()?'':'Your business name appears on the letter.');
+  var d=active();
+  setErr($('dName'),$('e_dName'),(d&&d.name.trim())?'':'The debtor name appears on the letter.');
+  setErr($('baseRate'),$('e_baseRate'), n2(S.settings.baseRate)>=0?'':'Enter the base rate as a percentage.');
+  setErr($('manualRate'),$('e_manualRate'), n2(S.settings.manualRate)>=0?'':'Enter a rate of zero or more.');
+  setErr($('respondDays'),$('e_respondDays'), Math.round(n2(S.settings.respondDays))>=1?'':'At least one day.');
+}
+
+/* ── events ──────────────────────────────────────────────── */
+function touched(){ if(S.sample){S.sample=false;$('sampleChip').style.display='none';} }
+
+function bindText(id,setter){
+  var el=$(id);
+  el.addEventListener('input',function(){touched();setter(el.value);update();});
+  el.addEventListener('blur',validateAll);
+}
+function wire(){
+  document.querySelectorAll('[data-cr]').forEach(function(el){
+    el.addEventListener('input',function(){touched();S.creditor[el.getAttribute('data-cr')]=el.value;update();});
+    el.addEventListener('blur',validateAll);
+  });
+  document.querySelectorAll('[data-pay]').forEach(function(el){
+    el.addEventListener('input',function(){touched();S.settings.pay[el.getAttribute('data-pay')]=el.value;update();});
+  });
+  document.querySelectorAll('[data-db]').forEach(function(el){
+    el.addEventListener('input',function(){
+      touched();var d=active();if(!d)return;
+      var k=el.getAttribute('data-db');
+      d[k]=(el.type==='checkbox')?el.checked:el.value;
+      if(k==='name')renderDebtorSelect();
+      update();
+    });
+    el.addEventListener('blur',validateAll);
+  });
+
+  $('curSel').addEventListener('change',function(){
+    touched();S.currency=$('curSel').value;$('curCustom').disabled=(S.currency!=='CUSTOM');update();});
+  $('curCustom').addEventListener('input',function(){touched();S.currencyCustom=$('curCustom').value;update();});
+
+  $('basis').addEventListener('change',function(){
+    touched();S.settings.basis=$('basis').value;
+    $('ukFields').hidden=(S.settings.basis!=='uk');
+    $('manualFields').hidden=(S.settings.basis==='uk');
+    $('compOn').parentNode.style.display=(S.settings.basis==='uk')?'':'none';
+    update();});
+
+  ['margin','baseRate','manualRate','respondDays'].forEach(function(id){
+    $(id).addEventListener('input',function(){touched();S.settings[id]=n2($(id).value);update();});
+    $(id).addEventListener('blur',validateAll);
+  });
+  $('manualBasis').addEventListener('input',function(){touched();S.settings.manualBasis=$('manualBasis').value;update();});
+  $('dayCount').addEventListener('change',function(){touched();S.settings.dayCount=n2($('dayCount').value)||365;update();});
+  ['asOf','letterDate'].forEach(function(id){
+    $(id).addEventListener('input',function(){touched();S.settings[id]=$(id).value;update();});
+  });
+  $('prevLetters').addEventListener('input',function(){touched();S.settings.prevLetters=$('prevLetters').value;update();});
+  $('extraPara').addEventListener('input',function(){touched();S.settings.extraPara=$('extraPara').value;update();});
+  $('compOn').addEventListener('change',function(){touched();S.settings.compOn=$('compOn').checked;update();});
+  $('claimNow').addEventListener('change',function(){touched();S.settings.claimNow=$('claimNow').checked;update();});
+
+  /* invoice table (delegated) */
+  $('invBody').addEventListener('input',function(ev){
+    var el=ev.target,f=el.getAttribute&&el.getAttribute('data-f');
+    if(!f)return;
+    var tr=el.closest('tr'),id=tr.getAttribute('data-id'),d=active();
+    if(!d)return;
+    d.invoices.forEach(function(v){
+      if(v.id!==id)return;
+      if(f==='amount'||f==='paid')v[f]=n2(el.value); else v[f]=el.value;
+    });
+    touched();update();
+  });
+  $('invBody').addEventListener('blur',function(ev){
+    if(ev.target.getAttribute&&ev.target.getAttribute('data-f'))validateRow(ev.target.closest('tr'));
+  },true);
+  $('invBody').addEventListener('click',function(ev){
+    var b=ev.target.closest('[data-del]');
+    if(!b)return;
+    var id=b.getAttribute('data-del'),d=active();
+    if(!d)return;
+    d.invoices=d.invoices.filter(function(v){return v.id!==id;});
+    touched();renderRows();validateAll();update();
+  });
+  $('bAddRow').addEventListener('click',function(){
+    var d=active();if(!d)return;
+    var t=S.settings.asOf||todayISO();
+    d.invoices.push({id:uid(),no:'',issued:addDays(t,-30),due:t,amount:0,paid:0});
+    touched();renderRows();update();
+    var rows=document.querySelectorAll('#invBody tr[data-id]');
+    if(rows.length)rows[rows.length-1].querySelector('[data-f=no]').focus();
+  });
+
+  /* stage */
+  document.querySelectorAll('.stgrow .btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var d=active();if(!d)return;
+      d.stage=+b.getAttribute('data-stage');touched();update();
+    });
+  });
+  $('bAuto').addEventListener('click',function(){
+    var d=active();if(!d)return;d.stage=0;touched();update();});
+
+  /* debtors */
+  $('debtorSel').addEventListener('change',function(){
+    S.activeId=$('debtorSel').value;fillInputs();renderRows();validateAll();update();});
+  $('bAddDebtor').addEventListener('click',function(){
+    var t=S.settings.asOf||todayISO();
+    var d={id:uid(),name:'New debtor',attn:'',addr:'',email:'',acct:'',
+      ref:'LPC-'+new Date().getFullYear()+'-'+String(S.debtors.length+1).padStart(3,'0'),
+      sole:false,stage:0,invoices:[{id:uid(),no:'',issued:addDays(t,-30),due:t,amount:0,paid:0}]};
+    S.debtors.push(d);S.activeId=d.id;touched();
+    renderDebtorSelect();fillInputs();renderRows();update();$('dName').focus();$('dName').select();
+  });
+  $('bDupDebtor').addEventListener('click',function(){
+    var d=active();if(!d)return;
+    var c=JSON.parse(JSON.stringify(d));
+    c.id=uid();c.name=d.name+' (copy)';c.invoices.forEach(function(v){v.id=uid();});
+    S.debtors.push(c);S.activeId=c.id;touched();
+    renderDebtorSelect();fillInputs();renderRows();update();
+  });
+  $('bDelDebtor').addEventListener('click',function(){
+    if(S.debtors.length<=1)return;
+    var d=active();
+    if(!window.confirm('Delete "'+(d.name||'this debtor')+'" and its '+d.invoices.length+' invoice(s)? This cannot be undone.'))return;
+    S.debtors=S.debtors.filter(function(x){return x.id!==d.id;});
+    S.activeId=S.debtors[0].id;touched();
+    renderDebtorSelect();fillInputs();renderRows();validateAll();update();
+  });
+
+  /* toolbar */
+  $('bPrint').addEventListener('click',function(){window.print();});
+  $('bCsv').addEventListener('click',exportCSV);
+  $('bJson').addEventListener('click',exportJSON);
+  $('bImp').addEventListener('click',function(){$('fImp').click();});
+  $('fImp').addEventListener('change',importJSON);
+  $('bClear').addEventListener('click',function(){
+    if(!window.confirm('Clear every debtor, invoice and setting saved in this browser, and start from a blank form?'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();
+    renderDebtorSelect();fillInputs();renderRows();validateAll();update();
+    toast('All data cleared. The form is now blank — press “Add invoice” to begin.');
+  });
+}
+function blankState(){
+  var b=sampleState(),t=todayISO();
+  b.sample=false;
+  b.creditor={name:'',addr:'',contact:'',role:'',email:'',phone:'',reg:''};
+  b.settings.pay={bank:'',acctName:'',sort:'',acct:'',ref:''};
+  b.settings.prevLetters='';b.settings.extraPara='';
+  b.debtors=[{id:uid(),name:'',attn:'',addr:'',email:'',acct:'',ref:'',sole:false,stage:0,
+    invoices:[{id:uid(),no:'',issued:addDays(t,-30),due:t,amount:0,paid:0}]}];
+  b.activeId=b.debtors[0].id;
+  return b;
+}
+var toastTimer=null;
+function toast(msg,bad){
+  var el=$('toast');
+  el.textContent=msg;el.className='note noprint'+(bad?' bad':'');
+  el.style.display='block';
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){el.style.display='none';},6000);
+}
+
+/* ── export ──────────────────────────────────────────────── */
+function csvCell(v){
+  v=(v===null||v===undefined)?'':String(v);
+  return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+}
+function download(name,mime,text){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},400);
+    return true;
+  }catch(e){toast('Could not create the file: '+e.message,true);return false;}
+}
+function slug(s){return String(s||'export').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'export';}
+function exportCSV(){
+  var st=S.settings;
+  var head=['Debtor','Account','Letter ref','Stage','Invoice no','Issued','Due','Days late','Currency',
+    'Invoiced','Paid','Outstanding','Rate % p.a.','Interest','Fixed compensation','Total due'];
+  var lines=[head.map(csvCell).join(',')];
+  var gP=0,gI=0,gC=0,gT=0;
+  S.debtors.forEach(function(d){
+    var res=compute(d,st.asOf),stage=stageOf(d,res);
+    res.rows.forEach(function(r){
+      lines.push([d.name,d.acct,d.ref,stage+' '+STAGE_NAME[stage],r.no,r.issued,r.due,
+        (r.out>0?r.days:0),(S.currency==='CUSTOM'?(S.currencyCustom||'CUSTOM'):S.currency),
+        r.amount.toFixed(2),r.paid.toFixed(2),r.out.toFixed(2),ratePct().toFixed(2),
+        r.interest.toFixed(2),r.comp.toFixed(2),r.total.toFixed(2)].map(csvCell).join(','));
+    });
+    gP+=res.principal;gI+=res.interest;gC+=res.comp;gT+=res.total;
+  });
+  lines.push(['TOTAL','','','','','','','','',
+    '','',r2(gP).toFixed(2),'',r2(gI).toFixed(2),r2(gC).toFixed(2),r2(gT).toFixed(2)].map(csvCell).join(','));
+  lines.push('');
+  lines.push(['Calculated as at',st.asOf].map(csvCell).join(','));
+  lines.push(['Basis',st.basis==='uk'
+    ?('UK statutory — '+n2(st.margin).toFixed(2)+'% + BoE base '+n2(st.baseRate).toFixed(2)+'%')
+    :('Manual rate '+n2(st.manualRate).toFixed(2)+'% — '+(st.manualBasis||'')) ].map(csvCell).join(','));
+  lines.push(['Day count',dayCount()+'-day year, simple interest'].map(csvCell).join(','));
+  if(download('late-payment-'+slug(S.creditor.name)+'-'+st.asOf+'.csv','text/csv;charset=utf-8',
+    '﻿'+lines.join('\r\n')))toast('CSV exported — every debtor and invoice, calculated as at '+longDate(st.asOf)+'.');
+}
+function exportJSON(){
+  var payload={tool:'solvix.payment-reminder',version:1,exported:new Date().toISOString(),state:S};
+  if(download('late-payment-chaser-'+todayISO()+'.json','application/json',JSON.stringify(payload,null,2)))
+    toast('JSON exported — import it here later to restore everything exactly.');
+}
+function importJSON(ev){
+  var f=ev.target.files&&ev.target.files[0];
+  if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      var st=o&&o.state?o.state:o;
+      if(!st||!st.debtors||!st.debtors.length)throw new Error('no debtor data found');
+      S=normalise(st);
+      renderDebtorSelect();fillInputs();renderRows();validateAll();update();
+      toast('Imported '+S.debtors.length+' debtor'+(S.debtors.length===1?'':'s')+' from '+f.name+'.');
+    }catch(e){toast('That file could not be read as a Late Payment Chaser export: '+e.message,true);}
+    ev.target.value='';
+  };
+  fr.onerror=function(){toast('The file could not be read.',true);ev.target.value='';};
+  fr.readAsText(f);
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+load();
+renderDebtorSelect();
+fillInputs();
+renderRows();
+wire();
+validateAll();
+update();
+})();
+</script>
+</body>
+</html>

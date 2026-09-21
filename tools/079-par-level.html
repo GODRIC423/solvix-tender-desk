@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventory Par Level Sheet — Solvix Toolkit</title>
+<meta name="description" content="Set par levels and current counts per product and get the reorder grouped by supplier: order quantity rounded up to whole packs, order value per supplier, a minimum-order-value warning, and a flag for products that repeatedly run out or repeatedly overstock. Print per-supplier orders, export CSV, autosaves in the browser.">
+<meta name="theme-color" content="#A8434F">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A8434F'/%3E%3Crect x='7' y='16' width='4' height='9' fill='%23fff'/%3E%3Crect x='14' y='9' width='4' height='16' fill='%23fff'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%23fff'/%3E%3Cline x1='5' y1='12' x2='27' y2='12' stroke='%23fff' stroke-width='1.6' stroke-dasharray='2,2'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ══════════════════════════════════════════════════ */
+:root{--accent:#A8434F;--accent-ink:#82333C;--accent-wash:#F8EAEC;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E1808C;--accent-ink:#EFA9B1;--accent-wash:#3A1519;--on-accent:#210A0C;
+}}
+:root[data-theme="dark"]{--accent:#E1808C;--accent-ink:#EFA9B1;--accent-wash:#3A1519;--on-accent:#210A0C}
+
+.split>div{min-width:0}
+.stack{min-width:0}
+.stack>*{min-width:0}
+
+.mbar{display:none}
+@media(max-width:900px){
+  .mbar{display:flex;align-items:baseline;gap:9px;position:sticky;top:var(--abh,58px);z-index:30;
+    background:var(--accent-wash);border:1px solid var(--accent);border-radius:4px;
+    padding:8px 12px;margin:0 0 10px}
+  .mbar .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+  .mbar .v{font:700 19px/1.1 var(--mono);color:var(--accent-ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .sticky{position:static}
+  .appbar h1{font-size:14.5px}
+}
+@media(max-width:560px){
+  .appbar{padding:9px 10px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 8px}
+  .appbar .sub{display:none}
+  .appbar .brand{margin-right:6px}
+}
+
+.curRow{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:end}
+#curCustom{max-width:64px}
+.rmCell{width:34px;text-align:center}
+.tbl-suppliers th:nth-child(1),.tbl-suppliers td:nth-child(1){min-width:150px}
+.tbl-products th,.tbl-products td{white-space:nowrap}
+.tbl-products th:nth-child(2),.tbl-products td:nth-child(2){min-width:150px;white-space:normal}
+.tbl-products th:nth-child(9),.tbl-products td:nth-child(9){min-width:110px;white-space:normal}
+.tbl-products input[type=number]{min-width:58px}
+.tbl-products select{min-width:118px}
+.addRowBar{padding:9px var(--pad);border-top:1px solid var(--line)}
+.sBanner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.subgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.poCard .hd{gap:8px 10px}
+.poCard .hd h3{margin-right:auto}
+.poMeta{font:12px/1.4 var(--sans);color:var(--muted)}
+.poNone{padding:14px var(--pad);color:var(--muted);font-size:13.5px}
+.flagList{display:flex;flex-direction:column;gap:8px}
+.flagRow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;font-size:13.5px;
+  border-bottom:1px dotted var(--line);padding-bottom:8px}
+.flagRow:last-child{border-bottom:0;padding-bottom:0}
+.flagRow .nm{font-weight:600}
+.flagRow .why{color:var(--muted);font-size:12.5px;margin-top:1px}
+.docHead{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:10px}
+.docHead h2{font-size:17px}
+.docHead .r{text-align:right}
+.vh{position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* fix: wide tables inside flex/grid ancestors must be free to shrink so
+   .tw's own overflow-x:auto can scroll them, instead of stretching the
+   whole page past the viewport */
+.split>*,.stack>*,.grid>*{min-width:0}
+.tw{max-width:100%}
+
+/* overflow fixes: .appbar sits outside .app here so the kit's negative bleed
+   margins pushed past the viewport; grid/flex children need min-width:0 before
+   they will shrink below max-content; and visually-hidden .sr elements need a
+   left/top anchor or they resolve after wide content and drag the page out. */
+.appbar{margin-left:0!important;margin-right:0!important}
+.split>*,.stack>*,.grid>*{min-width:0}
+.tw{min-width:0;max-width:100%}
+.sr,.sr-only,.vh,.visually-hidden{position:absolute!important;left:0!important;top:0!important;
+  width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;
+  overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;
+  white-space:nowrap!important;border:0!important}
+</style>
+</head>
+<body>
+
+<header class="appbar" id="appbar">
+  <div class="brand">
+    <span class="mark">079</span>
+    <div style="min-width:0">
+      <h1>Inventory Par Level Sheet</h1>
+      <div class="sub">RETAIL &amp; HOSPITALITY · REORDER FROM PAR</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrint">🖨 Print orders</button>
+    <button type="button" class="btn" id="btnCsv">⬇ CSV</button>
+    <button type="button" class="btn dgr" id="btnClear">Clear all data</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <div class="mbar noprint" id="mbar">
+    <span class="k">Total order</span>
+    <span class="v" id="mbarV">—</span>
+  </div>
+
+  <div class="split">
+
+    <!-- ── inputs ── -->
+    <div class="stack noprint">
+
+      <div class="card" id="sampleBanner">
+        <div class="bd sBanner">
+          <div><strong>Sample data loaded.</strong> <span class="hint">This is a worked example — edit any field to use your own stock sheet, or clear it below.</span></div>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="hd"><h2>Document &amp; currency</h2></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="bizName">Business name</label>
+              <input id="bizName" type="text" autocomplete="off" placeholder="Your business name"></div>
+            <div class="f"><label for="bizPrep">Prepared by</label>
+              <input id="bizPrep" type="text" autocomplete="off" placeholder="Name"></div>
+            <div class="f"><label for="bizDate">Count / order date</label>
+              <input id="bizDate" type="date"></div>
+            <div class="f"><label for="curSel">Currency</label>
+              <div class="curRow">
+                <select id="curSel" style="width:auto">
+                  <option value="$">$ Dollar</option>
+                  <option value="£">£ Pound</option>
+                  <option value="€">€ Euro</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <input id="curCustom" type="text" maxlength="3" placeholder="Kr" style="display:none">
+                <span></span>
+              </div>
+            </div>
+          </div>
+          <p class="hint">The order date stands in for when this sheet was counted — it prints on every supplier order below.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Suppliers</h2><span class="hint">minimum order value, per supplier</span></div>
+        <div class="tw">
+          <table class="tbl-suppliers">
+            <thead><tr>
+              <th scope="col">Supplier</th>
+              <th scope="col" class="r">Min. order value</th>
+              <th scope="col"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="tbSuppliers"></tbody>
+          </table>
+        </div>
+        <div class="addRowBar"><button type="button" class="btn sm" id="btnAddSupplier">+ Add supplier</button></div>
+      </section>
+
+      <section class="card">
+        <div class="hd"><h2>Products &amp; par levels</h2></div>
+        <div class="tw">
+          <table class="tbl-products">
+            <thead><tr>
+              <th scope="col">Product</th>
+              <th scope="col">Supplier</th>
+              <th scope="col" class="r">Par level</th>
+              <th scope="col" class="r">On hand</th>
+              <th scope="col" class="r">Pack size</th>
+              <th scope="col" class="r">Unit cost</th>
+              <th scope="col" class="r">Lead (d)</th>
+              <th scope="col">Recent counts</th>
+              <th scope="col" class="r">Needed</th>
+              <th scope="col" class="r">Order qty</th>
+              <th scope="col" class="r">Order value</th>
+              <th scope="col">Par check</th>
+              <th scope="col"><span class="vh">Remove</span></th>
+            </tr></thead>
+            <tbody id="tbProducts"></tbody>
+          </table>
+        </div>
+        <div class="addRowBar"><button type="button" class="btn sm" id="btnAddProduct">+ Add product</button></div>
+        <div class="bd" style="padding-top:0">
+          <p class="hint">Order qty = par level minus on-hand, rounded up to whole packs — never a part-pack. Enter 3–8 recent stock-check counts (comma-separated, e.g. <span class="mono">0, 4, 0, 2</span>) so the tool can flag products that keep hitting zero or that never really get used before the next delivery.</p>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── results ── -->
+    <div class="stack">
+      <section class="card sticky noprint" id="resCard">
+        <div class="hd"><h2>Reorder now</h2></div>
+        <div class="bd">
+          <div class="stat hero">
+            <div class="k">Total order value</div>
+            <div class="v" id="sTotal">—</div>
+            <div class="u" id="sTotalSub">—</div>
+          </div>
+          <div class="subgrid">
+            <div class="stat"><div class="k">Suppliers below minimum</div><div class="v" id="sBelowMin" style="font-size:18px">—</div></div>
+            <div class="stat"><div class="k">Par-level flags</div><div class="v" id="sFlags" style="font-size:18px">—</div></div>
+          </div>
+          <p class="hint" style="margin-top:10px">Based on the counts entered — this tool does not read your till or place orders. Recount the shelf before you actually send these numbers.</p>
+        </div>
+      </section>
+
+      <div class="printonly" id="printHead">
+        <div class="docHead">
+          <div>
+            <h2 id="phBiz">Business name</h2>
+            <div class="poMeta">Purchase orders — generated from shelf counts</div>
+          </div>
+          <div class="r poMeta">
+            <div>Count / order date: <strong id="phDate">—</strong></div>
+            <div>Prepared by: <strong id="phPrep">—</strong></div>
+            <div>Grand total, all suppliers: <strong id="phTotal">—</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack" id="poWrap"></div>
+
+      <section class="card noprint" id="flagCard">
+        <div class="hd"><h2>Products to review</h2><span class="hint">from your recent-counts history</span></div>
+        <div class="bd" id="flagBody"><div class="empty">Add recent counts to at least two products to see flags here.</div></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<footer class="app noprint" style="padding-top:6px">
+  <p class="hint">Assumes on-hand counts and par levels are in the same unit as the pack size shown; order quantities always round up to a whole pack and never down. Par-level flags compare each product's own recent counts against its own par — they are a prompt to review the number, not a demand forecast. Saved automatically in this browser only (localStorage) — nothing is sent anywhere.</p>
+</footer>
+
+<script>
+"use strict";
+var KEY = "solvix.par-level.v1";
+function $(id){ return document.getElementById(id); }
+function uid(p){ return p + "_" + Math.random().toString(36).slice(2,9); }
+function todayISO(){ var d = new Date(); var m = String(d.getMonth()+1).padStart(2,"0"); var day = String(d.getDate()).padStart(2,"0"); return d.getFullYear() + "-" + m + "-" + day; }
+function num(v){ var n = parseFloat(v); return isFinite(n) ? n : NaN; }
+function numOr(v, fb){ var n = num(v); return isFinite(n) ? n : fb; }
+function round2(n){ if(!isFinite(n)) return 0; var r = Math.round((n + (n>=0?1:-1)*1e-9) * 100) / 100; return r === 0 ? 0 : r; }
+function fmtMoney(n, sym){ if(!isFinite(n)) return "—"; var v = round2(n); if(Object.is(v,-0)) v = 0; return sym + v.toFixed(2); }
+function fmtQty(n){ if(!isFinite(n)) return "—"; var v = Math.round(n); if(Object.is(v,-0)) v = 0; return String(v); }
+
+/* ── product row model ─────────────────────────────────────────── */
+function product(name, supplierId, par, count, pack, cost, lead, hist){
+  return { id: uid("p"), name: name, supplierId: supplierId, par: par, count: count, pack: pack, cost: cost, lead: lead, hist: hist };
+}
+function supplier(name, mov){ return { id: uid("sup"), name: name, mov: mov }; }
+
+function blankState(){
+  var s1 = supplier("", 0);
+  return {
+    sample: false,
+    currency: "$", customSym: "",
+    biz: { name: "", prepared: "", date: todayISO() },
+    suppliers: [ s1 ],
+    products: [ product("", s1.id, 0, 0, 1, 0, 0, "") ]
+  };
+}
+function sampleState(){
+  var sFresh = supplier("Fresh Farm Produce", 150);
+  var sBev = supplier("City Beverage Co", 200);
+  var sDry = supplier("Bulk Dry Goods", 100);
+  return {
+    sample: true,
+    currency: "$", customSym: "",
+    biz: { name: "Riverside Café & Deli", prepared: "Jordan", date: todayISO() },
+    suppliers: [ sFresh, sBev, sDry ],
+    products: [
+      product("Whole milk 2L bottle", sFresh.id, 24, 6, 6, 3.00, 2, "0, 4, 0, 2"),
+      product("Free-range eggs (dozen)", sFresh.id, 15, 9, 5, 3.50, 2, "10, 11, 9, 12"),
+      product("Coffee beans 1kg", sFresh.id, 30, 36, 6, 14.00, 2, "34, 36, 32, 35"),
+      product("Cola 330ml can", sBev.id, 240, 48, 24, 0.80, 3, "24, 0, 24, 0"),
+      product("Sparkling water 500ml", sBev.id, 96, 84, 12, 1.20, 3, "90, 96, 92, 96"),
+      product("Rice 1kg bag", sDry.id, 60, 15, 10, 2.20, 5, "5, 20, 10, 18"),
+      product("Paper napkins, pack of 100", sDry.id, 200, 40, 20, 1.50, 5, "")
+    ]
+  };
+}
+
+function merge(base, o){
+  var out = {}, k;
+  for(k in base){ if(Object.prototype.hasOwnProperty.call(base,k)) out[k] = base[k]; }
+  for(k in o){
+    if(!Object.prototype.hasOwnProperty.call(o,k)) continue;
+    var bv = base[k], ov = o[k];
+    if(bv && typeof bv === "object" && !Array.isArray(bv) && ov && typeof ov === "object" && !Array.isArray(ov)) out[k] = merge(bv, ov);
+    else out[k] = ov;
+  }
+  return out;
+}
+
+var S = sampleState();
+
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ /* storage blocked — tool still works */ } }
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    if(!raw) return false;
+    var o = JSON.parse(raw);
+    if(!o || typeof o !== "object") return false;
+    var base = blankState();
+    S = merge(base, o);
+    if(!Array.isArray(S.suppliers)) S.suppliers = base.suppliers;
+    if(!Array.isArray(S.products)) S.products = base.products;
+    if(!S.suppliers.length) S.suppliers = [ supplier("", 0) ];
+    if(!S.products.length) S.products = [ product("", S.suppliers[0].id, 0, 0, 1, 0, 0, "") ];
+    return true;
+  } catch(e){ return false; }
+}
+
+/* ── par-accuracy from recent counts ──────────────────────────────
+   Compares each entry in a product's recent-count history to its own
+   par. A count of zero (or below) is a stockout. A count at 60% of
+   par or higher is "still nearly full" — barely used before the next
+   check. Two thirds+ stockouts among the entries → raise the par.
+   Six tenths+ still-nearly-full → the par is probably set too high. */
+function parAccuracy(histStr, par){
+  var parts = String(histStr || "").split(/[,;\s]+/);
+  var entries = [];
+  for(var i=0;i<parts.length;i++){
+    if(parts[i] === "") continue;
+    var n = num(parts[i]);
+    if(isFinite(n) && n >= 0) entries.push(n);
+  }
+  if(entries.length < 2) return { status:"insufficient", label:"Add recent counts", chip:"" };
+  var stockouts = 0, stillFull = 0;
+  var overThresh = par > 0 ? par * 0.6 : Infinity;
+  for(i=0;i<entries.length;i++){
+    if(entries[i] <= 0) stockouts++;
+    if(entries[i] >= overThresh) stillFull++;
+  }
+  var stockRate = stockouts / entries.length;
+  var fullRate = stillFull / entries.length;
+  if(stockRate >= 0.4) return { status:"raise", label:"Raise par — hit zero " + stockouts + "/" + entries.length + " checks", chip:"bad" };
+  if(fullRate >= 0.6) return { status:"lower", label:"Lower par — still near full " + stillFull + "/" + entries.length + " checks", chip:"warn" };
+  return { status:"ok", label:"Par looks right", chip:"ok" };
+}
+
+function currencySymbol(){ return S.currency === "custom" ? (S.customSym || "$") : S.currency; }
+
+/* ── the maths ─────────────────────────────────────────────────── */
+function calc(){
+  var sym = currencySymbol();
+  var groups = {}, order = [];
+  S.suppliers.forEach(function(s){
+    groups[s.id] = { id:s.id, name:(s.name && s.name.trim()) || "(unnamed supplier)", mov:Math.max(0, numOr(s.mov,0)), items:[], subtotal:0 };
+    order.push(s.id);
+  });
+  var unassigned = { id:"__unassigned", name:"Unassigned", mov:0, items:[], subtotal:0 };
+
+  var flagged = [];
+  var totalOrderValue = 0, itemsNeedingReorder = 0;
+  var computedById = {};
+
+  S.products.forEach(function(p){
+    var par = Math.max(0, numOr(p.par,0));
+    var count = Math.max(0, numOr(p.count,0));
+    var packRaw = numOr(p.pack,0);
+    var packSafe = packRaw > 0 ? packRaw : 1;
+    var cost = Math.max(0, numOr(p.cost,0));
+    var lead = Math.max(0, numOr(p.lead,0));
+
+    var needed = Math.max(0, par - count);
+    var packs = needed > 0 ? Math.ceil(needed / packSafe) : 0;
+    var orderQty = packs * packSafe;
+    var orderValue = round2(orderQty * cost);
+    if(orderQty > 0){ itemsNeedingReorder++; totalOrderValue = round2(totalOrderValue + orderValue); }
+
+    var acc = parAccuracy(p.hist, par);
+    var name = (p.name && p.name.trim()) || "(unnamed product)";
+    if(acc.status === "raise" || acc.status === "lower") flagged.push({ name:name, acc:acc });
+
+    var row = { id:p.id, name:name, par:par, count:count, pack:packSafe, packValid: packRaw>0, cost:cost, lead:lead,
+                needed:needed, packs:packs, orderQty:orderQty, orderValue:orderValue, acc:acc };
+    computedById[p.id] = row;
+
+    var g = (p.supplierId && groups[p.supplierId]) ? groups[p.supplierId] : unassigned;
+    g.items.push(row);
+    g.subtotal = round2(g.subtotal + orderValue);
+  });
+
+  var groupList = order.map(function(id){ return groups[id]; });
+  if(unassigned.items.length) groupList.push(unassigned);
+
+  groupList.forEach(function(g){
+    g.hasOrder = g.items.some(function(it){ return it.orderQty > 0; });
+    g.belowMin = g.hasOrder && g.mov > 0 && g.subtotal < g.mov;
+    g.shortfall = g.belowMin ? round2(g.mov - g.subtotal) : 0;
+  });
+
+  var suppliersWithOrders = groupList.filter(function(g){ return g.hasOrder; }).length;
+  var suppliersBelowMin = groupList.filter(function(g){ return g.belowMin; }).length;
+
+  return { sym:sym, groups:groupList, totalOrderValue: round2(totalOrderValue), itemsNeedingReorder:itemsNeedingReorder,
+            suppliersWithOrders:suppliersWithOrders, suppliersBelowMin:suppliersBelowMin, flagged:flagged, byId:computedById };
+}
+
+/* ── validation on blur ───────────────────────────────────────── */
+function markInvalid(input, errEl, msg){
+  if(msg){ input.classList.add("inv"); errEl.textContent = msg; errEl.hidden = false; }
+  else { input.classList.remove("inv"); errEl.hidden = true; errEl.textContent = ""; }
+}
+function validateNonNeg(input, errEl, label){
+  if(input.value === "") { markInvalid(input, errEl, ""); return; }
+  var n = num(input.value);
+  if(!isFinite(n) || n < 0) markInvalid(input, errEl, label + " must be 0 or more");
+  else markInvalid(input, errEl, "");
+}
+function validatePack(input, errEl){
+  if(input.value === "") { markInvalid(input, errEl, "Pack size is required"); return; }
+  var n = num(input.value);
+  if(!isFinite(n) || n <= 0) markInvalid(input, errEl, "Must be at least 1");
+  else markInvalid(input, errEl, "");
+}
+
+/* ── suppliers table ──────────────────────────────────────────── */
+function renderSuppliers(){
+  var tb = $("tbSuppliers");
+  tb.textContent = "";
+  S.suppliers.forEach(function(s){
+    var tr = document.createElement("tr");
+
+    var tdN = document.createElement("td");
+    var iN = document.createElement("input");
+    iN.type = "text"; iN.value = s.name; iN.setAttribute("aria-label","Supplier name"); iN.autocomplete = "off"; iN.placeholder = "Supplier name";
+    iN.addEventListener("input", function(){ s.name = iN.value; S.sample = false; renderProducts(); update(); });
+    tdN.appendChild(iN); tr.appendChild(tdN);
+
+    var tdM = document.createElement("td"); tdM.className = "r";
+    var wrapM = document.createElement("div");
+    var iM = document.createElement("input");
+    iM.type = "number"; iM.min = "0"; iM.step = "0.01"; iM.inputMode = "decimal";
+    iM.value = s.mov; iM.setAttribute("aria-label", "Minimum order value for " + (s.name || "this supplier"));
+    var eM = document.createElement("span"); eM.className = "err"; eM.hidden = true;
+    iM.addEventListener("input", function(){ s.mov = iM.value; S.sample = false; update(); });
+    iM.addEventListener("blur", function(){ validateNonNeg(iM, eM, "Minimum order value"); });
+    wrapM.appendChild(iM); wrapM.appendChild(eM);
+    tdM.appendChild(wrapM); tr.appendChild(tdM);
+
+    var tdX = document.createElement("td"); tdX.className = "rmCell";
+    var bx = document.createElement("button");
+    bx.type = "button"; bx.className = "btn sm ico"; bx.textContent = "✕";
+    bx.setAttribute("aria-label", "Remove supplier " + (s.name || ""));
+    bx.addEventListener("click", function(){
+      S.suppliers = S.suppliers.filter(function(x){ return x.id !== s.id; });
+      S.products.forEach(function(p){ if(p.supplierId === s.id) p.supplierId = null; });
+      if(!S.suppliers.length) S.suppliers.push(supplier("", 0));
+      S.sample = false; renderSuppliers(); renderProducts(); update();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    tb.appendChild(tr);
+  });
+}
+
+/* ── products table ───────────────────────────────────────────── */
+var productRefs = [];
+function renderProducts(){
+  var tb = $("tbProducts");
+  tb.textContent = "";
+  productRefs = [];
+  S.products.forEach(function(p){
+    var tr = document.createElement("tr");
+
+    function textCell(value, ph, label, prop){
+      var td = document.createElement("td");
+      var i = document.createElement("input");
+      i.type = "text"; i.value = value; i.placeholder = ph || ""; i.autocomplete = "off"; i.setAttribute("aria-label", label);
+      i.addEventListener("input", function(){ p[prop] = i.value; S.sample = false; update(); });
+      td.appendChild(i); tr.appendChild(td);
+      return i;
+    }
+    function numCell(value, label, prop, opts){
+      opts = opts || {};
+      var td = document.createElement("td"); td.className = "r";
+      var wrap = document.createElement("div");
+      var i = document.createElement("input");
+      i.type = "number"; i.min = opts.min !== undefined ? opts.min : "0"; i.step = opts.step || "1"; i.inputMode = "decimal";
+      i.value = value; i.setAttribute("aria-label", label);
+      var e = document.createElement("span"); e.className = "err"; e.hidden = true;
+      i.addEventListener("input", function(){ p[prop] = i.value; S.sample = false; update(); });
+      i.addEventListener("blur", function(){ if(opts.pack) validatePack(i, e); else validateNonNeg(i, e, opts.errLabel || label); });
+      wrap.appendChild(i); wrap.appendChild(e);
+      td.appendChild(wrap); tr.appendChild(td);
+      return i;
+    }
+
+    textCell(p.name, "Product name", "Product name", "name");
+
+    var tdS = document.createElement("td");
+    var sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Supplier for " + (p.name || "this product"));
+    var optNone = document.createElement("option"); optNone.value = ""; optNone.textContent = "— unassigned —"; sel.appendChild(optNone);
+    S.suppliers.forEach(function(s){
+      var op = document.createElement("option"); op.value = s.id; op.textContent = s.name || "(unnamed supplier)";
+      if(p.supplierId === s.id) op.selected = true;
+      sel.appendChild(op);
+    });
+    if(!p.supplierId) optNone.selected = true;
+    sel.addEventListener("change", function(){ p.supplierId = sel.value || null; S.sample = false; update(); });
+    tdS.appendChild(sel); tr.appendChild(tdS);
+
+    numCell(p.par, "Par level", "par", {});
+    numCell(p.count, "On hand", "count", {});
+    numCell(p.pack, "Pack size", "pack", { min:"1", pack:true });
+    numCell(p.cost, "Unit cost", "cost", { step:"0.01" });
+    numCell(p.lead, "Lead time, days", "lead", {});
+    textCell(p.hist, "e.g. 0, 4, 0, 2", "Recent stock counts for " + (p.name || "this product"), "hist");
+
+    var tdNeeded = document.createElement("td"); tdNeeded.className = "n";
+    var tdQty = document.createElement("td"); tdQty.className = "n";
+    var tdVal = document.createElement("td"); tdVal.className = "n";
+    tr.appendChild(tdNeeded); tr.appendChild(tdQty); tr.appendChild(tdVal);
+
+    var tdChip = document.createElement("td");
+    var chip = document.createElement("span"); chip.className = "chip";
+    tdChip.appendChild(chip); tr.appendChild(tdChip);
+
+    var tdX = document.createElement("td"); tdX.className = "rmCell";
+    var bx = document.createElement("button");
+    bx.type = "button"; bx.className = "btn sm ico"; bx.textContent = "✕";
+    bx.setAttribute("aria-label", "Remove product " + (p.name || ""));
+    bx.addEventListener("click", function(){
+      S.products = S.products.filter(function(x){ return x.id !== p.id; });
+      if(!S.products.length) S.products.push(product("", S.suppliers[0] ? S.suppliers[0].id : null, 0, 0, 1, 0, 0, ""));
+      S.sample = false; renderProducts(); update();
+    });
+    tdX.appendChild(bx); tr.appendChild(tdX);
+
+    productRefs.push({ id:p.id, tdNeeded:tdNeeded, tdQty:tdQty, tdVal:tdVal, chip:chip });
+    tb.appendChild(tr);
+  });
+}
+function syncProductCells(c){
+  productRefs.forEach(function(ref){
+    var row = c.byId[ref.id];
+    if(!row){ ref.tdNeeded.textContent = "—"; ref.tdQty.textContent = "—"; ref.tdVal.textContent = "—"; ref.chip.textContent = "—"; ref.chip.className = "chip"; return; }
+    ref.tdNeeded.textContent = fmtQty(row.needed);
+    ref.tdQty.textContent = fmtQty(row.orderQty);
+    ref.tdVal.textContent = fmtMoney(row.orderValue, c.sym);
+    ref.chip.textContent = row.acc.status === "insufficient" ? "Add counts" : row.acc.label;
+    ref.chip.className = "chip" + (row.acc.chip ? " " + row.acc.chip : "");
+  });
+}
+
+/* ── results panel ───────────────────────────────────────────── */
+function line(k, v){
+  var d = document.createElement("div"); d.className = "flagRow";
+  var l = document.createElement("div");
+  var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = k;
+  var why = document.createElement("div"); why.className = "why"; why.textContent = v;
+  l.appendChild(nm); l.appendChild(why);
+  d.appendChild(l);
+  return d;
+}
+function renderPO(c){
+  var wrap = $("poWrap");
+  wrap.textContent = "";
+  var any = false;
+  c.groups.forEach(function(g){
+    if(!g.items.length) return;
+    any = true;
+    var card = document.createElement("section");
+    card.className = "card poCard" + (g.hasOrder ? "" : " noprint");
+
+    var hd = document.createElement("div"); hd.className = "hd";
+    var h3 = document.createElement("h3"); h3.textContent = g.name; hd.appendChild(h3);
+    var chip = document.createElement("span"); chip.className = "chip" + (g.belowMin ? " bad" : (g.hasOrder ? " ok" : ""));
+    chip.textContent = g.belowMin ? "Below minimum" : (g.hasOrder ? "Ready to send" : "No order needed");
+    hd.appendChild(chip);
+    card.appendChild(hd);
+
+    if(!g.hasOrder){
+      var bd0 = document.createElement("div"); bd0.className = "bd poNone";
+      bd0.textContent = "Every product from this supplier is at or above par right now — nothing to order.";
+      card.appendChild(bd0);
+      wrap.appendChild(card);
+      return;
+    }
+
+    var orderItems = g.items.filter(function(it){ return it.orderQty > 0; });
+    var tw = document.createElement("div"); tw.className = "tw";
+    var table = document.createElement("table");
+    var thead = document.createElement("thead");
+    thead.innerHTML = '<tr><th scope="col">Product</th><th scope="col" class="r">Par</th><th scope="col" class="r">On hand</th><th scope="col" class="r">Order qty</th><th scope="col" class="r">Unit cost</th><th scope="col" class="r">Lead (d)</th><th scope="col" class="r">Line value</th></tr>';
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    orderItems.forEach(function(it){
+      var tr = document.createElement("tr");
+      var cells = [
+        [it.name, false],
+        [fmtQty(it.par), true],
+        [fmtQty(it.count), true],
+        [fmtQty(it.orderQty), true],
+        [fmtMoney(it.cost, c.sym), true],
+        [fmtQty(it.lead), true],
+        [fmtMoney(it.orderValue, c.sym), true]
+      ];
+      cells.forEach(function(pair){
+        var td = document.createElement("td"); if(pair[1]) td.className = "n";
+        td.textContent = pair[0]; tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    var tfoot = document.createElement("tfoot");
+    var trf = document.createElement("tr");
+    var tdfl = document.createElement("td"); tdfl.colSpan = 6; tdfl.textContent = "Order subtotal — " + g.name;
+    var tdfv = document.createElement("td"); tdfv.className = "n"; tdfv.textContent = fmtMoney(g.subtotal, c.sym);
+    trf.appendChild(tdfl); trf.appendChild(tdfv); tfoot.appendChild(trf);
+    table.appendChild(tfoot);
+    tw.appendChild(table);
+    card.appendChild(tw);
+
+    var ft = document.createElement("div"); ft.className = "ft";
+    if(g.belowMin){
+      var b = document.createElement("span"); b.className = "chip bad";
+      b.textContent = "Add " + fmtMoney(g.shortfall, c.sym) + " to reach the " + fmtMoney(g.mov, c.sym) + " minimum";
+      ft.appendChild(b);
+    } else if(g.mov > 0){
+      var okc = document.createElement("span"); okc.className = "chip ok";
+      okc.textContent = "Meets the " + fmtMoney(g.mov, c.sym) + " minimum order value";
+      ft.appendChild(okc);
+    } else {
+      var nomov = document.createElement("span"); nomov.className = "hint"; nomov.textContent = "No minimum order value set for this supplier.";
+      ft.appendChild(nomov);
+    }
+    card.appendChild(ft);
+
+    wrap.appendChild(card);
+  });
+  if(!any){
+    var empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Add a product to see supplier orders here.";
+    wrap.appendChild(empty);
+  }
+}
+function renderFlags(c){
+  var body = $("flagBody");
+  body.textContent = "";
+  if(!c.flagged.length){
+    var empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No products flagged — either counts look steady, or add more recent-count history to check.";
+    body.appendChild(empty);
+    return;
+  }
+  var list = document.createElement("div"); list.className = "flagList";
+  c.flagged.forEach(function(f){
+    var row = document.createElement("div"); row.className = "flagRow";
+    var l = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = f.name;
+    var why = document.createElement("div"); why.className = "why"; why.textContent = f.acc.status === "raise" ? "Runs out repeatedly — consider a higher par." : "Stays near full — consider a lower par.";
+    l.appendChild(nm); l.appendChild(why);
+    var chip = document.createElement("span"); chip.className = "chip " + f.acc.chip; chip.textContent = f.acc.status === "raise" ? "Raise par" : "Lower par";
+    row.appendChild(l); row.appendChild(chip);
+    list.appendChild(row);
+  });
+  body.appendChild(list);
+}
+
+function renderResults(c){
+  $("sTotal").textContent = fmtMoney(c.totalOrderValue, c.sym);
+  $("sTotalSub").textContent = c.itemsNeedingReorder + " item" + (c.itemsNeedingReorder===1?"":"s") + " to order across " + c.suppliersWithOrders + " supplier" + (c.suppliersWithOrders===1?"":"s");
+  $("sBelowMin").textContent = fmtQty(c.suppliersBelowMin);
+  $("sFlags").textContent = fmtQty(c.flagged.length);
+  $("mbarV").textContent = fmtMoney(c.totalOrderValue, c.sym);
+
+  $("phBiz").textContent = (S.biz.name && S.biz.name.trim()) || "Inventory Par Level Sheet";
+  $("phDate").textContent = S.biz.date || "—";
+  $("phPrep").textContent = (S.biz.prepared && S.biz.prepared.trim()) || "—";
+  $("phTotal").textContent = fmtMoney(c.totalOrderValue, c.sym);
+
+  renderPO(c);
+  renderFlags(c);
+}
+
+function syncFormFields(){
+  $("bizName").value = S.biz.name || "";
+  $("bizPrep").value = S.biz.prepared || "";
+  $("bizDate").value = S.biz.date || todayISO();
+  $("curSel").value = (S.currency === "$" || S.currency === "£" || S.currency === "€") ? S.currency : "custom";
+  $("curCustom").value = S.customSym || "";
+  $("curCustom").style.display = S.currency === "custom" ? "" : "none";
+  $("sampleBanner").hidden = !S.sample;
+}
+
+function update(){
+  var c = calc();
+  syncProductCells(c);
+  renderResults(c);
+  save();
+  return c;
+}
+
+/* ── wiring ────────────────────────────────────────────────────── */
+function wireStatic(){
+  $("bizName").addEventListener("input", function(){ S.biz.name = $("bizName").value; S.sample=false; update(); });
+  $("bizPrep").addEventListener("input", function(){ S.biz.prepared = $("bizPrep").value; S.sample=false; update(); });
+  $("bizDate").addEventListener("input", function(){ S.biz.date = $("bizDate").value; S.sample=false; update(); });
+
+  $("curSel").addEventListener("change", function(){
+    var v = $("curSel").value;
+    S.currency = v;
+    $("curCustom").style.display = v === "custom" ? "" : "none";
+    S.sample = false; update();
+  });
+  $("curCustom").addEventListener("input", function(){ S.customSym = $("curCustom").value || ""; S.sample=false; update(); });
+
+  $("btnAddSupplier").addEventListener("click", function(){
+    S.suppliers.push(supplier("", 0));
+    S.sample = false; renderSuppliers(); renderProducts(); update();
+  });
+  $("btnAddProduct").addEventListener("click", function(){
+    S.products.push(product("", S.suppliers[0] ? S.suppliers[0].id : null, 0, 0, 1, 0, 0, ""));
+    S.sample = false; renderProducts(); update();
+  });
+
+  $("btnPrint").addEventListener("click", function(){ window.print(); });
+  $("btnCsv").addEventListener("click", exportCsv);
+  $("btnClear").addEventListener("click", function(){
+    if(!confirm("Delete every supplier and product on this sheet? This cannot be undone.")) return;
+    S = blankState();
+    boot();
+  });
+
+  window.addEventListener("resize", setAbh);
+}
+function setAbh(){
+  try { document.documentElement.style.setProperty("--abh", $("appbar").offsetHeight + "px"); } catch(e){}
+}
+
+/* ── CSV export ───────────────────────────────────────────────── */
+function csvCell(v){
+  var s = (v === null || v === undefined) ? "" : String(v);
+  if(/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function csvRow(a){ return a.map(csvCell).join(","); }
+function dl(name, mime, text){
+  try {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 800);
+  } catch(e){ /* download blocked */ }
+}
+function exportCsv(){
+  var c = calc();
+  var rows = [];
+  rows.push(["Solvix Inventory Par Level Sheet"]);
+  rows.push(["Business", S.biz.name || ""]);
+  rows.push(["Prepared by", S.biz.prepared || ""]);
+  rows.push(["Count / order date", S.biz.date || ""]);
+  rows.push([]);
+  rows.push(["Product","Supplier","Par level","On hand","Pack size","Unit cost","Needed","Order qty (packs rounded up)","Order value","Lead time (days)","Par check"]);
+  S.products.forEach(function(p){
+    var row = c.byId[p.id];
+    if(!row) return;
+    var supName = "Unassigned";
+    c.groups.forEach(function(g){ if(g.items.indexOf(row) !== -1) supName = g.name; });
+    rows.push([
+      row.name, supName, fmtQty(row.par), fmtQty(row.count), fmtQty(row.pack),
+      row.cost.toFixed(2), fmtQty(row.needed), fmtQty(row.orderQty), row.orderValue.toFixed(2),
+      fmtQty(row.lead), row.acc.status === "insufficient" ? "Add recent counts" : row.acc.label
+    ]);
+  });
+  rows.push([]);
+  rows.push(["Supplier summary"]);
+  rows.push(["Supplier","Items to order","Order subtotal","Minimum order value","Status"]);
+  c.groups.forEach(function(g){
+    var orderCount = g.items.filter(function(it){ return it.orderQty > 0; }).length;
+    rows.push([g.name, fmtQty(orderCount), g.subtotal.toFixed(2), g.mov.toFixed(2),
+      g.belowMin ? "Below minimum" : (g.hasOrder ? "Ready to send" : "No order needed")]);
+  });
+  rows.push([]);
+  rows.push(["Grand total, all suppliers", "", c.totalOrderValue.toFixed(2)]);
+  var text = "﻿" + rows.map(csvRow).join("\r\n") + "\r\n";
+  var d = (S.biz.date || todayISO());
+  dl("par-level-order-" + d + ".csv", "text/csv;charset=utf-8", text);
+}
+
+/* ── boot ─────────────────────────────────────────────────────── */
+function boot(){
+  syncFormFields();
+  renderSuppliers();
+  renderProducts();
+  update();
+  setAbh();
+}
+(function init(){
+  load();
+  wireStatic();
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>First Aid Kit Audit — contents check, shortfalls, expiry dates &amp; restock order</title>
+<meta name="description" content="Audit first aid kits against a standard contents list. Pre-loaded BS 8599-1 style contents for small, medium, large, travel and vehicle kits with editable required quantities, actual quantity found and expiry date per item, shortfalls totalled into a costed restock order, items expiring inside a configurable window flagged, a kit location register with last-audit and next-due dates, and audit history per kit. Prints an audit sheet and restock list and exports CSV and JSON.">
+<meta name="theme-color" content="#B3261E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23B3261E'/%3E%3Cpath d='M13 5.5h6V13h7.5v6H19v7.5h-6V19H5.5v-6H13z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══ tool-specific ═══════════════════════════════════════════════ */
+:root{--accent:#B3261E;--accent-ink:#8D1E17;--accent-wash:#FBE7E5;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#E8695F;--accent-ink:#F09B93;--accent-wash:#2E1513;--on-accent:#180907}}
+:root[data-theme="dark"]{--accent:#E8695F;--accent-ink:#F09B93;--accent-wash:#2E1513;--on-accent:#180907}
+
+[hidden]{display:none!important}
+.app{max-width:1340px}
+.pagestack{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(292px,.42fr)}
+@media(max-width:1060px){.split{grid-template-columns:minmax(0,1fr)}}
+.split>*,.stack>*{min-width:0}
+.fgrid{display:grid;gap:10px 12px;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));align-items:end}
+.span2{grid-column:span 2}
+@media(max-width:560px){.span2{grid-column:span 1}}
+
+/* stat band */
+.statband{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.statband .stat.hero{grid-column:span 2}
+@media(max-width:520px){.statband{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+  .statband .stat.hero{grid-column:1/-1}}
+.stat.hero .v{font-size:33px}
+.stat .sub2{font:11.5px/1.35 var(--sans);color:var(--muted);margin-top:3px}
+.stat .v.sm{font-size:18px}
+.stat.flagbad{background:var(--bad-wash);border-color:var(--bad)}
+.stat.flagbad .v{color:var(--bad)}
+.stat.flagwarn{background:var(--warn-wash);border-color:var(--warn)}
+.stat.flagwarn .v{color:var(--warn)}
+.stat.flagok .v{color:var(--ok)}
+
+/* audit table */
+.itbl{min-width:882px}
+.rgtbl{min-width:1080px}
+.hstbl{min-width:820px}
+.itbl td,.rgtbl td,.hstbl td{padding:5px 7px}
+.itbl th,.rgtbl th,.hstbl th{padding:8px 7px}
+.itbl col.c-it{width:224px} .itbl col.c-q{width:64px} .itbl col.c-dt{width:116px}
+.itbl col.c-pr{width:72px} .itbl col.c-st{width:108px} .itbl col.c-c{width:74px}
+.itbl col.c-rs{width:62px}
+table input[type=number]{-moz-appearance:textfield;appearance:textfield}
+table input[type=number]::-webkit-outer-spin-button,
+table input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.rgtbl col.c-rf{width:106px} .rgtbl col.c-lo{width:238px} .rgtbl col.c-ty{width:158px}
+.rgtbl col.c-cu{width:146px} .rgtbl col.c-dt{width:136px} .rgtbl col.c-iv{width:76px}
+.rgtbl col.c-nx{width:126px} .rgtbl col.c-sc{width:92px}
+.cst .hint{white-space:nowrap}
+.chip{white-space:nowrap}
+#siteBox{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:0 20px}
+.hstbl col.c-dt{width:140px} .hstbl col.c-by{width:170px} .hstbl col.c-n{width:84px} .hstbl col.c-nt{width:230px}
+.rmc{text-align:right;width:36px}
+.rmbtn{border:1px solid var(--line);background:var(--raise);color:var(--muted);border-radius:3px;
+  font:700 12px/1 var(--mono);padding:5px 7px;cursor:pointer}
+.rmbtn:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-wash)}
+td.calc{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.calc.pos{font-weight:700;color:var(--bad)}
+td.calc.zero{color:var(--faint)}
+tr.sel{background:var(--accent-wash)}
+tr.rowbad td{background:var(--bad-wash)}
+tr.rowbad:hover td{background:var(--bad-wash)}
+td .err{display:block;margin-top:2px;padding-left:2px}
+.selbtn{font:600 11px/1 var(--sans);border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  border-radius:3px;padding:5px 7px;cursor:pointer;white-space:nowrap}
+.selbtn:hover{border-color:var(--accent);color:var(--accent)}
+.selbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+/* rail lists */
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .l{color:var(--ink-2);min-width:0}
+.kv .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
+.kv .v.bad{color:var(--bad)} .kv .v.ok{color:var(--ok)} .kv .v.warn{color:var(--warn)}
+.rlist{display:flex;flex-direction:column;gap:6px;max-height:330px;overflow-y:auto}
+.ritem{display:flex;gap:8px;align-items:baseline;justify-content:space-between;
+  border-left:3px solid var(--accent);background:var(--accent-wash);padding:6px 9px;border-radius:0 3px 3px 0}
+.ritem .nm{font:600 12.5px/1.35 var(--sans);min-width:0}
+.ritem .nm small{display:block;font:400 11px/1.3 var(--sans);color:var(--ink-2)}
+.ritem .qt{font:700 13px/1.2 var(--mono);white-space:nowrap;text-align:right}
+.ritem .qt small{display:block;font:400 11px/1.3 var(--mono);color:var(--ink-2)}
+.ritem.exp{border-color:var(--bad);background:var(--bad-wash)}
+.ritem.soon{border-color:var(--warn);background:var(--warn-wash)}
+.ritem.miss{border-color:var(--muted);background:var(--sunk)}
+.msg{margin:0}
+.msg:not(:empty){margin-top:10px;padding:8px 11px;border-radius:4px;background:var(--ok-wash);color:var(--ok);
+  font:600 12.5px/1.4 var(--sans)}
+footer.foot{color:var(--muted);font-size:12px;line-height:1.55;padding:4px 2px 0}
+@media(max-width:560px){
+  .appbar{padding-top:9px;padding-bottom:9px;gap:7px 8px}
+  .appbar .btn{font-size:12px;padding:7px 9px}
+  .appbar .sub{display:none}
+  .card>.hd{padding:10px 12px}
+  :root{--pad:12px}
+}
+
+/* print document */
+.doc{color:#000;font-family:var(--sans)}
+.doc .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:16pt;
+  border-bottom:2.5pt solid #000;padding-bottom:6pt;margin-bottom:8pt}
+.doc .lh .org{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.doc .lh .oaddr{font-size:8.5pt;color:#333;margin-top:2pt;white-space:pre-line}
+.doc .lh .ttl{text-align:right}
+.doc .lh h2{font-size:14pt;letter-spacing:.02em}
+.doc .lh .yr{font-family:var(--mono);font-size:10pt;margin-top:3pt;font-weight:700}
+.doc .lh .ref{font-family:var(--mono);font-size:8.5pt;color:#333;margin-top:2pt}
+.doc .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:4pt 10pt;margin-bottom:8pt}
+.doc .meta div{border-bottom:.75pt solid #ccc;padding-bottom:2pt;min-height:20pt}
+.doc .meta b{display:block;font-size:7pt;letter-spacing:.09em;text-transform:uppercase;color:#555;font-weight:700}
+.doc .meta span{font-size:9.5pt}
+.doc h3.sec{font-size:9pt;letter-spacing:.09em;text-transform:uppercase;margin:9pt 0 4pt;
+  border-bottom:.75pt solid #000;padding-bottom:2pt}
+.doc table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:3pt;table-layout:fixed}
+.doc th,.doc td{border:.75pt solid #999;padding:3pt 4pt;text-align:left;vertical-align:top;word-wrap:break-word}
+.doc th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  font-size:7.5pt;letter-spacing:.05em;text-transform:uppercase;color:#000}
+.doc td.n,.doc th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.doc td.c,.doc th.c{text-align:center}
+.doc tfoot td{background:#f2f2f2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-weight:700}
+.doc .warnbox{border:1.2pt solid #000;padding:5pt 6pt;font-size:7.6pt;line-height:1.42;margin-bottom:7pt}
+.doc .warnbox b{display:block;font-size:8.2pt;margin-bottom:2pt;text-transform:uppercase;letter-spacing:.06em}
+.doc .fn{font-size:7.4pt;color:#333;margin-bottom:5pt;line-height:1.4}
+.doc .sign{display:grid;grid-template-columns:1fr 1fr;gap:8pt 14pt;margin-top:8pt}
+.doc .sign div{border:.75pt solid #999;padding:4pt 5pt;min-height:44pt}
+.doc .sign b{display:block;font-size:7pt;letter-spacing:.08em;text-transform:uppercase;color:#555}
+.doc .sign i{display:block;border-bottom:.5pt solid #666;margin-top:15pt;font-style:normal;font-size:7pt;color:#666}
+.doc .kitsheet+.kitsheet{break-before:page;padding-top:2pt}
+.doc .pfoot{font-size:7.2pt;color:#333;border-top:.75pt solid #999;margin-top:8pt;padding-top:3pt}
+</style>
+</head>
+<body>
+
+<div class="app noprint" style="padding-bottom:0">
+<header class="appbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">FA</div>
+    <div>
+      <h1>First Aid Kit Audit</h1>
+      <div class="sub">CONTENTS CHECK · SHORTFALLS · EXPIRY · RESTOCK</div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn pri" id="bPrint">Print / PDF</button>
+    <button type="button" class="btn" id="bCsv">CSV</button>
+    <button type="button" class="btn" id="bJson">JSON</button>
+    <button type="button" class="btn" id="bImport">Import</button>
+    <button type="button" class="btn dgr" id="bClear">Clear all data</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</header>
+</div>
+
+<main class="app noprint pagestack">
+
+  <!-- ── headline ────────────────────────────────────────────────── -->
+  <section class="card">
+    <div class="hd">
+      <h2>Kit <span class="mono" id="kitLabel">—</span></h2>
+      <span class="chip" id="kitStatus">—</span>
+      <span class="chip warn" id="sampleChip">Sample data — edit or clear</span>
+      <button type="button" class="btn sm" id="bSample">Load sample</button>
+    </div>
+    <div class="bd stack">
+      <div class="statband">
+        <div class="stat hero">
+          <div class="k">Kit compliance — lines complete and in date</div>
+          <div class="v" id="sPct">—</div>
+          <div class="sub2" id="sPctSub">&nbsp;</div>
+        </div>
+        <div class="stat" id="stShort">
+          <div class="k">Lines to restock</div>
+          <div class="v" id="sShort">—</div>
+          <div class="sub2" id="sShortSub">&nbsp;</div>
+        </div>
+        <div class="stat" id="stExp">
+          <div class="k">Expired</div>
+          <div class="v" id="sExp">—</div>
+          <div class="sub2">discard and replace</div>
+        </div>
+        <div class="stat" id="stSoon">
+          <div class="k">Expiring soon</div>
+          <div class="v" id="sSoon">—</div>
+          <div class="sub2" id="sSoonSub">&nbsp;</div>
+        </div>
+        <div class="stat">
+          <div class="k">Restock cost</div>
+          <div class="v sm" id="sCost">—</div>
+          <div class="sub2" id="sCostSub">&nbsp;</div>
+        </div>
+        <div class="stat" id="stDue">
+          <div class="k">Next audit due</div>
+          <div class="v sm" id="sDue">—</div>
+          <div class="sub2" id="sDueSub">&nbsp;</div>
+        </div>
+      </div>
+
+      <div class="fgrid">
+        <div class="f span2">
+          <label for="selKit">Kit being audited</label>
+          <select id="selKit"></select>
+        </div>
+        <div class="f">
+          <label for="iDate">Audit date</label>
+          <input type="date" id="iDate">
+          <span class="err" id="eDate"></span>
+        </div>
+        <div class="f span2">
+          <label for="iBy">Audited by</label>
+          <input type="text" id="iBy" placeholder="Name and role">
+        </div>
+        <div class="f">
+          <label for="iWin">Expiry warning (days)</label>
+          <input type="number" id="iWin" min="0" max="3650" step="1" inputmode="numeric">
+          <span class="err" id="eWin"></span>
+        </div>
+        <div class="f">
+          <label for="iCur">Currency</label>
+          <select id="iCur">
+            <option value="£">£ Pound</option>
+            <option value="$">$ Dollar</option>
+            <option value="€">€ Euro</option>
+            <option value="other">Custom symbol…</option>
+          </select>
+        </div>
+        <div class="f" id="curOtherWrap" hidden>
+          <label for="iCurOther">Custom symbol</label>
+          <input type="text" id="iCurOther" maxlength="4" placeholder="R$">
+        </div>
+        <div class="f span2">
+          <label for="iOrg">Organisation</label>
+          <input type="text" id="iOrg" placeholder="Company name">
+        </div>
+        <div class="f span2">
+          <label for="iAddr">Site / address (printed on the audit sheet)</label>
+          <input type="text" id="iAddr" placeholder="Unit, street, town, postcode">
+        </div>
+        <div class="f">
+          <label for="iScope">Printout</label>
+          <select id="iScope">
+            <option value="one">This kit only</option>
+            <option value="all">Every kit on the register</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="note bad">
+        <strong>This is a stock-check tool, not a certificate of compliance.</strong>
+        The pre-loaded contents lists follow the item ranges commonly published for BS 8599-1 workplace kits
+        (small, medium, large, travel) and BS 8599-2 vehicle kits. They are supplied as an <em>editable starting
+        point</em> and are not a substitute for the published standard, which you should check yourself.
+        In Great Britain the Health and Safety (First-Aid) Regulations 1981 require kit contents to be decided by
+        your own first-aid needs assessment — there is no legally fixed list, and a BS 8599 kit is not mandatory.
+        This tool only compares the numbers and dates you type in: it cannot tell whether sterile packaging is
+        intact, whether an item is fit for use, or whether you have enough trained first aiders and appointed
+        persons. Confirm quantities against your current risk assessment and take advice from a competent
+        occupational health and safety adviser.
+      </div>
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ── audit table + rail ──────────────────────────────────────── -->
+  <section class="split">
+    <div class="stack">
+    <div class="card">
+      <div class="hd">
+        <h2>Contents audit</h2>
+        <span class="chip" id="linesChip">—</span>
+      </div>
+      <div class="tw">
+        <table class="itbl" id="itemsTable">
+          <colgroup><col class="c-it"><col class="c-q"><col class="c-q"><col class="c-dt"><col class="c-pr"><col class="c-st"><col class="c-q"><col class="c-rs"><col class="c-c"><col style="width:34px"></colgroup>
+          <thead><tr>
+            <th scope="col">Item</th>
+            <th scope="col" class="n">Req</th>
+            <th scope="col" class="n">Found</th>
+            <th scope="col">Expiry</th>
+            <th scope="col" class="n">Unit cost</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="n">Short</th>
+            <th scope="col" class="n">Restock</th>
+            <th scope="col" class="n">Line cost</th>
+            <th scope="col"><span class="sr" aria-hidden="true"></span></th>
+          </tr></thead>
+          <tbody id="itemsBody"></tbody>
+          <tfoot><tr>
+            <td colspan="6" id="ftLabel">—</td>
+            <td class="n" id="ftShort">—</td>
+            <td class="n" id="ftRestock">—</td>
+            <td class="n" id="ftCost">—</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+      <div class="ft">
+        <button type="button" class="btn sm" id="bAddItem">+ Add item line</button>
+        <button type="button" class="btn sm" id="bReset">Reset required quantities to template</button>
+        <span class="hint" style="margin-left:auto" id="itemsHint">&nbsp;</span>
+      </div>
+    </div>
+
+      <div class="card">
+        <div class="hd"><h2>Site summary — every kit on the register</h2></div>
+        <div class="bd" id="siteBox"></div>
+      </div>
+    </div>
+
+    <div class="stack sticky">
+      <div class="card">
+        <div class="hd"><h2>Restock order</h2><span class="chip" id="roChip">—</span></div>
+        <div class="bd" id="roBox"></div>
+        <div class="ft"><span class="hint">Estimated cost</span>
+          <strong class="mono" style="margin-left:auto" id="roTotal">—</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Expiry watch — all kits</h2><span class="chip" id="ewChip">—</span></div>
+        <div class="bd" id="ewBox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── register ────────────────────────────────────────────────── -->
+  <section class="card">
+    <div class="hd">
+      <h2>Kit location register</h2>
+      <span class="chip" id="regChip">—</span>
+    </div>
+    <div class="tw">
+      <table class="rgtbl" id="regTable">
+        <colgroup><col style="width:74px"><col class="c-rf"><col class="c-lo"><col class="c-ty"><col class="c-cu"><col class="c-dt"><col class="c-iv"><col class="c-nx"><col class="c-sc"><col class="c-sc"><col style="width:36px"></colgroup>
+        <thead><tr>
+          <th scope="col">Audit</th>
+          <th scope="col">Kit ref</th>
+          <th scope="col">Location</th>
+          <th scope="col">Kit type</th>
+          <th scope="col">Custodian</th>
+          <th scope="col">Last audit</th>
+          <th scope="col" class="n">Every (mo)</th>
+          <th scope="col">Next due</th>
+          <th scope="col" class="n">Compliance</th>
+          <th scope="col" class="n">Restock</th>
+          <th scope="col"></th>
+        </tr></thead>
+        <tbody id="regBody"></tbody>
+      </table>
+    </div>
+    <div class="ft">
+      <button type="button" class="btn sm" id="bAddKit">+ Add kit</button>
+      <span class="hint" style="margin-left:auto">Changing a kit type offers to reload that template's required quantities.</span>
+    </div>
+  </section>
+
+  <!-- ── history ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <div class="hd">
+      <h2>Audit history — <span class="mono" id="histLabel">—</span></h2>
+      <button type="button" class="btn sm pri" id="bRecord">Record this audit</button>
+    </div>
+    <div class="tw">
+      <table class="hstbl" id="histTable">
+        <colgroup><col class="c-dt"><col class="c-by"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-nt"><col style="width:36px"></colgroup>
+        <thead><tr>
+          <th scope="col">Audit date</th>
+          <th scope="col">Audited by</th>
+          <th scope="col" class="n">Compliance</th>
+          <th scope="col" class="n">Short lines</th>
+          <th scope="col" class="n">Expired</th>
+          <th scope="col" class="n">Units</th>
+          <th scope="col" class="n">Cost</th>
+          <th scope="col">Note / action taken</th>
+          <th scope="col"></th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+    <div class="ft"><span class="hint">Recording an audit stamps the kit's last-audit date and recalculates when the next check falls due.</span></div>
+  </section>
+
+  <footer class="foot">
+    Required quantities are pre-loaded from the item ranges commonly published for BS 8599-1 workplace kits
+    (small / medium / large / travel) and BS 8599-2 vehicle kits, and are fully editable — the standard's own
+    tables take precedence over anything shown here. Shortfall = required − quantity found; an item past its
+    expiry date counts as zero usable stock, so its restock quantity is the full required amount. Restock
+    quantities are whole units, rounded up. Next audit due = last audit date + audit interval in calendar months.
+    Everything is stored only in this browser. Nothing is sent anywhere.
+  </footer>
+</main>
+
+<section class="printonly doc" id="printdoc"></section>
+
+<script>
+"use strict";
+/* ══ constants ══════════════════════════════════════════════════ */
+var KEY="solvix.first-aid-audit.v1";
+var DAY=86400000;
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var TYPES=[
+  {id:"small",  label:"Small (BS 8599-1)"},
+  {id:"medium", label:"Medium (BS 8599-1)"},
+  {id:"large",  label:"Large (BS 8599-1)"},
+  {id:"travel", label:"Travel / personal"},
+  {id:"vehicle",label:"Vehicle (BS 8599-2)"}
+];
+/* catalogue: name, has-expiry, default unit cost, then qty per kit type */
+var CATALOGUE=[
+  ["Guidance leaflet",                         0,0.60, 1, 1, 1, 1, 1],
+  ["Contents list",                            0,0.20, 1, 1, 1, 1, 1],
+  ["Medium sterile dressing 12 x 12 cm",       1,0.55, 4, 6, 8, 1, 2],
+  ["Large sterile dressing 18 x 18 cm",        1,0.95, 1, 2, 3, 0, 1],
+  ["Triangular bandage, sterile",              1,0.35, 2, 3, 4, 1, 2],
+  ["Safety pins",                              0,0.05, 6,12,24, 2, 6],
+  ["Adhesive dressings (plasters), sterile",   1,0.04,40,60,100,20,20],
+  ["Sterile wet wipes",                        1,0.05,20,30,40,10,10],
+  ["Microporous tape 2.5 cm x 10 m",           1,0.60, 1, 2, 3, 1, 1],
+  ["Nitrile gloves (pairs)",                   1,0.15, 6, 9,12, 2, 2],
+  ["Resuscitation face shield",                1,0.85, 1, 1, 2, 1, 1],
+  ["Foil survival blanket",                    0,0.75, 1, 2, 3, 1, 2],
+  ["Burn dressing 10 x 10 cm",                 1,1.40, 1, 2, 2, 1, 1],
+  ["Clothing shears",                          0,1.90, 1, 1, 1, 1, 1],
+  ["Conforming bandage 7.5 cm x 4 m",          1,0.45, 1, 2, 3, 1, 1],
+  ["Finger sterile dressing 3.5 x 3.5 cm",     1,0.45, 2, 3, 4, 1, 1],
+  ["Sterile eye pad dressing",                 1,0.55, 2, 3, 4, 1, 1]
+];
+var TYPECOL={small:3,medium:4,large:5,travel:6,vehicle:7};
+
+/* ══ small helpers ══════════════════════════════════════════════ */
+function $(s,r){return (r||document).querySelector(s);}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
+function num(v,d){var n=parseFloat(v);return isFinite(n)?n:(d===undefined?0:d);}
+function okNum(v){return v===""||v===null||v===undefined?false:isFinite(parseFloat(v));}
+function p2(n){return (n<10?"0":"")+n;}
+function fmtN(n){if(n===null||n===undefined||!isFinite(n))return "—";
+  var r=Math.round(n*100)/100;if(Object.is(r,-0))r=0;return String(r);}
+function fmtPct(p){return (p===null||!isFinite(p))?"—":Math.round(p)+"%";}
+function cur(){return S&&S.cur?S.cur:"£";}
+function money(n){if(n===null||n===undefined||!isFinite(n))return "—";
+  var v=Math.round(n*100)/100;if(Object.is(v,-0))v=0;return cur()+v.toFixed(2);}
+function money0(n){return money(n);}
+
+/* dates as whole-day numbers */
+function todayYmd(){var d=new Date();return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());}
+function ymdN(s){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(s||"")))return null;
+  var p=String(s).split("-"),y=+p[0],m=+p[1],d=+p[2];
+  if(m<1||m>12||d<1||d>31)return null;
+  var t=Date.UTC(y,m-1,d),dt=new Date(t);
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==m-1||dt.getUTCDate()!==d)return null;
+  return Math.round(t/DAY);
+}
+function nYmd(n){var d=new Date(n*DAY);
+  return d.getUTCFullYear()+"-"+p2(d.getUTCMonth()+1)+"-"+p2(d.getUTCDate());}
+function fmtDate(ymd){var n=ymdN(ymd);if(n===null)return "—";return fmtDateN(n);}
+function fmtDateN(n){var d=new Date(n*DAY);
+  return p2(d.getUTCDate())+" "+MON[d.getUTCMonth()]+" "+d.getUTCFullYear();}
+function addMonthsN(ymd,m){
+  var n=ymdN(ymd);if(n===null)return null;
+  var d=new Date(n*DAY),y=d.getUTCFullYear(),mo=d.getUTCMonth()+Math.round(m),da=d.getUTCDate();
+  var last=new Date(Date.UTC(y,mo+1,0)).getUTCDate();
+  return Math.round(Date.UTC(y,mo,Math.min(da,last))/DAY);
+}
+function offYmd(days){return nYmd(ymdN(todayYmd())+days);}
+function typeLabel(id){for(var i=0;i<TYPES.length;i++)if(TYPES[i].id===id)return TYPES[i].label;return id||"—";}
+
+/* ══ state ══════════════════════════════════════════════════════ */
+var S=null,C=null;
+
+function templateItems(type){
+  var col=TYPECOL[type]||TYPECOL.medium,out=[];
+  CATALOGUE.forEach(function(r){
+    var q=r[col];
+    if(q===0)return;
+    out.push({id:uid(),n:r[0],exq:!!r[1],req:q,found:0,exp:"",price:r[2]});
+  });
+  return out;
+}
+function newKit(ref,loc,type,cust,lastAudit,interval){
+  return {id:uid(),ref:ref,location:loc,type:type,custodian:cust,
+    lastAudit:lastAudit,interval:interval,items:templateItems(type),history:[]};
+}
+function blankState(){
+  return {v:1,sample:false,org:"",addr:"",by:"",date:todayYmd(),win:90,cur:"£",
+    scope:"one",kits:[],sel:null};
+}
+function sampleState(){
+  var st=blankState();
+  st.sample=true;
+  st.org="Northfield Joinery Ltd";
+  st.addr="Unit 7 Kestrel Way, Leeds LS12 4RB";
+  st.by="R. Ahmed — Appointed Person";
+  st.date=todayYmd();
+  st.win=90; st.cur="£";
+
+  var k1=newKit("FA-01","Workshop — wall by main door","large","R. Ahmed",offYmd(-96),3);
+  var found1={
+    "Guidance leaflet":[1,""],
+    "Contents list":[1,""],
+    "Medium sterile dressing 12 x 12 cm":[6,offYmd(430)],
+    "Large sterile dressing 18 x 18 cm":[3,offYmd(430)],
+    "Triangular bandage, sterile":[4,offYmd(610)],
+    "Safety pins":[24,""],
+    "Adhesive dressings (plasters), sterile":[62,offYmd(180)],
+    "Sterile wet wipes":[40,offYmd(-45)],
+    "Microporous tape 2.5 cm x 10 m":[3,offYmd(300)],
+    "Nitrile gloves (pairs)":[8,offYmd(240)],
+    "Resuscitation face shield":[1,offYmd(900)],
+    "Foil survival blanket":[3,""],
+    "Burn dressing 10 x 10 cm":[2,offYmd(40)],
+    "Clothing shears":[1,""],
+    "Conforming bandage 7.5 cm x 4 m":[3,offYmd(365)],
+    "Finger sterile dressing 3.5 x 3.5 cm":[4,offYmd(365)],
+    "Sterile eye pad dressing":[2,offYmd(500)]
+  };
+  k1.items.forEach(function(it){var f=found1[it.n];if(f){it.found=f[0];it.exp=f[1];}});
+  k1.history=[
+    {id:uid(),date:offYmd(-96),by:"R. Ahmed",pct:100,short:0,expired:0,units:0,cost:0,
+     note:"Full restock after quarterly check."},
+    {id:uid(),date:offYmd(-188),by:"R. Ahmed",pct:88,short:2,expired:0,units:46,cost:2.94,
+     note:"Plasters and wipes topped up."}
+  ];
+
+  var k2=newKit("FA-02","Office — reception desk","medium","J. Clark",offYmd(-20),3);
+  k2.items.forEach(function(it){it.found=it.req;if(it.exq)it.exp=offYmd(520);});
+  k2.history=[{id:uid(),date:offYmd(-20),by:"J. Clark",pct:100,short:0,expired:0,units:0,cost:0,
+    note:"No action needed."}];
+
+  var k3=newKit("FA-03","Spray booth corridor","small","D. Whitfield",offYmd(-140),3);
+  k3.items.forEach(function(it){
+    it.found=it.req;
+    if(it.exq)it.exp=offYmd(300);
+    if(it.n==="Burn dressing 10 x 10 cm"){it.found=0;it.exp="";}
+    if(it.n==="Sterile wet wipes"){it.exp="";}
+  });
+
+  var k4=newKit("VAN-14","Transit van VAN-14 — under passenger seat","vehicle","S. Nowak",offYmd(-45),6);
+  k4.items.forEach(function(it){
+    it.found=it.req;
+    if(it.exq)it.exp=offYmd(410);
+    if(it.n==="Adhesive dressings (plasters), sterile"){it.exp=offYmd(-12);}
+    if(it.n==="Nitrile gloves (pairs)"){it.found=1;it.exp=offYmd(60);}
+  });
+
+  var k5=newKit("TRV-02","Site survey bag — kept with estimator","travel","P. Boyd",offYmd(-8),6);
+  k5.items.forEach(function(it){it.found=it.req;if(it.exq)it.exp=offYmd(700);});
+
+  st.kits=[k1,k2,k3,k4,k5];
+  st.sel=k1.id;
+  return st;
+}
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){/* storage blocked */}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return null;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=="object"||!Array.isArray(o.kits))return null;
+    return normalise(o);
+  }catch(e){return null;}
+}
+function normalise(o){
+  var st=blankState();
+  st.sample=!!o.sample;
+  st.org=String(o.org||""); st.addr=String(o.addr||""); st.by=String(o.by||"");
+  st.date=ymdN(o.date)!==null?o.date:todayYmd();
+  st.win=isFinite(parseFloat(o.win))?Math.max(0,parseFloat(o.win)):90;
+  st.cur=String(o.cur||"£").slice(0,4)||"£";
+  st.scope=(o.scope==="all")?"all":"one";
+  st.kits=(o.kits||[]).map(function(k){
+    return {
+      id:String(k.id||uid()),
+      ref:String(k.ref||""),
+      location:String(k.location||""),
+      type:TYPECOL[k.type]?k.type:"medium",
+      custodian:String(k.custodian||""),
+      lastAudit:ymdN(k.lastAudit)!==null?k.lastAudit:"",
+      interval:isFinite(parseFloat(k.interval))?Math.max(0,parseFloat(k.interval)):3,
+      items:(k.items||[]).map(function(it){
+        return {id:String(it.id||uid()),n:String(it.n||""),exq:!!it.exq,
+          req:it.req===""?"":num(it.req,0),found:it.found===""?"":num(it.found,0),
+          exp:String(it.exp||""),price:it.price===""?"":num(it.price,0)};
+      }),
+      history:(k.history||[]).map(function(h){
+        return {id:String(h.id||uid()),date:String(h.date||""),by:String(h.by||""),
+          pct:h.pct===null||h.pct===undefined?null:num(h.pct,0),
+          short:num(h.short,0),expired:num(h.expired,0),units:num(h.units,0),
+          cost:num(h.cost,0),note:String(h.note||"")};
+      })
+    };
+  });
+  var ids={};st.kits.forEach(function(k){ids[k.id]=1;});
+  st.sel=ids[o.sel]?o.sel:(st.kits[0]?st.kits[0].id:null);
+  return st;
+}
+function selKit(){
+  if(!S.sel)return null;
+  for(var i=0;i<S.kits.length;i++)if(S.kits[i].id===S.sel)return S.kits[i];
+  return null;
+}
+
+/* ══ computation ════════════════════════════════════════════════ */
+function compute(){
+  var T=ymdN(S.date)!==null?ymdN(S.date):ymdN(todayYmd());
+  var win=Math.max(0,Math.round(num(S.win,90)));
+  C={today:T,win:win,kits:[],byId:{},
+     site:{kits:0,pass:0,action:0,overdue:0,lines:0,ok:0,shortLines:0,expired:0,soon:0,
+           missing:0,units:0,cost:0},watch:[]};
+
+  S.kits.forEach(function(k){
+    var kc={id:k.id,ref:k.ref,loc:k.location,type:k.type,cust:k.custodian,
+      lines:[],nLines:0,ok:0,shortLines:0,shortUnits:0,expired:0,soon:0,missing:0,
+      units:0,cost:0,pct:null,nextDue:null,daysDue:null,overdue:false,status:"pass"};
+
+    k.items.forEach(function(it){
+      var req=Math.max(0,num(it.req,0)),found=Math.max(0,num(it.found,0));
+      var price=Math.max(0,num(it.price,0));
+      var eN=ymdN(it.exp),days=null,st;
+      if(eN!==null){days=eN-T;st=days<0?"expired":(days<=win?"soon":"in");}
+      else st=it.exq?"missing":"na";
+      var usable=(st==="expired")?0:found;
+      var shortQ=Math.max(0,Math.ceil(req-found));
+      var restock=Math.max(0,Math.ceil(req-usable));
+      var cost=Math.round(restock*price*100)/100;
+      var good=(restock===0&&st!=="expired");
+      var lc={id:it.id,n:it.n,req:req,found:found,exp:it.exp,expN:eN,days:days,st:st,
+        usable:usable,short:shortQ,restock:restock,price:price,cost:cost,ok:good,exq:it.exq};
+      kc.lines.push(lc);
+      kc.nLines++;
+      if(good)kc.ok++;
+      if(shortQ>0){kc.shortLines++;kc.shortUnits+=shortQ;}
+      if(st==="expired")kc.expired++;
+      if(st==="soon")kc.soon++;
+      if(st==="missing")kc.missing++;
+      kc.units+=restock;
+      kc.cost=Math.round((kc.cost+cost)*100)/100;
+    });
+
+    kc.pct=kc.nLines>0?(kc.ok/kc.nLines)*100:null;
+    kc.restockLines=kc.lines.filter(function(l){return l.restock>0;}).length;
+    kc.nextDue=addMonthsN(k.lastAudit,num(k.interval,0));
+    kc.daysDue=(kc.nextDue===null)?null:kc.nextDue-T;
+    kc.overdue=(kc.daysDue!==null&&kc.daysDue<0);
+    kc.status=(kc.restockLines>0||kc.expired>0)?"fail"
+             :((kc.soon>0||kc.missing>0||kc.overdue)?"watch":"pass");
+
+    C.kits.push(kc); C.byId[k.id]=kc;
+    C.site.kits++;
+    if(kc.status==="pass")C.site.pass++;else C.site.action++;
+    if(kc.overdue)C.site.overdue++;
+    C.site.lines+=kc.nLines; C.site.ok+=kc.ok;
+    C.site.shortLines+=kc.restockLines; C.site.expired+=kc.expired;
+    C.site.soon+=kc.soon; C.site.missing+=kc.missing;
+    C.site.units+=kc.units;
+    C.site.cost=Math.round((C.site.cost+kc.cost)*100)/100;
+
+    kc.lines.forEach(function(l){
+      if(l.st==="expired"||l.st==="soon"||l.st==="missing")
+        C.watch.push({kit:k.ref||"(no ref)",loc:k.location,n:l.n,st:l.st,days:l.days,exp:l.exp,found:l.found});
+    });
+  });
+
+  C.watch.sort(function(a,b){
+    var r={expired:0,soon:1,missing:2};
+    if(r[a.st]!==r[b.st])return r[a.st]-r[b.st];
+    return (a.days===null?9999:a.days)-(b.days===null?9999:b.days);
+  });
+  C.sel=S.sel?C.byId[S.sel]||null:null;
+  return C;
+}
+function statusChip(st){
+  if(st==="expired")return '<span class="chip bad">Expired</span>';
+  if(st==="soon")return '<span class="chip warn">Expiring</span>';
+  if(st==="missing")return '<span class="chip warn">No date</span>';
+  if(st==="in")return '<span class="chip ok">In date</span>';
+  return '<span class="chip">No expiry</span>';
+}
+
+/* ══ rendering ══════════════════════════════════════════════════ */
+function renderSettings(){
+  $("#iDate").value=S.date; $("#iBy").value=S.by; $("#iWin").value=S.win;
+  $("#iOrg").value=S.org; $("#iAddr").value=S.addr; $("#iScope").value=S.scope;
+  var known=(S.cur==="£"||S.cur==="$"||S.cur==="€");
+  $("#iCur").value=known?S.cur:"other";
+  $("#curOtherWrap").hidden=known;
+  $("#iCurOther").value=known?"":S.cur;
+  $("#sampleChip").hidden=!S.sample;
+}
+function renderKitSelect(){
+  var sel=$("#selKit"),h="";
+  if(!S.kits.length)h='<option value="">No kits on the register</option>';
+  S.kits.forEach(function(k){
+    h+='<option value="'+esc(k.id)+'">'+esc((k.ref||"(no ref)")+" — "+(k.location||"unnamed location"))+
+       " · "+esc(typeLabel(k.type))+'</option>';
+  });
+  sel.innerHTML=h;
+  sel.value=S.sel||"";
+  sel.disabled=!S.kits.length;
+}
+function renderItems(){
+  var k=selKit(),b=$("#itemsBody");
+  if(!k){b.innerHTML='<tr><td colspan="10"><div class="empty">No kit selected. Add a kit on the register below.</div></td></tr>';return;}
+  var h="";
+  k.items.forEach(function(it){
+    h+='<tr data-id="'+esc(it.id)+'">'+
+      '<td><input type="text" data-f="n" data-id="'+esc(it.id)+'" value="'+esc(it.n)+'" title="'+esc(it.n)+'" aria-label="Item name"></td>'+
+      '<td><input type="number" min="0" step="1" inputmode="numeric" data-f="req" data-id="'+esc(it.id)+'" value="'+esc(it.req)+'" aria-label="Required quantity for '+esc(it.n)+'"><span class="err" data-e="req"></span></td>'+
+      '<td><input type="number" min="0" step="1" inputmode="numeric" data-f="found" data-id="'+esc(it.id)+'" value="'+esc(it.found)+'" aria-label="Quantity found for '+esc(it.n)+'"><span class="err" data-e="found"></span></td>'+
+      '<td><input type="date" data-f="exp" data-id="'+esc(it.id)+'" value="'+esc(it.exp)+'" aria-label="Earliest expiry date for '+esc(it.n)+'"></td>'+
+      '<td><input type="number" min="0" step="0.01" inputmode="decimal" data-f="price" data-id="'+esc(it.id)+'" value="'+esc(it.price)+'" aria-label="Unit cost for '+esc(it.n)+'"><span class="err" data-e="price"></span></td>'+
+      '<td class="cst">—</td>'+
+      '<td class="calc csh">—</td>'+
+      '<td class="calc crs">—</td>'+
+      '<td class="calc cco">—</td>'+
+      '<td class="rmc"><button type="button" class="rmbtn" data-rm="'+esc(it.id)+'" aria-label="Remove '+esc(it.n)+'">×</button></td>'+
+      '</tr>';
+  });
+  if(!k.items.length)h='<tr><td colspan="10"><div class="empty">No items on this checklist. Use “Reset required quantities to template” or add a line.</div></td></tr>';
+  b.innerHTML=h;
+}
+function renderRegister(){
+  var b=$("#regBody"),h="";
+  S.kits.forEach(function(k){
+    var isSel=(k.id===S.sel);
+    h+='<tr data-kid="'+esc(k.id)+'"'+(isSel?' class="sel"':'')+'>'+
+      '<td><button type="button" class="selbtn" data-sel="'+esc(k.id)+'" aria-pressed="'+(isSel?"true":"false")+'">'+(isSel?"Auditing":"Audit")+'</button></td>'+
+      '<td><input type="text" data-kf="ref" data-kid="'+esc(k.id)+'" value="'+esc(k.ref)+'" aria-label="Kit reference"></td>'+
+      '<td><input type="text" data-kf="location" data-kid="'+esc(k.id)+'" value="'+esc(k.location)+'" title="'+esc(k.location)+'" aria-label="Kit location"></td>'+
+      '<td><select data-kf="type" data-kid="'+esc(k.id)+'" aria-label="Kit type">'+
+        TYPES.map(function(t){return '<option value="'+t.id+'"'+(t.id===k.type?" selected":"")+'>'+esc(t.label)+'</option>';}).join("")+
+        '</select></td>'+
+      '<td><input type="text" data-kf="custodian" data-kid="'+esc(k.id)+'" value="'+esc(k.custodian)+'" aria-label="Custodian"></td>'+
+      '<td><input type="date" data-kf="lastAudit" data-kid="'+esc(k.id)+'" value="'+esc(k.lastAudit)+'" aria-label="Last audit date"></td>'+
+      '<td><input type="number" min="0" max="60" step="1" inputmode="numeric" data-kf="interval" data-kid="'+esc(k.id)+'" value="'+esc(k.interval)+'" aria-label="Audit interval in months"></td>'+
+      '<td class="knx">—</td>'+
+      '<td class="calc kpc">—</td>'+
+      '<td class="calc kct">—</td>'+
+      '<td class="rmc"><button type="button" class="rmbtn" data-rmk="'+esc(k.id)+'" aria-label="Remove kit">×</button></td>'+
+      '</tr>';
+  });
+  if(!S.kits.length)h='<tr><td colspan="11"><div class="empty">No kits yet. Add the first one.</div></td></tr>';
+  b.innerHTML=h;
+}
+function renderHistory(){
+  var k=selKit(),b=$("#histBody");
+  $("#histLabel").textContent=k?(k.ref||"(no ref)"):"—";
+  if(!k||!k.history.length){
+    b.innerHTML='<tr><td colspan="9"><div class="empty">No audits recorded for this kit yet. Press “Record this audit”.</div></td></tr>';
+    return;
+  }
+  var rows=k.history.slice().sort(function(a,b2){
+    var x=ymdN(a.date),y=ymdN(b2.date);
+    return (y===null?-1e9:y)-(x===null?-1e9:x);});
+  var h="";
+  rows.forEach(function(r){
+    h+='<tr>'+
+      '<td class="mono">'+esc(fmtDate(r.date))+'</td>'+
+      '<td>'+esc(r.by||"—")+'</td>'+
+      '<td class="calc">'+fmtPct(r.pct)+'</td>'+
+      '<td class="calc">'+fmtN(r.short)+'</td>'+
+      '<td class="calc'+(r.expired>0?' pos':'')+'">'+fmtN(r.expired)+'</td>'+
+      '<td class="calc">'+fmtN(r.units)+'</td>'+
+      '<td class="calc">'+money(r.cost)+'</td>'+
+      '<td><input type="text" data-hf="note" data-hid="'+esc(r.id)+'" value="'+esc(r.note)+'" aria-label="Audit note"></td>'+
+      '<td class="rmc"><button type="button" class="rmbtn" data-rmh="'+esc(r.id)+'" aria-label="Remove history entry">×</button></td>'+
+      '</tr>';
+  });
+  b.innerHTML=h;
+}
+
+/* live numbers ------------------------------------------------- */
+function refresh(){
+  compute();
+  var kc=C.sel;
+
+  /* hero + stats */
+  $("#kitLabel").textContent=kc?((kc.ref||"(no ref)")+(kc.loc?" · "+kc.loc:"")):"—";
+  var chip=$("#kitStatus");
+  if(!kc){chip.className="chip";chip.textContent="—";}
+  else if(kc.status==="fail"){chip.className="chip bad";chip.textContent="Action required";}
+  else if(kc.status==="watch"){chip.className="chip warn";chip.textContent="Check soon";}
+  else {chip.className="chip ok";chip.textContent="Complete";}
+
+  $("#sPct").textContent=kc?fmtPct(kc.pct):"—";
+  $("#sPctSub").innerHTML=kc?
+    (kc.ok+" of "+kc.nLines+" lines complete and in date · "+kc.restockLines+" to restock"):
+    "&nbsp;";
+  $("#sShort").textContent=kc?String(kc.restockLines):"—";
+  $("#sShortSub").innerHTML=kc?(fmtN(kc.units)+" units to order"):"&nbsp;";
+  $("#stShort").className="stat"+(kc&&kc.restockLines>0?" flagbad":(kc?" flagok":""));
+  $("#sExp").textContent=kc?String(kc.expired):"—";
+  $("#stExp").className="stat"+(kc&&kc.expired>0?" flagbad":(kc?" flagok":""));
+  $("#sSoon").textContent=kc?String(kc.soon):"—";
+  $("#sSoonSub").innerHTML=kc?("within "+C.win+" days"+(kc.missing?" · "+kc.missing+" with no date":"")):"&nbsp;";
+  $("#stSoon").className="stat"+(kc&&(kc.soon>0||kc.missing>0)?" flagwarn":(kc?" flagok":""));
+  $("#sCost").textContent=kc?money(kc.cost):"—";
+  $("#sCostSub").innerHTML=kc?("at the unit costs entered"):"&nbsp;";
+
+  var dueEl=$("#sDue"),dueSub=$("#sDueSub"),dueBox=$("#stDue");
+  if(!kc||kc.nextDue===null){dueEl.textContent="—";dueSub.innerHTML="set a last-audit date";dueBox.className="stat";}
+  else{
+    dueEl.textContent=kc.overdue?"OVERDUE":(kc.daysDue+" d");
+    dueSub.innerHTML=esc((kc.overdue?"was due ":"due ")+fmtDateN(kc.nextDue)+
+      (kc.overdue?" · "+Math.abs(kc.daysDue)+" days ago":""));
+    dueBox.className="stat"+(kc.overdue?" flagbad":(kc.daysDue<=14?" flagwarn":" flagok"));
+  }
+
+  /* per-line cells */
+  if(kc){
+    var body=$("#itemsBody");
+    kc.lines.forEach(function(l){
+      var tr=body.querySelector('tr[data-id="'+l.id+'"]');
+      if(!tr)return;
+      var stc=tr.querySelector(".cst");
+      var extra="";
+      if(l.st==="expired")extra=' <span class="hint">'+Math.abs(l.days)+' d ago</span>';
+      else if(l.st==="soon")extra=' <span class="hint">'+l.days+' d</span>';
+      stc.innerHTML=statusChip(l.st)+extra;
+      var sh=tr.querySelector(".csh");sh.textContent=l.short>0?fmtN(l.short):"–";
+      sh.className="calc csh"+(l.short>0?" pos":" zero");
+      var rs=tr.querySelector(".crs");rs.textContent=l.restock>0?fmtN(l.restock):"–";
+      rs.className="calc crs"+(l.restock>0?" pos":" zero");
+      var co=tr.querySelector(".cco");co.textContent=l.restock>0?money(l.cost):"–";
+      co.className="calc cco"+(l.restock>0?"":" zero");
+      tr.className=(l.st==="expired")?"rowbad":"";
+    });
+    $("#ftLabel").textContent=kc.nLines+" item lines · "+kc.ok+" complete and in date";
+    $("#ftShort").textContent=fmtN(kc.lines.reduce(function(a,l){return a+l.short;},0));
+    $("#ftRestock").textContent=fmtN(kc.units);
+    $("#ftCost").textContent=money(kc.cost);
+    $("#linesChip").textContent=typeLabel(kc.type);
+    $("#itemsHint").textContent="Shortfall = required − found. An expired line counts as zero usable stock.";
+  }else{
+    $("#ftLabel").textContent="—";$("#ftShort").textContent="—";
+    $("#ftRestock").textContent="—";$("#ftCost").textContent="—";
+    $("#linesChip").textContent="—";$("#itemsHint").textContent="";
+  }
+
+  /* register computed cells */
+  C.kits.forEach(function(k){
+    var tr=$("#regBody").querySelector('tr[data-kid="'+k.id+'"]');
+    if(!tr)return;
+    var nx=tr.querySelector(".knx");
+    if(k.nextDue===null){nx.innerHTML='<span class="hint">—</span>';}
+    else{
+      nx.innerHTML='<span class="mono">'+esc(fmtDateN(k.nextDue))+'</span>'+
+        (k.overdue?' <span class="chip bad">Overdue</span>':(k.daysDue<=14?' <span class="chip warn">'+k.daysDue+' d</span>':''));
+    }
+    var pc=tr.querySelector(".kpc");
+    pc.textContent=fmtPct(k.pct);
+    pc.className="calc kpc"+(k.pct!==null&&k.pct<100?" pos":"");
+    var ct=tr.querySelector(".kct");
+    ct.textContent=k.units>0?(fmtN(k.units)+" · "+money(k.cost)):"–";
+    ct.className="calc kct"+(k.units>0?" pos":" zero");
+  });
+  $("#regChip").textContent=C.site.kits+" kits · "+C.site.pass+" complete";
+
+  /* restock rail */
+  var ro=$("#roBox");
+  if(!kc){ro.innerHTML='<div class="empty">No kit selected.</div>';$("#roChip").textContent="—";$("#roTotal").textContent="—";}
+  else{
+    var need=kc.lines.filter(function(l){return l.restock>0;});
+    if(!need.length){
+      ro.innerHTML='<div class="empty">Nothing to order — every line meets its required quantity and is in date.</div>';
+    }else{
+      var hh='<div class="rlist">';
+      need.forEach(function(l){
+        var why=(l.st==="expired")?"expired — replace all "+fmtN(l.found):("found "+fmtN(l.found)+" of "+fmtN(l.req));
+        hh+='<div class="ritem'+(l.st==="expired"?" exp":"")+'"><div class="nm">'+esc(l.n)+
+            '<small>'+esc(why)+'</small></div>'+
+            '<div class="qt">'+fmtN(l.restock)+'<small>'+money(l.cost)+'</small></div></div>';
+      });
+      hh+='</div>';
+      ro.innerHTML=hh;
+    }
+    $("#roChip").textContent=need.length+" line"+(need.length===1?"":"s");
+    $("#roTotal").textContent=money(kc.cost);
+  }
+
+  /* expiry watch */
+  var ew=$("#ewBox");
+  if(!C.watch.length){ew.innerHTML='<div class="empty">Nothing expired, expiring within '+C.win+' days, or missing a date.</div>';}
+  else{
+    var w='<div class="rlist">';
+    C.watch.slice(0,60).forEach(function(x){
+      var cls=x.st==="expired"?"exp":(x.st==="soon"?"soon":"miss");
+      var right=x.st==="missing"?"no date":(x.days<0?Math.abs(x.days)+" d ago":x.days+" d");
+      w+='<div class="ritem '+cls+'"><div class="nm">'+esc(x.n)+
+         '<small>'+esc(x.kit)+(x.loc?" · "+esc(x.loc):"")+'</small></div>'+
+         '<div class="qt">'+esc(right)+'<small>'+esc(x.st==="missing"?"record it":fmtDate(x.exp))+'</small></div></div>';
+    });
+    w+='</div>';
+    ew.innerHTML=w;
+  }
+  $("#ewChip").textContent=C.site.expired+" expired · "+C.site.soon+" soon";
+
+  /* site summary */
+  var s=C.site;
+  var sitePct=s.lines>0?(s.ok/s.lines)*100:null;
+  $("#siteBox").innerHTML=
+    kv("Kits on register",String(s.kits))+
+    kv("Kits complete",s.pass+" of "+s.kits,s.pass===s.kits&&s.kits>0?"ok":"bad")+
+    kv("Audits overdue",String(s.overdue),s.overdue>0?"bad":"ok")+
+    kv("Site compliance",fmtPct(sitePct),sitePct!==null&&sitePct>=100?"ok":"warn")+
+    kv("Expired items",String(s.expired),s.expired>0?"bad":"ok")+
+    kv("Expiring within "+C.win+" d",String(s.soon),s.soon>0?"warn":"ok")+
+    kv("Missing expiry dates",String(s.missing),s.missing>0?"warn":"ok")+
+    kv("Units to order — all kits",fmtN(s.units))+
+    kv("Restock cost — all kits",money(s.cost));
+
+  buildDoc();
+  save();
+}
+function kv(l,v,cls){
+  return '<div class="kv"><span class="l">'+esc(l)+'</span><span class="v'+(cls?" "+cls:"")+'">'+esc(v)+'</span></div>';
+}
+function flash(m){var e=$("#msg");e.textContent=m;clearTimeout(flash.t);flash.t=setTimeout(function(){e.textContent="";},3600);}
+function clearSample(){if(S.sample){S.sample=false;$("#sampleChip").hidden=true;}}
+
+/* ══ print document ═════════════════════════════════════════════ */
+function docHead(){
+  return '<div class="lh"><div><div class="org">'+esc(S.org||"—")+'</div>'+
+    '<div class="oaddr">'+esc(S.addr||"")+'</div></div>'+
+    '<div class="ttl"><h2>First Aid Kit Audit</h2>'+
+    '<div class="yr">'+esc(fmtDate(S.date))+'</div>'+
+    '<div class="ref">Printed '+esc(fmtDate(todayYmd()))+'</div></div></div>';
+}
+function docWarn(){
+  return '<div class="warnbox"><b>Read this before relying on the sheet</b>'+
+    'This is a stock-check record, not a certificate of compliance. The pre-loaded contents lists follow the '+
+    'item ranges commonly published for BS 8599-1 workplace kits and BS 8599-2 vehicle kits and are an editable '+
+    'starting point only — the published standard takes precedence. In Great Britain the Health and Safety '+
+    '(First-Aid) Regulations 1981 require kit contents to be decided by your own first-aid needs assessment; '+
+    'there is no legally fixed list. This sheet records only the quantities and dates entered by the auditor. '+
+    'It does not confirm that packaging is intact, that items are fit for use, or that enough trained first '+
+    'aiders are in place. Take advice from a competent occupational health and safety adviser.</div>';
+}
+function kitSheet(k,kc){
+  var h='<div class="kitsheet">';
+  h+='<h3 class="sec">Kit '+esc(k.ref||"(no ref)")+' — '+esc(k.location||"location not recorded")+'</h3>';
+  h+='<div class="meta">'+
+    '<div><b>Kit type</b><span>'+esc(typeLabel(k.type))+'</span></div>'+
+    '<div><b>Custodian</b><span>'+esc(k.custodian||"—")+'</span></div>'+
+    '<div><b>Audit date</b><span>'+esc(fmtDate(S.date))+'</span></div>'+
+    '<div><b>Audited by</b><span>'+esc(S.by||"—")+'</span></div>'+
+    '<div><b>Previous audit</b><span>'+esc(fmtDate(k.lastAudit))+'</span></div>'+
+    '<div><b>Audit interval</b><span>'+esc(fmtN(num(k.interval,0))+" months")+'</span></div>'+
+    '<div><b>Next audit due</b><span>'+esc(kc.nextDue===null?"—":fmtDateN(kc.nextDue)+(kc.overdue?" (overdue)":""))+'</span></div>'+
+    '<div><b>Expiry window</b><span>'+esc(C.win+" days")+'</span></div>'+
+    '<div><b>Compliance</b><span>'+esc(fmtPct(kc.pct)+" ("+kc.ok+" of "+kc.nLines+" lines)")+'</span></div>'+
+    '<div><b>Lines to restock</b><span>'+esc(String(kc.restockLines))+'</span></div>'+
+    '<div><b>Expired items</b><span>'+esc(String(kc.expired))+'</span></div>'+
+    '<div><b>Restock cost</b><span>'+esc(money(kc.cost))+'</span></div>'+
+    '</div>';
+
+  h+='<table><colgroup><col style="width:34%"><col style="width:7%"><col style="width:7%"><col style="width:13%"><col style="width:13%"><col style="width:7%"><col style="width:9%"><col style="width:10%"></colgroup>'+
+    '<thead><tr><th>Item</th><th class="n">Req</th><th class="n">Found</th><th>Expiry</th><th>Status</th>'+
+    '<th class="n">Short</th><th class="n">Restock</th><th class="n">Line cost</th></tr></thead><tbody>';
+  if(!kc.lines.length)h+='<tr><td colspan="8">No items on this checklist.</td></tr>';
+  kc.lines.forEach(function(l){
+    var stt=l.st==="expired"?("EXPIRED "+Math.abs(l.days)+" d"):
+            l.st==="soon"?("Expires in "+l.days+" d"):
+            l.st==="in"?"In date":
+            l.st==="missing"?"No date recorded":"No expiry";
+    h+='<tr><td>'+esc(l.n||"(unnamed)")+'</td><td class="n">'+fmtN(l.req)+'</td><td class="n">'+fmtN(l.found)+'</td>'+
+      '<td>'+esc(l.exp?fmtDate(l.exp):"—")+'</td><td>'+esc(stt)+'</td>'+
+      '<td class="n">'+(l.short>0?fmtN(l.short):"–")+'</td>'+
+      '<td class="n">'+(l.restock>0?fmtN(l.restock):"–")+'</td>'+
+      '<td class="n">'+(l.restock>0?money(l.cost):"–")+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="5">Totals</td><td class="n">'+
+    fmtN(kc.lines.reduce(function(a,l){return a+l.short;},0))+'</td><td class="n">'+fmtN(kc.units)+
+    '</td><td class="n">'+money(kc.cost)+'</td></tr></tfoot></table>';
+  h+='<p class="fn">Short = required − quantity found. Restock = required − usable stock, where an item past '+
+     'its expiry date counts as zero usable. Quantities are whole units, rounded up. Costs use the unit prices entered '+
+     'and exclude delivery and tax.</p>';
+
+  var need=kc.lines.filter(function(l){return l.restock>0;});
+  h+='<h3 class="sec">Restock order — '+esc(k.ref||"(no ref)")+'</h3>';
+  if(!need.length){
+    h+='<p class="fn">Nothing to order. Every line meets its required quantity and is in date.</p>';
+  }else{
+    h+='<table><colgroup><col style="width:52%"><col style="width:12%"><col style="width:18%"><col style="width:18%"></colgroup>'+
+      '<thead><tr><th>Item to order</th><th class="n">Qty</th><th class="n">Unit cost</th><th class="n">Line cost</th></tr></thead><tbody>';
+    need.forEach(function(l){
+      h+='<tr><td>'+esc(l.n||"(unnamed)")+(l.st==="expired"?' <i>(expired stock — discard '+fmtN(l.found)+')</i>':'')+
+        '</td><td class="n">'+fmtN(l.restock)+'</td><td class="n">'+money(l.price)+'</td><td class="n">'+money(l.cost)+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td>Total — '+need.length+' line'+(need.length===1?"":"s")+', '+fmtN(kc.units)+
+      ' units</td><td class="n">'+fmtN(kc.units)+'</td><td class="n"></td><td class="n">'+money(kc.cost)+'</td></tr></tfoot></table>';
+  }
+
+  if(k.history&&k.history.length){
+    var rows=k.history.slice().sort(function(a,b){
+      var x=ymdN(a.date),y=ymdN(b.date);return (y===null?-1e9:y)-(x===null?-1e9:x);}).slice(0,8);
+    h+='<h3 class="sec">Audit history</h3>';
+    h+='<table><colgroup><col style="width:15%"><col style="width:20%"><col style="width:11%"><col style="width:10%"><col style="width:9%"><col style="width:12%"><col style="width:23%"></colgroup>'+
+      '<thead><tr><th>Date</th><th>Audited by</th><th class="n">Compliance</th><th class="n">Short</th>'+
+      '<th class="n">Expired</th><th class="n">Cost</th><th>Note</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      h+='<tr><td>'+esc(fmtDate(r.date))+'</td><td>'+esc(r.by||"—")+'</td><td class="n">'+fmtPct(r.pct)+
+        '</td><td class="n">'+fmtN(r.short)+'</td><td class="n">'+fmtN(r.expired)+'</td><td class="n">'+money(r.cost)+
+        '</td><td>'+esc(r.note||"")+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  h+='<div class="sign"><div><b>Audited by</b><i>Signature</i><i>Date</i></div>'+
+     '<div><b>Restock authorised by</b><i>Signature</i><i>Date</i></div></div>';
+  h+='</div>';
+  return h;
+}
+function buildDoc(){
+  var d=$("#printdoc"),h=docHead()+docWarn();
+  var list=(S.scope==="all")?S.kits:(selKit()?[selKit()]:[]);
+  if(!list.length){h+='<p class="fn">No kit selected.</p>';}
+  list.forEach(function(k){var kc=C.byId[k.id];if(kc)h+=kitSheet(k,kc);});
+
+  h+='<h3 class="sec" style="break-before:auto">Kit location register — all kits</h3>';
+  h+='<table><colgroup><col style="width:11%"><col style="width:23%"><col style="width:14%"><col style="width:13%"><col style="width:11%"><col style="width:11%"><col style="width:8%"><col style="width:9%"></colgroup>'+
+    '<thead><tr><th>Kit ref</th><th>Location</th><th>Type</th><th>Custodian</th><th>Last audit</th>'+
+    '<th>Next due</th><th class="n">Compl.</th><th class="n">Restock</th></tr></thead><tbody>';
+  if(!C.kits.length)h+='<tr><td colspan="8">No kits on the register.</td></tr>';
+  C.kits.forEach(function(kc){
+    var k=null;S.kits.forEach(function(x){if(x.id===kc.id)k=x;});
+    if(!k)return;
+    h+='<tr><td>'+esc(k.ref||"—")+'</td><td>'+esc(k.location||"—")+'</td><td>'+esc(typeLabel(k.type))+
+      '</td><td>'+esc(k.custodian||"—")+'</td><td>'+esc(fmtDate(k.lastAudit))+'</td><td>'+
+      esc(kc.nextDue===null?"—":fmtDateN(kc.nextDue)+(kc.overdue?" (overdue)":""))+'</td><td class="n">'+
+      fmtPct(kc.pct)+'</td><td class="n">'+(kc.units>0?money(kc.cost):"–")+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="6">'+C.site.kits+' kits · '+C.site.pass+
+    ' complete · '+C.site.overdue+' audits overdue</td><td class="n">'+
+    fmtPct(C.site.lines>0?(C.site.ok/C.site.lines)*100:null)+'</td><td class="n">'+money(C.site.cost)+
+    '</td></tr></tfoot></table>';
+  h+='<div class="pfoot">Prepared with the Solvix First Aid Kit Audit tool. Shortfall = required − found; '+
+     'expired stock counts as zero usable. Next audit due = last audit + interval in calendar months. '+
+     'Expiry warning window '+C.win+' days. Figures are only as good as the quantities and dates entered.</div>';
+  d.innerHTML=h;
+}
+
+/* ══ export ═════════════════════════════════════════════════════ */
+function dl(name,text,mime){
+  try{
+    var b=new Blob([text],{type:mime});
+    var u=URL.createObjectURL(b),a=document.createElement("a");
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
+  }catch(e){flash("Download blocked by the browser.");}
+}
+function cq(v){
+  var s=(v===null||v===undefined)?"":String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvRow(a){return a.map(cq).join(",");}
+function slug(s){return (String(s||"first-aid-audit").toLowerCase().replace(/[^a-z0-9]+/g,"-")
+  .replace(/^-|-$/g,"")||"first-aid-audit");}
+function stName(st){
+  return st==="expired"?"Expired":st==="soon"?"Expiring":st==="in"?"In date":
+         st==="missing"?"No date recorded":"No expiry";
+}
+function buildCsv(){
+  compute();
+  var L=[];
+  L.push(csvRow(["First aid kit audit"]));
+  L.push(csvRow(["Organisation",S.org]));
+  L.push(csvRow(["Site / address",S.addr]));
+  L.push(csvRow(["Audit date",S.date,"Audited by",S.by]));
+  L.push(csvRow(["Expiry warning window (days)",C.win,"Currency",S.cur]));
+  L.push(csvRow(["Printed",todayYmd()]));
+  L.push([]);
+  L.push(csvRow(["CONTENTS AUDIT — ALL KITS"]));
+  L.push(csvRow(["Kit ref","Location","Kit type","Item","Required","Found","Expiry","Days to expiry",
+    "Status","Short (req-found)","Restock qty","Unit cost","Line cost"]));
+  S.kits.forEach(function(k){
+    var kc=C.byId[k.id];if(!kc)return;
+    kc.lines.forEach(function(l){
+      L.push(csvRow([k.ref,k.location,typeLabel(k.type),l.n,fmtN(l.req),fmtN(l.found),l.exp||"",
+        l.days===null?"":l.days,stName(l.st),fmtN(l.short),fmtN(l.restock),
+        l.price.toFixed(2),l.cost.toFixed(2)]));
+    });
+  });
+  L.push([]);
+  L.push(csvRow(["RESTOCK ORDER — ALL KITS"]));
+  L.push(csvRow(["Kit ref","Item","Qty to order","Unit cost","Line cost","Reason"]));
+  var tot=0,units=0;
+  S.kits.forEach(function(k){
+    var kc=C.byId[k.id];if(!kc)return;
+    kc.lines.forEach(function(l){
+      if(l.restock<=0)return;
+      tot=Math.round((tot+l.cost)*100)/100;units+=l.restock;
+      L.push(csvRow([k.ref,l.n,fmtN(l.restock),l.price.toFixed(2),l.cost.toFixed(2),
+        l.st==="expired"?("Expired — replace all "+fmtN(l.found)):("Found "+fmtN(l.found)+" of "+fmtN(l.req))]));
+    });
+  });
+  L.push(csvRow(["TOTAL","","","","",""]));
+  L.push(csvRow(["","Units",fmtN(units),"Cost",tot.toFixed(2),S.cur]));
+  L.push([]);
+  L.push(csvRow(["KIT LOCATION REGISTER"]));
+  L.push(csvRow(["Kit ref","Location","Kit type","Custodian","Last audit","Interval (months)",
+    "Next due","Days to due","Compliance %","Lines to restock","Expired","Expiring","Restock units","Restock cost"]));
+  S.kits.forEach(function(k){
+    var kc=C.byId[k.id];if(!kc)return;
+    L.push(csvRow([k.ref,k.location,typeLabel(k.type),k.custodian,k.lastAudit,fmtN(num(k.interval,0)),
+      kc.nextDue===null?"":nYmd(kc.nextDue),kc.daysDue===null?"":kc.daysDue,
+      kc.pct===null?"":Math.round(kc.pct),kc.restockLines,kc.expired,kc.soon,fmtN(kc.units),kc.cost.toFixed(2)]));
+  });
+  L.push([]);
+  L.push(csvRow(["AUDIT HISTORY"]));
+  L.push(csvRow(["Kit ref","Audit date","Audited by","Compliance %","Short lines","Expired",
+    "Restock units","Restock cost","Note"]));
+  S.kits.forEach(function(k){
+    (k.history||[]).forEach(function(r){
+      L.push(csvRow([k.ref,r.date,r.by,r.pct===null?"":Math.round(r.pct),fmtN(r.short),fmtN(r.expired),
+        fmtN(r.units),num(r.cost,0).toFixed(2),r.note]));
+    });
+  });
+  return L.map(function(r){return Array.isArray(r)?r.join(""):r;}).join("\r\n")+"\r\n";
+}
+
+/* ══ events ═════════════════════════════════════════════════════ */
+function bindHeader(){
+  $("#selKit").addEventListener("change",function(){
+    S.sel=this.value||null;renderItems();renderRegister();renderHistory();refresh();
+  });
+  $("#iDate").addEventListener("change",function(){
+    var v=this.value;
+    if(v&&ymdN(v)===null){this.classList.add("inv");$("#eDate").textContent="Not a valid date.";return;}
+    this.classList.remove("inv");$("#eDate").textContent="";
+    S.date=v||todayYmd();clearSample();refresh();
+  });
+  $("#iBy").addEventListener("input",function(){S.by=this.value;clearSample();refresh();});
+  $("#iWin").addEventListener("input",function(){
+    if(this.value!==""&&(!okNum(this.value)||parseFloat(this.value)<0)){
+      this.classList.add("inv");$("#eWin").textContent="Enter 0 or more days.";return;}
+    this.classList.remove("inv");$("#eWin").textContent="";
+    S.win=this.value===""?0:Math.max(0,Math.round(num(this.value,90)));clearSample();refresh();
+  });
+  $("#iOrg").addEventListener("input",function(){S.org=this.value;clearSample();refresh();});
+  $("#iAddr").addEventListener("input",function(){S.addr=this.value;clearSample();refresh();});
+  $("#iScope").addEventListener("change",function(){S.scope=this.value;refresh();});
+  $("#iCur").addEventListener("change",function(){
+    if(this.value==="other"){$("#curOtherWrap").hidden=false;$("#iCurOther").focus();
+      S.cur=$("#iCurOther").value||"¤";}
+    else{$("#curOtherWrap").hidden=true;S.cur=this.value;}
+    refresh();
+  });
+  $("#iCurOther").addEventListener("input",function(){
+    S.cur=(this.value||"¤").slice(0,4);refresh();
+  });
+}
+function bindItems(){
+  var body=$("#itemsBody");
+  body.addEventListener("input",function(e){
+    var t=e.target;if(!t.dataset||!t.dataset.f)return;
+    var k=selKit();if(!k)return;
+    var it=null;k.items.forEach(function(x){if(x.id===t.dataset.id)it=x;});
+    if(!it)return;
+    var f=t.dataset.f,cell=t.parentNode,err=cell.querySelector(".err");
+    if(f==="n"){it.n=t.value;}
+    else if(f==="exp"){
+      if(t.value&&ymdN(t.value)===null){t.classList.add("inv");return;}
+      t.classList.remove("inv");it.exp=t.value;
+    }else{
+      if(t.value!==""&&(!okNum(t.value)||parseFloat(t.value)<0)){
+        t.classList.add("inv");if(err)err.textContent="0 or more";return;}
+      t.classList.remove("inv");if(err)err.textContent="";
+      it[f]=t.value===""?"":num(t.value,0);
+    }
+    clearSample();refresh();
+  });
+  body.addEventListener("click",function(e){
+    var b=e.target.closest?e.target.closest("[data-rm]"):null;
+    if(!b)return;
+    var k=selKit();if(!k)return;
+    k.items=k.items.filter(function(x){return x.id!==b.dataset.rm;});
+    clearSample();renderItems();refresh();
+  });
+  $("#bAddItem").addEventListener("click",function(){
+    var k=selKit();if(!k){flash("Add a kit on the register first.");return;}
+    k.items.push({id:uid(),n:"",exq:true,req:1,found:0,exp:"",price:0});
+    clearSample();renderItems();refresh();
+    var rows=$("#itemsBody").querySelectorAll("tr");
+    if(rows.length){var inp=rows[rows.length-1].querySelector("input");if(inp)inp.focus();}
+  });
+  $("#bReset").addEventListener("click",function(){
+    var k=selKit();if(!k)return;
+    if(!confirm("Reset this kit's item list and required quantities to the "+typeLabel(k.type)+
+      " template? Quantities found and expiry dates you have recorded for matching items are kept."))return;
+    var old={};k.items.forEach(function(it){old[it.n]=it;});
+    k.items=templateItems(k.type).map(function(it){
+      var o=old[it.n];
+      if(o){it.found=o.found;it.exp=o.exp;it.price=o.price;}
+      return it;
+    });
+    clearSample();renderItems();refresh();flash("Required quantities reset to the "+typeLabel(k.type)+" template.");
+  });
+}
+function bindRegister(){
+  var body=$("#regBody");
+  body.addEventListener("input",function(e){
+    var t=e.target;if(!t.dataset||!t.dataset.kf)return;
+    var k=null;S.kits.forEach(function(x){if(x.id===t.dataset.kid)k=x;});
+    if(!k)return;
+    var f=t.dataset.kf;
+    if(f==="interval"){
+      if(t.value!==""&&(!okNum(t.value)||parseFloat(t.value)<0)){t.classList.add("inv");return;}
+      t.classList.remove("inv");k.interval=t.value===""?0:Math.max(0,Math.round(num(t.value,3)));
+    }else if(f==="lastAudit"){
+      if(t.value&&ymdN(t.value)===null){t.classList.add("inv");return;}
+      t.classList.remove("inv");k.lastAudit=t.value;
+    }else if(f==="type"){ return; }
+    else{k[f]=t.value;}
+    clearSample();
+    if(f==="ref"||f==="location")renderKitSelect();
+    refresh();
+  });
+  body.addEventListener("change",function(e){
+    var t=e.target;
+    if(!t.dataset||t.dataset.kf!=="type")return;
+    var k=null;S.kits.forEach(function(x){if(x.id===t.dataset.kid)k=x;});
+    if(!k)return;
+    var nt=t.value;
+    k.type=nt;
+    if(confirm("Load the "+typeLabel(nt)+" template's required quantities into "+(k.ref||"this kit")+
+      "? Quantities found and expiry dates for matching items are kept. Cancel to change the type only.")){
+      var old={};k.items.forEach(function(it){old[it.n]=it;});
+      k.items=templateItems(nt).map(function(it){
+        var o=old[it.n];if(o){it.found=o.found;it.exp=o.exp;it.price=o.price;}
+        return it;
+      });
+      if(k.id===S.sel)renderItems();
+    }
+    clearSample();renderKitSelect();refresh();
+  });
+  body.addEventListener("click",function(e){
+    var s=e.target.closest?e.target.closest("[data-sel]"):null;
+    if(s){S.sel=s.dataset.sel;renderKitSelect();renderItems();renderRegister();renderHistory();refresh();return;}
+    var r=e.target.closest?e.target.closest("[data-rmk]"):null;
+    if(!r)return;
+    var k=null;S.kits.forEach(function(x){if(x.id===r.dataset.rmk)k=x;});
+    if(!k)return;
+    if(!confirm("Remove kit "+(k.ref||"(no ref)")+" and its audit history?"))return;
+    S.kits=S.kits.filter(function(x){return x.id!==k.id;});
+    if(S.sel===k.id)S.sel=S.kits[0]?S.kits[0].id:null;
+    clearSample();renderKitSelect();renderItems();renderRegister();renderHistory();refresh();
+  });
+  $("#bAddKit").addEventListener("click",function(){
+    var n=S.kits.length+1;
+    var k=newKit("FA-"+p2(n),"","medium","",todayYmd(),3);
+    S.kits.push(k);S.sel=k.id;clearSample();
+    renderKitSelect();renderItems();renderRegister();renderHistory();refresh();
+    var tr=$("#regBody").querySelector('tr[data-kid="'+k.id+'"]');
+    if(tr){var i=tr.querySelector('input[data-kf="ref"]');if(i)i.focus();}
+  });
+}
+function bindHistory(){
+  var body=$("#histBody");
+  body.addEventListener("input",function(e){
+    var t=e.target;if(!t.dataset||!t.dataset.hf)return;
+    var k=selKit();if(!k)return;
+    k.history.forEach(function(r){if(r.id===t.dataset.hid)r.note=t.value;});
+    save();buildDoc();
+  });
+  body.addEventListener("click",function(e){
+    var b=e.target.closest?e.target.closest("[data-rmh]"):null;
+    if(!b)return;
+    var k=selKit();if(!k)return;
+    if(!confirm("Remove this audit history entry?"))return;
+    k.history=k.history.filter(function(r){return r.id!==b.dataset.rmh;});
+    renderHistory();refresh();
+  });
+  $("#bRecord").addEventListener("click",function(){
+    var k=selKit();if(!k){flash("Add a kit first.");return;}
+    compute();
+    var kc=C.byId[k.id];if(!kc)return;
+    k.history.push({id:uid(),date:S.date,by:S.by,pct:kc.pct===null?null:Math.round(kc.pct),
+      short:kc.restockLines,expired:kc.expired,units:kc.units,cost:kc.cost,note:""});
+    k.lastAudit=S.date;
+    clearSample();renderRegister();renderHistory();refresh();
+    flash("Audit recorded for "+(k.ref||"this kit")+". Last-audit date set to "+fmtDate(S.date)+".");
+  });
+}
+function bindActions(){
+  $("#bPrint").addEventListener("click",function(){buildDoc();window.print();});
+  $("#bCsv").addEventListener("click",function(){
+    dl(slug((S.org||"first-aid")+"-kit-audit-"+S.date)+".csv","﻿"+buildCsv(),"text/csv;charset=utf-8");
+    flash("CSV exported.");
+  });
+  $("#bJson").addEventListener("click",function(){
+    dl(slug((S.org||"first-aid")+"-kit-audit-"+S.date)+".json",JSON.stringify(S,null,2),"application/json");
+    flash("JSON exported.");
+  });
+  $("#bImport").addEventListener("click",function(){$("#fImport").click();});
+  $("#fImport").addEventListener("change",function(){
+    var f=this.files&&this.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        if(!o||!Array.isArray(o.kits))throw new Error("bad");
+        S=normalise(o);
+        renderSettings();renderKitSelect();renderItems();renderRegister();renderHistory();refresh();
+        flash("Imported "+S.kits.length+" kit"+(S.kits.length===1?"":"s")+" from "+f.name+".");
+      }catch(e){flash("That file is not a First Aid Kit Audit export.");}
+    };
+    rd.readAsText(f);
+    this.value="";
+  });
+  $("#bSample").addEventListener("click",function(){
+    if(!confirm("Replace everything on this page with the sample data?"))return;
+    S=sampleState();
+    renderSettings();renderKitSelect();renderItems();renderRegister();renderHistory();refresh();
+    flash("Sample data loaded.");
+  });
+  $("#bClear").addEventListener("click",function(){
+    if(!confirm("Clear all data? Everything on this page and the saved copy in this browser will be removed."))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=blankState();
+    var k=newKit("FA-01","","medium","",todayYmd(),3);
+    k.items.forEach(function(it){it.found=0;});
+    S.kits=[k];S.sel=k.id;
+    renderSettings();renderKitSelect();renderItems();renderRegister();renderHistory();refresh();
+    flash("All data cleared.");
+  });
+}
+
+/* ══ boot ═══════════════════════════════════════════════════════ */
+(function(){
+  S=load();
+  if(!S)S=sampleState();
+  renderSettings();renderKitSelect();renderItems();renderRegister();renderHistory();
+  bindHeader();bindItems();bindRegister();bindHistory();bindActions();
+  refresh();
+})();
+</script>
+</body>
+</html>

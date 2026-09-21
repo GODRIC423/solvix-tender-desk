@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>htop for your life — process monitor</title>
+<meta name="description" content="An ncurses-style process monitor for the processes that actually run you: sleep, coffee, worry, laundry, rent. Live CPU and memory, a load average for the week, and F9 to kill.">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0A0A'/%3E%3Crect x='5' y='6' width='22' height='3' fill='%2333FF66'/%3E%3Crect x='5' y='12' width='14' height='3' fill='%2333FF66'/%3E%3Crect x='5' y='18' width='18' height='3' fill='%23FFB000'/%3E%3Crect x='5' y='24' width='8' height='3' fill='%2333FF66'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0A0A;
+  --fg:#33FF66;
+  --amb:#FFB000;
+  --dim:#555566;
+  --dim2:#9096ab;
+  --fg-soft:#22b048;
+  --glow:rgba(51,255,102,.35);
+  --lh:1.45;
+}
+html[data-phos="amber"]{
+  --fg:#FFB000;
+  --amb:#33FF66;
+  --fg-soft:#b07a00;
+  --glow:rgba(255,176,0,.35);
+}
+*{box-sizing:border-box;border-radius:0!important}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg)}
+body{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  font-size:15px;line-height:var(--lh);
+  min-height:100vh;
+  text-shadow:0 0 6px var(--glow);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+@media (max-width:1100px){body{font-size:14px}}
+@media (max-width:600px){body{font-size:13px}}
+
+/* CRT layers */
+.crt{position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.18) 2px 3px)}
+.vig{position:fixed;inset:0;pointer-events:none;z-index:49;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.55) 100%)}
+
+/* app frame */
+.app{
+  min-height:100vh;display:grid;
+  grid-template-rows:auto auto 1fr auto auto;
+  padding:.35em .6em .5em;gap:.85em .25em;
+}
+@media (min-width:1100px){
+  .app{height:100vh;overflow:hidden}
+}
+.topbar{display:flex;justify-content:space-between;gap:1ch;flex-wrap:wrap;
+  background:var(--fg);color:var(--bg);text-shadow:none;padding:0 1ch;font-weight:500}
+.topbar span{white-space:nowrap}
+@media (max-width:640px){.topbar .sub{display:none}}
+.topbar .tab{background:var(--bg);color:var(--fg);padding:0 1ch;text-shadow:0 0 6px var(--glow)}
+
+/* panes with box-drawing borders */
+.pane{
+  position:relative;border:1px solid var(--dim);
+  padding:.8em 1ch .6em;min-width:0;
+}
+.pane>.ptitle{
+  position:absolute;top:-.75em;left:1.5ch;background:var(--bg);margin:0;font-size:1em;line-height:var(--lh);
+  padding:0 .5ch;color:var(--fg);font-weight:700;letter-spacing:0;white-space:nowrap;
+}
+.pane>.ptitle::before{content:"┤ ";color:var(--dim)}
+.pane>.ptitle::after{content:" ├";color:var(--dim)}
+.pane>.ptag{position:absolute;bottom:-.75em;right:1.5ch;background:var(--bg);padding:0 .5ch;color:var(--dim2);white-space:nowrap}
+
+/* header meters */
+.hdr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:0 3ch;align-items:start}
+@media (max-width:1100px){.hdr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.logo{display:none}}
+@media (max-width:640px){.hdr{grid-template-columns:1fr}}
+.meter{display:flex;white-space:pre;min-width:0}
+.meter .k{color:var(--fg);font-weight:700;width:4ch;flex:none}
+.meter .br{color:var(--dim2);flex:none}
+.meter .bar{flex:1;min-width:0;overflow:hidden;display:flex}
+.meter .bar .g{color:var(--fg)}
+.meter .bar .a{color:var(--amb)}
+.meter .bar .lbl{color:var(--dim2);margin-left:auto}
+.meter .bar .lbl b{color:var(--fg);font-weight:400}
+.summ{white-space:pre-wrap}
+.summ .l{color:var(--dim2)}
+.summ b{font-weight:400;color:var(--fg)}
+.summ .amb{color:var(--amb)}
+.logo{color:var(--amb);white-space:pre;line-height:1.05;font-size:.9em;margin:0;text-shadow:0 0 8px rgba(255,176,0,.45);padding-top:.1em}
+html[data-phos="amber"] .logo{color:var(--fg);text-shadow:0 0 8px var(--glow)}
+
+/* main split */
+.main{display:grid;grid-template-columns:minmax(0,2.15fr) minmax(0,1fr);gap:1.1em 1.4ch;min-height:0}
+@media (max-width:1100px){.main{grid-template-columns:1fr}}
+.pane.plist{display:flex;flex-direction:column;min-height:0;padding-bottom:.25em}
+.tblwrap{overflow:auto;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:var(--dim) var(--bg)}
+@media (max-width:1100px){.tblwrap{overflow:visible;overflow-x:hidden}}
+.row{
+  display:grid;gap:0 1ch;white-space:nowrap;align-items:baseline;
+  grid-template-columns:5ch 7ch 3ch 3ch 6ch 6ch 1ch 5ch 5ch 8ch minmax(8ch,1fr);
+  padding:0 .5ch;cursor:default;
+  transition:opacity .55s ease,transform .55s ease;
+}
+.row>span{overflow:hidden;text-overflow:clip;min-width:0}
+.row .n{text-align:right}
+.row .cmd{overflow:hidden;text-overflow:ellipsis}
+.row .cmd .tree{color:var(--dim)}
+.row .cmd .arg{color:var(--dim2)}
+.row .s-D,.row .s-T{color:var(--dim2)}
+.row .hot{color:var(--amb)}
+.thead{background:var(--fg);color:var(--bg);text-shadow:none;font-weight:700;position:sticky;top:0;z-index:2}
+.thead .sorted{background:var(--amb);color:var(--bg)}
+html[data-phos="amber"] .thead .sorted{background:var(--bg);color:var(--fg)}
+.row.sel{background:var(--fg);color:var(--bg);text-shadow:none}
+.row.sel .cmd .tree,.row.sel .cmd .arg,.row.sel .s-D,.row.sel .s-T,.row.sel .hot{color:var(--bg)}
+.row.sel .hot{font-weight:700}
+.row.dying{opacity:0;transform:translateX(3ch)}
+.row.spawn{animation:spawn .5s steps(4) both}
+@keyframes spawn{from{opacity:0}to{opacity:1}}
+.tbl:focus-visible{outline:none}
+.tbl:focus-visible .row.sel{outline:2px dashed var(--amb);outline-offset:-2px}
+@media (max-width:1100px){
+  .row{grid-template-columns:5ch 7ch 1ch 5ch 5ch 8ch minmax(8ch,1fr)}
+  .row .pri,.row .ni,.row .virt,.row .res{display:none}
+}
+@media (max-width:520px){
+  .row{grid-template-columns:5ch 1ch 5ch 5ch 8ch minmax(8ch,1fr)}
+  .row .user{display:none}
+}
+.empty{color:var(--dim2);padding:.5em .5ch}
+
+/* detail pane */
+.pdet{display:flex;flex-direction:column;min-height:0}
+.detin{display:flex;flex-direction:column;gap:.9em;min-height:0;flex:1;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--dim) var(--bg);padding-bottom:1.1em}
+.env{white-space:pre-wrap;color:var(--dim2)}
+.env b{font-weight:400;color:var(--fg)}
+.env .amb{color:var(--amb)}
+.kv{display:grid;grid-template-columns:8ch 1fr;gap:0 1ch;white-space:pre-wrap}
+.kv .l{color:var(--dim2)}
+.kv .amb{color:var(--amb)}
+.desc{margin:0;color:var(--fg);white-space:normal;max-width:56ch}
+.desc::before{content:"# ";color:var(--dim2)}
+.week{white-space:pre;line-height:1.1}
+.week .cap{color:var(--dim2);line-height:var(--lh);white-space:normal}
+.week .g{color:var(--fg)}
+.week .a{color:var(--amb)}
+.week .z{color:var(--dim)}
+.week .d{color:var(--dim2)}
+.week .today{color:var(--amb);font-weight:700}
+.rule{color:var(--dim);white-space:nowrap;overflow:hidden}
+
+/* command line */
+.cmdline{display:flex;align-items:center;gap:0;white-space:pre;padding:0 .5ch;min-height:1.45em;overflow:hidden}
+.cmdline .ps{color:var(--amb);font-weight:500}
+.cmdline .ps .p{color:var(--fg)}
+.cmdline input{
+  font:inherit;color:inherit;background:transparent;border:0;outline:0;padding:0;margin:0;
+  caret-color:transparent;width:1ch;min-width:1ch;text-shadow:inherit;
+}
+.cmdline input:focus-visible{outline:none}
+.cur{display:inline-block;width:1ch;height:1.15em;background:var(--fg);vertical-align:text-bottom;
+  animation:blink 1.2s steps(1,end) infinite;box-shadow:0 0 8px var(--glow)}
+.cmdline:focus-within .cur{animation-duration:.6s}
+@keyframes blink{0%,68%{opacity:1}69%,100%{opacity:0}}
+.msg{color:var(--dim2);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.msg.warn{color:var(--amb)}
+@media (max-width:640px){.msg{display:none}.cmdline{flex-wrap:wrap}}
+.msgm{display:none;color:var(--dim2);padding:0 .5ch;white-space:normal}
+@media (max-width:640px){.msgm{display:block}}
+
+/* F-key footer */
+.fbar{display:flex;flex-wrap:wrap;gap:0;background:var(--bg)}
+.fbar button{
+  font:inherit;line-height:var(--lh);border:0;padding:0;margin:0;background:transparent;color:var(--fg);
+  display:flex;cursor:pointer;text-shadow:none;white-space:nowrap;flex:1 1 auto;
+}
+.fbar button .k{color:var(--fg);font-weight:700;padding:0 0 0 .5ch;text-shadow:0 0 6px var(--glow)}
+.fbar button .v{background:var(--fg);color:var(--bg);flex:1;text-align:left;padding:0 1ch 0 .5ch;font-weight:500}
+.fbar button:hover .v,.fbar button:focus-visible .v{background:var(--amb)}
+.fbar button:focus-visible{outline:2px solid var(--amb);outline-offset:1px}
+.fbar button.on .v{background:var(--amb)}
+.fbar button:active .v{background:var(--bg);color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
+
+/* help overlay */
+.ovl{position:fixed;inset:0;z-index:60;background:rgba(10,10,10,.82);display:none;align-items:center;justify-content:center;padding:1.5em}
+.ovl[data-open="1"]{display:flex}
+.box{background:var(--bg);border:1px solid var(--fg);max-width:78ch;width:100%;max-height:92vh;overflow:auto;padding:1.4em 2ch 1.2em;position:relative;box-shadow:0 0 40px var(--glow)}
+.box .ptitle{position:absolute;top:-.75em;left:1.5ch;background:var(--bg);padding:0 .5ch;font-weight:700}
+.box .ptitle::before{content:"┤ ";color:var(--dim)}
+.box .ptitle::after{content:" ├";color:var(--dim)}
+.box h2{font-size:1em;margin:0 0 .6em;color:var(--amb);font-weight:700;text-transform:uppercase}
+.box h2::before{content:"## ";color:var(--dim)}
+.box p{margin:0 0 .9em;max-width:70ch}
+.box dl{display:grid;grid-template-columns:14ch 1fr;gap:.15em 2ch;margin:0 0 1em}
+.box dt{color:var(--amb);white-space:nowrap}
+.box dd{margin:0;color:var(--fg)}
+.box .close{position:absolute;top:.5em;right:1ch;font:inherit;border:1px solid var(--dim);background:transparent;color:var(--fg);padding:0 1ch;cursor:pointer;text-shadow:none}
+.box .close:hover,.box .close:focus-visible{background:var(--fg);color:var(--bg);outline:none}
+.box .dim{color:var(--dim2)}
+
+/* quit screen */
+.bye{position:fixed;inset:0;z-index:70;background:var(--bg);display:none;padding:2em 3ch;white-space:pre-wrap;cursor:pointer}
+.bye[data-open="1"]{display:block}
+.bye .dim{color:var(--dim2)}
+.bye .amb{color:var(--amb)}
+
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+a{color:var(--amb)}
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){
+  .cur{animation:none}
+  .row{transition:none}
+  .row.spawn{animation:none}
+  .crt{display:none}
+}
+</style>
+</head>
+<body>
+<div class="crt" aria-hidden="true"></div>
+<div class="vig" aria-hidden="true"></div>
+
+<div class="app" id="app">
+  <header class="topbar" aria-label="session bar">
+    <span><span class="tab">htop 3.3.0-life</span><span class="sub"> tty1 · session leader: you</span></span>
+    <span id="clock" aria-live="off">Thu Sep  3 00:00:00</span>
+  </header>
+
+  <!-- PANE 1: meters -->
+  <section class="pane hdr" aria-labelledby="t1">
+    <h1 class="ptitle" id="t1">1 meters</h1>
+    <div class="meters" id="meters" aria-label="resource meters">
+      <div class="meter"><span class="k">bod</span><span class="br">[</span><span class="bar" data-m="c0"></span><span class="br">]</span></div>
+      <div class="meter"><span class="k">mnd</span><span class="br">[</span><span class="bar" data-m="c1"></span><span class="br">]</span></div>
+      <div class="meter"><span class="k">hrt</span><span class="br">[</span><span class="bar" data-m="c2"></span><span class="br">]</span></div>
+      <div class="meter"><span class="k">wlt</span><span class="br">[</span><span class="bar" data-m="c3"></span><span class="br">]</span></div>
+      <div class="meter"><span class="k">Mem</span><span class="br">[</span><span class="bar" data-m="mem"></span><span class="br">]</span></div>
+      <div class="meter"><span class="k">Swp</span><span class="br">[</span><span class="bar" data-m="swp"></span><span class="br">]</span></div>
+    </div>
+    <div class="summ" id="summ" aria-label="summary"><span class="l">Tasks:</span> <b id="s-tasks">24</b>, <b id="s-thr">61</b> thr; <b id="s-run" class="amb">3</b> running
+<span class="l">Load average (week):</span> <b id="s-load">1.84 2.31 2.02</b>
+<span class="l">                     </span> <span class="l">today   3d    7d</span>
+<span class="l">Uptime:</span> <b id="s-up">12,591 days, 00:00:00</b>
+<span class="l">Kernel:</span> <b>consciousness 34.7.1-generic</b>
+<span class="l">Scheduler:</span> <b>CFS</b> <span class="l">(Completely Fair, allegedly)</span></div>
+    <pre class="logo" aria-hidden="true">█     █ █████ █████
+█     █ █     █
+█     █ ████  ████
+█     █ █     █
+█████ █ █     █████</pre>
+    <span class="ptag" aria-hidden="true">refresh 1.0s</span>
+  </section>
+
+  <div class="main">
+    <!-- PANE 2: processes -->
+    <section class="pane plist" aria-labelledby="t2">
+      <h2 class="ptitle" id="t2">2 processes</h2>
+      <div class="tblwrap">
+        <div class="tbl" id="tbl" role="listbox" tabindex="0" aria-label="life processes; use arrow keys or j/k to move, F9 to kill" aria-activedescendant="">
+          <div class="row thead" role="presentation" id="thead">
+            <span class="n pid" data-k="pid">PID</span><span class="user">USER</span><span class="n pri">PRI</span><span class="n ni">NI</span>
+            <span class="n virt">VIRT</span><span class="n res">RES</span><span class="st">S</span>
+            <span class="n cpu" data-k="cpu">CPU%</span><span class="n mem" data-k="mem">MEM%</span><span class="n time" data-k="time">TIME+</span><span class="cmd">Command</span>
+          </div>
+          <div id="rows"></div>
+          <div class="empty" id="empty" hidden>no process matches the filter. (if only.)</div>
+        </div>
+      </div>
+      <span class="ptag" id="ptag2" aria-hidden="true">sort: CPU% ▼</span>
+    </section>
+
+    <!-- PANE 3: detail + week load -->
+    <section class="pane pdet" aria-labelledby="t3">
+      <h2 class="ptitle" id="t3">3 detail</h2>
+      <div class="detin">
+      <div class="kv" id="kv" aria-live="off"></div>
+      <p class="desc" id="desc"></p>
+      <div class="rule" aria-hidden="true">────────────────────────────────────────────────────────────────────────</div>
+      <div class="week" id="week" aria-label="load average for the last seven days"></div>
+      <div class="rule" aria-hidden="true">────────────────────────────────────────────────────────────────────────</div>
+      <div class="env" aria-label="environment">HOME=<b>/home/you</b>
+SHELL=<b>/bin/sigh</b>
+EDITOR=<b>whatever is already open</b>
+LANG=<b>en_GB.tired</b>
+TZ=<b>whichever one the deadline is in</b>
+OOM_SCORE_ADJ=<b class="amb">-1000</b>  <span>(never let the kernel pick)</span></div>
+      </div>
+      <span class="ptag" aria-hidden="true">detail of selection</span>
+    </section>
+  </div>
+
+  <div class="cmdline" id="cmdline">
+    <label class="ps" for="q"><span class="p">life@home</span>:~ $ <span id="mode" class="sr">command</span></label><span id="prefix" aria-hidden="true"></span><input id="q" type="text" autocomplete="off" spellcheck="false" aria-label="search or filter processes by name" aria-describedby="msg"><span class="cur" aria-hidden="true"></span>
+    <span class="msg" id="msg" role="status" aria-live="polite">welcome back. press F1 for help, j/k to move, F9 to kill.</span>
+  </div>
+  <div class="msgm" id="msgm" aria-hidden="true"></div>
+
+  <nav class="fbar" aria-label="function keys">
+    <button type="button" data-f="F1"><span class="k">F1</span><span class="v">Help</span></button>
+    <button type="button" data-f="F2"><span class="k">F2</span><span class="v">Setup</span></button>
+    <button type="button" data-f="F3"><span class="k">F3</span><span class="v">Search</span></button>
+    <button type="button" data-f="F4"><span class="k">F4</span><span class="v">Filter</span></button>
+    <button type="button" data-f="F5" id="btnTree"><span class="k">F5</span><span class="v">Tree</span></button>
+    <button type="button" data-f="F6"><span class="k">F6</span><span class="v">SortBy</span></button>
+    <button type="button" data-f="F7"><span class="k">F7</span><span class="v">Nice -</span></button>
+    <button type="button" data-f="F8"><span class="k">F8</span><span class="v">Nice +</span></button>
+    <button type="button" data-f="F9"><span class="k">F9</span><span class="v">Kill</span></button>
+    <button type="button" data-f="F10"><span class="k">F10</span><span class="v">Quit</span></button>
+  </nav>
+</div>
+
+<!-- F1 help -->
+<div class="ovl" id="help" role="dialog" aria-modal="true" aria-labelledby="helpt" data-open="0">
+  <div class="box">
+    <span class="ptitle" id="helpt">htop for your life — help</span>
+    <button type="button" class="close" id="helpClose" aria-label="close help">[x]</button>
+    <h2>What this is</h2>
+    <p>A process monitor for the machine you actually run on. Every line in pane 2 is something that is currently scheduled on you: sleep, coffee, worry, laundry, rent. CPU% is how much of your attention a thing is consuming right now; MEM% is how much of you it holds even when it is not running. TIME+ is the cumulative time it has had since boot, which was your birthday. Values refresh every second because that is how often they change.</p>
+    <p>The four meters at the top are your cores: body, mind, heart and wallet. Mem is attention. Swp is sleep debt, and if it is ever above zero you already know why.</p>
+    <h2>Keys</h2>
+    <dl>
+      <dt>↑ ↓  /  j k</dt><dd>move the inverse-video selection</dd>
+      <dt>Home / End</dt><dd>jump to the first or last process</dd>
+      <dt>F1  h  ?</dt><dd>this help</dd>
+      <dt>F2</dt><dd>setup: toggle phosphor colour (green / amber)</dd>
+      <dt>F3  /</dt><dd>incremental search; Enter keeps it as a filter, Esc clears</dd>
+      <dt>F4  \</dt><dd>filter (same line, same result, different habit)</dd>
+      <dt>F5  t</dt><dd>tree view: children indented under their parent process</dd>
+      <dt>F6  &gt;</dt><dd>cycle sort column: CPU%, MEM%, TIME+, PID</dd>
+      <dt>F7 / F8  [ ]</dt><dd>nice the selection: lower is more urgent, higher is less</dd>
+      <dt>F9  x  Del</dt><dd>kill the selected process (SIGTERM). Some respawn. You know which.</dd>
+      <dt>F10  q</dt><dd>quit. Logs the session out; click or press a key to log back in.</dd>
+    </dl>
+    <h2>States</h2>
+    <dl>
+      <dt>R</dt><dd>running — it has you right now</dd>
+      <dt>S</dt><dd>sleeping — waiting on a timer or a person</dd>
+      <dt>D</dt><dd>uninterruptible — the laundry on the chair</dd>
+      <dt>T</dt><dd>stopped — the side project</dd>
+      <dt>Z</dt><dd>zombie — finished but still on your mind</dd>
+    </dl>
+    <p class="dim">Killing pid 1 is not permitted. Nothing here is saved; reload and it all comes back, which is also how mornings work.</p>
+  </div>
+</div>
+
+<!-- F10 quit -->
+<div class="bye" id="bye" data-open="0" role="dialog" aria-label="session ended" tabindex="-1"><span class="dim">htop for your life: received SIGTERM from tty1</span>
+flushing attention buffers . . . <span class="amb">done</span>
+unmounting /home/you            . . . <span class="amb">done</span>
+sleep(8h) scheduled             . . . <span class="amb">pending</span>
+
+<span class="dim">[Process completed]</span>
+
+login: you
+password:
+<span class="amb">Last login: yesterday, later than planned.</span>
+
+press any key or click to log back in <span class="cur" aria-hidden="true"></span></div>
+
+<script>
+(function(){
+  'use strict';
+  const $=s=>document.querySelector(s);
+  const rowsEl=$('#rows'), tbl=$('#tbl'), msgEl=$('#msg'), msgm=$('#msgm'), q=$('#q'), prefix=$('#prefix'), modeEl=$('#mode');
+  const kvEl=$('#kv'), descEl=$('#desc'), weekEl=$('#week'), emptyEl=$('#empty');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- data ----------
+  const P=(pid,ppid,user,ni,virt,res,s,cpu,mem,time,cmd,arg,desc,respawn)=>({pid,ppid,user,ni,pri:20+ni,virt,res,s,cpu,base:cpu,mem,time,cmd,arg,desc,respawn});
+  const SEED=[
+    P(1,0,'root',0,'1.0T','34.7G','S',0.3,0.0,1e9,'life','',
+      'The init process. Everything else in this list is a child of this one. It cannot be killed from here; F10 is the closest you get, and it only logs you out for a bit.'),
+    P(200,1,'you',0,'8.2G','1.9G','S',2.1,4.0,3.1e8,'work','--hours=40 --actual=51',
+      'Session leader for anything you get paid for. Forks aggressively on Monday mornings and refuses to release its file handles before Friday evening.'),
+    P(211,200,'you',0,'2.4G','980M','R',18.4,9.2,2.9e7,'inbox','--poll=4s --unread=1447',
+      'Polls for new mail every four seconds whether you asked it to or not. Memory grows without bound; the unread counter is stored as a 64-bit integer for a reason.'),
+    P(212,200,'you',-5,'1.1G','412M','S',6.0,5.1,1.7e7,'deadlines','--wake=23:40',
+      'A timer process that sleeps for weeks, then wakes at 23:40 the night before with realtime priority and every core it can grab.'),
+    P(213,200,'you',5,'600M','200M','S',4.4,2.0,2.2e7,'meetings','--could-have-been=email',
+      'Blocks on other people. Frequently spawned with no arguments and a thirty-minute default that was never negotiated with you.'),
+    P(300,1,'you',10,'3.0G','1.2G','S',0.9,3.0,4.0e8,'home','--daemon',
+      'The housekeeping daemon. Low priority, never finishes, always respawns. If it ever exits cleanly, check who else is living in your flat.'),
+    P(311,300,'you',10,'420M','96M','D',1.2,1.4,9.1e6,'laundry','--phase=fold',
+      'Cyclic. Runs in three phases (wash, dry, fold) but the third is often left in state D: uninterruptible sleep on the bedroom chair.','',true),
+    P(312,300,'you',10,'300M','88M','R',3.3,1.1,7.7e6,'dishes','--sink-buffer=full',
+      'Accumulates in the sink buffer until a high-water mark triggers a flush. Respawns within seconds of completion, every single time.',true),
+    P(313,300,'you',10,'250M','40M','S',0.6,0.9,3.3e6,'groceries','',
+      'A batch job. Runs best with a written argument list; without one it returns snacks and no milk, and exits zero anyway.'),
+    P(314,300,'cat',-20,'2.0G','1.0G','R',3.1,6.5,1.4e8,'cat','--wake=05:12 --reason=none',
+      'Runs at nice -20 because it decided so. Wakes you at 05:12 for reasons it will not document. Uses 3% CPU and 100% of the chair.'),
+    P(315,300,'you',15,'80M','12M','S',0.2,0.3,2.0e7,'plants','--water=3d',
+      'Requires a small write every three days. Silently degrades if ignored; the leaves are the log file, and they are yellowing.'),
+    P(400,1,'you',0,'9.9G','2.6G','S',1.0,6.0,1e9,'self','',
+      'Everything that is actually you. Should be the highest-priority group; is usually scheduled last, after work and home have had their turn.'),
+    P(411,400,'you',-10,'6.0G','3.4G','S',7.8,12.0,3.3e8,'sleep','--target=8h --actual=6h14m',
+      'The only process that lets the others cool down. Target eight hours, actual six hours fourteen minutes. Chronic under-allocation shows up in Swp.'),
+    P(412,400,'you',-2,'220M','60M','R',22.6,1.2,4.4e5,'coffee','--cups=2 --regret=0',
+      'A short-lived process that raises the clock speed of everything else for roughly ninety minutes, then bills you for it around three in the afternoon.'),
+    P(413,400,'you',0,'4.7G','2.1G','R',41.2,14.3,6.6e7,'worry','--about=everything',
+      'Spins at high CPU doing nothing useful. Cannot be killed permanently; SIGTERM only makes it respawn under a new PID a few seconds later. F9 anyway, it is satisfying.',true),
+    P(414,400,'you',19,'3.2G','1.7G','R',15.7,8.8,2.5e7,'doomscroll','--more=5min',
+      'Zombie-adjacent. Holds the thumb in a busy loop, leaks attention, and reports "just five more minutes" to the scheduler every five minutes.'),
+    P(415,400,'you',0,'700M','150M','S',0.8,1.8,8.8e5,'gym','--sched=07:00 --rate=2.3/wk',
+      'Scheduled for 07:00 daily. Actual invocation rate: 2.3 per week. Every completed run lowers the load on worry by about 0.4 for the rest of the day.'),
+    P(416,400,'you',-5,'1.5G','300M','S',1.4,2.2,1.9e6,'therapy','--weekly',
+      'A weekly garbage collector for the heap. Expensive per call, but it is the only thing that actually frees memory still held by processes that exited years ago.'),
+    P(417,400,'you',10,'2.8G','1.1G','T',0.0,4.1,1.2e6,'side_project','--readme=done',
+      'Started fourteen months ago with a README and a lot of enthusiasm. Currently in state T: stopped, but the intention is still resident in memory.'),
+    P(418,400,'you',-3,'900M','420M','S',2.9,3.6,5.2e7,'friends','--latency=high',
+      'Network I/O. Latency goes up with age; throughput is fine once a connection is actually established. Do not let this one time out.'),
+    P(500,1,'you',0,'5.5G','2.0G','S',0.7,2.5,4.4e8,'money','--supervisor',
+      'Accounting supervisor. Forks rent on the first of every month regardless of what else is running, and never once has it asked.'),
+    P(511,500,'landlord',-15,'2.9G','2.9G','S',1.1,38.0,1.1e8,'rent','--due=01 --negotiable=no',
+      'Consumes 38% of MEM in a single allocation, once a month, at 00:00:01. Non-negotiable; has never once been swapped out.'),
+    P(512,500,'hmrc',0,'1.2G','300M','S',0.4,1.9,2.6e7,'taxes','--sleep=11mo',
+      'Sleeps eleven months, then runs for one very long weekend in April. Exits with a code you did not expect, in either direction.'),
+    P(601,1,'you',19,'64M','8M','Z',0.0,0.1,7.2e4,'that_thing_you_said','--in=2014',
+      'A zombie: it finished nine years ago and nobody has reaped it. Costs nothing, holds a PID, shows up at 02:00. Therapy can wait() on it.')
+  ];
+  let procs=SEED.map(p=>Object.assign({},p));
+  let nextPid=700;
+  const state={sel:413,sort:'cpu',tree:false,filter:'',searching:false,killed:new Set()};
+  const SORTS=['cpu','mem','time','pid'];
+  const SORTN={cpu:'CPU%',mem:'MEM%',time:'TIME+',pid:'PID'};
+
+  // ---------- helpers ----------
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  function fmtTime(s){ // htop style H:MM:SS or D-HH:MM
+    s=Math.floor(s);
+    const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60), sec=s%60;
+    if(d>=365){const y=Math.floor(d/365);return y+'y'+String(d%365).padStart(3,'0')+'d';}
+    if(d>0)return d+'-'+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    return h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+  }
+  const pct=v=>v.toFixed(1).padStart(5,' ');
+  function say(t,warn){msgEl.textContent=t;msgm.textContent=t;msgEl.classList.toggle('warn',!!warn);msgm.classList.toggle('warn',!!warn);}
+
+  // ---------- rows ----------
+  const rowMap=new Map();
+  function makeRow(p){
+    const r=document.createElement('div');
+    r.className='row';r.setAttribute('role','option');r.id='p'+p.pid;r.dataset.pid=p.pid;
+    r.innerHTML='<span class="n pid"></span><span class="user"></span><span class="n pri"></span><span class="n ni"></span>'+
+      '<span class="n virt"></span><span class="n res"></span><span class="st"></span>'+
+      '<span class="n cpu"></span><span class="n mem"></span><span class="n time"></span><span class="cmd"></span>';
+    r.addEventListener('click',()=>{select(p.pid);tbl.focus({preventScroll:true});});
+    r.addEventListener('dblclick',()=>kill());
+    return r;
+  }
+  function fillRow(p,r){
+    const c=r.children;
+    c[0].textContent=p.pid; c[1].textContent=p.user; c[2].textContent=p.pri; c[3].textContent=p.ni;
+    c[4].textContent=p.virt; c[5].textContent=p.res;
+    c[6].textContent=p.s; c[6].className='st s-'+p.s;
+    c[7].textContent=pct(p.cpu); c[7].className='n cpu'+(p.cpu>=30?' hot':'');
+    c[8].textContent=pct(p.mem); c[8].className='n mem'+(p.mem>=30?' hot':'');
+    c[9].textContent=fmtTime(p.time);
+    let pre='';
+    if(state.tree&&p.ppid!==0){
+      const sibs=visibleList().filter(x=>x.ppid===p.ppid);
+      const last=sibs[sibs.length-1]===p;
+      pre=(p.ppid===1?'':'  ')+(last?'└─ ':'├─ ');
+    }
+    c[10].innerHTML=(pre?'<span class="tree">'+pre+'</span>':'')+'<span class="name">'+p.cmd+'</span>'+(p.arg?' <span class="arg">'+p.arg+'</span>':'');
+  }
+  function sorted(list){
+    const k=state.sort;
+    return list.slice().sort((a,b)=>k==='pid'?a.pid-b.pid:(b[k]-a[k])||(a.pid-b.pid));
+  }
+  function visibleList(){
+    let list=procs.filter(p=>!state.filter||p.cmd.includes(state.filter)||p.arg.includes(state.filter)||p.user.includes(state.filter));
+    if(!state.tree)return sorted(list);
+    // tree order: depth-first, sort siblings by sort key
+    const out=[];
+    const walk=(ppid)=>{sorted(list.filter(p=>p.ppid===ppid)).forEach(p=>{out.push(p);walk(p.pid);});};
+    walk(0);
+    // filtered orphans (parent hidden by filter) appended
+    list.forEach(p=>{if(!out.includes(p))out.push(p);});
+    return out;
+  }
+  function renderList(){
+    const list=visibleList();
+    const frag=document.createDocumentFragment();
+    list.forEach(p=>{
+      let r=rowMap.get(p.pid);
+      if(!r){r=makeRow(p);rowMap.set(p.pid,r);}
+      fillRow(p,r);
+      frag.appendChild(r);
+    });
+    // drop rows for procs no longer present/visible
+    [...rowsEl.children].forEach(r=>{if(!list.some(p=>'p'+p.pid===r.id)&&!r.classList.contains('dying'))r.remove();});
+    rowsEl.appendChild(frag);
+    emptyEl.hidden=list.length>0;
+    if(!list.some(p=>p.pid===state.sel)&&list.length)state.sel=list[0].pid;
+    paintSel();
+    $('#thead').querySelectorAll('[data-k]').forEach(el=>el.classList.toggle('sorted',el.dataset.k===state.sort));
+    $('#ptag2').textContent='sort: '+SORTN[state.sort]+(state.sort==='pid'?' ▲':' ▼')+(state.tree?' · tree':'')+(state.filter?' · filter: '+state.filter:'');
+  }
+  function paintSel(){
+    rowMap.forEach((r,pid)=>{const on=pid===state.sel;r.classList.toggle('sel',on);r.setAttribute('aria-selected',on?'true':'false');});
+    tbl.setAttribute('aria-activedescendant','p'+state.sel);
+    renderDetail();
+  }
+  function select(pid){state.sel=pid;paintSel();const r=rowMap.get(pid);if(r)r.scrollIntoView({block:'nearest'});}
+  function move(d){
+    const list=visibleList().map(p=>p.pid);if(!list.length)return;
+    let i=list.indexOf(state.sel);
+    if(d===Infinity)i=list.length-1;else if(d===-Infinity)i=0;else i=clamp(i+d,0,list.length-1);
+    select(list[i]);
+  }
+  function selProc(){return procs.find(p=>p.pid===state.sel);}
+
+  // ---------- detail ----------
+  const startedAt=Date.now();
+  function renderDetail(){
+    const p=selProc();
+    if(!p){kvEl.innerHTML='';descEl.textContent='';return;}
+    const par=procs.find(x=>x.pid===p.ppid);
+    const kids=procs.filter(x=>x.ppid===p.pid).length;
+    const st={R:'running',S:'sleeping',D:'uninterruptible',T:'stopped',Z:'zombie'}[p.s];
+    kvEl.innerHTML=
+      '<span class="l">Name</span><span><b>'+p.cmd+'</b>'+(p.arg?' <span class="l">'+p.arg+'</span>':'')+'</span>'+
+      '<span class="l">PID</span><span>'+p.pid+' <span class="l">ppid</span> '+p.ppid+(par?' <span class="l">('+par.cmd+')</span>':'')+'</span>'+
+      '<span class="l">State</span><span>'+p.s+' <span class="l">'+st+'</span>'+(kids?'  <span class="l">children</span> '+kids:'')+'</span>'+
+      '<span class="l">Nice</span><span>'+p.ni+' <span class="l">pri</span> '+p.pri+(p.ni<0?' <span class="amb">urgent</span>':p.ni>=10?' <span class="l">deferrable</span>':'')+'</span>'+
+      '<span class="l">CPU%</span><span'+(p.cpu>=30?' class="amb"':'')+'>'+p.cpu.toFixed(1)+'</span>'+
+      '<span class="l">MEM%</span><span'+(p.mem>=30?' class="amb"':'')+'>'+p.mem.toFixed(1)+' <span class="l">('+p.res+' resident of '+p.virt+')</span></span>'+
+      '<span class="l">TIME+</span><span>'+fmtTime(p.time)+(p.respawn?' <span class="l">· respawns</span>':'')+'</span>';
+    descEl.textContent=p.desc;
+  }
+
+  // ---------- week load chart ----------
+  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const week=[2.41,1.98,2.87,3.05,2.66,0.94,1.31]; // today = Thu (index 3) drifts
+  const TODAY=3;
+  function renderWeek(){
+    const H=6, maxv=4;
+    let out='';
+    for(let r=H;r>=1;r--){
+      const thr=r/H*maxv;
+      let line='<span class="d">'+(r===H?'4.0 ':r===Math.round(H/2)?'2.0 ':'    ')+'</span>';
+      for(let d=0;d<7;d++){
+        const v=week[d], full=v>=thr, half=!full&&v>=thr-maxv/H/2;
+        const ch=full?'████':half?'▄▄▄▄':'    ';
+        const cls=v>=2.5?'a':'g';
+        line+='<span class="'+(full||half?cls:'z')+'">'+ch+'</span> ';
+      }
+      out+=line+'\n';
+    }
+    out+='<span class="d">    </span>';
+    for(let d=0;d<7;d++)out+='<span class="'+(d===TODAY?'today':'d')+'">'+DAYS[d].padEnd(4,' ')+'</span> ';
+    out+='\n<span class="d">    </span>';
+    for(let d=0;d<7;d++)out+='<span class="'+(d===TODAY?'today':'d')+'">'+week[d].toFixed(2)+'</span> ';
+    out+='\n<span class="cap">load average, last 7 days · runnable processes waiting on you · amber above 2.50 · Sat was fine</span>';
+    weekEl.innerHTML=out;
+  }
+
+  // ---------- meters ----------
+  const cores=[0.62,0.71,0.38,0.83]; // body mind heart wallet
+  let memUse=5.61, memTot=8.0, swpUse=1.74, swpTot=4.0;
+  let chW=0;
+  function measureCh(){
+    const s=document.createElement('span');s.textContent='0000000000';s.style.cssText='position:absolute;visibility:hidden;white-space:pre';
+    $('#meters').appendChild(s);chW=s.getBoundingClientRect().width/10;s.remove();
+  }
+  function bar(el,frac,label,labelCls){
+    const n=Math.max(8,Math.floor(el.clientWidth/chW));
+    const room=n-label.length-1;
+    const filled=Math.round(frac*room);
+    const g=Math.min(filled,Math.round(room*0.5)), a=filled-g;
+    el.innerHTML='<span class="g">'+'|'.repeat(g)+'</span><span class="a">'+'|'.repeat(Math.max(0,a))+'</span>'+
+      '<span class="lbl">'+label+'</span>';
+  }
+  function drawMeters(){
+    if(!chW)measureCh();
+    document.querySelectorAll('.meter .bar').forEach(el=>{
+      const m=el.dataset.m;
+      if(m[0]==='c'){const v=cores[+m[1]];bar(el,v,(v*100).toFixed(1)+'%');}
+      else if(m==='mem')bar(el,memUse/memTot,memUse.toFixed(2)+'G/'+memTot.toFixed(2)+'G');
+      else bar(el,swpUse/swpTot,swpUse.toFixed(2)+'G/'+swpTot.toFixed(2)+'G');
+    });
+  }
+
+  // ---------- tick ----------
+  const BIRTH=Date.UTC(1992,2,14,6,12,0);
+  function tickData(){
+    let cpuSum=0;
+    procs.forEach(p=>{
+      if(p.s==='T'||p.s==='Z'){p.cpu=0;return;}
+      const jitter=p.base*rnd(-0.18,0.18)+rnd(-0.6,0.6);
+      p.cpu=clamp(p.base+jitter,0,99.9);
+      if(p.cmd==='coffee'){p.base=Math.max(4,p.base-0.04);} // wears off
+      if(p.cmd==='worry'&&Math.random()<0.08){p.base=clamp(p.base+rnd(-6,6),20,70);}
+      p.mem=clamp(p.mem+rnd(-0.03,0.03),0,99);
+      if(p.s==='R')p.time+=1;else if(Math.random()<0.15)p.time+=1;
+      cpuSum+=p.cpu;
+    });
+    cores.forEach((v,i)=>{cores[i]=clamp(v+rnd(-0.03,0.03),0.05,0.99);});
+    cores[1]=clamp(cpuSum/300,0.1,0.99);
+    memUse=clamp(memUse+rnd(-0.05,0.06),3.2,7.9);
+    swpUse=clamp(swpUse+rnd(-0.02,0.02),0.4,3.9);
+    week[TODAY]=clamp(week[TODAY]+rnd(-0.04,0.05),0.5,3.9);
+  }
+  function tickView(){
+    // update text in place
+    procs.forEach(p=>{const r=rowMap.get(p.pid);if(r&&!r.classList.contains('dying'))fillRow(p,r);});
+    // reorder if needed
+    const want=visibleList().map(p=>'p'+p.pid);
+    const have=[...rowsEl.children].filter(r=>!r.classList.contains('dying')).map(r=>r.id);
+    if(want.join()!==have.join())renderList(); else renderDetail();
+    drawMeters();renderWeek();
+    const running=procs.filter(p=>p.s==='R').length;
+    $('#s-tasks').textContent=procs.length;$('#s-thr').textContent=procs.length*2+13;$('#s-run').textContent=running;
+    const l1=week[TODAY], l3=(week[TODAY]+week[TODAY-1]+week[TODAY-2])/3, l7=week.reduce((a,b)=>a+b,0)/7;
+    $('#s-load').textContent=l1.toFixed(2)+' '+l3.toFixed(2)+' '+l7.toFixed(2);
+    const now=new Date();
+    const up=now-BIRTH, days=Math.floor(up/86400000);
+    const hh=String(now.getHours()).padStart(2,'0'),mm=String(now.getMinutes()).padStart(2,'0'),ss=String(now.getSeconds()).padStart(2,'0');
+    $('#s-up').textContent=days.toLocaleString('en-US')+' days, '+hh+':'+mm+':'+ss;
+    $('#clock').textContent=now.toDateString().replace(/ (\d) /,'  $1 ')+' '+hh+':'+mm+':'+ss;
+  }
+  let last=0, raf=0;
+  function loop(t){
+    raf=requestAnimationFrame(loop);
+    if(t-last<1000)return;
+    last=t;tickData();tickView();
+  }
+  function start(){if(!raf){last=0;raf=requestAnimationFrame(loop);}}
+  function stop(){cancelAnimationFrame(raf);raf=0;}
+  document.addEventListener('visibilitychange',()=>document.hidden?stop():start());
+
+  // ---------- actions ----------
+  function kill(){
+    const p=selProc();if(!p)return;
+    if(p.pid===1){say('kill: (1) - Operation not permitted. pid 1 is init. Nice try.',true);return;}
+    const list=visibleList().map(x=>x.pid);const idx=list.indexOf(p.pid);
+    const victims=[p,...procs.filter(x=>x.ppid===p.pid)];
+    const kids=victims.length-1;
+    victims.forEach(v=>{
+      const r=rowMap.get(v.pid);
+      procs=procs.filter(x=>x!==v);
+      if(r){
+        r.classList.add('dying');r.classList.remove('sel');
+        const done=()=>{r.remove();rowMap.delete(v.pid);};
+        if(reduced)done();else setTimeout(done,600);
+      }
+      if(v.respawn){
+        const delay=v.cmd==='worry'?5500:v.cmd==='dishes'?9000:14000;
+        setTimeout(()=>respawn(v),delay);
+      }
+    });
+    const quips={worry:'Sent SIGTERM to worry. It will be back; they always are.',coffee:'coffee terminated. The 3pm crash has been rescheduled to now.',doomscroll:'doomscroll killed. 47 minutes returned to the pool.',rent:'rent killed. Unfortunately it is a monthly cron; see you on the 1st.',sleep:'You killed sleep. Swp will grow. This was your decision.',cat:'cat could not be killed and has been ignored instead. It approves.',work:'work terminated with '+kids+' children. Enjoy your weekend.',that_thing_you_said:'zombie reaped. It only took nine years.',dishes:'dishes done. Enjoy the next eleven seconds.',laundry:'laundry folded. The chair is briefly a chair.',side_project:'side_project stopped. It was already stopped. Now it is honest about it.',therapy:'therapy killed. Expect memory pressure in about three weeks.',gym:'gym killed. worry acquires the freed cores.'};
+    say(quips[p.cmd]||('Sent SIGTERM to '+p.cmd+' (pid '+p.pid+')'+(kids?' and '+kids+' child'+(kids>1?'ren':''):'')+'.'),p.cmd==='sleep');
+    if(p.cmd==='gym'){const w=procs.find(x=>x.cmd==='worry');if(w)w.base=clamp(w.base+8,0,90);}
+    if(p.cmd==='therapy'){const w=procs.find(x=>x.cmd==='worry');if(w)w.base=clamp(w.base+5,0,90);}
+    if(p.cmd==='worry'||p.cmd==='doomscroll'){cores[1]=Math.max(0.1,cores[1]-0.2);}
+    // move selection
+    const remaining=visibleList().map(x=>x.pid);
+    if(remaining.length){state.sel=remaining[Math.min(idx,remaining.length-1)];}
+    renderList();
+  }
+  function respawn(v){
+    if(document.hidden){setTimeout(()=>respawn(v),2000);return;}
+    const n=Object.assign({},v,{pid:nextPid++,time:0,cpu:v.base});
+    if(n.cmd==='worry')n.arg='--about=something_new';
+    procs.push(n);
+    renderList();
+    const r=rowMap.get(n.pid);if(r){r.classList.add('spawn');setTimeout(()=>r.classList.remove('spawn'),600);}
+    say(n.cmd+' respawned as pid '+n.pid+'.'+(n.cmd==='worry'?' Told you.':''));
+  }
+  function nice(d){
+    const p=selProc();if(!p)return;
+    if(p.pid===1){say('renice: pid 1: you do not get to set the priority of being alive.',true);return;}
+    p.ni=clamp(p.ni+d,-20,19);p.pri=20+p.ni;
+    p.base=clamp(p.base*(d<0?1.12:0.9),0,95);
+    say('renice: '+p.cmd+' → nice '+p.ni+(p.ni<=-15?'. That is cat-level urgency.':p.ni>=15?'. Deferred indefinitely.':'.'));
+    fillRow(p,rowMap.get(p.pid));renderDetail();
+  }
+  function cycleSort(){state.sort=SORTS[(SORTS.indexOf(state.sort)+1)%4];renderList();say('sorted by '+SORTN[state.sort]+'.');}
+  function toggleTree(){state.tree=!state.tree;$('#btnTree').classList.toggle('on',state.tree);renderList();say(state.tree?'tree view: children indented under parents.':'flat view.');}
+  function togglePhos(){
+    const amber=document.documentElement.dataset.phos==='amber';
+    if(amber)delete document.documentElement.dataset.phos;else document.documentElement.dataset.phos='amber';
+    document.querySelector('meta[name=theme-color]').content='#0A0A0A';
+    say('setup: phosphor set to '+(amber?'P1 green':'P3 amber')+'.');
+  }
+  function openSearch(mode){
+    state.searching=true;prefix.textContent=mode==='filter'?'filter: ':'search: ';modeEl.textContent=mode;
+    q.value=state.filter;q.style.width=Math.max(1,q.value.length)+'ch';q.focus();
+    say('type to match process names. Enter keeps it, Esc clears.');
+  }
+  function closeSearch(keep){
+    state.searching=false;prefix.textContent='';modeEl.textContent='command';
+    if(!keep){state.filter='';}
+    q.value='';q.style.width='1ch';q.blur();tbl.focus({preventScroll:true});renderList();
+    say(keep&&state.filter?'filter kept: "'+state.filter+'". F3 then Esc clears it.':'ready.');
+  }
+  q.addEventListener('input',()=>{state.filter=q.value.trim().toLowerCase();q.style.width=Math.max(1,q.value.length)+'ch';renderList();});
+  q.addEventListener('focus',()=>{if(!state.searching)openSearch('search');});
+  q.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){e.preventDefault();closeSearch(false);}
+    else if(e.key==='Enter'){e.preventDefault();closeSearch(true);}
+    else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();move(e.key==='ArrowDown'?1:-1);}
+    else if(/^F\d+$/.test(e.key)){e.preventDefault();fkey(e.key);}
+  });
+
+  const help=$('#help'), bye=$('#bye');
+  function openHelp(){help.dataset.open='1';$('#helpClose').focus();}
+  function closeHelp(){help.dataset.open='0';tbl.focus({preventScroll:true});}
+  $('#helpClose').addEventListener('click',closeHelp);
+  help.addEventListener('click',e=>{if(e.target===help)closeHelp();});
+  function quit(){bye.dataset.open='1';bye.focus();stop();}
+  function login(){if(bye.dataset.open!=='1')return;bye.dataset.open='0';start();say('logged in. everything is still here. it always is.');tbl.focus({preventScroll:true});}
+  bye.addEventListener('click',login);
+
+  function fkey(k){
+    switch(k){
+      case 'F1':openHelp();break;
+      case 'F2':togglePhos();break;
+      case 'F3':openSearch('search');break;
+      case 'F4':openSearch('filter');break;
+      case 'F5':toggleTree();break;
+      case 'F6':cycleSort();break;
+      case 'F7':nice(-1);break;
+      case 'F8':nice(1);break;
+      case 'F9':kill();break;
+      case 'F10':quit();break;
+    }
+  }
+  document.querySelectorAll('.fbar button').forEach(b=>b.addEventListener('click',()=>{fkey(b.dataset.f);if(b.dataset.f!=='F3'&&b.dataset.f!=='F4'&&b.dataset.f!=='F1'&&b.dataset.f!=='F10')tbl.focus({preventScroll:true});}));
+
+  document.addEventListener('keydown',e=>{
+    if(bye.dataset.open==='1'){e.preventDefault();login();return;}
+    if(help.dataset.open==='1'){if(e.key==='Escape'||e.key==='F1'||e.key==='q'||e.key==='h'||e.key==='?'){e.preventDefault();closeHelp();}return;}
+    if(e.target===q)return;
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    if(/^F([1-9]|10)$/.test(e.key)){e.preventDefault();fkey(e.key);return;}
+    switch(e.key){
+      case 'j':case 'ArrowDown':e.preventDefault();move(1);break;
+      case 'k':case 'ArrowUp':e.preventDefault();move(-1);break;
+      case 'PageDown':e.preventDefault();move(8);break;
+      case 'PageUp':e.preventDefault();move(-8);break;
+      case 'Home':case 'g':e.preventDefault();move(-Infinity);break;
+      case 'End':case 'G':e.preventDefault();move(Infinity);break;
+      case 'h':case '?':e.preventDefault();openHelp();break;
+      case '/':e.preventDefault();openSearch('search');break;
+      case '\\':e.preventDefault();openSearch('filter');break;
+      case 't':e.preventDefault();toggleTree();break;
+      case '>':case '.':e.preventDefault();cycleSort();break;
+      case '[':e.preventDefault();nice(-1);break;
+      case ']':e.preventDefault();nice(1);break;
+      case 'x':case 'Delete':e.preventDefault();kill();break;
+      case 'q':e.preventDefault();quit();break;
+      case 'Escape':if(state.filter){state.filter='';renderList();say('filter cleared.');}break;
+    }
+  });
+  $('#thead').querySelectorAll('[data-k]').forEach(el=>{el.style.cursor='pointer';el.addEventListener('click',()=>{state.sort=el.dataset.k;renderList();});});
+  $('#cmdline').addEventListener('click',e=>{if(e.target.closest('input')||e.target.closest('.msg'))return;q.focus();});
+
+  let rz=0;
+  addEventListener('resize',()=>{cancelAnimationFrame(rz);rz=requestAnimationFrame(()=>{chW=0;drawMeters();});});
+
+  // ---------- boot ----------
+  renderList();renderWeek();
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(()=>{chW=0;drawMeters();});}
+  tickView();
+  start();
+})();
+</script>
+</body>
+</html>

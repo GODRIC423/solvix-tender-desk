@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GOO — a lava-lamp meditation on patience</title>
+<meta name="description" content="GOO is a slow lava-lamp meditation: warm metaballs drift and merge across the screen while a fourteen-line poem about patience surfaces one line at a time. Move your cursor and the goo leans toward you.">
+<meta name="theme-color" content="#2A0A3D">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232A0A3D'/%3E%3Ccircle cx='26' cy='28' r='15' fill='%23FF7A00'/%3E%3Ccircle cx='40' cy='40' r='12' fill='%23FF2E63'/%3E%3Ccircle cx='34' cy='33' r='9' fill='%23FF7A00'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Nunito:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --orange:#FF7A00; --magenta:#FF2E63; --purple:#2A0A3D;
+  --purple-deep:#170521; --purple-ink:#0f0316;
+  --cream:#FFE9D6; --cream-dim:#E9C6B3; --peach:#FFB36B;
+  --display:'Bagel Fat One','Arial Black',Impact,sans-serif;
+  --text:'Nunito','Segoe UI',system-ui,sans-serif;
+  --line-dur:4400ms;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;min-height:100svh;
+  background:radial-gradient(120% 90% at 50% 110%,#3a0e52 0%,var(--purple) 45%,var(--purple-deep) 100%) fixed;
+  color:var(--cream);font-family:var(--text);font-size:clamp(17px,1.05vw + 12px,20px);line-height:1.6;
+  overflow-x:hidden;
+}
+a{color:var(--peach)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--peach);outline-offset:4px;border-radius:999px}
+::selection{background:var(--magenta);color:var(--purple-ink)}
+
+/* ---------- Goo layer (fixed; rendered at half resolution and scaled up, which keeps the filter cheap and the edges soft) ---------- */
+.lamp{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;isolation:isolate}
+.lamp::after{ /* soft vignette keeps type readable, no hard edges */
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(70% 60% at 50% 50%,rgba(42,10,61,.28) 0%,rgba(42,10,61,0) 70%),
+             linear-gradient(to bottom,rgba(23,5,33,.55),rgba(23,5,33,0) 22%,rgba(23,5,33,0) 70%,rgba(23,5,33,.7));
+}
+.goo{position:absolute;left:0;top:0;width:50%;height:50%;transform:scale(2);transform-origin:0 0;display:block;will-change:transform;
+  filter:drop-shadow(0 0 14px rgba(255,110,40,.42))}
+.glow{position:absolute;inset:-20%;background:
+  radial-gradient(40% 40% at 30% 70%,rgba(255,122,0,.30),transparent 70%),
+  radial-gradient(35% 35% at 75% 30%,rgba(255,46,99,.24),transparent 70%);
+  filter:blur(40px);mix-blend-mode:screen}
+.svgdefs{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ---------- Layout ---------- */
+.page{position:relative;z-index:1}
+.top{position:fixed;inset:0 0 auto 0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:clamp(14px,2vw,26px) clamp(18px,3.5vw,44px)}
+.brand{display:flex;align-items:baseline;gap:.75rem;text-decoration:none;color:var(--cream)}
+.brand b{font:400 clamp(26px,2.4vw,34px)/1 var(--display);letter-spacing:.02em;
+  background:linear-gradient(120deg,var(--peach),var(--orange) 45%,var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 14px rgba(255,46,99,.35))}
+.brand span{font-size:.85rem;color:var(--cream-dim);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.controls{display:flex;gap:.5rem}
+.pill{appearance:none;border:0;cursor:pointer;font:700 .85rem/1 var(--text);letter-spacing:.04em;
+  color:var(--cream);background:rgba(42,10,61,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  padding:.75rem 1.1rem;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,179,107,.28),0 6px 24px rgba(23,5,33,.4);
+  transition:transform .25s cubic-bezier(.2,.9,.3,1.4),background .3s,box-shadow .3s}
+.pill:hover{background:rgba(255,122,0,.22);box-shadow:inset 0 0 0 1px rgba(255,179,107,.6),0 8px 30px rgba(255,46,99,.28);transform:scale(1.05)}
+.pill:active{transform:scale(.96)}
+.pill[aria-pressed="true"]{background:linear-gradient(120deg,var(--orange),var(--magenta));color:var(--purple-ink);box-shadow:0 8px 30px rgba(255,46,99,.4)}
+.pill .ico{display:inline-block;width:.7em;height:.7em;margin-right:.45em;vertical-align:-.05em;border-radius:50%;background:currentColor;transition:border-radius .3s}
+.pill[aria-pressed="false"] .ico{border-radius:20%}
+
+/* ---------- Stage ---------- */
+.stage{position:relative;min-height:100svh;display:grid;grid-template-rows:1fr auto;padding:clamp(90px,14vh,140px) clamp(18px,4vw,60px) clamp(28px,5vh,52px)}
+.poem{position:relative;display:grid;place-items:center;min-height:52svh;text-align:center}
+.poem ol{list-style:none;margin:0;padding:0;position:relative;width:100%;max-width:min(1100px,92vw)}
+.poem li{
+  font:400 clamp(30px,5.6vw,78px)/1.12 var(--display);letter-spacing:.005em;color:var(--cream);
+  text-shadow:0 2px 0 rgba(23,5,33,.4),0 0 14px rgba(23,5,33,.55),0 12px 44px rgba(23,5,33,.7),0 0 110px rgba(23,5,33,.6);
+  text-wrap:balance;
+}
+.poem[data-mode="play"] li{position:absolute;left:0;right:0;top:50%;translate:0 -50%;
+  opacity:0;filter:blur(14px);transform:translateY(22px) scale(.97);pointer-events:none;
+  transition:opacity 1.5s ease,filter 1.6s ease,transform 1.6s cubic-bezier(.2,.8,.2,1)}
+.poem[data-mode="play"] li.is-current{opacity:1;filter:blur(0);transform:none;pointer-events:auto;transition-delay:.5s}
+.poem[data-mode="play"] li.is-leaving{opacity:0;filter:blur(18px);transform:translateY(-40px) scale(1.04)}
+.poem[data-mode="all"] li{position:static;opacity:1;filter:none;transform:none;font-size:clamp(24px,3.2vw,44px);padding:.18em 0;
+  animation:settle .9s cubic-bezier(.2,.8,.2,1) both}
+.poem[data-mode="all"] li:nth-child(odd){color:var(--peach)}
+@keyframes settle{from{opacity:0;filter:blur(10px);transform:translateY(12px)}to{opacity:1;filter:blur(0);transform:none}}
+.poem[data-mode="play"] .poem-title{position:absolute;left:0;right:0;top:50%;translate:0 -50%;opacity:0;pointer-events:none;transition:opacity .6s ease}
+.poem[data-mode="play"].is-idle .poem-title{opacity:1}
+.poem-title{margin:0;font:400 clamp(22px,2.6vw,36px)/1.3 var(--display);color:var(--cream-dim);letter-spacing:.02em}
+.poem-title em{display:block;font:italic 400 clamp(15px,1.1vw,18px)/1.5 var(--text);color:var(--cream-dim);margin-top:.6em;opacity:.85}
+.poem[data-mode="all"] .poem-title{display:none}
+
+.foot{display:flex;align-items:flex-end;justify-content:space-between;gap:1.5rem;flex-wrap:wrap}
+.wordmark{margin:0;font:400 clamp(64px,10vw,150px)/.9 var(--display);letter-spacing:-.005em;
+  background:linear-gradient(170deg,var(--peach) 0%,var(--orange) 40%,var(--magenta) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 8px 32px rgba(255,46,99,.35));user-select:none}
+.meta{display:flex;flex-direction:column;align-items:flex-end;gap:.7rem;font-size:.9rem;color:var(--cream-dim);font-weight:600;letter-spacing:.03em;text-align:right}
+.dots{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:320px}
+.dots button{appearance:none;border:0;padding:0;width:12px;height:12px;border-radius:50%;cursor:pointer;
+  background:rgba(255,233,214,.22);box-shadow:0 0 0 0 rgba(255,46,99,0);transition:background .5s,transform .5s cubic-bezier(.2,.9,.3,1.6),box-shadow .5s}
+.dots button.done{background:var(--peach)}
+.dots button.now{background:var(--magenta);transform:scale(1.5);box-shadow:0 0 18px 2px rgba(255,46,99,.55)}
+.dots button:hover{transform:scale(1.3)}
+.hint{opacity:.85}
+.hint kbd{font:700 .78em/1 var(--text);padding:.15em .45em;border-radius:6px;background:rgba(255,233,214,.14);box-shadow:inset 0 0 0 1px rgba(255,233,214,.25)}
+
+/* ---------- Reading section ---------- */
+.notes{position:relative;padding:clamp(56px,9vw,130px) clamp(18px,4vw,60px) clamp(40px,7vw,100px)}
+.notes::before{content:"";position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(to bottom,rgba(23,5,33,0),rgba(23,5,33,.72) 18%,rgba(23,5,33,.85) 60%,rgba(15,3,22,.95))}
+.notes-inner{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(20px,3vw,44px);align-items:start}
+.notes h2{grid-column:1 / span 12;margin:0 0 .3em;font:400 clamp(38px,6vw,84px)/1 var(--display);
+  background:linear-gradient(120deg,var(--cream),var(--peach) 50%,var(--orange));-webkit-background-clip:text;background-clip:text;color:transparent;text-wrap:balance}
+.note{grid-column:span 4;position:relative;padding:clamp(22px,2.4vw,34px);border-radius:32px;
+  background:radial-gradient(120% 100% at 0% 0%,rgba(255,122,0,.16),rgba(42,10,61,.35) 60%);
+  box-shadow:inset 0 0 0 1px rgba(255,179,107,.14),0 30px 80px -30px rgba(15,3,22,.9)}
+.note h3{margin:0 0 .6em;font:400 clamp(24px,1.9vw,30px)/1.15 var(--display);color:var(--peach);letter-spacing:.01em}
+.note p{margin:0 0 1em;color:var(--cream)}
+.note p:last-child{margin:0}
+.note .num{position:absolute;top:-14px;right:22px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+  font:400 17px/1 var(--display);color:var(--purple-ink);background:linear-gradient(140deg,var(--orange),var(--magenta));box-shadow:0 8px 24px rgba(255,46,99,.35)}
+.wide{grid-column:1 / span 12;display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,44px);margin-top:clamp(10px,2vw,30px)}
+.wide .lead{font-size:clamp(20px,1.5vw,25px);line-height:1.45;font-weight:600;color:var(--cream);margin:0;text-wrap:pretty}
+.wide .lead strong{font:400 1.05em/1 var(--display);color:var(--orange);letter-spacing:.01em}
+.wide p{margin:0 0 1em}
+.colophon{grid-column:1 / span 12;margin-top:clamp(28px,4vw,60px);padding-top:1.4rem;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+  font-size:.9rem;color:var(--cream-dim);border-top:1px solid rgba(255,179,107,.18)}
+.colophon b{font:400 1.25em/1 var(--display);color:var(--peach);letter-spacing:.02em}
+
+@media (max-width:900px){
+  .note{grid-column:span 6}
+  .wide{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .brand span{display:none}
+  .stage{padding-top:96px}
+  .poem li{font-size:clamp(34px,9.2vw,56px)}
+  .poem[data-mode="all"] li{font-size:clamp(22px,6vw,30px)}
+  .note{grid-column:span 12}
+  .foot{align-items:flex-start;flex-direction:column}
+  .meta{align-items:flex-start;text-align:left}
+  .dots{justify-content:flex-start}
+  .wordmark{font-size:clamp(84px,24vw,120px)}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .poem[data-mode="play"] li,.poem[data-mode="all"] li{transition:none;animation:none}
+  .pill,.dots button{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="lamp" aria-hidden="true">
+  <div class="glow"></div>
+  <svg class="goo" id="goo" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" focusable="false">
+    <defs>
+      <filter id="goofilter" filterUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feGaussianBlur id="gooblur" in="SourceGraphic" stdDeviation="15" result="blur"/>
+        <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -7.5" result="goo"/>
+        <feGaussianBlur in="goo" stdDeviation=".9"/>
+      </filter>
+      <radialGradient id="wax" cx="50%" cy="104%" r="100%">
+        <stop offset="0" stop-color="#FFC176"/>
+        <stop offset=".3" stop-color="#FF7A00"/>
+        <stop offset=".7" stop-color="#FF2E63"/>
+        <stop offset="1" stop-color="#B41B5C"/>
+      </radialGradient>
+      <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FFE9D6" stop-opacity=".28"/>
+        <stop offset=".45" stop-color="#FFE9D6" stop-opacity="0"/>
+        <stop offset="1" stop-color="#2A0A3D" stop-opacity=".28"/>
+      </linearGradient>
+      <mask id="goomask" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
+        <g id="blobs" filter="url(#goofilter)" fill="#fff"></g>
+      </mask>
+    </defs>
+    <g mask="url(#goomask)">
+      <rect width="100%" height="100%" fill="url(#wax)"/>
+      <rect width="100%" height="100%" fill="url(#sheen)"/>
+    </g>
+  </svg>
+</div>
+
+<header class="top">
+  <a class="brand" href="#top" aria-label="GOO, a lava-lamp meditation"><b>GOO</b><span>a lava-lamp meditation</span></a>
+  <div class="controls">
+    <button class="pill" id="play" type="button" aria-pressed="true" aria-label="Pause the poem"><span class="ico" aria-hidden="true"></span><span class="lbl">Playing</span></button>
+    <button class="pill" id="mode" type="button" aria-pressed="false">Whole poem</button>
+  </div>
+</header>
+
+<div class="page" id="top">
+<main>
+  <section class="stage" aria-labelledby="poem-heading">
+    <div class="poem is-idle" id="poem" data-mode="play" aria-live="polite" aria-atomic="false">
+      <h1 class="poem-title" id="poem-heading">Slow<em>a poem about patience, one line at a time</em></h1>
+      <ol id="lines">
+        <li>Nothing here is in a hurry.</li>
+        <li>The warm rises because it is warm,</li>
+        <li>not because it was told to.</li>
+        <li>Watch one shape lean toward another</li>
+        <li>and take a whole minute to decide.</li>
+        <li>They do not touch. They become.</li>
+        <li>Somewhere a clock is losing its argument.</li>
+        <li>You are allowed to be this slow.</li>
+        <li>Let the thing you are waiting for</li>
+        <li>find you already softened.</li>
+        <li>What melts is not lost;</li>
+        <li>it is only changing its mind about edges.</li>
+        <li>Stay. The light will come around.</li>
+        <li>It always comes around.</li>
+      </ol>
+    </div>
+    <div class="foot">
+      <p class="wordmark" aria-hidden="true">GOO</p>
+      <div class="meta">
+        <div class="dots" id="dots" role="group" aria-label="Poem lines"></div>
+        <div id="counter">warming up</div>
+        <div class="hint" id="hint">move the cursor — the goo leans toward you · <kbd>space</kbd> pause · <kbd>→</kbd> next line</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes" aria-labelledby="notes-heading">
+    <div class="notes-inner">
+      <h2 id="notes-heading">How to sit with the goo</h2>
+
+      <article class="note">
+        <span class="num" aria-hidden="true">1</span>
+        <h3>Do not read ahead</h3>
+        <p>Each line arrives roughly every four seconds, which is slower than you want it to be. That gap is the whole exercise. Let a line land, notice the urge to know the next one, and stay with the blobs until it comes on its own.</p>
+      </article>
+
+      <article class="note">
+        <span class="num" aria-hidden="true">2</span>
+        <h3>Follow one blob</h3>
+        <p>Pick a single shape and watch it for the length of a line. It never stops moving, and it never hurries. When it meets a neighbour the two merge without a seam, sit together for a while, then separate as if nothing had been decided.</p>
+      </article>
+
+      <article class="note">
+        <span class="num" aria-hidden="true">3</span>
+        <h3>Let it come to you</h3>
+        <p>Rest your cursor somewhere and wait. The goo is attracted to it, slowly, the way warm wax leans toward the lamp. If you chase the blobs they will always be a little behind you. If you hold still, they gather.</p>
+      </article>
+
+      <div class="wide">
+        <p class="lead">A lava lamp is a very simple machine: <strong>heat, wax, time.</strong> The wax rises because it is warm and sinks because it has cooled, and nothing about that cycle can be rushed without ruining it. This page borrows that patience and adds fourteen lines to it.</p>
+        <div>
+          <p>The visual is built from nine soft circles that drift on slow sine waves and get pulled gently toward wherever your pointer rests. On their own they would simply overlap. What makes them merge is an SVG filter: the layer is blurred, then its alpha channel is pushed through a colour matrix that turns the blurry halo back into a solid shape. Where two circles are close, their blurs add up and the threshold joins them into one form, so the shapes appear to melt together. A second, lighter blur is applied afterwards so the result never gains a hard edge; the lamp is meant to glow, not to cut.</p>
+          <p>If your system asks for reduced motion the drift stops, the poem is shown whole, and the goo becomes a still pool of colour. You can also switch to the whole poem at any time with the button above, or step through it with the arrow keys.</p>
+        </div>
+      </div>
+
+      <div class="colophon">
+        <span><b>GOO</b> &nbsp;·&nbsp; page 62 of 100</span>
+        <span>Set in Bagel Fat One and Nunito. Orange, magenta and one deep purple. No images, no libraries.</span>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var W = 0, H = 0, dpr = 1;
+  var isMobile = function(){ return window.innerWidth < 700; };
+
+  /* ---------- Blobs: SVG circles, gooed by the filter, used as a mask for the wax gradient ---------- */
+  var RES = .5; /* the SVG is laid out at half size and scaled x2 by CSS */
+  var svg = document.getElementById('goo');
+  var group = document.getElementById('blobs');
+  var blur = document.getElementById('gooblur');
+  var N = isMobile() ? 7 : 9;
+  var blobs = [];
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  var gold = Math.random();
+  for (var i=0;i<N;i++){
+    var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    group.appendChild(c);
+    blobs.push({
+      el: c,
+      bx: .12 + .76*((i*.618 + gold) % 1),      /* home position: golden-ratio x, stratified y, so the lamp is always evenly filled */
+      by: .08 + .84*((i + rand(.1,.9))/N),
+      ax: rand(.06,.17), ay: rand(.07,.18),      /* drift amplitude (fraction) */
+      fx: rand(.045,.10), fy: rand(.03,.08),     /* drift frequency, very slow */
+      px: rand(0,6.28), py: rand(0,6.28),
+      r: rand(100,236),                          /* radius in px at 1440 wide */
+      k: rand(.35,1),                            /* attraction weight */
+      x: 0, y: 0, vx: 0, vy: 0, rr: 60
+    });
+  }
+  function size(){
+    W = window.innerWidth; H = window.innerHeight;
+    svg.setAttribute('viewBox', '0 0 ' + (W*RES) + ' ' + (H*RES));
+    var scale = Math.min(1, Math.max(.42, W/1440));
+    blur.setAttribute('stdDeviation', (15*Math.max(.6, scale)).toFixed(1));
+    blobs.forEach(function(b){ b.rr = b.r*scale; b.el.setAttribute('r', (b.rr*RES).toFixed(1)); });
+  }
+  size();
+  window.addEventListener('resize', size);
+
+  /* cursor in viewport px */
+  var cur = {x:-1e4, y:-1e4, on:0, tx:0, ty:0, last:-1e9};
+  function point(e){
+    var p = e.touches ? e.touches[0] : e;
+    cur.tx = p.clientX; cur.ty = p.clientY; cur.last = performance.now();
+    if (cur.x < -1000){ cur.x = cur.tx; cur.y = cur.ty; }
+  }
+  window.addEventListener('pointermove', point, {passive:true});
+  window.addEventListener('pointerdown', point, {passive:true});
+  window.addEventListener('touchmove', point, {passive:true});
+  document.documentElement.addEventListener('pointerleave', function(){ cur.last = -1e9; });
+
+  var t0 = performance.now(), running = true, raf = 0, lastT = t0;
+  function place(b){ b.el.setAttribute('cx', (b.x*RES).toFixed(1)); b.el.setAttribute('cy', (b.y*RES).toFixed(1)); }
+  function frame(now){
+    raf = 0;
+    if (!running) return;
+    var dt = Math.min(.05, (now - lastT)/1000); lastT = now;
+    var t = (now - t0)/1000;
+    /* attraction fades in while the pointer is fresh, out after 2.5s of stillness */
+    var fresh = (now - cur.last) < 2500 ? 1 : 0;
+    cur.on += (fresh - cur.on) * (fresh ? .04 : .012);
+    cur.x += (cur.tx - cur.x) * .08; cur.y += (cur.ty - cur.y) * .08;
+
+    for (var i=0;i<blobs.length;i++){
+      var b = blobs[i];
+      var hx = (b.bx + Math.sin(t*b.fx*6.283 + b.px) * b.ax) * W;
+      var hy = (b.by + Math.sin(t*b.fy*6.283 + b.py) * b.ay) * H;
+      var dx = cur.x - hx, dy = cur.y - hy;
+      var dist = Math.hypot(dx,dy) || 1;
+      /* pull toward the cursor: strong when near, saturating far away */
+      var pull = cur.on * b.k * Math.min(1, 760/dist) * .66;
+      var gx = hx + dx*pull, gy = hy + dy*pull;
+      /* soft spring toward the goal */
+      b.vx += (gx - b.x) * 1.4 * dt; b.vy += (gy - b.y) * 1.4 * dt;
+      b.vx *= .94; b.vy *= .94;
+      b.x += b.vx; b.y += b.vy;
+      place(b);
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  /* settle initial positions instantly */
+  blobs.forEach(function(b){ b.x = b.bx*W; b.y = b.by*H; place(b); });
+  if (!reduce){ raf = requestAnimationFrame(frame); }
+
+  if (window.matchMedia('(hover: none)').matches){
+    document.getElementById('hint').innerHTML = 'touch and hold — the goo gathers under your finger · tap a dot to jump';
+  }
+
+  /* ---------- Poem sequencing ---------- */
+  var poem = document.getElementById('poem');
+  var lines = Array.prototype.slice.call(document.querySelectorAll('#lines li'));
+  var dotsWrap = document.getElementById('dots');
+  var counter = document.getElementById('counter');
+  var playBtn = document.getElementById('play');
+  var modeBtn = document.getElementById('mode');
+  var idx = -1, timer = 0, playing = true, mode = 'play';
+  var DUR = 4400, FIRST = 2600;
+
+  lines.forEach(function(li, i){
+    var d = document.createElement('button');
+    d.type = 'button'; d.setAttribute('aria-label', 'Go to line ' + (i+1));
+    d.addEventListener('click', function(){ if (mode === 'all') setMode('play'); show(i, true); });
+    dotsWrap.appendChild(d);
+  });
+  var dots = Array.prototype.slice.call(dotsWrap.children);
+
+  function paint(){
+    dots.forEach(function(d,i){
+      d.classList.toggle('done', i < idx);
+      d.classList.toggle('now', i === idx);
+    });
+    counter.textContent = idx < 0 ? 'warming up' : (idx >= lines.length ? 'the whole poem' : 'line ' + (idx+1) + ' of ' + lines.length);
+  }
+  function show(i, manual){
+    clearTimeout(timer);
+    poem.classList.remove('is-idle');
+    lines.forEach(function(li, j){
+      li.classList.toggle('is-leaving', li.classList.contains('is-current') && j !== i);
+      li.classList.toggle('is-current', j === i);
+    });
+    if (i >= lines.length){ /* finished: settle into whole poem */
+      idx = lines.length; setMode('all'); paint(); return;
+    }
+    idx = i; paint();
+    if (playing && mode === 'play') timer = setTimeout(function(){ show(idx+1); }, manual ? DUR + 1200 : DUR);
+  }
+  function setMode(m){
+    mode = m;
+    poem.dataset.mode = m;
+    modeBtn.setAttribute('aria-pressed', m === 'all' ? 'true' : 'false');
+    modeBtn.textContent = m === 'all' ? 'One line at a time' : 'Whole poem';
+    lines.forEach(function(li){ li.classList.remove('is-leaving'); });
+    if (m === 'all'){ clearTimeout(timer); poem.classList.remove('is-idle'); if (idx < 0) idx = lines.length; paint(); }
+    else { idx = -1; lines.forEach(function(li){ li.classList.remove('is-current'); }); paint(); poem.classList.add('is-idle'); if (playing) timer = setTimeout(function(){ show(0); }, FIRST); }
+  }
+  function setPlaying(p){
+    playing = p;
+    playBtn.setAttribute('aria-pressed', p ? 'true' : 'false');
+    playBtn.setAttribute('aria-label', p ? 'Pause the poem' : 'Resume the poem');
+    playBtn.querySelector('.lbl').textContent = p ? 'Playing' : 'Paused';
+    clearTimeout(timer);
+    if (p && mode === 'play') timer = setTimeout(function(){ show(idx+1); }, idx < 0 ? FIRST : DUR);
+  }
+  playBtn.addEventListener('click', function(){ setPlaying(!playing); });
+  modeBtn.addEventListener('click', function(){ setMode(mode === 'all' ? 'play' : 'all'); });
+  document.addEventListener('keydown', function(e){
+    if (e.target.tagName === 'BUTTON' && e.key === ' ') return;
+    if (e.key === ' '){ e.preventDefault(); setPlaying(!playing); }
+    else if (e.key === 'ArrowRight' && mode === 'play'){ show(Math.min(idx+1, lines.length), true); }
+    else if (e.key === 'ArrowLeft' && mode === 'play'){ show(Math.max(idx-1, 0), true); }
+  });
+
+  if (reduce){ setMode('all'); setPlaying(false); }
+  else { timer = setTimeout(function(){ show(0); }, FIRST); }
+
+  /* ---------- Pause everything when hidden ---------- */
+  var wasPlaying = playing;
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden){
+      running = false; if (raf){ cancelAnimationFrame(raf); raf = 0; }
+      wasPlaying = playing; clearTimeout(timer);
+    } else {
+      if (!reduce){ running = true; lastT = performance.now(); if(!raf) raf = requestAnimationFrame(frame); }
+      if (wasPlaying && mode === 'play' && !timer){ timer = setTimeout(function(){ show(idx+1); }, 1200); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

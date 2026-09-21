@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sales Tax &amp; VAT Calculator — Solvix Toolkit</title>
+<meta name="description" content="Add tax to a net figure or take tax out of a gross figure with the division shown in full, then build a document tax summary: several rates subtotalled separately, zero-rated, exempt, reverse charge and out-of-scope lines handled properly, editable rate presets for common jurisdictions, print/PDF tax summary, CSV and JSON.">
+<meta name="theme-color" content="#1B7A4B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B7A4B'/%3E%3Cpath d='M10.5 22.5L21.5 9.5' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='11.6' cy='11.6' r='2.7' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Ccircle cx='20.4' cy='20.4' r='2.7' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3C/svg%3E">
+<style>
+/* ══ Solvix Toolkit — shared design system ══════════════════════════
+   Inline this whole block in every tool. System fonts only: the tools
+   must work with no network at all. Set --accent per category.        */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F1F3F5; --surface:#FFFFFF; --sunk:#E7EAEE; --raise:#FBFCFD;
+  --ink:#15191E; --ink-2:#454D57; --muted:#6B747E; --faint:#98A1AB;
+  --line:#D5DAE0; --line-hard:#B4BCC5;
+  --accent:#1F5FA8; --accent-ink:#17497F; --accent-wash:#E6EEF8; --on-accent:#fff;
+  --ok:#1B7A4B; --ok-wash:#E3F2EA;
+  --warn:#9A6510; --warn-wash:#FBF0DC;
+  --bad:#B3261E; --bad-wash:#FBE7E5;
+  --r:5px; --pad:16px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sh:0 1px 2px rgba(21,25,30,.07),0 6px 18px -12px rgba(21,25,30,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#101317; --surface:#181C21; --sunk:#1E242A; --raise:#212830;
+  --ink:#E8ECF0; --ink-2:#B2BBC5; --muted:#828C97; --faint:#646E79;
+  --line:#2A323A; --line-hard:#3D4750;
+  --accent:#5A9BE8; --accent-ink:#7FB4F0; --accent-wash:#152538; --on-accent:#0B1017;
+  --ok:#43B87B; --ok-wash:#12251B; --warn:#D2A24C; --warn-wash:#2A2113;
+  --bad:#E8695F; --bad-wash:#2C1614;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px -12px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.22;letter-spacing:-.012em;font-weight:650}
+h1{font-size:20px} h2{font-size:16px} h3{font-size:14px}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* app frame */
+.app{max-width:1180px;margin:0 auto;padding:0 clamp(10px,2vw,22px) 64px}
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*clamp(10px,2vw,22px));padding:11px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.appbar .brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.appbar .mark{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font:700 12px/1 var(--mono);flex:none}
+.appbar h1{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .sub{font:400 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+
+/* layout */
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card>.hd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+.card>.hd h2{margin-right:auto}
+.card>.bd{padding:var(--pad)}
+.card>.ft{padding:11px var(--pad);border-top:1px solid var(--line);background:var(--sunk);
+  border-radius:0 0 var(--r) var(--r);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sticky{position:sticky;top:64px}
+
+/* fields */
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f>label,.lbl{font:600 10.5px/1.35 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{
+  font:15px/1.35 var(--sans);color:var(--ink);background:var(--raise);
+  border:1px solid var(--line-hard);border-radius:4px;padding:8px 9px;width:100%;min-width:0}
+input[type=number],.ta-r{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+input:disabled,select:disabled{background:var(--sunk);color:var(--muted)}
+textarea{resize:vertical;min-height:64px;font-family:var(--sans);text-align:left}
+.hint{font:11.5px/1.4 var(--sans);color:var(--muted)}
+.inv{border-color:var(--bad)!important}
+.err{font:11.5px/1.4 var(--sans);color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:4px;padding:12px;margin:0}
+legend{font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 5px}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--accent)}
+
+/* buttons */
+.btn{font:600 13.5px/1 var(--sans);padding:9px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--line-hard);background:var(--raise);color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink);color:var(--on-accent)}
+.btn.dgr{color:var(--bad);border-color:var(--line-hard)}
+.btn.dgr:hover{background:var(--bad-wash);border-color:var(--bad)}
+.btn.sm{font-size:12px;padding:6px 9px}
+.btn.ico{padding:6px 8px;font-family:var(--mono)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 10.5px/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-hard);white-space:nowrap;background:var(--sunk)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--accent-wash)}
+th.r,td.r{text-align:right}
+td.n,th.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:650;border-top:2px solid var(--line-hard);background:var(--sunk)}
+table input,table select{padding:5px 6px;font-size:13.5px;border-color:transparent;background:transparent}
+table input:hover,table select:hover{border-color:var(--line)}
+table input:focus,table select:focus{background:var(--raise)}
+
+/* results */
+.stat{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.stat .k{font:600 10px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:700 23px/1.15 var(--mono);letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .u{font-size:12.5px;color:var(--muted);font-weight:400}
+.stat.hero{background:var(--accent-wash);border-color:var(--accent)}
+.stat.hero .v{color:var(--accent-ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--sunk);color:var(--ink-2)}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.warn{background:var(--warn-wash);color:var(--warn)}
+.chip.bad{background:var(--bad-wash);color:var(--bad)}
+.note{border-left:3px solid var(--accent);background:var(--accent-wash);padding:11px 13px;border-radius:0 4px 4px 0;font-size:13.5px;line-height:1.5}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}
+.note.bad{border-color:var(--bad);background:var(--bad-wash)}
+.note strong{font-weight:650}
+.empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* print — every tool must produce a clean document */
+@media print{
+  @page{margin:14mm}
+  :root{--bg:#fff;--surface:#fff;--sunk:#fff;--raise:#fff;--ink:#000;--ink-2:#222;--muted:#555;
+        --line:#bbb;--line-hard:#888;--accent:#000;--accent-wash:#fff;--sh:none}
+  body{background:#fff;font-size:11pt}
+  .appbar,.noprint,.btn,.tools,nav{display:none!important}
+  .app{max-width:none;padding:0}
+  .card{border:1px solid #bbb;box-shadow:none;break-inside:avoid;margin-bottom:8mm}
+  .card>.ft{background:#fff}
+  .printonly{display:block!important}
+  .split,.cols-2,.cols-3{display:block}
+  table{font-size:10pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr,td,th{break-inside:avoid}
+  input,select,textarea{border:0;padding:0;background:#fff;color:#000;-webkit-appearance:none;appearance:none}
+  .stat{border:1px solid #bbb}
+  a[href]::after{content:""}
+}
+.printonly{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ══════════════════════════════════════════════════════════════════
+   067 — Sales Tax & VAT Calculator · Finance & Pricing
+   ══════════════════════════════════════════════════════════════════ */
+:root{--accent:#1B7A4B;--accent-ink:#145C39;--accent-wash:#E3F2EA;--on-accent:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --accent:#48BE84;--accent-ink:#78D6A6;--accent-wash:#122A1E;--on-accent:#07130C;}}
+:root[data-theme="dark"]{--accent:#48BE84;--accent-ink:#78D6A6;--accent-wash:#122A1E;--on-accent:#07130C}
+
+.appbar{position:sticky;top:0;margin:0;padding:0;display:block}
+.appbar-in{max-width:1300px;margin:0 auto;padding:10px clamp(10px,2vw,22px);
+  display:flex;flex-wrap:wrap;gap:9px 14px;align-items:center}
+.app{max-width:1300px}
+.app>*+*{margin-top:14px}
+main.app{padding-top:14px}
+.split{grid-template-columns:minmax(0,1fr) minmax(292px,.47fr)}
+[hidden]{display:none!important}
+@media(max-width:560px){.hidesm{display:none}}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:90;
+  background:var(--ink);color:var(--bg);font:600 13px/1.4 var(--sans);padding:9px 14px;border-radius:5px;
+  box-shadow:0 6px 22px -8px rgba(0,0,0,.55);max-width:calc(100vw - 24px);text-align:center}
+#toast[hidden]{display:none}
+#toast.bad{background:var(--bad);color:#fff}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line-hard);border-radius:4px;overflow:hidden;background:var(--raise);max-width:100%}
+.seg button{font:600 12.5px/1.2 var(--sans);padding:8px 11px;border:0;background:transparent;color:var(--ink-2);
+  cursor:pointer;border-right:1px solid var(--line);white-space:nowrap;flex:1 1 auto;min-width:0}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.seg.full{display:flex;width:100%}
+.seg.sm button{font-size:11.5px;padding:6px 8px}
+
+/* quick converter */
+.qgrid{display:grid;grid-template-columns:1.15fr 1.35fr .7fr;gap:9px}
+@media(max-width:640px){.qgrid{grid-template-columns:1fr 1fr}.qgrid .f:first-child{grid-column:1/-1}}
+.qres{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-hard);
+  border:1px solid var(--line-hard);border-radius:4px;overflow:hidden}
+@media(max-width:520px){.qres{grid-template-columns:1fr}}
+.qres>div{background:var(--sunk);padding:9px 11px;min-width:0}
+.qres>div.on{background:var(--accent-wash)}
+.qres span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.qres b{display:block;font:700 20px/1.15 var(--mono);font-variant-numeric:tabular-nums;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis}
+.qres>div.on b{color:var(--accent-ink)}
+.work{background:var(--raise);border:1px dashed var(--line-hard);border-radius:4px;padding:9px 11px;
+  font:13px/1.75 var(--mono);color:var(--ink-2);overflow-x:auto;white-space:pre-line}
+.work b{color:var(--ink);font-weight:700}
+
+/* line + rate tables */
+.lt td{padding:4px 6px}
+.lt th{padding:7px 6px;font-size:9.8px}
+.lt input,.lt select{width:100%}
+.lt td.calc{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+.lt td.calc.hi{font-weight:700;color:var(--accent-ink)}
+.lt .rm{border:0;background:transparent;color:var(--muted);cursor:pointer;font:700 15px/1 var(--mono);padding:3px 7px;border-radius:3px}
+.lt .rm:hover{color:var(--bad);background:var(--bad-wash)}
+.lt input[type=number]{-moz-appearance:textfield}
+.lt input[type=number]::-webkit-outer-spin-button,.lt input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.lt tbody tr.bad-row td{background:var(--bad-wash)}
+#lineTab{min-width:770px}
+#lineTab td.td input{min-width:120px}
+#lineTab th:first-child,#lineTab td.td{width:34%}
+#lineTab select{font-size:12.5px;padding:5px 2px 5px 5px}
+#rateTab{min-width:520px}
+.cellerr{display:block;font:10.5px/1.3 var(--sans);color:var(--bad);margin-top:1px;white-space:normal}
+.trt{font:600 10px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+
+/* results column */
+.col-res>*+*{margin-top:12px}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat.sm2 .v{font-size:17px}
+.sumtab{font-size:12.5px}
+.sumtab th{padding:6px 6px;font-size:9.5px}
+.sumtab td{padding:5px 6px}
+.sumtab td.n,.sumtab th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sumtab tfoot td{font-weight:700}
+.sumtab tr.memo td{background:var(--warn-wash);font-size:11.5px;color:var(--warn)}
+.sumtab tbody tr:hover{background:var(--accent-wash)}
+.kvs{font:12.5px/1.6 var(--sans);color:var(--ink-2)}
+.kvs div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dotted var(--line);padding:2px 0}
+.kvs div:last-child{border-bottom:0}
+.kvs b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;color:var(--ink)}
+.split>*,.stack>*,.col-res>*{min-width:0}
+@media(max-width:900px){
+  .split{display:flex;flex-direction:column}
+  .split>*{width:100%;min-width:0}
+  .col-res{order:-1}
+  .sticky{position:static}
+}
+
+/* ══ the tax summary — preview on screen, the deliverable in print ══ */
+#docCard{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh);padding:22px clamp(14px,3vw,30px) 26px}
+body.preview #docCard{display:block}
+body.preview #work{display:none}
+.doc-top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start;border-bottom:2.5px solid var(--ink);padding-bottom:12px}
+.doc-biz{min-width:0;flex:1 1 250px}
+.doc-biz .bn{font:700 20px/1.15 var(--sans);letter-spacing:-.015em}
+.doc-biz .ba{font:12.5px/1.5 var(--sans);color:var(--ink-2);margin-top:4px;white-space:pre-line}
+.doc-biz .br{font:600 12px/1.5 var(--mono);color:var(--ink-2);margin-top:5px}
+.doc-ttl{text-align:right;flex:0 1 auto}
+.doc-ttl .t1{font:700 21px/1.1 var(--sans);letter-spacing:-.02em;text-transform:uppercase}
+.doc-ttl .t2{font:600 12.5px/1.35 var(--sans);color:var(--ink-2);margin-top:4px}
+.doc-ttl .t3{display:inline-block;margin-top:6px;font:700 9.5px/1 var(--sans);letter-spacing:.1em;
+  text-transform:uppercase;border:1.5px solid var(--ink);padding:4px 6px;border-radius:3px}
+.doc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin:14px 0}
+@media(max-width:640px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
+.doc-grid div span{display:block;font:600 9.5px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.doc-grid div b{font:600 13px/1.35 var(--sans);word-break:break-word}
+.doc-hero{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--ink);border-radius:4px;overflow:hidden;margin-bottom:14px}
+@media(max-width:640px){.doc-hero{grid-template-columns:repeat(2,1fr)}}
+.doc-hero div{padding:9px 11px;border-right:1px solid var(--line-hard)}
+.doc-hero div:last-child{border-right:0}
+.doc-hero span{display:block;font:600 9px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.doc-hero b{display:block;font:700 18px/1.15 var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+.doc-sec{margin-top:14px}
+.doc-sec h4{font:700 10.5px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink);
+  border-bottom:1.5px solid var(--line-hard);padding-bottom:4px}
+.doc-sec table{width:100%;font-size:12.5px}
+.doc-sec th{background:var(--sunk);font-size:9.5px;padding:5px 6px;white-space:normal}
+.doc-sec td{padding:4px 6px;border-bottom:1px solid var(--line)}
+.doc-sec td.n,.doc-sec th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.doc-sec tfoot td{font-weight:700;background:var(--sunk);border-top:1.5px solid var(--line-hard)}
+.doc-sec tr.memo td{font-size:11.5px;font-style:italic}
+.doc-notes{margin-top:14px;font:12.5px/1.55 var(--sans);white-space:pre-line}
+.doc-foot{margin-top:14px;border-top:1px solid var(--line);padding-top:8px;
+  font:11.5px/1.5 var(--sans);color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px}
+
+@media print{
+  #work,.appbar,.noprint{display:none!important}
+  #docCard{display:block!important;border:0;box-shadow:none;padding:0;border-radius:0}
+  .app>*+*{margin-top:0}
+  .doc-top{border-bottom:2.5pt solid #000;padding-bottom:3mm}
+  .doc-biz .bn{font-size:16pt}.doc-biz .ba,.doc-biz .br{font-size:8.6pt}
+  .doc-ttl .t1{font-size:16pt}.doc-ttl .t2{font-size:9.5pt}.doc-ttl .t3{font-size:7pt;border-color:#000}
+  .doc-grid{display:grid!important;grid-template-columns:repeat(4,1fr);gap:2.5mm 5mm;margin:4mm 0}
+  .doc-grid div span{font-size:7pt;color:#555}.doc-grid div b{font-size:9.5pt}
+  .doc-hero{display:grid!important;grid-template-columns:repeat(4,1fr);border:1pt solid #000;margin-bottom:4mm}
+  .doc-hero div{padding:2mm 2.5mm;border-right:.5pt solid #888}
+  .doc-hero span{font-size:6.8pt}.doc-hero b{font-size:13pt}
+  .doc-sec{margin-top:4.5mm;break-inside:auto}
+  .doc-sec h4{font-size:8pt}
+  .doc-sec table{font-size:8.6pt}
+  .doc-sec th{background:#eee!important;font-size:7pt;padding:1.4mm 1.6mm}
+  .doc-sec td{padding:1.2mm 1.6mm;border-bottom:.5pt solid #ccc}
+  .doc-notes{font-size:8.6pt;margin-top:4mm}
+  .note{border-left:2.5pt solid #000;background:#fff!important;padding:2.5mm 3mm;font-size:8.2pt;break-inside:avoid}
+  .doc-foot{font-size:7.6pt;margin-top:4mm}
+  thead{display:table-header-group}
+  tr,td,th{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+ <div class="appbar-in">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">%</div>
+    <div style="min-width:0">
+      <h1>Sales Tax &amp; VAT Calculator</h1>
+      <div class="sub" id="barSub">add · remove · summarise by rate</div>
+    </div>
+  </div>
+  <div class="row noprint">
+    <button type="button" class="btn" id="btnPrev">Preview<span class="hidesm"> summary</span></button>
+    <button type="button" class="btn pri" id="btnPrint">Print / PDF</button>
+    <button type="button" class="btn" id="btnCsv">CSV</button>
+    <button type="button" class="btn" id="btnJson">Export<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn" id="btnImport">Import<span class="hidesm"> JSON</span></button>
+    <button type="button" class="btn dgr" id="btnClear">Clear<span class="hidesm"> all data</span></button>
+    <input type="file" id="fileIn" accept="application/json,.json" hidden>
+  </div>
+ </div>
+</header>
+
+<main class="app">
+
+  <div class="note noprint" id="banner">
+    <strong>Sample document loaded</strong> — a UK kitchen fit-out invoice mixing standard-rated labour,
+    5% energy-saving materials, zero-rated printed matter, a tax-inclusive retail price, a CIS reverse-charge
+    subcontract, an exempt insurance premium and an out-of-scope disbursement. Change anything, or start empty.
+    <div class="row" style="margin-top:9px">
+      <button type="button" class="btn sm" id="btnBlank">Start an empty document</button>
+      <button type="button" class="btn sm" id="btnDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div class="note warn noprint">
+    <strong>This tool does the arithmetic. It does not decide your tax position.</strong>
+    It applies the rates and treatments <em>you</em> choose to the figures <em>you</em> enter. It does not know
+    whether a supply is standard-rated, reduced-rated, zero-rated, exempt, subject to the reverse charge or
+    outside the scope of tax, whether you are registered, which country's rules apply, or when a place-of-supply
+    or margin scheme changes the answer. Preset rates are a convenience, are editable, and change without notice.
+    Check the current rate and the correct treatment with the tax authority or your accountant before you issue,
+    file or pay anything on the strength of these figures.
+  </div>
+
+  <!-- ══════ THE TAX SUMMARY — the printed deliverable ══════ -->
+  <section id="docCard" aria-label="Tax summary document">
+    <div class="doc-top">
+      <div class="doc-biz">
+        <div class="bn" id="dBiz">—</div>
+        <div class="ba" id="dAddr"></div>
+        <div class="br" id="dReg"></div>
+      </div>
+      <div class="doc-ttl">
+        <div class="t1" id="dTitle">Tax Summary</div>
+        <div class="t2" id="dSubtitle">—</div>
+        <div class="t3" id="dBadge">Tax analysis</div>
+      </div>
+    </div>
+
+    <div class="doc-grid">
+      <div><span>Reference</span><b id="dRef">—</b></div>
+      <div><span>Date</span><b id="dDate">—</b></div>
+      <div><span>Customer / counterparty</span><b id="dClient">—</b></div>
+      <div><span>Their registration no.</span><b id="dCReg">—</b></div>
+      <div><span>Tax</span><b id="dTaxName">—</b></div>
+      <div><span>Jurisdiction</span><b id="dJur">—</b></div>
+      <div><span>Prices entered as</span><b id="dBasis">—</b></div>
+      <div><span>Rounding basis</span><b id="dRound">—</b></div>
+    </div>
+
+    <div class="doc-hero">
+      <div><span>Net total</span><b id="dhNet">—</b></div>
+      <div><span id="dhTaxK">Tax charged</span><b id="dhTax">—</b></div>
+      <div><span>Document total</span><b id="dhGross">—</b></div>
+      <div><span>Taxable net</span><b id="dhTaxable">—</b></div>
+    </div>
+
+    <div class="doc-sec"><h4>Lines</h4><div class="tw"><table id="dLines"></table></div></div>
+    <div class="doc-sec"><h4>Tax summary by rate</h4><div class="tw"><table id="dSum"></table></div></div>
+
+    <div class="doc-notes" id="dNotes"></div>
+
+    <div style="margin-top:14px">
+      <div class="note warn">
+        <strong>Tax calculation notice.</strong> This summary applies the tax rates and treatments entered by the
+        preparer to the amounts entered by the preparer. It is not tax advice and it is not a substitute for a
+        compliant tax invoice, a filed return or professional advice. It does not determine whether any supply
+        is taxable, reduced-rated, zero-rated, exempt, subject to a reverse charge or outside the scope of tax;
+        it does not check registration status, place of supply, time of supply, margin or special schemes,
+        partial exemption, or any local rounding rule. Rates change and preset rates in this tool are editable
+        defaults, not a statement of current law. Verify every rate and treatment with the relevant tax
+        authority or a qualified adviser before relying on these figures.
+      </div>
+    </div>
+
+    <div class="doc-foot" id="dFoot"></div>
+  </section>
+
+  <div id="work">
+  <div class="split">
+
+    <!-- ══════ INPUTS ══════ -->
+    <div class="stack">
+
+      <!-- quick converter -->
+      <section class="card">
+        <div class="hd">
+          <h2>Add or remove tax</h2>
+          <span class="chip ok" id="qcChip">—</span>
+        </div>
+        <div class="bd stack">
+          <div class="seg full" role="group" aria-label="Direction">
+            <button type="button" id="segAdd" aria-pressed="true">Amount is net — add tax</button>
+            <button type="button" id="segRem" aria-pressed="false">Amount is gross — take tax out</button>
+          </div>
+          <div class="qgrid">
+            <div class="f">
+              <label for="qAmt">Amount</label>
+              <input type="number" id="qAmt" step="0.01" inputmode="decimal" autocomplete="off">
+              <span class="err" id="eQAmt" hidden></span>
+            </div>
+            <div class="f">
+              <label for="qCode">Tax code</label>
+              <select id="qCode"></select>
+            </div>
+            <div class="f">
+              <label for="qRate">Rate %</label>
+              <input type="number" id="qRate" step="0.01" min="0" max="100" inputmode="decimal" autocomplete="off">
+              <span class="err" id="eQRate" hidden></span>
+            </div>
+          </div>
+          <div class="qres">
+            <div id="qcNetBox"><span>Net — excludes tax</span><b id="qNet">—</b></div>
+            <div><span id="qTaxK">Tax</span><b id="qTax">—</b></div>
+            <div id="qcGrossBox"><span>Gross — includes tax</span><b id="qGross">—</b></div>
+          </div>
+          <div class="work" id="qWork">—</div>
+          <div class="note warn" id="qMistake" hidden></div>
+          <div class="row">
+            <button type="button" class="btn sm" id="qAdd">Add this as a document line</button>
+            <span class="hint">Rounded to 2 dp. Rate taken from the tax code, or type your own.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- lines -->
+      <section class="card">
+        <div class="hd">
+          <h2>Document lines</h2>
+          <div class="row noprint">
+            <span class="lbl" style="text-transform:none;letter-spacing:0;font-size:11.5px">New lines priced</span>
+            <div class="seg sm" role="group" aria-label="Default price basis for new lines">
+              <button type="button" id="segNet" aria-pressed="true">Net</button>
+              <button type="button" id="segGross" aria-pressed="false">Gross</button>
+            </div>
+            <button type="button" class="btn sm" id="btnAddLine">+ Add line</button>
+          </div>
+        </div>
+        <div class="bd" style="padding:0">
+          <div class="tw">
+            <table class="lt" id="lineTab">
+              <thead><tr>
+                <th scope="col">Description</th>
+                <th scope="col" class="n">Qty</th>
+                <th scope="col" class="n">Unit price</th>
+                <th scope="col">Priced</th>
+                <th scope="col">Tax code</th>
+                <th scope="col" class="n">Net</th>
+                <th scope="col" class="n">Tax</th>
+                <th scope="col" class="n">Gross</th>
+                <th scope="col"><span class="printonly">&nbsp;</span><span aria-hidden="true">&nbsp;</span></th>
+              </tr></thead>
+              <tbody id="lineBody"></tbody>
+              <tfoot><tr>
+                <td colspan="5" style="text-align:right">Document totals</td>
+                <td class="calc" id="ftNet">—</td>
+                <td class="calc" id="ftTax">—</td>
+                <td class="calc hi" id="ftGross">—</td>
+                <td></td>
+              </tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="ft">
+          <span class="hint" id="lineHint">—</span>
+        </div>
+      </section>
+
+      <!-- rates -->
+      <section class="card">
+        <div class="hd">
+          <h2>Tax codes &amp; rates</h2>
+          <div class="row noprint">
+            <button type="button" class="btn sm" id="btnAddCode">+ Add code</button>
+          </div>
+        </div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f">
+              <label for="selJur">Rate preset</label>
+              <select id="selJur"></select>
+            </div>
+            <div class="f">
+              <label for="inTaxName">Name of the tax on the document</label>
+              <input type="text" id="inTaxName" maxlength="28" autocomplete="off">
+            </div>
+          </div>
+          <div class="tw">
+            <table class="lt" id="rateTab">
+              <thead><tr>
+                <th scope="col">Code / label</th>
+                <th scope="col" class="n">Rate %</th>
+                <th scope="col">Treatment</th>
+                <th scope="col" class="n">Lines</th>
+                <th scope="col"><span aria-hidden="true">&nbsp;</span></th>
+              </tr></thead>
+              <tbody id="rateBody"></tbody>
+            </table>
+          </div>
+          <div class="hint">
+            <strong>Zero-rated</strong> is taxable at 0% and counts in taxable turnover.
+            <strong>Exempt</strong> carries no tax and is not taxable turnover.
+            <strong>Reverse charge</strong> lines carry no tax on this document — the customer accounts for it —
+            but stay in the document total, and the tax they must account for is shown as a memorandum.
+            <strong>Outside scope</strong> lines carry no tax and no memorandum.
+          </div>
+        </div>
+      </section>
+
+      <!-- document details -->
+      <section class="card">
+        <div class="hd"><h2>Document details</h2></div>
+        <div class="bd stack">
+          <div class="grid cols-2">
+            <div class="f"><label for="inBiz">Your business name</label>
+              <input type="text" id="inBiz" maxlength="80" autocomplete="off"></div>
+            <div class="f"><label for="inReg">Your tax registration no.</label>
+              <input type="text" id="inReg" maxlength="40" autocomplete="off"></div>
+          </div>
+          <div class="f"><label for="inAddr">Your address</label>
+            <textarea id="inAddr" rows="3" maxlength="240"></textarea></div>
+          <div class="grid cols-2">
+            <div class="f"><label for="inClient">Customer / counterparty</label>
+              <input type="text" id="inClient" maxlength="80" autocomplete="off"></div>
+            <div class="f"><label for="inCReg">Their tax registration no.</label>
+              <input type="text" id="inCReg" maxlength="40" autocomplete="off"></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="inRef">Reference</label>
+              <input type="text" id="inRef" maxlength="40" autocomplete="off"></div>
+            <div class="f"><label for="inDate">Date</label>
+              <input type="date" id="inDate"></div>
+            <div class="f"><label for="inType">Document type</label>
+              <select id="inType">
+                <option>Invoice</option><option>Credit note</option><option>Quotation</option>
+                <option>Sales summary</option><option>Purchase summary</option>
+                <option>Return working paper</option>
+              </select></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="f"><label for="selCur">Currency</label>
+              <select id="selCur">
+                <option value="£">£ pound</option><option value="$">$ dollar</option>
+                <option value="€">€ euro</option><option value="other">Other symbol…</option>
+              </select></div>
+            <div class="f" id="curOtherWrap" hidden><label for="inCurOther">Symbol or code</label>
+              <input type="text" id="inCurOther" maxlength="5" autocomplete="off"></div>
+            <div class="f"><label for="selRound">Tax rounding basis</label>
+              <select id="selRound">
+                <option value="rate">On each rate subtotal</option>
+                <option value="line">On each line, then summed</option>
+              </select></div>
+          </div>
+          <div class="f"><label for="inNotes">Notes printed on the summary</label>
+            <textarea id="inNotes" rows="3" maxlength="600"></textarea></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ══════ RESULTS ══════ -->
+    <aside class="col-res">
+      <div class="card sticky">
+        <div class="hd">
+          <h2>Tax summary</h2>
+          <span class="chip" id="resChip">—</span>
+        </div>
+        <div class="bd stack">
+
+          <div class="stat hero">
+            <div class="k" id="heroK">Tax charged</div>
+            <div class="v" id="heroV">—</div>
+            <div class="u" id="heroU">—</div>
+          </div>
+
+          <div class="statgrid">
+            <div class="stat sm2"><div class="k">Net total</div><div class="v" id="vNet">—</div>
+              <div class="u">excludes tax</div></div>
+            <div class="stat sm2"><div class="k">Document total</div><div class="v" id="vGross">—</div>
+              <div class="u">net + tax charged</div></div>
+          </div>
+
+          <div class="tw">
+            <table class="sumtab" id="sumTab">
+              <caption class="printonly">Tax summary by rate</caption>
+              <thead><tr>
+                <th scope="col">Code</th><th scope="col" class="n">Rate</th>
+                <th scope="col" class="n">Net</th><th scope="col" class="n">Tax</th><th scope="col" class="n">Gross</th>
+              </tr></thead>
+              <tbody id="sumBody"></tbody>
+              <tfoot id="sumFoot"></tfoot>
+            </table>
+          </div>
+
+          <div class="kvs" id="kvs"></div>
+
+          <div class="note warn" id="roundNote" hidden></div>
+          <div class="note bad" id="errNote" hidden></div>
+        </div>
+        <div class="ft">
+          <span class="lbl" style="margin-right:auto">Total to collect</span>
+          <span class="mono" id="ftTotal" style="font-weight:700;font-size:16px">—</span>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+  </div>
+</main>
+
+<footer class="app" style="padding-bottom:26px">
+  <div class="hint" id="footNote">
+    Adds tax as net × (1 + rate) and removes it as gross ÷ (1 + rate) — never by subtracting the rate from the
+    gross. Each tax code is subtotalled separately as a return requires; zero-rated and exempt are kept apart;
+    reverse-charge and out-of-scope lines are excluded from the tax total but stay in the document total.
+    Money is rounded half-up to 2 decimal places. Preset rates are editable defaults, not tax advice —
+    check the current rate and treatment with the tax authority. Works offline; your data stays in this browser.
+  </div>
+</footer>
+
+<div id="toast" hidden role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+var KEY='solvix.vat-calculator.v1';
+var $=function(id){return document.getElementById(id);};
+
+/* ══ number helpers ═══════════════════════════════════════════════ */
+function pv(s){
+  if(s===null||s===undefined)return null;
+  var t=String(s).replace(/[\s,]/g,'').replace(/[£$€]/g,'');
+  if(t==='')return null;
+  var n=parseFloat(t);
+  return isFinite(n)?n:null;
+}
+function fin(n){return typeof n==='number'&&isFinite(n);}
+/* round half away from zero to 2dp, immune to binary representation dust */
+function r2(n){
+  if(!fin(n))return NaN;
+  var s=n<0?-1:1,v=Math.abs(n)*100,f=Math.floor(v),d=v-f;
+  if(d>=0.5-1e-9)f+=1;
+  return s*f/100;
+}
+function grp(x){var p=String(x).split('.');return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',')+(p[1]?'.'+p[1]:'');}
+function CUR(){return S.cur==='other'?(S.curOther||''):S.cur;}
+function money(n){
+  if(!fin(n))return '—';
+  if(Math.abs(n)<5e-9)n=0;
+  return (n<0?'−':'')+CUR()+grp(Math.abs(n).toFixed(2));
+}
+function moneyPlain(n){
+  if(!fin(n))return '';
+  if(Math.abs(n)<5e-9)n=0;
+  return n.toFixed(2);
+}
+function rateTxt(p){
+  if(!fin(p))return '—';
+  var s=Math.abs(p-Math.round(p))<1e-9?String(Math.round(p)):String(parseFloat(p.toFixed(3)));
+  return s+'%';
+}
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function gcd(a,b){a=Math.abs(a);b=Math.abs(b);while(b){var t=b;b=a%b;a=t;}return a;}
+/* tax fraction of a gross amount, as a simplified fraction where possible */
+function taxFraction(p){
+  if(!fin(p)||p<=0)return null;
+  var num=Math.round(p*1000),den=Math.round((100+p)*1000);
+  if(Math.abs(num/1000-p)>1e-6)return null;
+  var g=gcd(num,den);
+  if(!g)return null;
+  num/=g;den/=g;
+  if(den>100000)return null;
+  return num+'/'+den;
+}
+
+/* ══ jurisdiction rate presets ════════════════════════════════════
+   Editable defaults believed correct at the time of build. Rates change:
+   the user must verify them. Every preset also gets the four standard
+   non-taxable treatments so a mixed document can be built at once.     */
+var JUR=[
+ ['GB','United Kingdom','VAT',[['Standard',20],['Reduced',5]]],
+ ['IE','Ireland','VAT',[['Standard',23],['Reduced',13.5],['Second reduced',9],['Livestock',4.8]]],
+ ['DE','Germany','USt',[['Standard',19],['Reduced',7]]],
+ ['FR','France','TVA',[['Standard',20],['Intermediate',10],['Reduced',5.5],['Super-reduced',2.1]]],
+ ['ES','Spain','IVA',[['General',21],['Reduced',10],['Super-reduced',4]]],
+ ['IT','Italy','IVA',[['Ordinaria',22],['Ridotta 10',10],['Ridotta 5',5],['Minima',4]]],
+ ['NL','Netherlands','btw',[['Standard',21],['Reduced',9]]],
+ ['BE','Belgium','btw / TVA',[['Standard',21],['Reduced 12',12],['Reduced 6',6]]],
+ ['AT','Austria','USt',[['Standard',20],['Reduced 13',13],['Reduced 10',10]]],
+ ['PL','Poland','VAT',[['Standard',23],['Reduced 8',8],['Reduced 5',5]]],
+ ['PT','Portugal','IVA',[['Normal',23],['Intermédia',13],['Reduzida',6]]],
+ ['SE','Sweden','moms',[['Standard',25],['Reduced 12',12],['Reduced 6',6]]],
+ ['DK','Denmark','moms',[['Standard',25]]],
+ ['NO','Norway','MVA',[['Standard',25],['Food',15],['Transport',12]]],
+ ['CH','Switzerland','MWST',[['Standard',8.1],['Accommodation',3.8],['Reduced',2.6]]],
+ ['AU','Australia','GST',[['GST',10]]],
+ ['NZ','New Zealand','GST',[['GST',15]]],
+ ['CA','Canada','GST/HST',[['GST',5],['HST 13',13],['HST 15',15]]],
+ ['SG','Singapore','GST',[['GST',9]]],
+ ['AE','United Arab Emirates','VAT',[['Standard',5]]],
+ ['SA','Saudi Arabia','VAT',[['Standard',15]]],
+ ['ZA','South Africa','VAT',[['Standard',15]]],
+ ['IN','India','GST',[['GST 28',28],['GST 18',18],['GST 12',12],['GST 5',5]]],
+ ['JP','Japan','Consumption tax',[['Standard',10],['Reduced',8]]],
+ ['MX','Mexico','IVA',[['General',16],['Border',8]]],
+ ['US','United States','Sales tax',[['State + local',0]]],
+ ['XX','Custom / other','Tax',[['Standard',0]]]
+];
+var TREAT=[['tax','Taxable'],['zero','Zero-rated'],['exempt','Exempt'],
+           ['reverse','Reverse charge'],['oos','Outside scope']];
+function treatLabel(t){for(var i=0;i<TREAT.length;i++)if(TREAT[i][0]===t)return TREAT[i][1];return 'Taxable';}
+function jurByCode(c){for(var i=0;i<JUR.length;i++)if(JUR[i][0]===c)return JUR[i];return JUR[JUR.length-1];}
+
+var uid=0;
+function nid(p){uid++;return p+uid+'-'+Math.floor(Math.random()*10000);}
+
+function codesFor(jc){
+  var j=jurByCode(jc),out=[],i;
+  for(i=0;i<j[3].length;i++)out.push({id:nid('c'),c:j[3][i][0],r:String(j[3][i][1]),t:'tax'});
+  out.push({id:nid('c'),c:'Zero-rated',r:'0',t:'zero'});
+  out.push({id:nid('c'),c:'Exempt',r:'0',t:'exempt'});
+  out.push({id:nid('c'),c:'Reverse charge',r:String(j[3][0][1]),t:'reverse'});
+  out.push({id:nid('c'),c:'Outside scope',r:'0',t:'oos'});
+  return out;
+}
+
+function today(){
+  var d=new Date(),m=String(d.getMonth()+1),dd=String(d.getDate());
+  return d.getFullYear()+'-'+(m.length<2?'0'+m:m)+'-'+(dd.length<2?'0'+dd:dd);
+}
+
+/* ══ state ════════════════════════════════════════════════════════ */
+function blank(){
+  var codes=codesFor('GB');
+  return {v:1,sample:false,showBanner:false,preview:false,
+    cur:'£',curOther:'',jur:'GB',taxName:'VAT',rounding:'rate',defBasis:'net',
+    codes:codes,
+    lines:[{id:nid('l'),d:'',q:'1',p:'',b:'net',code:codes[0].id}],
+    q:{dir:'add',amt:'',rate:String(codes[0].r),codeId:codes[0].id},
+    doc:{biz:'',addr:'',reg:'',client:'',creg:'',ref:'',date:today(),type:'Invoice',notes:''}};
+}
+function sample(){
+  var codes=codesFor('GB');
+  var std=codes[0].id,red=codes[1].id,zero=codes[2].id,exm=codes[3].id,rev=codes[4].id,oos=codes[5].id;
+  return {v:1,sample:true,showBanner:true,preview:false,
+    cur:'£',curOther:'',jur:'GB',taxName:'VAT',rounding:'rate',defBasis:'net',
+    codes:codes,
+    lines:[
+      {id:nid('l'),d:'Kitchen supply and fit — labour',q:'1',p:'4250.00',b:'net',code:std},
+      {id:nid('l'),d:'Energy-saving insulation materials, installed',q:'1',p:'980.00',b:'net',code:red},
+      {id:nid('l'),d:'Printed care and installation manuals',q:'12',p:'6.50',b:'net',code:zero},
+      {id:nid('l'),d:'Showroom display units (shelf price, tax included)',q:'3',p:'59.99',b:'gross',code:std},
+      {id:nid('l'),d:'Structural steelwork subcontract — CIS reverse charge',q:'1',p:'1600.00',b:'net',code:rev},
+      {id:nid('l'),d:'Insurance-backed guarantee premium',q:'1',p:'145.00',b:'net',code:exm},
+      {id:nid('l'),d:'Local authority skip permit paid on client account',q:'1',p:'90.00',b:'net',code:oos}
+    ],
+    q:{dir:'rem',amt:'120.00',rate:'20',codeId:std},
+    doc:{biz:'Halstead & Rowe Joinery Ltd',
+      addr:'Unit 7, Cranmore Trade Park\nBirmingham B12 9QD\n0121 496 0184',
+      reg:'GB 418 2266 71',
+      client:'Marchmont Property Services Ltd',creg:'GB 771 0392 04',
+      ref:'INV-2026-118',date:today(),type:'Invoice',
+      notes:'Reverse charge: customer to account for the VAT to HMRC at the standard rate.\nPayment due 30 days from the date of this invoice.'}};
+}
+
+var S=sample();
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return false;
+    var o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return false;
+    S=normalise(o);
+    return true;
+  }catch(e){return false;}
+}
+function normalise(o){
+  var b=blank(),i,k;
+  var s={v:1,
+    sample:!!o.sample,showBanner:!!o.showBanner,preview:!!o.preview,
+    cur:(o.cur==='£'||o.cur==='$'||o.cur==='€'||o.cur==='other')?o.cur:'£',
+    curOther:typeof o.curOther==='string'?o.curOther.slice(0,5):'',
+    jur:typeof o.jur==='string'?o.jur:'GB',
+    taxName:typeof o.taxName==='string'&&o.taxName?o.taxName.slice(0,28):'VAT',
+    rounding:o.rounding==='line'?'line':'rate',
+    defBasis:o.defBasis==='gross'?'gross':'net',
+    codes:[],lines:[],q:{},doc:{}};
+  if(Object.prototype.toString.call(o.codes)==='[object Array]'&&o.codes.length){
+    for(i=0;i<o.codes.length&&i<40;i++){
+      var c=o.codes[i]||{};
+      var t='tax';
+      for(k=0;k<TREAT.length;k++)if(TREAT[k][0]===c.t)t=c.t;
+      s.codes.push({id:typeof c.id==='string'&&c.id?c.id:nid('c'),
+        c:String(c.c==null?'Code':c.c).slice(0,32),
+        r:String(c.r==null?'0':c.r).slice(0,10),t:t});
+    }
+  }
+  if(!s.codes.length)s.codes=codesFor(s.jur);
+  var ids={};for(i=0;i<s.codes.length;i++)ids[s.codes[i].id]=1;
+  if(Object.prototype.toString.call(o.lines)==='[object Array]'){
+    for(i=0;i<o.lines.length&&i<300;i++){
+      var l=o.lines[i]||{};
+      s.lines.push({id:typeof l.id==='string'&&l.id?l.id:nid('l'),
+        d:String(l.d==null?'':l.d).slice(0,160),
+        q:String(l.q==null?'1':l.q).slice(0,14),
+        p:String(l.p==null?'':l.p).slice(0,14),
+        b:l.b==='gross'?'gross':'net',
+        code:(typeof l.code==='string'&&ids[l.code])?l.code:s.codes[0].id});
+    }
+  }
+  if(!s.lines.length)s.lines=[{id:nid('l'),d:'',q:'1',p:'',b:s.defBasis,code:s.codes[0].id}];
+  var q=o.q||{};
+  s.q={dir:q.dir==='rem'?'rem':'add',
+    amt:String(q.amt==null?'':q.amt).slice(0,14),
+    rate:String(q.rate==null?'20':q.rate).slice(0,10),
+    codeId:(typeof q.codeId==='string'&&ids[q.codeId])?q.codeId:''};
+  var dk=['biz','addr','reg','client','creg','ref','date','type','notes'];
+  for(i=0;i<dk.length;i++){k=dk[i];s.doc[k]=(o.doc&&o.doc[k]!=null)?String(o.doc[k]).slice(0,400):b.doc[k];}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s.doc.date))s.doc.date=today();
+  return s;
+}
+
+function codeById(id){for(var i=0;i<S.codes.length;i++)if(S.codes[i].id===id)return S.codes[i];return null;}
+function codeRate(c){
+  if(!c)return null;
+  var v=pv(c.r);
+  if(v==null||!isFinite(v)||v<0||v>100)return null;
+  return v;
+}
+/* rate actually charged on this document for a code, as a decimal */
+function chargedRate(c){
+  if(!c)return 0;
+  if(c.t!=='tax')return 0;
+  var v=codeRate(c);
+  return v==null?0:v/100;
+}
+
+/* ══ the calculation ══════════════════════════════════════════════ */
+var R=null;
+function compute(){
+  var i,byCode={},order=[],bad=0,badCodes=0;
+  for(i=0;i<S.codes.length;i++){
+    var c=S.codes[i];
+    if(codeRate(c)===null)badCodes++;
+    byCode[c.id]={code:c,net:0,lineNet:0,lineTax:0,n:0};
+    order.push(c.id);
+  }
+  var lines=[];
+  for(i=0;i<S.lines.length;i++){
+    var l=S.lines[i],c2=codeById(l.code);
+    var q=pv(l.q),p=pv(l.p);
+    var rec={id:l.id,ok:false,net:NaN,tax:NaN,gross:NaN,dNet:NaN,dTax:NaN,dGross:NaN,code:c2,err:''};
+    if(q===null&&p===null){rec.err='';}
+    else if(q===null){rec.err='Quantity?';}
+    else if(p===null){rec.err='Price?';}
+    else if(!c2){rec.err='No tax code';}
+    else if(codeRate(c2)===null){rec.err='Rate must be 0–100';}
+    else{
+      var r=chargedRate(c2),amt=q*p,net,tax;
+      if(l.b==='gross'){
+        var den=1+r;
+        if(!(den>0)){rec.err='Rate invalid';}
+        else{net=amt/den;tax=amt-net;rec.ok=true;}
+      }else{net=amt;tax=net*r;rec.ok=true;}
+      if(rec.ok){
+        rec.net=net;rec.tax=tax;rec.gross=net+tax;
+        /* displayed line figures always reconcile: the side the user typed is
+           the anchor, the other side is the balancing figure */
+        if(l.b==='gross'){rec.dGross=r2(amt);rec.dNet=r2(net);rec.dTax=r2(rec.dGross-rec.dNet);}
+        else{rec.dNet=r2(net);rec.dTax=r2(tax);rec.dGross=r2(rec.dNet+rec.dTax);}
+        var b=byCode[c2.id];
+        b.net+=net;b.lineNet+=rec.dNet;b.lineTax+=rec.dTax;b.n++;
+      }
+    }
+    if(!rec.ok&&rec.err)bad++;
+    lines.push(rec);
+  }
+  var groups=[],netTotal=0,taxTotal=0,memoTotal=0,
+      taxableNet=0,zeroNet=0,exemptNet=0,revNet=0,oosNet=0,lineModeDiff=0;
+  for(i=0;i<order.length;i++){
+    var g=byCode[order[i]];
+    if(!g.n)continue;
+    var cc=g.code,rp=codeRate(cc),rd=chargedRate(cc),netSub,taxSub;
+    if(S.rounding==='line'){netSub=r2(g.lineNet);taxSub=r2(g.lineTax);}
+    else{netSub=r2(g.net);taxSub=(cc.t==='tax')?r2(netSub*rd):0;}
+    var altTax=(S.rounding==='line')?((cc.t==='tax')?r2(r2(g.net)*rd):0):r2(g.lineTax);
+    lineModeDiff+=Math.abs(r2(taxSub-altTax));
+    var memo=(cc.t==='reverse'&&rp!==null)?r2(netSub*rp/100):0;
+    var grossSub=r2(netSub+taxSub);
+    groups.push({code:cc,rate:rp,net:netSub,tax:taxSub,gross:grossSub,memo:memo,n:g.n});
+    netTotal=r2(netTotal+netSub);taxTotal=r2(taxTotal+taxSub);memoTotal=r2(memoTotal+memo);
+    if(cc.t==='tax')taxableNet=r2(taxableNet+netSub);
+    else if(cc.t==='zero'){taxableNet=r2(taxableNet+netSub);zeroNet=r2(zeroNet+netSub);}
+    else if(cc.t==='exempt')exemptNet=r2(exemptNet+netSub);
+    else if(cc.t==='reverse')revNet=r2(revNet+netSub);
+    else oosNet=r2(oosNet+netSub);
+  }
+  R={lines:lines,groups:groups,netTotal:netTotal,taxTotal:taxTotal,
+     grossTotal:r2(netTotal+taxTotal),memoTotal:memoTotal,
+     taxableNet:taxableNet,zeroNet:zeroNet,exemptNet:exemptNet,revNet:revNet,oosNet:oosNet,
+     bad:bad,badCodes:badCodes,lineModeDiff:r2(lineModeDiff),
+     used:S.lines.length-bad};
+  return R;
+}
+
+/* ══ quick converter ══════════════════════════════════════════════ */
+function quick(){
+  var amt=pv(S.q.amt),rp=pv(S.q.rate);
+  var okAmt=amt!==null&&isFinite(amt);
+  var okRate=rp!==null&&isFinite(rp)&&rp>=0&&rp<=100;
+  err('eQAmt',$('qAmt'),(S.q.amt!==''&&!okAmt)?'Enter a number.':'');
+  err('eQRate',$('qRate'),(S.q.rate!==''&&!okRate)?'Rate must be between 0 and 100.':'');
+  var net=NaN,tax=NaN,gross=NaN,r=okRate?rp/100:NaN;
+  if(okAmt&&okRate){
+    if(S.q.dir==='add'){net=r2(amt);tax=r2(amt*r);gross=r2(net+tax);}
+    else{gross=r2(amt);net=r2(gross/(1+r));tax=r2(gross-net);}
+  }
+  var tn=S.taxName||'Tax';
+  $('qNet').textContent=money(net);
+  $('qTax').textContent=money(tax);
+  $('qGross').textContent=money(gross);
+  $('qTaxK').textContent=tn+(okRate?' at '+rateTxt(rp):'');
+  $('qcChip').textContent=okRate?(tn+' '+rateTxt(rp)):(tn+' — set a rate');
+  $('qcNetBox').className=(S.q.dir==='rem')?'on':'';
+  $('qcGrossBox').className=(S.q.dir==='add')?'on':'';
+
+  var w='',mist='';
+  if(okAmt&&okRate){
+    var mult=(1+r);
+    var multTxt=mult.toFixed(r===Math.round(r*100)/100?4:6).replace(/0+$/,'').replace(/\.$/,'');
+    if(S.q.dir==='add'){
+      w='net × (1 + rate)\n'+
+        moneyPlain(r2(amt))+' × (1 + '+(r).toFixed(4).replace(/0+$/,'').replace(/\.$/,'')+
+        ') = <b>'+moneyPlain(gross)+'</b>\n'+
+        tn+' = '+moneyPlain(gross)+' − '+moneyPlain(net)+' = <b>'+moneyPlain(tax)+'</b>';
+    }else{
+      var frac=taxFraction(rp);
+      w='gross ÷ (1 + rate)\n'+
+        moneyPlain(r2(amt))+' ÷ '+multTxt+' = <b>'+moneyPlain(net)+'</b>  net\n'+
+        tn+' = '+moneyPlain(gross)+' − '+moneyPlain(net)+' = <b>'+moneyPlain(tax)+'</b>'+
+        (frac?('\ncheck: '+moneyPlain(gross)+' × '+frac+' = '+moneyPlain(tax)):'');
+      if(rp>0){
+        var wrong=r2(amt-amt*r),wtax=r2(amt-wrong),diff=r2(net-wrong);
+        mist='<strong>The mistake to avoid.</strong> Taking '+rateTxt(rp)+' off the gross gives '+
+          money(wrong)+', not '+money(net)+' — it understates the net by '+money(diff)+
+          '. To take '+esc(tn)+' out you divide by '+multTxt+'; you do not subtract '+rateTxt(rp)+
+          '. (Subtracting would imply '+esc(tn)+' of '+money(wtax)+' instead of '+money(tax)+'.)';
+      }
+    }
+  }else{
+    w='Enter an amount and a rate.\nAdd: net × (1 + rate)\nRemove: gross ÷ (1 + rate)';
+  }
+  $('qWork').innerHTML=w;
+  $('qMistake').innerHTML=mist;
+  $('qMistake').hidden=!mist;
+}
+
+/* ══ rendering ════════════════════════════════════════════════════ */
+/* the treatment is only worth repeating when the code name does not say it */
+function treatSuffix(c){
+  if(!c||c.t==='tax')return '';
+  var t=treatLabel(c.t);
+  return String(c.c).toLowerCase().indexOf(t.toLowerCase().split(' ')[0])>=0?'':' ('+t+')';
+}
+function codeOptions(sel){
+  var h='',i;
+  for(i=0;i<S.codes.length;i++){
+    var c=S.codes[i],rp=codeRate(c);
+    var showR=(c.t==='tax'||c.t==='reverse');
+    var lab=c.c+(showR?(' · '+(rp===null?'?':rateTxt(rp))):'')+treatSuffix(c);
+    h+='<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(lab)+'</option>';
+  }
+  return h;
+}
+function renderLines(){
+  var h='',i;
+  for(i=0;i<S.lines.length;i++){
+    var l=S.lines[i],n=i+1;
+    h+='<tr data-id="'+esc(l.id)+'">'+
+      '<td class="td"><label class="lbl" for="ld'+n+'" style="position:absolute;left:-9999px">Line '+n+' description</label>'+
+        '<input type="text" id="ld'+n+'" data-f="d" value="'+esc(l.d)+'" placeholder="Description" maxlength="160" autocomplete="off"></td>'+
+      '<td class="n" style="width:8%"><label class="lbl" for="lq'+n+'" style="position:absolute;left:-9999px">Line '+n+' quantity</label>'+
+        '<input type="number" id="lq'+n+'" data-f="q" value="'+esc(l.q)+'" step="any" inputmode="decimal" autocomplete="off"></td>'+
+      '<td class="n" style="width:12%"><label class="lbl" for="lp'+n+'" style="position:absolute;left:-9999px">Line '+n+' unit price</label>'+
+        '<input type="number" id="lp'+n+'" data-f="p" value="'+esc(l.p)+'" step="0.01" inputmode="decimal" autocomplete="off"></td>'+
+      '<td style="width:10%"><label class="lbl" for="lb'+n+'" style="position:absolute;left:-9999px">Line '+n+' price basis</label>'+
+        '<select id="lb'+n+'" data-f="b"><option value="net"'+(l.b==='net'?' selected':'')+'>Net</option>'+
+        '<option value="gross"'+(l.b==='gross'?' selected':'')+'>Gross</option></select></td>'+
+      '<td style="width:19%"><label class="lbl" for="lc'+n+'" style="position:absolute;left:-9999px">Line '+n+' tax code</label>'+
+        '<select id="lc'+n+'" data-f="code">'+codeOptions(l.code)+'</select></td>'+
+      '<td class="calc" data-c="net">—</td>'+
+      '<td class="calc" data-c="tax">—</td>'+
+      '<td class="calc hi" data-c="gross">—</td>'+
+      '<td style="width:34px"><button type="button" class="rm noprint" data-act="rm" '+
+        'aria-label="Remove line '+n+'" title="Remove line">×</button></td></tr>';
+  }
+  if(!S.lines.length)h='<tr><td colspan="9"><div class="empty">No lines yet — add one.</div></td></tr>';
+  $('lineBody').innerHTML=h;
+}
+function renderRates(){
+  var h='',i,counts={};
+  for(i=0;i<S.lines.length;i++)counts[S.lines[i].code]=(counts[S.lines[i].code]||0)+1;
+  for(i=0;i<S.codes.length;i++){
+    var c=S.codes[i],n=i+1,rp=codeRate(c),tsel='';
+    for(var k=0;k<TREAT.length;k++)
+      tsel+='<option value="'+TREAT[k][0]+'"'+(TREAT[k][0]===c.t?' selected':'')+'>'+TREAT[k][1]+'</option>';
+    h+='<tr data-id="'+esc(c.id)+'">'+
+      '<td class="td"><label class="lbl" for="rc'+n+'" style="position:absolute;left:-9999px">Code '+n+' label</label>'+
+        '<input type="text" id="rc'+n+'" data-f="c" value="'+esc(c.c)+'" maxlength="32" autocomplete="off"></td>'+
+      '<td class="n" style="width:14%"><label class="lbl" for="rr'+n+'" style="position:absolute;left:-9999px">Code '+n+' rate percent</label>'+
+        '<input type="number" id="rr'+n+'" data-f="r" value="'+esc(c.r)+'" step="0.01" min="0" max="100" inputmode="decimal" autocomplete="off"'+
+        (rp===null?' class="inv"':'')+'>'+(rp===null?'<span class="cellerr">0–100</span>':'')+'</td>'+
+      '<td style="width:26%"><label class="lbl" for="rt'+n+'" style="position:absolute;left:-9999px">Code '+n+' treatment</label>'+
+        '<select id="rt'+n+'" data-f="t">'+tsel+'</select></td>'+
+      '<td class="calc">'+(counts[c.id]||0)+'</td>'+
+      '<td style="width:34px"><button type="button" class="rm noprint" data-act="rmc" '+
+        'aria-label="Remove tax code '+esc(c.c)+'" title="Remove code">×</button></td></tr>';
+  }
+  $('rateBody').innerHTML=h;
+}
+function refreshCodeSelects(){
+  var rows=$('lineBody').getElementsByTagName('tr'),i;
+  for(i=0;i<rows.length;i++){
+    var id=rows[i].getAttribute('data-id');if(!id)continue;
+    var line=null,j;
+    for(j=0;j<S.lines.length;j++)if(S.lines[j].id===id)line=S.lines[j];
+    var sel=rows[i].querySelector('select[data-f="code"]');
+    if(sel&&line)sel.innerHTML=codeOptions(line.code);
+  }
+  var qc=$('qCode');
+  qc.innerHTML=codeOptions(S.q.codeId)+'<option value="">Custom rate…</option>';
+  qc.value=S.q.codeId||'';
+}
+
+function err(id,input,msgTxt){
+  var e=$(id);
+  if(!e)return;
+  if(msgTxt){e.textContent=msgTxt;e.hidden=false;if(input)input.classList.add('inv');}
+  else{e.textContent='';e.hidden=true;if(input)input.classList.remove('inv');}
+}
+
+function render(){
+  compute();
+  quick();
+  var rows=$('lineBody').getElementsByTagName('tr'),i,j;
+  for(i=0;i<rows.length;i++){
+    var id=rows[i].getAttribute('data-id');if(!id)continue;
+    var rec=null;
+    for(j=0;j<R.lines.length;j++)if(R.lines[j].id===id)rec=R.lines[j];
+    var cn=rows[i].querySelector('[data-c="net"]'),ct=rows[i].querySelector('[data-c="tax"]'),
+        cg=rows[i].querySelector('[data-c="gross"]');
+    if(!rec||!rec.ok){
+      cn.innerHTML=rec&&rec.err?('—<span class="cellerr">'+esc(rec.err)+'</span>'):'—';
+      ct.textContent='—';cg.textContent='—';
+      rows[i].className=(rec&&rec.err)?'bad-row':'';
+    }else{
+      var c=rec.code;
+      cn.textContent=money(rec.dNet);
+      ct.textContent=(c&&c.t==='tax')?money(rec.dTax):'—';
+      cg.textContent=money(rec.dGross);
+      rows[i].className='';
+    }
+  }
+  $('ftNet').textContent=money(R.netTotal);
+  $('ftTax').textContent=money(R.taxTotal);
+  $('ftGross').textContent=money(R.grossTotal);
+
+  var tn=S.taxName||'Tax';
+  $('heroK').textContent=tn+' charged on this document';
+  $('heroV').textContent=money(R.taxTotal);
+  $('heroU').textContent='on '+money(R.taxableNet)+' of taxable net · '+
+    (R.groups.length?R.groups.length:0)+' tax code'+(R.groups.length===1?'':'s')+' in use';
+  $('vNet').textContent=money(R.netTotal);
+  $('vGross').textContent=money(R.grossTotal);
+  $('ftTotal').textContent=money(R.grossTotal);
+  $('resChip').textContent=R.used+' line'+(R.used===1?'':'s')+' · '+jurByCode(S.jur)[1];
+  $('resChip').className='chip'+(R.bad?' bad':' ok');
+  if(R.bad)$('resChip').textContent=R.bad+' line'+(R.bad===1?'':'s')+' incomplete';
+
+  /* summary table */
+  var h='',g;
+  for(i=0;i<R.groups.length;i++){
+    g=R.groups[i];
+    var sub=treatSuffix(g.code);
+    h+='<tr><td>'+esc(g.code.c)+(sub?'<br><span class="trt">'+treatLabel(g.code.t)+'</span>':'')+'</td>'+
+      '<td class="n">'+(g.code.t==='tax'||g.code.t==='reverse'?rateTxt(g.rate):'—')+'</td>'+
+      '<td class="n">'+money(g.net)+'</td>'+
+      '<td class="n">'+(g.code.t==='tax'?money(g.tax):'—')+'</td>'+
+      '<td class="n">'+money(g.gross)+'</td></tr>';
+    if(g.memo>0)
+      h+='<tr class="memo"><td colspan="5">Memo — '+esc(tn)+' of '+money(g.memo)+
+        ' to be accounted for by the customer under the reverse charge (not charged here).</td></tr>';
+  }
+  if(!R.groups.length)h='<tr><td colspan="5"><div class="empty">Enter a line to see the summary.</div></td></tr>';
+  $('sumBody').innerHTML=h;
+  $('sumFoot').innerHTML='<tr><td>Totals</td><td class="n"></td><td class="n">'+money(R.netTotal)+
+    '</td><td class="n">'+money(R.taxTotal)+'</td><td class="n">'+money(R.grossTotal)+'</td></tr>';
+
+  var kv='';
+  kv+='<div><span>Taxable net (incl. zero-rated)</span><b>'+money(R.taxableNet)+'</b></div>';
+  if(R.zeroNet)kv+='<div><span>of which zero-rated</span><b>'+money(R.zeroNet)+'</b></div>';
+  if(R.exemptNet)kv+='<div><span>Exempt net</span><b>'+money(R.exemptNet)+'</b></div>';
+  if(R.revNet)kv+='<div><span>Reverse charge net</span><b>'+money(R.revNet)+'</b></div>';
+  if(R.memoTotal)kv+='<div><span>'+esc(tn)+' for customer to account for</span><b>'+money(R.memoTotal)+'</b></div>';
+  if(R.oosNet)kv+='<div><span>Outside the scope</span><b>'+money(R.oosNet)+'</b></div>';
+  kv+='<div><span>Effective rate on net total</span><b>'+
+    (R.netTotal>0?(r2(R.taxTotal/R.netTotal*100)).toFixed(2)+'%':'—')+'</b></div>';
+  $('kvs').innerHTML=kv;
+
+  var rn=$('roundNote');
+  if(R.lineModeDiff>0.004){
+    rn.innerHTML='<strong>Rounding basis matters here.</strong> Calculating '+esc(tn)+
+      ' on each rate subtotal rather than line by line changes the total by '+money(R.lineModeDiff)+
+      '. This document uses '+(S.rounding==='rate'?'the rate subtotal':'each line, then summed')+
+      '. Line figures may differ by a penny from the subtotal as a result.';
+    rn.hidden=false;
+  }else rn.hidden=true;
+
+  var en=$('errNote');
+  if(R.bad||R.badCodes){
+    var parts=[];
+    if(R.bad)parts.push(R.bad+' line'+(R.bad===1?' is':'s are')+' incomplete or invalid and '+
+      (R.bad===1?'is':'are')+' excluded from the totals');
+    if(R.badCodes)parts.push(R.badCodes+' tax code'+(R.badCodes===1?' has':'s have')+' a rate outside 0–100%');
+    en.innerHTML='<strong>Check the highlighted rows.</strong> '+parts.join('; ')+'.';
+    en.hidden=false;
+  }else en.hidden=true;
+
+  renderDoc();
+  syncFields();
+}
+
+function syncFields(){
+  $('segAdd').setAttribute('aria-pressed',S.q.dir==='add'?'true':'false');
+  $('segRem').setAttribute('aria-pressed',S.q.dir==='rem'?'true':'false');
+  $('segNet').setAttribute('aria-pressed',S.defBasis==='net'?'true':'false');
+  $('segGross').setAttribute('aria-pressed',S.defBasis==='gross'?'true':'false');
+  $('curOtherWrap').hidden=(S.cur!=='other');
+  $('btnPrev').textContent=document.body.classList.contains('preview')?'Back to editing':'Preview summary';
+  $('banner').hidden=!S.showBanner;
+  $('lineHint').textContent=S.lines.length+' line'+(S.lines.length===1?'':'s')+' · '+
+    'tax rounded to 2 dp on '+(S.rounding==='rate'?'each rate subtotal':'each line')+
+    ' · gross-priced lines are divided by (1 + rate), never reduced by the rate.';
+}
+
+/* ══ the printed document ═════════════════════════════════════════ */
+function fmtDate(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||''))return '—';
+  var p=iso.split('-'),M=['January','February','March','April','May','June','July',
+    'August','September','October','November','December'];
+  return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1]+' '+p[0];
+}
+function renderDoc(){
+  var d=S.doc,tn=S.taxName||'Tax',j=jurByCode(S.jur);
+  $('dBiz').textContent=d.biz||'Your business';
+  $('dAddr').textContent=d.addr||'';
+  $('dReg').textContent=d.reg?(tn+' reg. no. '+d.reg):'';
+  $('dTitle').textContent=tn+' Summary';
+  $('dSubtitle').textContent=(d.type||'Document')+(d.ref?(' · '+d.ref):'');
+  $('dBadge').textContent=tn+' analysis by rate';
+  $('dRef').textContent=d.ref||'—';
+  $('dDate').textContent=fmtDate(d.date);
+  $('dClient').textContent=d.client||'—';
+  $('dCReg').textContent=d.creg||'—';
+  $('dTaxName').textContent=tn;
+  $('dJur').textContent=j[1];
+  $('dBasis').textContent=(S.defBasis==='gross'?'Gross by default':'Net by default')+' — per line as shown';
+  $('dRound').textContent=(S.rounding==='rate'?'Tax on each rate subtotal':'Tax on each line, then summed');
+  $('dhNet').textContent=money(R.netTotal);
+  $('dhTaxK').textContent=tn+' charged';
+  $('dhTax').textContent=money(R.taxTotal);
+  $('dhGross').textContent=money(R.grossTotal);
+  $('dhTaxable').textContent=money(R.taxableNet);
+
+  var h='<thead><tr><th scope="col">#</th><th scope="col">Description</th><th scope="col" class="n">Qty</th>'+
+    '<th scope="col" class="n">Unit price</th><th scope="col">Priced</th><th scope="col">'+esc(tn)+' code</th>'+
+    '<th scope="col" class="n">Rate</th><th scope="col" class="n">Net</th><th scope="col" class="n">'+esc(tn)+
+    '</th><th scope="col" class="n">Gross</th></tr></thead><tbody>',i,n=0;
+  for(i=0;i<R.lines.length;i++){
+    var rec=R.lines[i],l=S.lines[i];
+    if(!rec.ok)continue;
+    n++;
+    var c=rec.code,rp=codeRate(c);
+    h+='<tr><td class="n">'+n+'</td><td>'+esc(l.d||'—')+'</td>'+
+      '<td class="n">'+esc(l.q)+'</td><td class="n">'+money(pv(l.p))+'</td>'+
+      '<td>'+(l.b==='gross'?'Incl. tax':'Excl. tax')+'</td>'+
+      '<td>'+esc(c?c.c:'—')+(c&&c.t!=='tax'?' <span class="trt">('+treatLabel(c.t)+')</span>':'')+'</td>'+
+      '<td class="n">'+((c&&(c.t==='tax'||c.t==='reverse'))?rateTxt(rp):'—')+'</td>'+
+      '<td class="n">'+money(rec.dNet)+'</td>'+
+      '<td class="n">'+((c&&c.t==='tax')?money(rec.dTax):'—')+'</td>'+
+      '<td class="n">'+money(rec.dGross)+'</td></tr>';
+  }
+  if(!n)h+='<tr><td colspan="10">No completed lines.</td></tr>';
+  h+='</tbody><tfoot><tr><td colspan="7">Totals</td><td class="n">'+money(R.netTotal)+
+    '</td><td class="n">'+money(R.taxTotal)+'</td><td class="n">'+money(R.grossTotal)+'</td></tr></tfoot>';
+  $('dLines').innerHTML=h;
+
+  var s='<thead><tr><th scope="col">'+esc(tn)+' code</th><th scope="col">Treatment</th>'+
+    '<th scope="col" class="n">Rate</th><th scope="col" class="n">Lines</th><th scope="col" class="n">Net</th>'+
+    '<th scope="col" class="n">'+esc(tn)+'</th><th scope="col" class="n">Gross</th></tr></thead><tbody>';
+  for(i=0;i<R.groups.length;i++){
+    var g=R.groups[i];
+    s+='<tr><td>'+esc(g.code.c)+'</td><td>'+treatLabel(g.code.t)+'</td>'+
+      '<td class="n">'+((g.code.t==='tax'||g.code.t==='reverse')?rateTxt(g.rate):'—')+'</td>'+
+      '<td class="n">'+g.n+'</td><td class="n">'+money(g.net)+'</td>'+
+      '<td class="n">'+(g.code.t==='tax'?money(g.tax):'—')+'</td>'+
+      '<td class="n">'+money(g.gross)+'</td></tr>';
+    if(g.memo>0)
+      s+='<tr class="memo"><td colspan="7">Memorandum only — '+esc(tn)+' of '+money(g.memo)+
+        ' at '+rateTxt(g.rate)+' is to be accounted for by the customer under the reverse charge '+
+        'and is not charged on this document.</td></tr>';
+  }
+  if(!R.groups.length)s+='<tr><td colspan="7">No completed lines.</td></tr>';
+  s+='</tbody><tfoot><tr><td colspan="4">Totals</td><td class="n">'+money(R.netTotal)+
+    '</td><td class="n">'+money(R.taxTotal)+'</td><td class="n">'+money(R.grossTotal)+'</td></tr>';
+  if(R.memoTotal>0)
+    s+='<tr class="memo"><td colspan="6">Reverse charge '+esc(tn)+
+      ' for the customer to account for (memorandum, not included above)</td><td class="n">'+
+      money(R.memoTotal)+'</td></tr>';
+  s+='</tfoot>';
+  $('dSum').innerHTML=s;
+
+  var notes=[];
+  if(d.notes)notes.push(d.notes);
+  notes.push('Tax on each rate is calculated by '+
+    (S.rounding==='rate'
+      ? 'applying the rate to the net subtotal for that rate (net × rate), so individual line figures may differ from the subtotal by up to one minor unit.'
+      : 'rounding each line to two decimal places and summing, so the rate subtotal is the sum of the rounded line figures.'));
+  notes.push('Lines priced "incl. tax" were converted with gross ÷ (1 + rate); lines priced "excl. tax" with net × (1 + rate).');
+  $('dNotes').textContent=notes.join('\n');
+
+  $('dFoot').innerHTML='<span>Prepared '+esc(fmtDate(today()))+'</span>'+
+    '<span>Currency: '+esc(CUR()||'—')+'</span>'+
+    '<span>'+esc(tn)+' summary — figures as entered by the preparer</span>';
+}
+
+/* ══ toast ════════════════════════════════════════════════════════ */
+var toastT=null;
+function msg(t,bad){
+  var el=$('toast');
+  el.textContent=t;el.className=bad?'bad':'';el.hidden=false;
+  if(toastT)clearTimeout(toastT);
+  toastT=setTimeout(function(){el.hidden=true;},bad?4200:2600);
+}
+
+/* ══ export ═══════════════════════════════════════════════════════ */
+function csvCell(v){
+  var s=(v==null)?'':String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvText(rows){
+  return rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n')+'\r\n';
+}
+function dl(name,text,mime){
+  try{
+    var blob=new Blob([text],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},600);
+  }catch(e){msg('This browser blocked the download.',true);}
+}
+function slug(s){
+  return (String(s||'tax-summary').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-|-$/g,'')||'tax-summary').slice(0,40);
+}
+function buildCsv(){
+  compute();
+  var tn=S.taxName||'Tax',cur=CUR(),rows=[],i;
+  rows.push([tn+' summary — Solvix Sales Tax & VAT Calculator']);
+  rows.push(['Business',S.doc.biz]);
+  rows.push([tn+' registration',S.doc.reg]);
+  rows.push(['Customer',S.doc.client]);
+  rows.push(['Their registration',S.doc.creg]);
+  rows.push(['Document type',S.doc.type]);
+  rows.push(['Reference',S.doc.ref]);
+  rows.push(['Date',S.doc.date]);
+  rows.push(['Jurisdiction preset',jurByCode(S.jur)[1]]);
+  rows.push(['Currency',cur]);
+  rows.push(['Rounding basis',S.rounding==='rate'?'Tax on each rate subtotal':'Tax on each line, then summed']);
+  rows.push([]);
+  rows.push(['LINES']);
+  rows.push(['#','Description','Qty','Unit price','Priced','Tax code','Treatment','Rate %',
+    'Net '+cur,tn+' '+cur,'Gross '+cur]);
+  var n=0;
+  for(i=0;i<R.lines.length;i++){
+    var rec=R.lines[i],l=S.lines[i];
+    if(!rec.ok){
+      rows.push(['','(incomplete) '+l.d,l.q,l.p,l.b==='gross'?'Incl. tax':'Excl. tax','','','','','','']);
+      continue;
+    }
+    n++;
+    var c=rec.code,rp=codeRate(c);
+    rows.push([n,l.d,l.q,moneyPlain(pv(l.p)),l.b==='gross'?'Incl. tax':'Excl. tax',c?c.c:'',
+      c?treatLabel(c.t):'',(c&&(c.t==='tax'||c.t==='reverse'))?rp:'',
+      moneyPlain(rec.dNet),(c&&c.t==='tax')?moneyPlain(rec.dTax):'0.00',moneyPlain(rec.dGross)]);
+  }
+  rows.push([]);
+  rows.push(['SUMMARY BY '+tn.toUpperCase()+' RATE']);
+  rows.push(['Tax code','Treatment','Rate %','Lines','Net '+cur,tn+' '+cur,'Gross '+cur,
+    'Reverse charge memo '+cur]);
+  for(i=0;i<R.groups.length;i++){
+    var g=R.groups[i];
+    rows.push([g.code.c,treatLabel(g.code.t),
+      (g.code.t==='tax'||g.code.t==='reverse')?g.rate:'',g.n,
+      moneyPlain(g.net),g.code.t==='tax'?moneyPlain(g.tax):'0.00',moneyPlain(g.gross),
+      g.memo>0?moneyPlain(g.memo):'']);
+  }
+  rows.push(['TOTAL','','','',moneyPlain(R.netTotal),moneyPlain(R.taxTotal),
+    moneyPlain(R.grossTotal),R.memoTotal>0?moneyPlain(R.memoTotal):'']);
+  rows.push([]);
+  rows.push(['Taxable net (incl. zero-rated)',moneyPlain(R.taxableNet)]);
+  rows.push(['Zero-rated net',moneyPlain(R.zeroNet)]);
+  rows.push(['Exempt net',moneyPlain(R.exemptNet)]);
+  rows.push(['Reverse charge net',moneyPlain(R.revNet)]);
+  rows.push([tn+' for customer to account for (memo)',moneyPlain(R.memoTotal)]);
+  rows.push(['Outside scope net',moneyPlain(R.oosNet)]);
+  rows.push([]);
+  rows.push(['Method','Add tax: net x (1 + rate). Remove tax: gross / (1 + rate).']);
+  rows.push(['Notice','Rates and treatments are those entered by the preparer. Not tax advice. '+
+    'Verify with the tax authority or a qualified adviser.']);
+  return csvText(rows);
+}
+
+/* ══ events ═══════════════════════════════════════════════════════ */
+function bindText(id,get,set){
+  var el=$(id);
+  el.value=get();
+  el.addEventListener('input',function(){set(el.value);save();render();});
+}
+
+function onLineInput(e){
+  var t=e.target,f=t.getAttribute('data-f');
+  if(!f)return;
+  var tr=t.closest?t.closest('tr'):null;
+  if(!tr)return;
+  var id=tr.getAttribute('data-id'),i;
+  for(i=0;i<S.lines.length;i++)if(S.lines[i].id===id){S.lines[i][f]=t.value;}
+  save();render();
+}
+function onRateInput(e){
+  var t=e.target,f=t.getAttribute('data-f');
+  if(!f)return;
+  var tr=t.closest?t.closest('tr'):null;
+  if(!tr)return;
+  var id=tr.getAttribute('data-id'),i;
+  for(i=0;i<S.codes.length;i++)if(S.codes[i].id===id){S.codes[i][f]=t.value;}
+  if(f==='r'){
+    var inp=tr.querySelector('input[data-f="r"]'),c=null;
+    for(i=0;i<S.codes.length;i++)if(S.codes[i].id===id)c=S.codes[i];
+    if(inp)inp.classList.toggle('inv',codeRate(c)===null);
+    if(S.q.codeId===id&&c){S.q.rate=c.r;$('qRate').value=c.r;}
+  }
+  save();refreshCodeSelects();renderRates2();render();
+}
+/* rate rows are rebuilt only for the "lines" count column; keep focus */
+function renderRates2(){
+  var counts={},i;
+  for(i=0;i<S.lines.length;i++)counts[S.lines[i].code]=(counts[S.lines[i].code]||0)+1;
+  var rows=$('rateBody').getElementsByTagName('tr');
+  for(i=0;i<rows.length;i++){
+    var id=rows[i].getAttribute('data-id');
+    var cell=rows[i].querySelector('td.calc');
+    if(cell)cell.textContent=counts[id]||0;
+  }
+}
+
+function init(){
+  var restored=load();
+  if(!restored){S=sample();save();}
+
+  /* selects that need options */
+  var jh='',i;
+  for(i=0;i<JUR.length;i++)jh+='<option value="'+JUR[i][0]+'">'+esc(JUR[i][1]+' — '+JUR[i][2])+'</option>';
+  $('selJur').innerHTML=jh;
+  $('selJur').value=S.jur;
+
+  renderLines();renderRates();refreshCodeSelects();
+
+  $('inTaxName').value=S.taxName;
+  $('inBiz').value=S.doc.biz;$('inReg').value=S.doc.reg;$('inAddr').value=S.doc.addr;
+  $('inClient').value=S.doc.client;$('inCReg').value=S.doc.creg;$('inRef').value=S.doc.ref;
+  $('inDate').value=S.doc.date;$('inType').value=S.doc.type;$('inNotes').value=S.doc.notes;
+  $('selCur').value=S.cur;$('inCurOther').value=S.curOther;$('selRound').value=S.rounding;
+  $('qAmt').value=S.q.amt;$('qRate').value=S.q.rate;
+  if(S.preview)document.body.classList.add('preview');
+
+  /* quick converter */
+  $('qAmt').addEventListener('input',function(){S.q.amt=this.value;save();render();});
+  $('qRate').addEventListener('input',function(){
+    S.q.rate=this.value;
+    var c=codeById(S.q.codeId);
+    if(!c||String(pv(c.r))!==String(pv(this.value))){S.q.codeId='';$('qCode').value='';}
+    save();render();
+  });
+  $('qCode').addEventListener('change',function(){
+    S.q.codeId=this.value;
+    var c=codeById(this.value);
+    if(c){S.q.rate=c.r;$('qRate').value=c.r;}
+    save();render();
+  });
+  $('segAdd').addEventListener('click',function(){S.q.dir='add';save();render();});
+  $('segRem').addEventListener('click',function(){S.q.dir='rem';save();render();});
+  $('qAdd').addEventListener('click',function(){
+    var amt=pv(S.q.amt);
+    if(amt===null){msg('Enter an amount first.',true);$('qAmt').focus();return;}
+    var cid=S.q.codeId;
+    if(!cid){
+      var rp=pv(S.q.rate);
+      if(rp===null||rp<0||rp>100){msg('Enter a rate between 0 and 100.',true);$('qRate').focus();return;}
+      var nc={id:nid('c'),c:'Rate '+rateTxt(rp),r:String(rp),t:'tax'};
+      S.codes.push(nc);cid=nc.id;S.q.codeId=cid;
+      renderRates();
+    }
+    S.lines.push({id:nid('l'),d:'',q:'1',p:moneyPlain(r2(amt)),
+      b:S.q.dir==='rem'?'gross':'net',code:cid});
+    S.sample=false;
+    save();renderLines();refreshCodeSelects();render();
+    var rows=$('lineBody').getElementsByTagName('tr');
+    if(rows.length){var inp=rows[rows.length-1].querySelector('input[data-f="d"]');if(inp)inp.focus();}
+    msg('Added as a document line.');
+  });
+
+  /* lines */
+  $('lineBody').addEventListener('input',onLineInput);
+  $('lineBody').addEventListener('change',function(e){
+    if(e.target.tagName==='SELECT'){onLineInput(e);renderRates2();}
+  });
+  $('lineBody').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('button[data-act="rm"]'):null;
+    if(!b)return;
+    var tr=b.closest('tr'),id=tr.getAttribute('data-id'),i;
+    for(i=0;i<S.lines.length;i++)if(S.lines[i].id===id){S.lines.splice(i,1);break;}
+    if(!S.lines.length)S.lines.push({id:nid('l'),d:'',q:'1',p:'',b:S.defBasis,code:S.codes[0].id});
+    S.sample=false;
+    save();renderLines();refreshCodeSelects();renderRates2();render();
+    msg('Line removed.');
+  });
+  $('btnAddLine').addEventListener('click',function(){
+    S.lines.push({id:nid('l'),d:'',q:'1',p:'',b:S.defBasis,code:S.codes[0].id});
+    save();renderLines();refreshCodeSelects();renderRates2();render();
+    var rows=$('lineBody').getElementsByTagName('tr');
+    if(rows.length){var inp=rows[rows.length-1].querySelector('input[data-f="d"]');if(inp)inp.focus();}
+  });
+  $('segNet').addEventListener('click',function(){S.defBasis='net';save();render();});
+  $('segGross').addEventListener('click',function(){S.defBasis='gross';save();render();});
+
+  /* rates */
+  $('rateBody').addEventListener('input',onRateInput);
+  $('rateBody').addEventListener('change',function(e){if(e.target.tagName==='SELECT')onRateInput(e);});
+  $('rateBody').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('button[data-act="rmc"]'):null;
+    if(!b)return;
+    if(S.codes.length<2){msg('Keep at least one tax code.',true);return;}
+    var tr=b.closest('tr'),id=tr.getAttribute('data-id'),i,used=0;
+    for(i=0;i<S.lines.length;i++)if(S.lines[i].code===id)used++;
+    if(used&&!window.confirm(used+' line'+(used===1?'':'s')+' use this code. Remove it and move '+
+      (used===1?'that line':'those lines')+' to the first code?'))return;
+    for(i=0;i<S.codes.length;i++)if(S.codes[i].id===id){S.codes.splice(i,1);break;}
+    var first=S.codes[0].id;
+    for(i=0;i<S.lines.length;i++)if(S.lines[i].code===id)S.lines[i].code=first;
+    if(S.q.codeId===id)S.q.codeId='';
+    save();renderRates();renderLines();refreshCodeSelects();render();
+    msg('Tax code removed.');
+  });
+  $('btnAddCode').addEventListener('click',function(){
+    S.codes.push({id:nid('c'),c:'New code',r:'0',t:'tax'});
+    save();renderRates();refreshCodeSelects();render();
+    var rows=$('rateBody').getElementsByTagName('tr');
+    if(rows.length){var inp=rows[rows.length-1].querySelector('input[data-f="c"]');if(inp){inp.focus();inp.select();}}
+  });
+  $('selJur').addEventListener('change',function(){
+    var jc=this.value,j=jurByCode(jc);
+    if(!window.confirm('Replace the tax codes with the '+j[1]+' preset?\n\n'+
+      'Lines keep their position but are moved to the first code. Preset rates are editable '+
+      'defaults — check them against the current published rates.')){this.value=S.jur;return;}
+    S.jur=jc;S.taxName=j[2];S.codes=codesFor(jc);
+    for(var i=0;i<S.lines.length;i++)S.lines[i].code=S.codes[0].id;
+    S.q.codeId=S.codes[0].id;S.q.rate=S.codes[0].r;
+    $('inTaxName').value=S.taxName;$('qRate').value=S.q.rate;
+    save();renderRates();renderLines();refreshCodeSelects();render();
+    msg(j[1]+' rates loaded — check them before you rely on them.');
+  });
+
+  bindText('inTaxName',function(){return S.taxName;},function(v){S.taxName=v||'Tax';});
+  bindText('inBiz',function(){return S.doc.biz;},function(v){S.doc.biz=v;});
+  bindText('inReg',function(){return S.doc.reg;},function(v){S.doc.reg=v;});
+  bindText('inAddr',function(){return S.doc.addr;},function(v){S.doc.addr=v;});
+  bindText('inClient',function(){return S.doc.client;},function(v){S.doc.client=v;});
+  bindText('inCReg',function(){return S.doc.creg;},function(v){S.doc.creg=v;});
+  bindText('inRef',function(){return S.doc.ref;},function(v){S.doc.ref=v;});
+  bindText('inNotes',function(){return S.doc.notes;},function(v){S.doc.notes=v;});
+  bindText('inCurOther',function(){return S.curOther;},function(v){S.curOther=v;});
+  $('inDate').addEventListener('change',function(){S.doc.date=this.value||today();save();render();});
+  $('inType').addEventListener('change',function(){S.doc.type=this.value;save();render();});
+  $('selCur').addEventListener('change',function(){
+    S.cur=this.value;
+    if(S.cur==='other'&&!S.curOther){S.curOther='';}
+    save();render();
+    if(S.cur==='other')$('inCurOther').focus();
+  });
+  $('selRound').addEventListener('change',function(){S.rounding=this.value==='line'?'line':'rate';save();render();});
+
+  /* banner */
+  $('btnDismiss').addEventListener('click',function(){S.showBanner=false;save();render();});
+  $('btnBlank').addEventListener('click',function(){
+    if(!window.confirm('Replace the sample with an empty document?'))return;
+    var keepCur=S.cur,keepOther=S.curOther;
+    S=blank();S.cur=keepCur;S.curOther=keepOther;
+    save();rebuildAll();msg('Empty document ready.');
+  });
+
+  /* actions */
+  $('btnPrev').addEventListener('click',function(){
+    document.body.classList.toggle('preview');
+    S.preview=document.body.classList.contains('preview');
+    save();render();
+    window.scrollTo(0,0);
+  });
+  $('btnPrint').addEventListener('click',function(){render();window.print();});
+  $('btnCsv').addEventListener('click',function(){
+    dl(slug((S.doc.ref||'tax-summary'))+'.csv','﻿'+buildCsv(),'text/csv;charset=utf-8');
+    msg('CSV downloaded.');
+  });
+  $('btnJson').addEventListener('click',function(){
+    dl(slug((S.doc.ref||'tax-summary'))+'.json',JSON.stringify(S,null,2),'application/json');
+    msg('JSON downloaded.');
+  });
+  $('btnImport').addEventListener('click',function(){$('fileIn').click();});
+  $('fileIn').addEventListener('change',function(){
+    var f=this.files&&this.files[0];
+    if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(String(rd.result));
+        if(!o||typeof o!=='object')throw 0;
+        S=normalise(o);
+        save();rebuildAll();msg('Imported.');
+      }catch(e){msg('That file is not a valid export from this tool.',true);}
+    };
+    rd.onerror=function(){msg('Could not read that file.',true);};
+    rd.readAsText(f);
+    this.value='';
+  });
+  $('btnClear').addEventListener('click',function(){
+    if(!window.confirm('Clear all saved data and reload the sample document?\n\nThis cannot be undone.'))return;
+    try{localStorage.removeItem(KEY);}catch(e){}
+    S=sample();save();rebuildAll();msg('Cleared — sample document reloaded.');
+  });
+
+  window.addEventListener('beforeprint',function(){try{render();}catch(e){}});
+
+  render();
+}
+function rebuildAll(){
+  $('selJur').value=S.jur;
+  $('inTaxName').value=S.taxName;
+  $('inBiz').value=S.doc.biz;$('inReg').value=S.doc.reg;$('inAddr').value=S.doc.addr;
+  $('inClient').value=S.doc.client;$('inCReg').value=S.doc.creg;$('inRef').value=S.doc.ref;
+  $('inDate').value=S.doc.date;$('inType').value=S.doc.type;$('inNotes').value=S.doc.notes;
+  $('selCur').value=S.cur;$('inCurOther').value=S.curOther;$('selRound').value=S.rounding;
+  $('qAmt').value=S.q.amt;$('qRate').value=S.q.rate;
+  document.body.classList.toggle('preview',!!S.preview);
+  renderLines();renderRates();refreshCodeSelects();render();
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+})();
+</script>
+</body>
+</html>
