@@ -27,6 +27,7 @@ import AssignParties from '@/components/AssignParties'
 import StopArrival from '@/components/StopArrival'
 import LaneCarrierPicker from '@/components/LaneCarrierPicker'
 import StopForm, { emptyStop } from '@/components/StopForm'
+import DocumentsPanel from '@/components/DocumentsPanel'
 import type { LoadStop } from '@/types/db'
 
 export default function LoadDetail() {
@@ -368,6 +369,8 @@ export default function LoadDetail() {
               })
             }
           />
+
+          <DocumentsPanel data={data} />
 
           <section className="card p-3" data-search-exclude>
             <h2 className="mb-2 text-sm font-semibold text-slate-200">Tracking</h2>

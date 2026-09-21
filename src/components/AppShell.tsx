@@ -9,6 +9,7 @@ export default function AppShell() {
     { to: '/loads', label: 'Loads' },
     { to: '/carriers', label: 'Carriers' },
     { to: '/customers', label: 'Customers' },
+    { to: '/invoices', label: 'Invoices' },
     ...(can('view_reports') ? [{ to: '/reports', label: 'Reports' }] : []),
     ...(can('manage_users') ? [{ to: '/users', label: 'Users' }] : []),
     { to: '/settings', label: 'Settings' },

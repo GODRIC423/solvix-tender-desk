@@ -30,6 +30,7 @@ export const PERMISSION_KEYS = [
   'import_customers',
   'export_customers',
   'view_reports',
+  'manage_billing',
   'manage_users',
   'manage_settings',
 ] as const
@@ -39,7 +40,7 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number]
 export interface PermissionMeta {
   label: string
   description: string
-  group: 'Loads' | 'Carriers' | 'Customers' | 'Reports' | 'Admin'
+  group: 'Loads' | 'Carriers' | 'Customers' | 'Reports' | 'Billing' | 'Admin'
   /** True for the ones that let data leave the system — shown with a warning tone. */
   sensitive?: boolean
 }
@@ -89,6 +90,11 @@ export const PERMISSIONS: Record<PermissionKey, PermissionMeta> = {
     group: 'Reports',
     sensitive: true,
   },
+  manage_billing: {
+    label: 'Invoice and record payments',
+    description: 'Create customer invoices, mark them sent or paid, and void them.',
+    group: 'Billing',
+  },
   manage_users: {
     label: 'Manage users',
     description: 'Change roles, teams, permissions and deactivate accounts.',
@@ -119,6 +125,7 @@ export const FALLBACK_ROLE_PERMISSIONS: RolePermissions = {
     import_customers: true,
     export_customers: false,
     view_reports: false,
+    manage_billing: true,
     manage_users: false,
     manage_settings: false,
   },

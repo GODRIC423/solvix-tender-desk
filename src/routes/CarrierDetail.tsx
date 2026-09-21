@@ -17,10 +17,14 @@ import CarrierScorecard from '@/components/CarrierScorecard'
 import RecordTimeline from '@/components/RecordTimeline'
 import { ContactChips } from '@/components/Contact'
 import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
+import CarrierDocumentsTab from '@/components/CarrierDocumentsTab'
+import CarrierInsuranceTab from '@/components/CarrierInsuranceTab'
+import InsuranceBadge from '@/components/InsuranceBadge'
+import { useCarrierInsuranceStatus } from '@/hooks/useDocuments'
 import { StatusPill } from './Carriers'
 import type { Carrier, CarrierInteractionView, LoadBoardRow } from '@/types/db'
 
-type Tab = 'overview' | 'activity' | 'loads'
+type Tab = 'overview' | 'activity' | 'loads' | 'documents' | 'insurance'
 
 /**
  * A carrier profile a dispatcher can live in: who to call up top, the last
@@ -33,6 +37,7 @@ export default function CarrierDetail() {
   const { data: interactions } = useCarrierInteractions(id)
   const { data: loadRows } = useCarrierLoads(id)
   const { data: performance } = useCarrierPerformance(id)
+  const { data: insuranceStatus } = useCarrierInsuranceStatus(id)
   const { data: stages } = usePipelineStages()
   const { data: profiles } = useProfiles()
   const [tab, setTab] = useState<Tab>('overview')
@@ -76,6 +81,7 @@ export default function CarrierDetail() {
         </Link>
         <h1 className="text-lg font-semibold text-slate-100">{carrier.name}</h1>
         <StatusPill status={carrier.status} />
+        <InsuranceBadge status={insuranceStatus} />
         {carrier.dot_number && (
           <span className="font-mono text-xs text-slate-400">DOT {carrier.dot_number}</span>
         )}
@@ -157,6 +163,12 @@ export default function CarrierDetail() {
             </span>
           )}
         </TabButton>
+        <TabButton active={tab === 'documents'} onClick={() => setTab('documents')}>
+          Documents
+        </TabButton>
+        <TabButton active={tab === 'insurance'} onClick={() => setTab('insurance')}>
+          Insurance
+        </TabButton>
       </div>
 
       {tab === 'overview' && (
@@ -170,6 +182,8 @@ export default function CarrierDetail() {
         <ActivityTab carrierId={carrier.id} timeline={timeline} loads={loads} />
       )}
       {tab === 'loads' && <CarrierLoads loads={loads} />}
+      {tab === 'documents' && <CarrierDocumentsTab carrier={carrier} />}
+      {tab === 'insurance' && <CarrierInsuranceTab carrier={carrier} />}
     </div>
   )
 }

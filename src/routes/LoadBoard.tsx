@@ -8,6 +8,8 @@ import { urgencyFor, relativeTime, type UrgencyResult } from '@/lib/urgency'
 import { BAND_DOT_CLASS, BAND_SEVERITY, bandFor } from '@/lib/qc-bands'
 import { BandDot, BandPill } from '@/components/BandPill'
 import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
+import { exportRows } from '@/components/CsvImport'
+import { todayStamp } from '@/lib/csv'
 import Toggle from '@/components/Toggle'
 import type { LoadBoardRow } from '@/types/db'
 
@@ -128,6 +130,41 @@ export default function LoadBoard() {
             <option value="qc">Sort: QC score</option>
             <option value="load_number">Sort: load #</option>
           </select>
+          {can('view_reports') && decorated.length > 0 && (
+            <button
+              className="btn"
+              title="Download the loads listed below as a CSV"
+              onClick={() =>
+                exportRows(
+                  `loads-${todayStamp()}.csv`,
+                  [
+                    { key: 'load_number', label: 'Load #' },
+                    { key: 'stage_label', label: 'Stage' },
+                    { key: 'customer_name', label: 'Customer' },
+                    { key: 'carrier_name', label: 'Carrier' },
+                    { key: 'origin_city', label: 'Origin city' },
+                    { key: 'origin_state', label: 'Origin state' },
+                    { key: 'dest_city', label: 'Dest city' },
+                    { key: 'dest_state', label: 'Dest state' },
+                    { key: 'first_pickup_at', label: 'Pickup' },
+                    { key: 'last_delivery_at', label: 'Delivery' },
+                    { key: 'customer_rate', label: 'Customer rate' },
+                    { key: 'carrier_rate', label: 'Carrier rate' },
+                    { key: 'margin', label: 'Margin' },
+                    { key: 'distance_miles', label: 'Miles' },
+                    { key: 'equipment_type_text', label: 'Equipment' },
+                    { key: 'commodity', label: 'Commodity' },
+                    { key: 'shipment_id', label: 'Shipment ID' },
+                    { key: 'qc_score', label: 'QC score' },
+                    { key: 'source', label: 'Source' },
+                  ],
+                  decorated.map(({ row }) => row as unknown as Record<string, unknown>),
+                )
+              }
+            >
+              Export CSV
+            </button>
+          )}
           {can('create_loads') && (
             <Link to="/loads/new" className="btn btn-primary">
               + New load
