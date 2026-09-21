@@ -442,3 +442,139 @@ export interface ReportLoad {
   equipment_type_text: string | null
   source: string
 }
+
+// ---------------------------------------------------------------------------
+// Documents & billing (migration 20260101000009)
+// ---------------------------------------------------------------------------
+
+export type LoadDocumentKind =
+  | 'rate_confirmation'
+  | 'bol'
+  | 'load_sheet'
+  | 'invoice'
+  | 'pod'
+  | 'carrier_invoice'
+  | 'lumper_receipt'
+  | 'scale_ticket'
+  | 'other'
+
+export interface LoadDocument {
+  id: string
+  load_id: string
+  kind: LoadDocumentKind
+  origin: 'generated' | 'uploaded'
+  file_name: string
+  /** Object key in the private `load-documents` bucket. */
+  storage_path: string
+  content_type: string | null
+  size_bytes: number | null
+  version: number
+  notes: string | null
+  uploaded_via: 'app' | 'carrier_link'
+  uploaded_by: string | null
+  created_at: string
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void'
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  load_id: string
+  customer_id: string | null
+  status: InvoiceStatus
+  issued_at: string
+  due_at: string | null
+  subtotal: number
+  total: number
+  currency: string
+  notes: string | null
+  document_id: string | null
+  sent_at: string | null
+  paid_at: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoiceLine {
+  id: string
+  invoice_id: string
+  description: string
+  quantity: number
+  rate: number | null
+  amount: number
+  sort_order: number
+}
+
+export interface LoadUploadLink {
+  id: string
+  load_id: string
+  token: string
+  expires_at: string
+  revoked_at: string | null
+  uses: number
+  created_by: string | null
+  created_at: string
+}
+
+export type CarrierDocumentKind =
+  | 'broker_carrier_agreement'
+  | 'insurance_certificate'
+  | 'w9'
+  | 'authority'
+  | 'other'
+
+export interface CarrierDocument {
+  id: string
+  carrier_id: string
+  kind: CarrierDocumentKind
+  file_name: string
+  /** Object key in the private `carrier-documents` bucket. */
+  storage_path: string
+  content_type: string | null
+  size_bytes: number | null
+  signed_at: string | null
+  expires_at: string | null
+  notes: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
+export type InsuranceCoverage =
+  | 'auto_liability'
+  | 'cargo'
+  | 'general_liability'
+  | 'workers_comp'
+  | 'other'
+
+export interface CarrierInsurance {
+  id: string
+  carrier_id: string
+  coverage: InsuranceCoverage
+  insurer: string | null
+  policy_number: string | null
+  coverage_amount: number | null
+  deductible: number | null
+  effective_at: string | null
+  expires_at: string | null
+  certificate_document_id: string | null
+  agent_name: string | null
+  agent_phone: string | null
+  agent_email: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row shape of `v_carrier_insurance_status` — one per carrier. */
+export interface CarrierInsuranceStatus {
+  carrier_id: string
+  policies: number
+  expired: number
+  expiring_30d: number
+  next_expiry: string | null
+  has_auto_liability: boolean
+  has_cargo: boolean
+}

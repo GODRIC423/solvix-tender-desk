@@ -89,6 +89,12 @@ jobs:
           echo "--- projects this token can see ---"
           PROJECTS=$(supabase projects list 2>&1 || true)
           echo "$PROJECTS"
+          # 401 is a different failure from "wrong account": the token itself
+          # is dead (expired or revoked), so no account lookup will help.
+          if echo "$PROJECTS" | grep -qi "unauthorized\|\b401\b"; then
+            echo "::error::Supabase rejected SUPABASE_ACCESS_TOKEN outright (401 Unauthorized): the token has expired or been revoked. Generate a new personal access token at https://supabase.com/dashboard/account/tokens (choose no expiration) while signed in to the account that owns project $SUPABASE_PROJECT_REF, update the SUPABASE_ACCESS_TOKEN secret, then re-run this workflow. See DEPLOY.md, 'Troubleshooting'."
+            exit 1
+          fi
           if ! echo "$PROJECTS" | grep -q "$SUPABASE_PROJECT_REF"; then
             echo "::error::The access token cannot see project $SUPABASE_PROJECT_REF. It was generated while signed in to a Supabase account that does not own this project. Sign in to the account whose project list shows $SUPABASE_PROJECT_REF (https://supabase.com/dashboard/projects), generate a new token there, and replace the SUPABASE_ACCESS_TOKEN secret. See DEPLOY.md, 'Troubleshooting'."
             exit 1
@@ -154,6 +160,14 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy ingest-load --project-ref afwwwprqpnkbmtwmasmm --use-api
+
+      # The carrier upload link's endpoint. Same story: code in this repo,
+      # redeployed on every merge.
+      - name: Deploy the upload function
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy upload-document --project-ref afwwwprqpnkbmtwmasmm --use-api
 
       - name: Deploy to Cloudflare Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

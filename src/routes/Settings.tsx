@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { useSaveSettings, useSettings, type InteractionAging } from '@/hooks/useSettings'
+import { logoUrl, useSaveSettings, useSettings, useUploadLogo, type InteractionAging } from '@/hooks/useSettings'
 import { DEFAULT_QC_BANDS, type QcBandThresholds } from '@/lib/qc-bands'
 import { DEFAULT_FLAG_RULES, type FlagRules, type FlagTier } from '@/lib/urgency'
 import { TEAM_SUGGESTIONS, teamLabel } from '@/lib/permissions'
+import { DEFAULT_AGREEMENT_TEXT, EMPTY_COMPANY, type CompanyProfile } from '@/lib/company'
 import Toggle, { ToggleRow } from '@/components/Toggle'
 import type { ViewPrefs } from '@/types/db'
 
@@ -30,7 +31,9 @@ export default function Settings() {
   const [teams, setTeams] = useState<Record<string, ViewPrefs>>({})
   const [cash, setCash] = useState<string>('')
   const [overhead, setOverhead] = useState<string>('')
+  const [company, setCompany] = useState<CompanyProfile>(EMPTY_COMPANY)
   const [dirty, setDirty] = useState(false)
+  const uploadLogo = useUploadLogo()
 
   // Seed the form once settings arrive (and again if they change underneath
   // us while nothing is being edited).
@@ -42,6 +45,7 @@ export default function Settings() {
     setTeams(settings.teamDefaults)
     setCash(settings.financials.cash_on_hand?.toString() ?? '')
     setOverhead(settings.financials.monthly_overhead?.toString() ?? '')
+    setCompany(settings.company)
   }, [settings, dirty])
 
   function touch<T>(setter: (v: T) => void) {
@@ -55,6 +59,7 @@ export default function Settings() {
   const setQcT = touch(setQc)
   const setAgingT = touch(setAging)
   const setTeamsT = touch(setTeams)
+  const setCompanyT = touch(setCompany)
 
   function onSave() {
     save.mutate(
@@ -65,9 +70,26 @@ export default function Settings() {
         team_defaults: teams,
         cash_on_hand: cash.trim() === '' ? null : Number(cash),
         monthly_overhead: overhead.trim() === '' ? null : Number(overhead),
+        company,
       },
       { onSuccess: () => setDirty(false) },
     )
+  }
+
+  // The logo is saved the moment it uploads — nobody should have to remember
+  // a second click for a picture they can already see.
+  async function onLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const path = await uploadLogo.mutateAsync(file)
+      const next = { ...company, logo_path: path }
+      setCompany(next)
+      save.mutate({ company: next })
+    } catch {
+      // uploadLogo.error is rendered under the picker
+    }
   }
 
   if (isLoading) return <div className="p-6 text-sm text-slate-400">Loading settings…</div>
@@ -107,6 +129,128 @@ export default function Settings() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* ------------------------------------------- company & documents */}
+        <Card
+          className="lg:col-span-2"
+          title="Company & documents"
+          explain="What prints on the letterhead of every rate confirmation, bill of lading and invoice, and the text of the broker-carrier agreement."
+        >
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
+              {(
+                [
+                  ['name', 'Company name'],
+                  ['dba', 'DBA'],
+                  ['address1', 'Address'],
+                  ['address2', 'Address 2'],
+                  ['city', 'City'],
+                  ['state', 'State'],
+                  ['postal', 'Zip'],
+                  ['phone', 'Phone'],
+                  ['email', 'Email'],
+                  ['website', 'Website'],
+                  ['mc_number', 'MC #'],
+                  ['dot_number', 'DOT #'],
+                  ['scac', 'SCAC'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="label">{label}</label>
+                  <input
+                    className="input"
+                    disabled={!editable}
+                    value={company[key] ?? ''}
+                    onChange={(e) =>
+                      setCompanyT({ ...company, [key]: key === 'name' ? e.target.value : e.target.value || null })
+                    }
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="label">Payment terms (days)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  disabled={!editable}
+                  value={company.payment_terms_days}
+                  onChange={(e) =>
+                    setCompanyT({ ...company, payment_terms_days: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Invoice footer</label>
+                <input
+                  className="input"
+                  disabled={!editable}
+                  placeholder="Thank you for your business"
+                  value={company.invoice_footer ?? ''}
+                  onChange={(e) => setCompanyT({ ...company, invoice_footer: e.target.value || null })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Remit to (only if different from the address above)</label>
+                <textarea
+                  className="input min-h-[60px]"
+                  disabled={!editable}
+                  placeholder={'Company name\nPO Box …\nCity, ST 00000'}
+                  value={company.remit_to ?? ''}
+                  onChange={(e) => setCompanyT({ ...company, remit_to: e.target.value || null })}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="label">Logo</div>
+              <div className="flex h-24 items-center justify-center rounded border border-ink-700 bg-white p-2">
+                {logoUrl(company.logo_path) ? (
+                  <img src={logoUrl(company.logo_path) ?? undefined} alt="Company logo" className="max-h-20 max-w-full object-contain" />
+                ) : (
+                  <span className="text-xs text-slate-500">No logo yet</span>
+                )}
+              </div>
+              {editable && (
+                <label className="btn mt-2 cursor-pointer text-xs">
+                  {uploadLogo.isPending ? 'Uploading…' : 'Upload PNG or JPEG'}
+                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={(e) => void onLogo(e)} />
+                </label>
+              )}
+              {uploadLogo.error && (
+                <p className="mt-1 text-xs text-red-300">{(uploadLogo.error as Error).message}</p>
+              )}
+              <p className="mt-1 text-[11px] text-slate-500">Prints top-left on every document. Under 2 MB.</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-1 flex items-center gap-2">
+              <label className="label mb-0">Broker-carrier agreement</label>
+              {editable && (
+                <button
+                  type="button"
+                  className="btn ml-auto text-xs"
+                  onClick={() => setCompanyT({ ...company, agreement_text: DEFAULT_AGREEMENT_TEXT })}
+                >
+                  Reset to standard text
+                </button>
+              )}
+            </div>
+            <textarea
+              className="input min-h-[200px] font-mono text-xs"
+              disabled={!editable}
+              value={company.agreement_text ?? DEFAULT_AGREEMENT_TEXT}
+              onChange={(e) => setCompanyT({ ...company, agreement_text: e.target.value })}
+            />
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              Lines starting with &quot;# &quot; print as headings. The placeholders {'{{carrier_name}}'},{' '}
+              {'{{carrier_mc}}'}, {'{{carrier_dot}}'}, {'{{carrier_address}}'}, {'{{broker_name}}'},{' '}
+              {'{{broker_mc}}'}, {'{{broker_address}}'}, {'{{payment_terms_days}}'} and {'{{date}}'} are filled in
+              when you generate the agreement from a carrier&apos;s Documents tab. This is a standard
+              template — have your attorney review it before you use it.
+            </p>
+          </div>
+        </Card>
+
         {/* ------------------------------------------------ unbooked flags */}
         <Card
           title="Flags — loads with no carrier yet"
@@ -362,13 +506,15 @@ function Card({
   title,
   explain,
   children,
+  className = '',
 }: {
   title: string
   explain?: React.ReactNode
   children: React.ReactNode
+  className?: string
 }) {
   return (
-    <section className="card p-3">
+    <section className={`card p-3 ${className}`}>
       <h2 className="mb-1 text-sm font-semibold text-slate-200">{title}</h2>
       {explain && <p className="mb-3 text-xs leading-relaxed text-slate-500">{explain}</p>}
       {children}

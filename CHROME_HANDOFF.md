@@ -1,10 +1,29 @@
 # Claude in Chrome handoffs
 
-## Nothing to do right now
+## One thing to do: replace the Supabase access token
 
-Setup is complete. GitHub Actions holds working Supabase credentials and, on
-every merge to `main`, applies any new database migration, redeploys the
-ingest function, and publishes the site — in that order.
+On Sept 21, 2026 the deploy pipeline stopped at "Check the Supabase access
+token" with `401 Unauthorized` — the token created on Sept 9 has expired or
+been revoked. Until it is replaced, merges to `main` build and test but do
+not deploy (production stays on the last good version, unchanged).
+
+Paste into Claude in Chrome:
+
+> You're replacing one secret. **Never report the value back in the chat.**
+>
+> 1. Go to https://supabase.com/dashboard/projects and confirm this account's
+>    list shows the project with ref `afwwwprqpnkbmtwmasmm`. If it doesn't,
+>    sign out and sign in the other way (GitHub vs email are separate
+>    accounts) until it does.
+> 2. In that session go to https://supabase.com/dashboard/account/tokens.
+>    Delete any token named `GitHub Actions`, then **Generate new token** with
+>    that name, all permissions, and **No expiration**. Copy it.
+> 3. Go to https://github.com/GODRIC423/solvix-tender-desk/settings/secrets/actions,
+>    edit the existing `SUPABASE_ACCESS_TOKEN`, paste, **Update secret**.
+> 4. Go to https://github.com/GODRIC423/solvix-tender-desk/actions/workflows/ci.yml
+>    and **Run workflow** on `main`. Report whether it goes green.
+
+Once that run is green, everything merged since Sept 21 is live.
 
 The sections below are kept as the record of what was done and as paste-ready
 prompts if a credential ever has to be replaced.

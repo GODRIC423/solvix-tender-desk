@@ -12,15 +12,19 @@ import Customers from './routes/Customers'
 import CustomerDetail from './routes/CustomerDetail'
 import Users from './routes/Users'
 import Settings from './routes/Settings'
+import CarrierUpload from './routes/CarrierUpload'
 
 // The charting library is a quarter of the whole app bundle and most people
 // on the desk never open Reports. Load it when they do.
 const Reports = lazy(() => import('./routes/Reports'))
+const Invoices = lazy(() => import('./routes/Invoices'))
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* A carrier's upload link — no account, the token in the URL is the key. */}
+      <Route path="/upload/:token" element={<CarrierUpload />} />
       <Route
         element={
           <RequireAuth>
@@ -41,6 +45,14 @@ export default function App() {
           element={
             <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading reports…</div>}>
               <Reports />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/invoices"
+          element={
+            <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading invoices…</div>}>
+              <Invoices />
             </Suspense>
           }
         />

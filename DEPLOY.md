@@ -106,6 +106,24 @@ To see what the hosted project has applied:
 supabase migration list --linked
 ```
 
+#### Troubleshooting: `401 Unauthorized` from `supabase orgs list` / `projects list`
+
+The token itself was rejected: it has **expired or been revoked**. (This is
+what happened on Sept 21, 2026 — the token generated on Sept 9 stopped
+working.) Personal access tokens can be created with an expiry; pick **No
+expiration** for this one.
+
+1. Go to <https://supabase.com/dashboard/account/tokens> signed in to the
+   account that owns project `afwwwprqpnkbmtwmasmm`.
+2. Generate a new token (name it `GitHub Actions`, **No expiration**), copy it.
+3. Replace the `SUPABASE_ACCESS_TOKEN` repository secret.
+4. Re-run the workflow (Actions -> CI -> Run workflow, on `main`).
+
+Until it is replaced, merges to `main` still typecheck, test and build, but
+the migration and deploy steps stop at the token check. Production keeps
+running the last deployed version — code and schema together — so nothing
+breaks; it is just not updated.
+
 #### Troubleshooting: "Your account does not have the necessary privileges to access this endpoint"
 
 This is what the Supabase Management API says when the access token's

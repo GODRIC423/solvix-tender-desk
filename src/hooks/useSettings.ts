@@ -8,6 +8,7 @@ import {
   type FlagRules,
 } from '@/lib/urgency'
 import { FALLBACK_ROLE_PERMISSIONS, type RolePermissions } from '@/lib/permissions'
+import { EMPTY_COMPANY, normalizeCompany, type CompanyProfile } from '@/lib/company'
 import type {
   CustomerInteractionType,
   FlagType,
@@ -39,6 +40,8 @@ export interface ResolvedSettings {
   rolePermissions: RolePermissions
   financials: Financials
   defaultTimezone: string
+  /** Letterhead and document text; see src/lib/company.ts. */
+  company: CompanyProfile
 }
 
 const DEFAULTS: ResolvedSettings = {
@@ -49,6 +52,7 @@ const DEFAULTS: ResolvedSettings = {
   rolePermissions: FALLBACK_ROLE_PERMISSIONS,
   financials: { cash_on_hand: null, monthly_overhead: null },
   defaultTimezone: 'America/Chicago',
+  company: EMPTY_COMPANY,
 }
 
 /**
@@ -65,7 +69,7 @@ export function useSettings() {
       const { data, error } = await supabase
         .from('org_settings')
         .select(
-          'qc_bands, urgency_rules, flag_rules, interaction_aging, team_defaults, role_permissions, cash_on_hand, monthly_overhead, default_timezone',
+          'qc_bands, urgency_rules, flag_rules, interaction_aging, team_defaults, role_permissions, cash_on_hand, monthly_overhead, default_timezone, company',
         )
         .eq('id', 1)
         .maybeSingle()
@@ -101,6 +105,7 @@ export function useSettings() {
           monthly_overhead: numberOrNull(row.monthly_overhead),
         },
         defaultTimezone: (row.default_timezone as string) || DEFAULTS.defaultTimezone,
+        company: normalizeCompany(row.company),
       }
     },
   })
@@ -120,6 +125,7 @@ export interface SettingsPatch {
   role_permissions?: RolePermissions
   cash_on_hand?: number | null
   monthly_overhead?: number | null
+  company?: CompanyProfile
 }
 
 export function useSaveSettings() {
@@ -195,6 +201,33 @@ export function useCustomerInteractionTypes() {
         .order('sort_order')
       if (error) throw error
       return (data ?? []) as CustomerInteractionType[]
+    },
+  })
+}
+
+/** Public URL of the logo object in the branding bucket, or null when none is set. */
+export function logoUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  return supabase.storage.from('branding').getPublicUrl(path).data.publicUrl
+}
+
+/**
+ * Put a new logo in the branding bucket. The object gets a fresh name each
+ * time so nothing caches the old picture; the caller saves the returned path
+ * into company.logo_path.
+ */
+export function useUploadLogo() {
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/jpeg' ? 'jpg' : null
+      if (!ext) throw new Error('Use a PNG or JPEG image.')
+      if (file.size > 2 * 1024 * 1024) throw new Error('Keep the logo under 2 MB.')
+      const path = `logo-${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('branding')
+        .upload(path, file, { contentType: file.type, upsert: true })
+      if (error) throw error
+      return path
     },
   })
 }

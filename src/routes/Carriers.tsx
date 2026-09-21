@@ -8,6 +8,8 @@ import {
   useSaveCarrier,
 } from '@/hooks/useCarriers'
 import { useCarrierListSignals, type CarrierListSignal } from '@/hooks/useCarrierPerformance'
+import { useCarrierInsuranceStatusList } from '@/hooks/useDocuments'
+import InsuranceBadge from '@/components/InsuranceBadge'
 import { useAuth } from '@/hooks/useAuth'
 import { useSettings } from '@/hooks/useSettings'
 import CsvImport, { exportRows, type CsvColumn } from '@/components/CsvImport'
@@ -15,7 +17,7 @@ import { OpenInNewTab, ROW_LINK_CLASS, useRowLink } from '@/components/RowLink'
 import { PhoneLink } from '@/components/Contact'
 import { todayStamp } from '@/lib/csv'
 import { relativeTime } from '@/lib/urgency'
-import type { Carrier } from '@/types/db'
+import type { Carrier, CarrierInsuranceStatus } from '@/types/db'
 
 /**
  * The template's columns. This list IS the template: the download, the
@@ -64,6 +66,7 @@ export default function Carriers() {
   const [exportError, setExportError] = useState<string | null>(null)
   const { data: carriers, isLoading } = useCarrierSearch(search)
   const { data: signals } = useCarrierListSignals()
+  const { data: insurance } = useCarrierInsuranceStatusList()
   const { data: due } = useDueCarrierFollowUps()
   const { data: settings } = useSettings()
   const { can } = useAuth()
@@ -184,7 +187,13 @@ export default function Carriers() {
               </tr>
             )}
             {(carriers ?? []).map((c) => (
-              <CarrierRow key={c.id} carrier={c} signal={signals?.[c.id]} quietDays={quietDays} />
+              <CarrierRow
+                key={c.id}
+                carrier={c}
+                signal={signals?.[c.id]}
+                insurance={insurance?.[c.id]}
+                quietDays={quietDays}
+              />
             ))}
           </tbody>
         </table>
@@ -208,10 +217,12 @@ function latestOf(...dates: Array<string | null | undefined>): string | null {
 function CarrierRow({
   carrier: c,
   signal,
+  insurance,
   quietDays,
 }: {
   carrier: Carrier
   signal?: CarrierListSignal
+  insurance?: CarrierInsuranceStatus
   quietDays: number
 }) {
   const href = `/carriers/${c.id}`
@@ -275,7 +286,10 @@ function CarrierRow({
         )}
       </td>
       <td className="td">
-        <StatusPill status={c.status} />
+        <div className="flex flex-wrap items-center gap-1">
+          <StatusPill status={c.status} />
+          {insurance && <InsuranceBadge status={insurance} compact />}
+        </div>
       </td>
       <td className="td text-right">
         <OpenInNewTab href={href} what="carrier" />
